@@ -282,12 +282,10 @@ export class AssistantService implements OnModuleInit, OnModuleDestroy {
     });
     // Field names the user typed become aliases before anything goes to Gemini (RFC §12.6).
     const aliases = await this.executor.aliases(scope.workspaceId);
-    const contents: Content[] = earlier
-      .slice(0, -1)
-      .map((m) => ({
-        role: m.role === "user" ? "user" : "model",
-        parts: [{ text: pseudonymise(m.text, aliases) }],
-      }));
+    const contents: Content[] = earlier.slice(0, -1).map((m) => ({
+      role: m.role === "user" ? "user" : "model",
+      parts: [{ text: pseudonymise(m.text, aliases) }],
+    }));
     question = pseudonymise(question, aliases);
     const ctx: string[] = [];
     if (context.fieldId) {
