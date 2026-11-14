@@ -38,7 +38,7 @@ export function BottomSheet(p: BottomSheetProps) {
       <button
         type="button"
         aria-label={p.cancelLabel}
-        className="absolute inset-0 bg-ink/40"
+        className="absolute inset-0 bg-ink/40 dark:bg-bg/70"
         onClick={p.onClose}
       />
       <div

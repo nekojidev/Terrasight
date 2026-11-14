@@ -156,8 +156,19 @@ export const FieldMap = forwardRef<FieldMapHandle, FieldMapProps>(function Field
       e.preventDefault();
       handlers.current.onFinish();
     });
+    // Re-read the token colours when the theme attribute changes.
+    const repaint = () => {
+      if (!m.getLayer("field-points")) return;
+      m.setPaintProperty("field-points", "circle-color", token("--ts-surface"));
+      m.setPaintProperty("field-points", "circle-stroke-color", token("--ts-ink"));
+    };
+    const observer = new MutationObserver(repaint);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
     map.current = m;
-    return () => m.remove();
+    return () => {
+      observer.disconnect();
+      m.remove();
+    };
     // The map is created once; props reach handlers through the ref.
   }, []);
 

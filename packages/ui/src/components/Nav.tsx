@@ -76,6 +76,8 @@ export interface TopBarProps {
   notificationsLabel: string;
   hasNotifications?: boolean;
   onNotifications: () => void;
+  /** Extra control before notifications (e.g. the theme toggle on phones). */
+  extra?: ReactNode;
 }
 
 /** Top bar: crumb, ⌘K search, UA/EN switch, notifications. */
@@ -114,6 +116,7 @@ export function TopBar(p: TopBarProps) {
           </button>
         ))}
       </div>
+      {p.extra}
       <button
         type="button"
         aria-label={p.notificationsLabel}

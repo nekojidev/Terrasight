@@ -3,6 +3,9 @@
 /* Tailwind must see the classes used inside packages/ui. */
 @source "../../../../packages/ui/src";
 
+html[data-theme="dark"] {
+  color-scheme: dark;
+}
 html {
   background: var(--ts-bg);
 }
