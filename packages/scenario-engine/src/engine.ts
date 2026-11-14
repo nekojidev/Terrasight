@@ -419,6 +419,103 @@ export function pickTwo(ranked: ScenarioResult[]): ScenarioResult[] {
   return second ? [first, second] : [first];
 }
 
+/** Quick FAO-56 pass (RFC §8.1): each crop alone in every weather year → median yield ratio for the calibration. */
+function calibrate(input: EngineInput, years: number[], crops: string[]): Record<string, number> {
+  const calibration: Record<string, number> = {};
+  for (const crop of crops) {
+    if (!CROPS[crop]) continue;
+    const ratios = years
+      .map((y) => {
+        const days = input.weatherByYear.get(y) ?? [];
+        const sow = sowingDate(input, crop, y);
+        return (
+          simulateSeason(
+            {
+              site: input.site,
+              crops: [{ crop, sowing: sow }],
+              irrigated: input.irrigated,
+              startDepletionMm: 0,
+            },
+            days,
+          ).crops[0]?.yieldRatio ?? 1
+        );
+      })
+      .sort((a, b) => a - b);
+    calibration[crop] = ratios[Math.floor(ratios.length / 2)] ?? 1;
+  }
+  return calibration;
+}
+
+const completeYears = (input: EngineInput) =>
+  [...input.weatherByYear.keys()].filter((y) => (input.weatherByYear.get(y)?.length ?? 0) >= 360);
+
+/** The block-bootstrap weather runs of the D5 pipeline (same seed as runScenarios, so the same 150 runs). */
+export function weatherRuns(input: EngineInput): WeatherRun[] {
+  const seed = seedFrom(
+    `${input.fieldKey}|${input.firstSeason}|${input.irrigated}|${input.waterCapMm ?? ""}|${input.deltaT ?? 0}|${input.precipFactor ?? 1}`,
+  );
+  return bootstrapRuns(completeYears(input), new Pcg32(seed), input.runs);
+}
+
+export interface YieldRange {
+  crop: string;
+  season: number;
+  p10: number;
+  p50: number;
+  p90: number;
+  unit: "t/ha";
+  runs: number;
+  /** No verified pest-loss term exists: the range is weather and water only. */
+  pestLossIncluded: false;
+}
+
+/** Linear-interpolated percentile of a sorted array, q in [0, 1]. */
+export function percentile(sorted: number[], q: number): number {
+  if (!sorted.length) return NaN;
+  const pos = (sorted.length - 1) * q;
+  const lo = Math.floor(pos);
+  const hi = Math.ceil(pos);
+  return sorted[lo]! + (sorted[hi]! - sorted[lo]!) * (pos - lo);
+}
+
+/**
+ * Yield range P10 / P50 / P90 (t/ha) of the main crop of one season of a plan across the weather runs (FR-YF-1).
+ * Same yields the scenarios price: FAO-33 water response, calibrated to the budget yield. No pest-loss term.
+ * Null when the season has no priced crop.
+ */
+export function yieldRange(
+  input: EngineInput,
+  plan: SeasonPlan[],
+  runs: WeatherRun[],
+  seasonIndex = 0,
+): YieldRange | null {
+  const p = plan[seasonIndex];
+  const crop = p?.crops.find((c) => c !== "fallow" && CROPS[c] && input.prices[c]);
+  if (!p || !crop || !runs.length) return null;
+  const calibration = input.calibration ?? calibrate(input, completeYears(input), [crop]);
+  const withCal = { ...input, calibration };
+  const ys = runs
+    .map(
+      (r) =>
+        simulateRun(withCal, plan.slice(0, seasonIndex + 1), r, input.waterCapMm).revenueParts[seasonIndex]?.find(
+          (x) => x.crop === crop,
+        )?.tonnes,
+    )
+    .filter((t): t is number => t != null && Number.isFinite(t))
+    .sort((a, b) => a - b);
+  if (!ys.length) return null;
+  return {
+    crop,
+    season: p.season,
+    p10: percentile(ys, 0.1),
+    p50: percentile(ys, 0.5),
+    p90: percentile(ys, 0.9),
+    unit: "t/ha",
+    runs: ys.length,
+    pestLossIncluded: false,
+  };
+}
+
 /** The D5 pipeline (RFC §8): filters (with relaxation) → Monte Carlo → price step → score → 2 different alternatives. */
 export function runScenarios(engineInput: EngineInput, weights: Weights = EQUAL_WEIGHTS): EngineResult {
   let input = engineInput;
@@ -463,29 +560,7 @@ export function runScenarios(engineInput: EngineInput, weights: Weights = EQUAL_
   }
 
   // Quick FAO-56 pass (RFC §8.1): each crop alone in every weather year → median yield ratio for the calibration.
-  const calibration: Record<string, number> = {};
-  for (const crop of allCrops) {
-    if (!CROPS[crop]) continue;
-    const ratios = years
-      .map((y) => {
-        const days = input.weatherByYear.get(y) ?? [];
-        const sow = sowingDate(input, crop, y);
-        return (
-          simulateSeason(
-            {
-              site: input.site,
-              crops: [{ crop, sowing: sow }],
-              irrigated: input.irrigated,
-              startDepletionMm: 0,
-            },
-            days,
-          ).crops[0]?.yieldRatio ?? 1
-        );
-      })
-      .sort((a, b) => a - b);
-    calibration[crop] = ratios[Math.floor(ratios.length / 2)] ?? 1;
-  }
-  input = { ...input, calibration };
+  input = { ...input, calibration: calibrate(input, years, allCrops) };
 
   const currentPlan = planSeasons(input.current.sequence, input.current.position, input.firstSeason);
   const cur = evaluateRotation(
