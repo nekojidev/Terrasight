@@ -104,8 +104,15 @@ export class ReportsService {
     );
     const byField = new Map<string, typeof rows>();
     for (const r of rows) (byField.get(r.fieldId) ?? byField.set(r.fieldId, []).get(r.fieldId)!).push(r);
+    // Who reads the report: the company's Viewers (owner / manager), named on the month card.
+    const viewers = await this.prisma.system.membership.findMany({
+      where: { workspaceId, role: "viewer" },
+      orderBy: { createdAt: "asc" },
+      select: { user: { select: { name: true } } },
+    });
     return {
       workspaceName: ws.name,
+      recipients: viewers.map((v) => v.user.name),
       language: lang ?? ws.reportLanguage,
       counts: {
         items: rows.length,

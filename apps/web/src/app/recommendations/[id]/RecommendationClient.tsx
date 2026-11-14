@@ -49,6 +49,27 @@ export interface RecView {
   undoUntil: string | null;
 }
 
+/** 910 + "MMDD" → "September 10"; days / seasons / m / NDVI read as plain values. */
+function useThresholdValue() {
+  const t = useTranslations("App");
+  const locale = useLocale();
+  return (v: number | string | undefined, unit: string | undefined): string => {
+    if (v === undefined) return "—";
+    if (unit === "MMDD") {
+      const n = Number(v);
+      return new Intl.DateTimeFormat(locale === "uk" ? "uk-UA" : "en-US", {
+        timeZone: "UTC",
+        day: "numeric",
+        month: "long",
+      }).format(new Date(Date.UTC(2001, Math.floor(n / 100) - 1, n % 100, 12)));
+    }
+    if (unit === "days") return t("thr_unit_days", { n: Number(v) });
+    if (unit === "seasons") return t("thr_unit_seasons", { n: Number(v) });
+    if (unit === "NDVI") return String(v);
+    return `${v}${unit ? ` ${unit}` : ""}`;
+  };
+}
+
 const LEVEL_TONE = {
   high: "text-urgent",
   moderate: "text-week",
@@ -74,6 +95,7 @@ export function RecommendationClient({
   const m = useTranslations("Main");
   const f = useTranslations("Field");
   const locale = useLocale() as "en" | "uk";
+  const thresholdValue = useThresholdValue();
   const client = useQueryClient();
   const key = ["recommendation", workspaceId, initial.id];
   const rec = useQuery({
@@ -329,8 +351,11 @@ export function RecommendationClient({
           <ul className="mt-3 flex flex-col gap-3 text-small text-ink-2">
             {citations.map((c) => (
               <li key={c.threshold}>
-                <span className="font-mono text-ink">
-                  {c.threshold} = {c.value} {c.unit}
+                <span className="block text-ink">
+                  {t.has(`thr_${c.threshold}`)
+                    ? t(`thr_${c.threshold}`)
+                    : c.threshold?.replace(/([A-Z])/g, " $1").toLowerCase()}
+                  : <span className="font-mono font-semibold">{thresholdValue(c.value, c.unit)}</span>
                 </span>
                 <span className="block">
                   {c.url ? (

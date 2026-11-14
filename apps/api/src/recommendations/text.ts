@@ -30,7 +30,23 @@ const LEVEL: Record<string, Localised> = {
   unknown: { en: "risk unknown — data missing", uk: "ризик невідомий — бракує даних" },
 };
 
+/** "2026-09-05" → "September 5, 2026" / "5 вересня 2026 р."; other values unchanged. */
+function value(v: number | string, lang: Lang): string {
+  if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v))
+    return new Intl.DateTimeFormat(lang === "uk" ? "uk-UA" : "en-US", {
+      timeZone: "UTC",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    }).format(new Date(`${v}T12:00:00Z`));
+  return String(v);
+}
+
 const DRIVER: Record<string, Localised> = {
+  early_sowing: {
+    en: "sown on {v}, earlier than the recommended date",
+    uk: "посіяно {v}, раніше за рекомендовану дату",
+  },
   rotation: { en: "host crop {v} season(s) in a row", uk: "культура-господар {v} сезон(и) поспіль" },
   degree_days: { en: "{v} °C·d since emergence", uk: "{v} °C·д від сходів" },
   temperature: { en: "autumn warmer than {v}% of past years", uk: "осінь тепліша за {v}% минулих років" },
@@ -98,7 +114,12 @@ export function recommendationText(rec: RecLike, lib: Library): RecText {
   const why = (lang: Lang) =>
     fired.length
       ? fired
-          .map((d) => (DRIVER[d.driver]?.[lang] ?? `${d.driver}: {v}`).replace("{v}", String(d.value)))
+          .map((d) =>
+            (
+              DRIVER[d.driver]?.[lang] ??
+              `${lib.pests.drivers[d.driver]?.[lang] ?? d.driver.replace(/_/g, " ")}: {v}`
+            ).replace("{v}", value(d.value, lang)),
+          )
           .join("; ")
       : lang === "en"
         ? "No driver has fired."
