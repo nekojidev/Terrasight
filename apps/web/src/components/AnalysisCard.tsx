@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnalysisPanel, Button, type FieldRunStatus } from "@terrasight/ui";
 import { Play } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
+import { dateShortIn, isAutumn, isSameDayIn, timeIn, useNow } from "@/lib/time";
 import { api } from "@/lib/api";
 import { useWorkspaceEvents } from "@/lib/events";
 
@@ -71,27 +72,17 @@ export function AnalysisCard({
 
   const r = run.data;
   const running = r?.status === "running" || start.isPending;
-  const date = (iso: string) =>
-    new Intl.DateTimeFormat(locale === "uk" ? "uk-UA" : "en-US", {
-      timeZone,
-      day: "numeric",
-      month: "short",
-    }).format(new Date(iso));
-  const time = (iso: string) =>
-    new Intl.DateTimeFormat(locale === "uk" ? "uk-UA" : "en-US", {
-      timeZone,
-      hour: "2-digit",
-      minute: "2-digit",
-    }).format(new Date(iso));
-  const isToday = (iso: string) => date(iso) === date(new Date().toISOString());
-  const when = r?.finishedAt
-    ? isToday(r.finishedAt)
-      ? t("anToday", { time: time(r.finishedAt) })
-      : t("anOn", { date: date(r.finishedAt), time: time(r.finishedAt) })
-    : null;
-  const autumn = [9, 10, 11, 12].includes(
-    Number(new Intl.DateTimeFormat("en-US", { timeZone, month: "numeric" }).format(new Date())),
-  );
+  const date = (iso: string) => dateShortIn(iso, locale, timeZone);
+  const time = (iso: string) => timeIn(iso, locale, timeZone);
+  // "Today" and the season depend on the clock: unknown on the server and the hydration render, set after mount.
+  const now = useNow();
+  const when =
+    r?.finishedAt && now
+      ? isSameDayIn(new Date(r.finishedAt), now, timeZone)
+        ? t("anToday", { time: time(r.finishedAt) })
+        : t("anOn", { date: date(r.finishedAt), time: time(r.finishedAt) })
+      : null;
+  const autumn = isAutumn(now, timeZone);
   const checks = autumn
     ? [t("anAutumn1"), t("anAutumn2"), t("anAutumn3"), t("anAutumn4")]
     : [t("anSpring1"), t("anSpring2")];

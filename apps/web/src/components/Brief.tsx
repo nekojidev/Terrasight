@@ -20,6 +20,7 @@ import { useState } from "react";
 import { AnalysisCard } from "@/components/AnalysisCard";
 import { api } from "@/lib/api";
 import { useWorkspaceEvents } from "@/lib/events";
+import { greetingKey, useNow } from "@/lib/time";
 
 type Localised = { en: string; uk: string };
 interface Item {
@@ -94,6 +95,7 @@ export function Brief({
   const key = ["brief", workspaceId];
   useWorkspaceEvents(workspaceId, ["brief", "analysis"]);
   const brief = useQuery({ queryKey: key, queryFn: () => api<Brief>(`/api/w/${workspaceId}/brief`) });
+  const now = useNow();
   const [done, setDone] = useState<Record<string, Done>>({});
   const [sheet, setSheet] = useState<Item | null>(null);
   const [note, setNote] = useState("");
@@ -159,12 +161,7 @@ export function Brief({
   const strip = (s: Item["seasons"]) => (
     <SeasonStrip size="sm" seasons={s.map((x) => ({ crop: x.crop, name: x.crop, year: x.season }))} />
   );
-  const hour = Number(
-    new Intl.DateTimeFormat("en-GB", { timeZone: b.timeZone, hour: "2-digit", hourCycle: "h23" }).format(
-      new Date(),
-    ),
-  );
-  const hello = hour < 12 ? "hiMorning" : hour < 18 ? "hiDay" : "hiEvening";
+  const hello = greetingKey(now, b.timeZone);
 
   async function act(i: Item, kind: "accept" | "snooze", note?: string) {
     // On a phone, Accept first shows what the owner will see, with an optional note (design 05, RFC §10.4).
