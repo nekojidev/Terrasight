@@ -46,12 +46,11 @@ const LEVEL_TONE = {
 const BARS = { high: 3, moderate: 2, low: 1, none: 0, unknown: 0 } as const;
 
 /** Tabs of the field page (design 08). Only Overview exists until Zones (EP-09 mock), Rotation (EP-06), Report (EP-08). */
-export function FieldTabs({ fieldId, active = 0 }: { fieldId: string; active?: 0 | 2 }) {
+export function FieldTabs({ fieldId, active = 0 }: { fieldId: string; active?: 0 | 1 | 2 }) {
   const r = useTranslations("Field");
-  // Zones (EP-09 mock) and the owner report tab (EP-08) come later.
   const tabs: Array<{ label: string; href: string | null }> = [
     { label: r("tab1"), href: `/fields/${fieldId}` },
-    { label: r("tab2"), href: null },
+    { label: r("tab2"), href: `/fields/${fieldId}/zones` },
     { label: r("tab3"), href: `/fields/${fieldId}/rotation` },
     { label: r("tab4"), href: `/reports?field=${fieldId}` },
   ];

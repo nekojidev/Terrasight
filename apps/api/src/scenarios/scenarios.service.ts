@@ -425,6 +425,76 @@ export class ScenariosService {
     return { season: plan.season, crop: plan.crop, rotationId: plan.rotationId, savedAt: plan.savedAt };
   }
 
+  /** Rotations overview (sidebar "Rotations"): each field's plan for the first season and its rotation item. */
+  async overview(workspaceId: string) {
+    const season = this.env.PLAN_FIRST_SEASON;
+    const fields = await this.prisma.db.field.findMany({
+      where: { workspaceId, archivedAt: null },
+      select: {
+        id: true,
+        name: true,
+        aliasNo: true,
+        regionId: true,
+        irrigation: true,
+        areaHa: true,
+        countyName: true,
+      },
+      orderBy: { aliasNo: "asc" },
+    });
+    const ids = fields.map((f) => f.id);
+    const [plans, recs, crops] = await Promise.all([
+      this.prisma.system.plan.findMany({ where: { fieldId: { in: ids }, season } }),
+      this.prisma.system.recommendation.findMany({
+        where: {
+          fieldId: { in: ids },
+          type: "rotation",
+          season,
+          status: { in: ["open", "accepted", "snoozed", "in_report"] },
+        },
+      }),
+      this.prisma.system.cropSeason.findMany({ where: { fieldId: { in: ids } }, orderBy: { season: "asc" } }),
+    ]);
+    return {
+      season,
+      horizon: [season, season + 4],
+      cropNames: Object.fromEntries(
+        Object.entries(this.lib.rotations.crops).map(([id, c]) => [id, { en: c.en, uk: c.uk }]),
+      ),
+      fields: fields.map((f) => {
+        const plan = plans.find((p) => p.fieldId === f.id);
+        const rec = recs.find((r) => r.fieldId === f.id);
+        const drivers = ((rec?.drivers as Array<{ driver: string; value: unknown }>) ?? []).reduce<
+          Record<string, unknown>
+        >((a, d) => ({ ...a, [d.driver]: d.value }), {});
+        return {
+          fieldId: f.id,
+          name: f.name,
+          areaHa: f.areaHa,
+          county: f.countyName,
+          irrigation: f.irrigation,
+          hasLibrary: Boolean(
+            f.regionId && this.lib.rotations.rotations.some((r) => r.region === f.regionId),
+          ),
+          recent: crops
+            .filter((c) => c.fieldId === f.id)
+            .slice(-5)
+            .map((c) => ({ season: c.season, crop: c.mainCrop })),
+          plan: plan ? { crop: plan.crop, rotationId: plan.rotationId, savedAt: plan.savedAt } : null,
+          recommendation: rec
+            ? {
+                id: rec.id,
+                level: rec.level,
+                firstCrop: (drivers.first_crop as string) ?? null,
+                bestOption: (drivers.best_option as string) ?? null,
+                deadline: rec.deadline?.toISOString().slice(0, 10) ?? null,
+                keyNumbers: rec.keyNumbers,
+              }
+            : null,
+        };
+      }),
+    };
+  }
+
   async getPlan(workspaceId: string, fieldId: string, season: number) {
     const field = await this.prisma.db.field.findFirst({
       where: { id: fieldId, workspaceId },

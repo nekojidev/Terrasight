@@ -86,11 +86,13 @@ export function TopBar(p: TopBarProps) {
       <button
         type="button"
         onClick={p.onSearch}
-        className="focus-ring flex min-h-tap w-[450px] max-w-full items-center gap-3 rounded-input border border-line bg-surface px-4 text-left text-body text-ink-3"
+        className="focus-ring flex min-h-tap w-auto max-w-full items-center sm:w-[450px] gap-3 rounded-input border border-line bg-surface px-4 text-left text-body text-ink-3"
       >
         <Search aria-hidden className="size-5" strokeWidth={1.7} />
-        <span className="flex-1">{p.searchLabel}</span>
-        <kbd className="rounded-[6px] border border-line px-1.5 font-mono text-[12px]">⌘K</kbd>
+        <span className="sr-only sm:not-sr-only sm:flex-1">{p.searchLabel}</span>
+        <kbd className="hidden rounded-[6px] sm:inline border border-line px-1.5 font-mono text-[12px]">
+          ⌘K
+        </kbd>
       </button>
       <div
         role="group"

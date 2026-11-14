@@ -1,12 +1,12 @@
 import { Module } from "@nestjs/common";
 import { FieldsModule } from "../fields/fields.module.js";
-import { ScenariosController } from "./scenarios.controller.js";
+import { RotationsOverviewController, ScenariosController } from "./scenarios.controller.js";
 import { ScenariosService } from "./scenarios.service.js";
 
 /** EP-06: rotation scenarios and the season plan. */
 @Module({
   imports: [FieldsModule],
-  controllers: [ScenariosController],
+  controllers: [ScenariosController, RotationsOverviewController],
   providers: [ScenariosService],
   exports: [ScenariosService],
 })

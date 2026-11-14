@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { AppShell } from "@/components/AppShell";
-import { FieldList, type FieldRow } from "@/components/FieldList";
+import { FieldsOverview, type FieldsOverviewData } from "./FieldsOverview";
 import { SessionRefresher } from "@/components/SessionRefresher";
 import { activeWorkspace, serverGet, type Me } from "@/lib/server-api";
 
@@ -14,7 +14,7 @@ interface WorkspaceDetail {
   role: Me["workspaces"][number]["role"];
 }
 
-/** /fields: plain list for now; design 07 lands in EP-04. */
+/** Design 07: fields by county with the region map (S-04.08). */
 export default async function FieldsPage() {
   const me = await serverGet<Me>("/api/me");
   if (!me.ok) {
@@ -25,7 +25,7 @@ export default async function FieldsPage() {
   if (!active) redirect("/onboarding");
   const [ws, fields] = await Promise.all([
     serverGet<WorkspaceDetail>(`/api/w/${active.id}`),
-    serverGet<FieldRow[]>(`/api/w/${active.id}/fields`),
+    serverGet<FieldsOverviewData>(`/api/w/${active.id}/fields-overview`),
   ]);
   if (!ws.ok) redirect("/");
   if (ws.data.fieldCount === 0 && ws.data.role !== "viewer") redirect("/fields/new");
@@ -36,11 +36,11 @@ export default async function FieldsPage() {
       user={{ name: me.data.name, role: ws.data.role }}
       crumb={t("fieldsTitle")}
     >
-      <FieldList
-        fields={fields.ok ? fields.data : []}
-        units={ws.data.units}
-        canEdit={ws.data.role !== "viewer"}
-      />
+      {fields.ok ? (
+        <FieldsOverview data={fields.data} units={ws.data.units} canEdit={ws.data.role !== "viewer"} />
+      ) : (
+        <p className="text-body text-urgent">{t("errGeneric")}</p>
+      )}
     </AppShell>
   );
 }

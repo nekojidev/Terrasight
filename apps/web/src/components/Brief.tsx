@@ -2,6 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  BottomSheet,
   Chip,
   ErrorCard,
   HeroItem,
@@ -91,6 +92,8 @@ export function Brief({
   useWorkspaceEvents(workspaceId, ["brief", "analysis"]);
   const brief = useQuery({ queryKey: key, queryFn: () => api<Brief>(`/api/w/${workspaceId}/brief`) });
   const [done, setDone] = useState<Record<string, Done>>({});
+  const [sheet, setSheet] = useState<Item | null>(null);
+  const [note, setNote] = useState("");
 
   if (brief.isPending) {
     return (
@@ -157,10 +160,21 @@ export function Brief({
   );
   const hello = hour < 12 ? "hiMorning" : hour < 18 ? "hiDay" : "hiEvening";
 
-  async function act(i: Item, kind: "accept" | "snooze") {
+  async function act(i: Item, kind: "accept" | "snooze", note?: string) {
+    // On a phone, Accept first shows what the owner will see, with an optional note (design 05, RFC §10.4).
+    if (
+      kind === "accept" &&
+      note === undefined &&
+      typeof window !== "undefined" &&
+      window.matchMedia("(max-width: 639px)").matches
+    ) {
+      setSheet(i);
+      setNote("");
+      return;
+    }
     const r = await api<{ undoUntil: string | null }>(
       `/api/w/${workspaceId}/recommendations/${i.id}/${kind}`,
-      { body: {} },
+      { body: note ? { note } : {} },
     );
     if (r.undoUntil) {
       setDone((d) => ({ ...d, [i.id]: { kind, undoUntil: r.undoUntil! } }));
@@ -371,6 +385,35 @@ export function Brief({
           )}
         </RailCard>
       </aside>
+      <BottomSheet
+        open={sheet !== null}
+        title={t("bsTitle")}
+        primaryLabel={t("bsAdd")}
+        cancelLabel={t("bsCancel")}
+        onClose={() => setSheet(null)}
+        onPrimary={() => {
+          const i = sheet;
+          setSheet(null);
+          if (i) void act(i, "accept", note);
+        }}
+      >
+        {sheet && (
+          <div className="flex flex-col gap-3">
+            <p className="text-small text-ink-2">{sheet.fieldName}</p>
+            <p className="text-body font-semibold text-ink">{sheet.text.action[locale]}</p>
+            <p className="text-small text-ink-2">{sheet.text.title[locale]}</p>
+            <label className="flex flex-col gap-1 text-small text-ink-2">
+              {t("bsNote")}
+              <textarea
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                maxLength={1000}
+                className="min-h-20 rounded-input border border-line-strong bg-surface p-3 text-body text-ink"
+              />
+            </label>
+          </div>
+        )}
+      </BottomSheet>
     </div>
   );
 }

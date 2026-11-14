@@ -1,6 +1,6 @@
 "use client";
 
-import { Sidebar, TopBar, type NavItem } from "@terrasight/ui";
+import { BottomTabs, Sidebar, TopBar, type NavItem } from "@terrasight/ui";
 import { FileText, Home, LogOut, Map, RefreshCw, Sparkles } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
@@ -119,7 +119,13 @@ export function AppShell({
           notificationsLabel={t("notif")}
           onNotifications={() => undefined}
         />
-        <main className="mx-auto w-full max-w-[1180px] px-8 py-10">{children}</main>
+        <main className="mx-auto w-full max-w-[1180px] px-4 pt-6 pb-24 sm:px-8 sm:py-10 lg:pb-10">
+          {children}
+        </main>
+      </div>
+      {/* Phones and tablets: bottom tabs Home · Fields · Assistant · Reports (design 05). */}
+      <div className="lg:hidden">
+        <BottomTabs label={t("nav_label")} items={items.filter((i) => i.href !== "/rotation")} />
       </div>
     </div>
   );

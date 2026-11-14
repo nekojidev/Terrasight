@@ -25,6 +25,19 @@ function uuid(id: string): string {
   return id;
 }
 
+/** Rotations overview for the workspace (sidebar "Rotations"). */
+@Controller("w/:ws/rotations")
+@UseGuards(AuthGuard, WorkspaceGuard)
+export class RotationsOverviewController {
+  constructor(private readonly scenarios: ScenariosService) {}
+
+  @Get()
+  @Requires("scenarios.explore")
+  overview(@Req() req: AuthedRequest) {
+    return this.scenarios.overview(req.workspaceId!);
+  }
+}
+
 /** Rotation scenarios and the season plan (S-06.03, S-06.06; Tech Design §14). Viewers can explore, not save. */
 @Controller("w/:ws/fields/:id")
 @UseGuards(AuthGuard, WorkspaceGuard)
