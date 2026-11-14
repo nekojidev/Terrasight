@@ -93,6 +93,7 @@ export function RotationClient({
   const money = (perHa: number) => Math.round(units === "imperial" ? perHa / AC : perHa);
   const water = (mm: number) =>
     units === "imperial" ? `${(mm / 25.4).toFixed(1)} in` : `${Math.round(mm)} mm`;
+  const signedPlain = (v: number) => `${v < 0 ? "−" : ""}$${Math.abs(money(v)).toLocaleString()}`;
   const signed = (v: number) => `${v >= 0 ? "+" : "−"}$${Math.abs(money(v)).toLocaleString()}`;
 
   const scenarios = useMemo(() => {
@@ -519,34 +520,41 @@ export function RotationClient({
         <h2 className="text-h2 text-ink">{t("rot2022")}</h2>
         <p className="mb-4 text-small text-ink-2">{t("rot2022Sub")}</p>
         <div className="grid gap-4 sm:grid-cols-3">
-          {scenarios.map((s, i) => (
-            <div key={s.id}>
-              <p className="flex justify-between text-small font-semibold text-ink">
-                <span>
-                  {letters[i]} · {name(s)}
+          {scenarios.map((s, i) => {
+            const pct =
+              Number.isFinite(s.if2022.margin) && Math.abs(s.if2022.typical) > 1
+                ? Math.round(((s.if2022.typical - s.if2022.margin) / Math.abs(s.if2022.typical)) * 100)
+                : null;
+            return (
+              <div key={s.id}>
+                <p className="flex justify-between gap-2 text-small font-semibold text-ink">
+                  <span>
+                    {letters[i]} · {name(s)}
+                  </span>
+                  <span className={pct !== null && pct > 0 ? "text-urgent" : "text-ink-2"}>
+                    {pct === null ? "—" : pct === 0 ? "0%" : `${pct > 0 ? "−" : "+"}${Math.abs(pct)}%`}
+                  </span>
+                </p>
+                <span aria-hidden className="mt-2 block h-2.5 overflow-hidden rounded-chip bg-muted">
+                  <span
+                    className={`block h-full ${s.id === pick?.id ? "bg-ink" : "bg-ink-2"}`}
+                    style={{ width: `${pct === null ? 0 : Math.min(100, Math.max(2, pct))}%` }}
+                  />
                 </span>
-                <span className={s.if2022.margin < s.margin ? "text-urgent" : "text-ink-2"}>
-                  ${money(s.if2022.margin).toLocaleString()}
-                </span>
-              </p>
-              <span aria-hidden className="mt-2 block h-2 overflow-hidden rounded-chip bg-muted">
-                <span
-                  className="block h-full bg-ink"
-                  style={{
-                    width: `${Math.min(100, Math.max(4, s.margin ? (Math.max(0, s.margin - s.if2022.margin) / Math.abs(s.margin)) * 100 : 0))}%`,
-                  }}
-                />
-              </span>
-              <p className="mt-1 text-micro text-ink-3">
-                {t("rot2022Drop", {
-                  pct: s.margin
-                    ? Math.round((Math.max(0, s.margin - s.if2022.margin) / Math.abs(s.margin)) * 100)
-                    : 0,
-                  season: s.if2022.season,
-                })}
-              </p>
-            </div>
-          ))}
+                {pct === 0 && <p className="mt-1 text-small text-ink-3">{t("rot2022Covered")}</p>}
+                {pct !== null && pct !== 0 && (
+                  <p className="mt-1 text-small text-ink-3">
+                    {t("rot2022Season", {
+                      season: s.if2022.season,
+                      hit: signedPlain(s.if2022.margin),
+                      typical: signedPlain(s.if2022.typical),
+                      unit: area,
+                    })}
+                  </p>
+                )}
+              </div>
+            );
+          })}
         </div>
       </section>
 
@@ -570,7 +578,13 @@ export function RotationClient({
               [t("rotSoilC"), (s: ScenarioResult) => s.carbonChange.toFixed(2)],
               [t("rotErosion"), (s: ScenarioResult) => String(Math.round(s.erosion))],
               [t("rotDrought"), (s: ScenarioResult) => `$${money(s.drought)}`],
-              [t("rot2022"), (s: ScenarioResult) => `$${money(s.if2022.margin)}`],
+              [
+                t("rot2022"),
+                (s: ScenarioResult) =>
+                  Number.isFinite(s.if2022.margin)
+                    ? `${signedPlain(s.if2022.margin)} / ${signedPlain(s.if2022.typical)}`
+                    : "—",
+              ],
               [r("row_price"), (s: ScenarioResult) => `${s.priceWins}/10`],
               [r("row_score"), (s: ScenarioResult) => (s.score ?? 0).toFixed(2)],
             ].map(([label, f]) => (

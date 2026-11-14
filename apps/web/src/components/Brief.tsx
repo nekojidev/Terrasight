@@ -137,7 +137,10 @@ export function Brief({
     c === null ? "—" : units === "imperial" ? `${Math.round((c * 9) / 5 + 32)}°F` : `${Math.round(c)}°`;
   const numbers = (i: Item) =>
     i.keyNumbers.slice(0, 3).map((k) => ({
-      value: String(k.value),
+      value:
+        typeof k.value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(k.value)
+          ? dateShort(k.value)
+          : String(k.value),
       label: t.has(`kn_${k.id}`) ? t(`kn_${k.id}`) : k.id,
       weight: k.weight,
     }));
@@ -321,7 +324,7 @@ export function Brief({
         </p>
       </div>
 
-      <aside className="flex flex-col gap-4">
+      <aside className="hidden flex-col gap-4 md:flex">
         <RailCard title={m("rail_day")}>
           <div className="grid grid-cols-3 gap-2">
             <p className="rounded-input bg-signal p-3 text-ink">

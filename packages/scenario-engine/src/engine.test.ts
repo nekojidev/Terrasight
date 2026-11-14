@@ -132,12 +132,12 @@ describe("scenario engine (RFC §8)", () => {
     for (const s of [r.current, ...r.alternatives]) {
       expect(s.drought).toBeLessThanOrEqual(s.margin);
       expect(Number.isFinite(s.if2022.margin)).toBe(true);
-      expect(s.if2022.margin).toBeLessThan(s.margin + 1e-6);
+      expect(s.if2022.margin).toBeLessThanOrEqual(s.if2022.typical + 1e-6);
       expect(s.marginBySeason).toHaveLength(5);
       expect(Number.isFinite(s.carbonChange)).toBe(true);
     }
     const wins = [r.current, ...r.alternatives].reduce((n, s) => n + s.priceWins, 0);
-    expect(wins).toBeLessThanOrEqual(10);
+    expect(wins).toBe(10); // counted among the shown options only
     expect(r.bestFit).not.toBeNull();
   });
 

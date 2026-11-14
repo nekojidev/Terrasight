@@ -94,8 +94,11 @@ export interface ScenarioResult {
   erosion: number;
   /** Mean margin in the worst 10 % of runs (CVaR-10), $/ha/yr. */
   drought: number;
-  /** Worst mean margin when 2022 repeats in one of the 5 seasons. */
-  if2022: { margin: number; season: number };
+  /**
+   * 2022 repeating in one season: that season's margin with 2022 weather vs the same season with ordinary weather
+   * (the base run), for the season where it hurts most. NaN when 2022 is not in the weather history.
+   */
+  if2022: { margin: number; typical: number; season: number };
   /** In how many of the 10 price scenarios this option has the highest mean margin. */
   priceWins: number;
   capped: boolean;
@@ -284,8 +287,13 @@ function evaluateRotation(
   const runMargins = outcomes.map((o) => mean(o.marginBySeason));
   const sorted = [...runMargins].sort((a, b) => a - b);
   const worst = sorted.slice(0, Math.max(1, Math.round(sorted.length * 0.1)));
-  const stressMargins = stress.map((r) => mean(simulateRun(input, plan, r, input.waterCapMm).marginBySeason));
-  const worstStress = stressMargins.length ? Math.min(...stressMargins) : NaN;
+  // Stress run i puts 2022 into season i of the base run (runs[0]); compare that season with the base run's season i.
+  const base = outcomes[0]?.marginBySeason ?? [];
+  const drops = stress.map((r, i) => {
+    const hit = simulateRun(input, plan, r, input.waterCapMm).marginBySeason[i]!;
+    return { i, hit, typical: base[i]!, drop: base[i]! - hit };
+  });
+  const worstStress = drops.length ? drops.reduce((w, d) => (d.drop > w.drop ? d : w)) : null;
   // Price step: re-price the same yields under each of the 10 scenarios.
   const byPrice = prices.map((mult) =>
     mean(
@@ -317,10 +325,9 @@ function evaluateRotation(
     carbonChange: mean(outcomes.map((o) => o.carbonChange)),
     erosion: mean(outcomes.map((o) => o.erosion)),
     drought: mean(worst),
-    if2022: {
-      margin: worstStress,
-      season: plan[stressMargins.indexOf(worstStress)]?.season ?? plan[0]!.season,
-    },
+    if2022: worstStress
+      ? { margin: worstStress.hit, typical: worstStress.typical, season: plan[worstStress.i]!.season }
+      : { margin: NaN, typical: NaN, season: plan[0]!.season },
     capped,
     capLoss,
     pestPressure: pestPressure(plan, history, input.pestModels),
@@ -502,16 +509,13 @@ export function runScenarios(engineInput: EngineInput, weights: Weights = EQUAL_
     ),
   );
   const everyone = [cur, ...alts];
-  const wins = prices.map((_, p) =>
-    everyone.reduce((b, s, i) => (s.byPrice[p]! > everyone[b]!.byPrice[p]! ? i : b), 0),
-  );
   const finish = (s: (typeof everyone)[number], i: number, kind: ScenarioResult["kind"]): ScenarioResult => {
     const { byPrice: _byPrice, ...rest } = s;
     return {
       ...rest,
       kind,
       ...(kind === "current" ? { label: input.current.label } : {}),
-      priceWins: wins.filter((w) => w === i).length,
+      priceWins: 0, // set below, among the options actually shown
       relaxed: kind === "alternative" ? relaxed : [],
       delta: {
         margin: s.margin - cur.margin,
@@ -527,7 +531,14 @@ export function runScenarios(engineInput: EngineInput, weights: Weights = EQUAL_
   );
   const current = ranked[0]!;
   const alternatives = pickTwo(ranked);
-  const three = [current, ...alternatives];
+  // Price robustness among the shown options: in how many of the 10 price scenarios each has the highest margin.
+  const byPriceOf = new Map(everyone.map((e) => [e.id, e.byPrice]));
+  const shown = [current, ...alternatives];
+  prices.forEach((_, p) => {
+    const winner = shown.reduce((b, s) => (byPriceOf.get(s.id)![p]! > byPriceOf.get(b.id)![p]! ? s : b));
+    winner.priceWins++;
+  });
+  const three = shown;
   const best = three.reduce((b, s) => ((s.score ?? 0) > (b.score ?? 0) ? s : b), current);
   return {
     current,
@@ -542,4 +553,4 @@ export function runScenarios(engineInput: EngineInput, weights: Weights = EQUAL_
 export { addDays };
 
 /** Bumped whenever the engine or simulator changes results; part of the scenario cache key. */
-export const ENGINE_VERSION = "2026-11-14.2";
+export const ENGINE_VERSION = "2026-11-15.1";
