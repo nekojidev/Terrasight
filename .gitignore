@@ -12,3 +12,4 @@ apps/api/src/generated/
 data/boundaries/
 .DS_Store
 apps/web/next-env.d.ts
+uploads/

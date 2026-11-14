@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Chip, DoneRow, FactorRows, TextField, type Factor } from "@terrasight/ui";
 import { ArrowLeft, Bug, Calendar, Check, Pencil, RefreshCw, ShieldCheck, Sparkles, X } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useState, type FormEvent } from "react";
 import { api } from "@/lib/api";
@@ -81,6 +82,14 @@ export function RecommendationClient({
     initialData: initial,
   });
   const [editing, setEditing] = useState(false);
+  const router = useRouter();
+  async function startCheck() {
+    const task = await api<{ id: string }>(
+      `/api/w/${workspaceId}/recommendations/${initial.id}/scouting-tasks`,
+      { body: {} },
+    );
+    router.push(`/scout/${task.id}`);
+  }
   const r = rec.data;
   const base = `/api/w/${workspaceId}/recommendations/${r.id}`;
 
@@ -278,6 +287,11 @@ export function RecommendationClient({
       </div>
 
       <aside className="flex flex-col gap-4">
+        {canAct && (r.type === "pest" || r.type === "disease") && (
+          <Button icon={<Bug />} onClick={() => void startCheck()} className="justify-center">
+            {t("scStart")}
+          </Button>
+        )}
         {canAct && (
           <Link
             href={`/assistant?rec=${r.id}&field=${r.fieldId}`}

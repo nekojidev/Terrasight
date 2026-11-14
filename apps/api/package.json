@@ -18,6 +18,8 @@
     "boundaries:check": "node --env-file-if-exists=../../.env scripts/check-region-points.mjs"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "3.999.0",
+    "@aws-sdk/s3-request-presigner": "3.999.0",
     "@google/genai": "2.9.0",
     "@nestjs/common": "12.5.0",
     "@nestjs/core": "12.5.0",

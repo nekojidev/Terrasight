@@ -233,6 +233,16 @@
     "rotCap": "Water cap",
     "rotNoCap": "no cap",
     "rotRerun": "Re-run (2–5 s)",
-    "rotReset": "Reset"
+    "rotReset": "Reset",
+    "scHow": "Look at 20 plants near the point and count the plants with signs of {pest}.",
+    "scCount": "Plants with signs out of 20",
+    "scSent": "Sent on {date}: {pct}% of plants affected.",
+    "scSendWait": "You can send after all 5 points",
+    "scPhotoAdded": "Photo added",
+    "scPhotoFailed": "The photo could not be uploaded",
+    "scStart": "Start a check",
+    "scOpen": "Open the check",
+    "scResult": "{pct}% of plants affected",
+    "scScouted": "Scouted on {date}: {pct}%"
   }
 }

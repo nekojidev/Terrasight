@@ -28,6 +28,10 @@ export const EnvSchema = z.object({
   /** Gemini API (RFC D9); without a key the assistant answers "Assistant unavailable". */
   GEMINI_API_KEY: z.string().optional(),
   GEMINI_MODEL: z.string().default("gemini-3.8-flash"),
+  /** Private bucket for scouting photos (Tech Design §11); without it photos go to UPLOADS_DIR (development). */
+  S3_BUCKET: z.string().optional(),
+  AWS_REGION: z.string().default("us-east-1"),
+  UPLOADS_DIR: z.string().default(fileURLToPath(new URL("../../../../uploads/", import.meta.url))),
   /** First planned season (harvest year) of the 5-season horizon (RFC §7.7: 2026–2030). */
   PLAN_FIRST_SEASON: z.coerce.number().int().min(2020).max(2100).default(2026),
   /** Recorded real responses served when a live call fails (RFC §5.4). */

@@ -14,6 +14,7 @@ import { ForecastService } from "../src/analysis/forecast.service.js";
 import { AnalysisScheduler } from "../src/analysis/scheduler.js";
 import { ToolError, ToolExecutor } from "../src/assistant/executor.js";
 import type { ScenariosService } from "../src/scenarios/scenarios.service.js";
+import { ScoutingService } from "../src/scouting/scouting.service.js";
 import { HistoryService } from "../src/history/history.service.js";
 import { RateLimitService } from "../src/auth/rate-limit.js";
 import { loadEnv, type Env } from "../src/config/config.js";
@@ -363,5 +364,47 @@ describe("assistant tool scope (S-05.01)", () => {
       seasons: Array<{ season: number }>;
     };
     expect(historyA.seasons.map((x) => x.season)).toEqual([2023, 2024, 2025]);
+  });
+});
+
+describe("scouting W-route (S-07.01)", () => {
+  async function fieldWith(wkt: string): Promise<string> {
+    const { ws } = await workspaceWithField("Route host");
+    const r = await client.query(
+      `INSERT INTO fields (id, workspace_id, name, alias_no, geom, centroid, area_ha, tier)
+       VALUES (gen_random_uuid(), $1, 'Shape', 2, ST_Multi(ST_GeomFromText($2, 4326)), ST_Centroid(ST_GeomFromText($2, 4326)), 50, 'A') RETURNING id`,
+      [ws, wkt],
+    );
+    return r.rows[0].id as string;
+  }
+  const shapes: Record<string, string> = {
+    pivot: "", // filled below from PostGIS (a 390 m circle)
+    strip: "POLYGON((-101.06 38.095,-101.04 38.095,-101.04 38.0965,-101.06 38.0965,-101.06 38.095))",
+    lshape:
+      "POLYGON((-101.06 38.09,-101.05 38.09,-101.05 38.094,-101.056 38.094,-101.056 38.1,-101.06 38.1,-101.06 38.09))",
+  };
+
+  it("puts 5 points inside the field, away from the edge, the same every time", async () => {
+    const circle = await client.query(
+      `SELECT ST_AsText(ST_Buffer(ST_SetSRID(ST_MakePoint(-101.05, 38.1), 4326)::geography, 390)::geometry) AS w`,
+    );
+    shapes.pivot = circle.rows[0].w as string;
+    const svc = new ScoutingService(env, loadLibrary(DATA_DIR), prisma, null as never, null as never);
+    for (const [name, wkt] of Object.entries(shapes)) {
+      const id = await fieldWith(wkt);
+      const pts = await svc.route(id);
+      expect(pts, name).toHaveLength(5);
+      for (const p of pts) {
+        const r = await client.query(
+          `SELECT ST_Intersects(geom, ST_SetSRID(ST_MakePoint($2, $3), 4326)) AS inside,
+                  ST_Distance(ST_Boundary(ST_GeometryN(geom, 1))::geography, ST_SetSRID(ST_MakePoint($2, $3), 4326)::geography) AS edge
+           FROM fields WHERE id = $1`,
+          [id, p.lon, p.lat],
+        );
+        expect(r.rows[0].inside, `${name} point inside`).toBe(true);
+        expect(r.rows[0].edge, `${name} point away from the edge`).toBeGreaterThan(5);
+      }
+      expect(await svc.route(id)).toEqual(pts);
+    }
   });
 });
