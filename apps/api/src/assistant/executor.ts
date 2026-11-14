@@ -251,6 +251,12 @@ export class ToolExecutor {
         ndviPeak: q(s.ndviPeak, "NDVI", 2),
       })),
       irrigation: h.irrigation,
+      // Seasons after the last mapped one: USDA CDL for a season is published early the next year.
+      notYetMapped: (() => {
+        const last = Math.max(...h.seasons.map((x) => x.season), 0);
+        const current = SeasonsService.currentSeason(new Date());
+        return last ? Array.from({ length: Math.max(0, current - last - 1) }, (_, i) => last + 1 + i) : [];
+      })(),
       source: "USDA CDL / MODIS NDVI, NASA POWER",
     };
   }

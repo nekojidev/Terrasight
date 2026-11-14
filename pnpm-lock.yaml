@@ -236,7 +236,11 @@ importers:
         specifier: 4.6.7
         version: 4.6.7
 
-  packages/scenario-engine: {}
+  packages/scenario-engine:
+    dependencies:
+      '@terrasight/simulator':
+        specifier: workspace:*
+        version: link:../simulator
 
   packages/shared:
     dependencies:

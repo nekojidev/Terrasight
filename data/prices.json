@@ -1,7 +1,621 @@
 {
   "version": 1,
-  "about": "Default prices and costs per region (RFC §16, Tech Design §6.2). Filled by the team before EP-06 (S-06.05): USDA NASS prices received (2025 average), K-State crop budgets for variable costs; source and asOf per crop. Other regions fall back to FAOSTAT producer prices, labelled Estimate.",
+  "about": "Default prices and costs per region (RFC §16, Tech Design §6.2). Prices: USDA NASS Crop Values 2025 Summary (preliminary). Variable costs and reference yields: K-State KSU Farm Management Guides (direct expenses, include labour, exclude rent and capital recovery) and UNL Nebraska Crop Budgets (total operating costs). variableCost / yieldRef = irrigated budget; dryland = dryland budget. Unit conversions: 56 lb/bu corn and sorghum, 60 lb wheat and soybean, 50 lb millet and canola; $/acre × 2.471 = $/ha. Researched 2026-11-14; scenarios use a crop only once verified.",
   "currency": "USD",
-  "regions": {},
-  "fallback": { "source": "FAOSTAT producer prices", "label": "Estimate", "byCountry": {} }
+  "regions": {
+    "us-southern-plains": {
+      "crops": {
+        "corn": {
+          "price": {
+            "value": 157.5,
+            "unit": "$/t"
+          },
+          "variableCost": {
+            "value": 1435,
+            "unit": "$/ha"
+          },
+          "yieldRef": {
+            "value": 14.12,
+            "unit": "t/ha"
+          },
+          "dryland": {
+            "variableCost": {
+              "value": 694,
+              "unit": "$/ha"
+            },
+            "yieldRef": {
+              "value": 5.15,
+              "unit": "t/ha"
+            }
+          },
+          "source": "Price: USDA NASS Crop Values 2025 Summary (Feb 2026, preliminary), Kansas. Costs and yields: K-State KSU Farm Management Guides 2027 (Nov 2026), Southwest / Western KS, total direct expenses, middle yield",
+          "asOf": "2025",
+          "urls": [
+            "https://esmis.nal.usda.gov/sites/default/release-files/795791/cpvl0226.pdf",
+            "https://agmanager.info/node/34292",
+            "https://agmanager.info/node/34291"
+          ],
+          "note": "$4.00/bu. SW irrigated pivot $580.79/ac, 225 bu; SW W-C-F dryland $281.05/ac, 82 bu.",
+          "verified": false,
+          "verifiedBy": null
+        },
+        "sorghum": {
+          "price": {
+            "value": 134.5,
+            "unit": "$/t"
+          },
+          "variableCost": {
+            "value": 997,
+            "unit": "$/ha"
+          },
+          "yieldRef": {
+            "value": 10.04,
+            "unit": "t/ha"
+          },
+          "dryland": {
+            "variableCost": {
+              "value": 558,
+              "unit": "$/ha"
+            },
+            "yieldRef": {
+              "value": 5.34,
+              "unit": "t/ha"
+            }
+          },
+          "source": "Price: USDA NASS Crop Values 2025 Summary (Feb 2026, preliminary), Kansas. Costs and yields: K-State KSU Farm Management Guides 2027 (Nov 2026), Southwest / Western KS, total direct expenses, middle yield",
+          "asOf": "2025",
+          "urls": [
+            "https://esmis.nal.usda.gov/sites/default/release-files/795791/cpvl0226.pdf",
+            "https://agmanager.info/node/34292",
+            "https://agmanager.info/node/34291"
+          ],
+          "note": "$6.10/cwt. SW irrigated $403.55/ac, 160 bu; SW W-S-F $225.85/ac, 85 bu.",
+          "verified": false,
+          "verifiedBy": null
+        },
+        "winter_wheat": {
+          "price": {
+            "value": 169.0,
+            "unit": "$/t"
+          },
+          "variableCost": {
+            "value": 702,
+            "unit": "$/ha"
+          },
+          "yieldRef": {
+            "value": 4.71,
+            "unit": "t/ha"
+          },
+          "dryland": {
+            "variableCost": {
+              "value": 485,
+              "unit": "$/ha"
+            },
+            "yieldRef": {
+              "value": 3.63,
+              "unit": "t/ha"
+            }
+          },
+          "source": "Price: USDA NASS Crop Values 2025 Summary (Feb 2026, preliminary), Kansas. Costs and yields: K-State KSU Farm Management Guides 2027 (Nov 2026), Southwest / Western KS, total direct expenses, middle yield; dryland wheat from the 2026 edition (no western wheat budget in 2027)",
+          "asOf": "2025",
+          "urls": [
+            "https://esmis.nal.usda.gov/sites/default/release-files/795791/cpvl0226.pdf",
+            "https://agmanager.info/node/34292",
+            "https://www.agmanager.info/farm-budgets/historical-farm-budget-projections/2026-historical-budget-projections-non-irrigated"
+          ],
+          "note": "$4.60/bu. W KS limited irrigation $284.29/ac, 70 bu; SW W-F $196.30/ac, 54 bu.",
+          "verified": false,
+          "verifiedBy": null
+        },
+        "soybean": {
+          "price": {
+            "value": 365.6,
+            "unit": "$/t"
+          },
+          "variableCost": {
+            "value": 654,
+            "unit": "$/ha"
+          },
+          "yieldRef": {
+            "value": 4.37,
+            "unit": "t/ha"
+          },
+          "dryland": {
+            "variableCost": {
+              "value": 415,
+              "unit": "$/ha"
+            },
+            "yieldRef": {
+              "value": 1.68,
+              "unit": "t/ha"
+            }
+          },
+          "source": "Price: USDA NASS Crop Values 2025 Summary (Feb 2026, preliminary), Kansas. Costs and yields: K-State KSU Farm Management Guides 2027 (Nov 2026), Southwest / Western KS, total direct expenses, middle yield",
+          "asOf": "2025",
+          "urls": [
+            "https://esmis.nal.usda.gov/sites/default/release-files/795791/cpvl0226.pdf",
+            "https://agmanager.info/node/34292",
+            "https://agmanager.info/node/34291"
+          ],
+          "note": "$9.95/bu. SW irrigated $264.65/ac, 65 bu; SW W-SB-F $168.12/ac, 25 bu.",
+          "verified": false,
+          "verifiedBy": null
+        },
+        "sunflower": {
+          "price": {
+            "value": 463.0,
+            "unit": "$/t"
+          },
+          "variableCost": {
+            "value": 880,
+            "unit": "$/ha"
+          },
+          "yieldRef": {
+            "value": 2.69,
+            "unit": "t/ha"
+          },
+          "dryland": {
+            "variableCost": {
+              "value": 560,
+              "unit": "$/ha"
+            },
+            "yieldRef": {
+              "value": 1.79,
+              "unit": "t/ha"
+            }
+          },
+          "source": "Price: USDA NASS Crop Values 2025 Summary (Feb 2026, preliminary), Kansas. Costs and yields: K-State KSU Farm Management Guides 2027 (Nov 2026), Southwest / Western KS, total direct expenses, middle yield",
+          "asOf": "2025",
+          "urls": [
+            "https://esmis.nal.usda.gov/sites/default/release-files/795791/cpvl0226.pdf",
+            "https://agmanager.info/node/34292",
+            "https://agmanager.info/node/34291"
+          ],
+          "note": "KS all-sunflower $21.00/cwt (oil-type withheld). W KS irrigated $356.24/ac, 24 cwt; W KS W-SF-F $226.52/ac, 16 cwt.",
+          "verified": false,
+          "verifiedBy": null
+        },
+        "alfalfa": {
+          "price": {
+            "value": 133.4,
+            "unit": "$/t"
+          },
+          "variableCost": {
+            "value": 1346,
+            "unit": "$/ha"
+          },
+          "yieldRef": {
+            "value": 11.21,
+            "unit": "t/ha"
+          },
+          "dryland": {
+            "variableCost": {
+              "value": 680,
+              "unit": "$/ha"
+            },
+            "yieldRef": {
+              "value": 6.73,
+              "unit": "t/ha"
+            }
+          },
+          "source": "Price: USDA NASS Crop Values 2025 Summary (Feb 2026, preliminary), Kansas. Costs and yields: K-State KSU Farm Management Guides 2027 (Nov 2026), Southwest / Western KS, total direct expenses, middle yield",
+          "asOf": "2025",
+          "urls": [
+            "https://esmis.nal.usda.gov/sites/default/release-files/795791/cpvl0226.pdf",
+            "https://agmanager.info/node/34292",
+            "https://agmanager.info/node/34291"
+          ],
+          "note": "Baled hay $121/short ton. W KS irrigated pivot $544.66/ac, 5 t; SW KS dryland $275.15/ac, 3 t.",
+          "verified": false,
+          "verifiedBy": null
+        },
+        "cotton": {
+          "price": {
+            "value": 1347,
+            "unit": "$/t"
+          },
+          "variableCost": {
+            "value": 2077,
+            "unit": "$/ha"
+          },
+          "yieldRef": {
+            "value": 1.68,
+            "unit": "t/ha"
+          },
+          "dryland": {
+            "variableCost": {
+              "value": 1428,
+              "unit": "$/ha"
+            },
+            "yieldRef": {
+              "value": 1.01,
+              "unit": "t/ha"
+            }
+          },
+          "source": "Price: USDA NASS Crop Values 2025 Summary (Feb 2026, preliminary), Kansas. Costs and yields: K-State KSU Farm Management Guides 2027 (Nov 2026), Southwest / Western KS, total direct expenses, middle yield",
+          "asOf": "2025",
+          "urls": [
+            "https://esmis.nal.usda.gov/sites/default/release-files/795791/cpvl0226.pdf",
+            "https://agmanager.info/node/34292",
+            "https://agmanager.info/node/34291"
+          ],
+          "note": "Upland lint $0.611/lb, partial marketing year (Aug–Dec 2025); cottonseed revenue not included. SW irrigated $840.59/ac, 1,500 lb; SW W-CT-F $577.89/ac, 900 lb.",
+          "verified": false,
+          "verifiedBy": null
+        },
+        "winter_canola": {
+          "price": {
+            "value": 451.9,
+            "unit": "$/t"
+          },
+          "variableCost": {
+            "value": 963,
+            "unit": "$/ha"
+          },
+          "yieldRef": {
+            "value": 1.57,
+            "unit": "t/ha"
+          },
+          "dryland": {
+            "variableCost": {
+              "value": 739,
+              "unit": "$/ha"
+            },
+            "yieldRef": {
+              "value": 1.12,
+              "unit": "t/ha"
+            }
+          },
+          "source": "Price: USDA NASS Crop Values 2025 Summary, United States (Kansas withheld). Costs: K-State 2027, SW irrigated; South Central KS dryland (no western dryland budget)",
+          "asOf": "2025",
+          "urls": [
+            "https://esmis.nal.usda.gov/sites/default/release-files/795791/cpvl0226.pdf",
+            "https://agmanager.info/node/34292",
+            "https://agmanager.info/node/34291"
+          ],
+          "note": "US $20.50/cwt.",
+          "verified": false,
+          "verifiedBy": null
+        },
+        "forage_sorghum": {
+          "price": {
+            "value": 36.1,
+            "unit": "$/t"
+          },
+          "variableCost": {
+            "value": null,
+            "unit": "$/ha"
+          },
+          "yieldRef": {
+            "value": null,
+            "unit": "t/ha"
+          },
+          "dryland": {
+            "variableCost": {
+              "value": 754,
+              "unit": "$/ha"
+            },
+            "yieldRef": {
+              "value": 20.18,
+              "unit": "t/ha"
+            }
+          },
+          "source": "Price: K-State budget price (no NASS price for silage). Cost and yield: K-State 2027 South Central KS silage (no western or irrigated budget)",
+          "asOf": "2025",
+          "urls": [
+            "https://agmanager.info/node/34291"
+          ],
+          "note": "$32.71/ton as harvested, 9 t/ac. Not a NASS price. Irrigated uses the dryland budget.",
+          "verified": false,
+          "verifiedBy": null
+        },
+        "millet": {
+          "price": {
+            "value": 164.0,
+            "unit": "$/t"
+          },
+          "variableCost": {
+            "value": null,
+            "unit": "$/ha"
+          },
+          "yieldRef": {
+            "value": null,
+            "unit": "t/ha"
+          },
+          "dryland": {
+            "variableCost": {
+              "value": 304,
+              "unit": "$/ha"
+            },
+            "yieldRef": {
+              "value": 2.47,
+              "unit": "t/ha"
+            }
+          },
+          "source": "Price: USDA NASS Crop Values 2025, Colorado proso (no Kansas row). Cost and yield: UNL 2026 Nebraska Crop Budgets #53 Panhandle (no K-State budget)",
+          "asOf": "2025",
+          "urls": [
+            "https://esmis.nal.usda.gov/sites/default/release-files/795791/cpvl0226.pdf",
+            "https://cap.unl.edu/sites/unl.edu.ianr.agecon.center-for-ag-profitability/files/media/file/2026-nebraska-crop-budgets.pdf"
+          ],
+          "note": "$3.72/bu at 50 lb; 22 cwt/ac. Proxy for Kansas.",
+          "verified": false,
+          "verifiedBy": null
+        },
+        "fallow": {
+          "price": {
+            "value": 0,
+            "unit": "$/t"
+          },
+          "variableCost": {
+            "value": null,
+            "unit": "$/ha"
+          },
+          "yieldRef": {
+            "value": null,
+            "unit": "t/ha"
+          },
+          "dryland": {
+            "variableCost": {
+              "value": null,
+              "unit": "$/ha"
+            },
+            "yieldRef": {
+              "value": 0,
+              "unit": "t/ha"
+            }
+          },
+          "source": "No K-State, UNL or CSU budget prices a fallow year on its own: weed control is folded into the W-F wheat budget",
+          "asOf": "2025",
+          "urls": [
+            "https://www.agmanager.info/farm-budgets/historical-farm-budget-projections/2026-historical-budget-projections-non-irrigated"
+          ],
+          "note": "Cost missing: team decision needed.",
+          "verified": false,
+          "verifiedBy": null
+        }
+      }
+    },
+    "us-central-high-plains": {
+      "crops": {
+        "winter_wheat": {
+          "price": {
+            "value": 159.8,
+            "unit": "$/t"
+          },
+          "variableCost": {
+            "value": null,
+            "unit": "$/ha"
+          },
+          "yieldRef": {
+            "value": null,
+            "unit": "t/ha"
+          },
+          "dryland": {
+            "variableCost": {
+              "value": 595,
+              "unit": "$/ha"
+            },
+            "yieldRef": {
+              "value": 4.71,
+              "unit": "t/ha"
+            }
+          },
+          "source": "Price: USDA NASS Crop Values 2025 Summary (preliminary), Colorado (Nebraska where Colorado has no row). Costs and yields: UNL 2026 Nebraska Crop Budgets, Panhandle / Southwest, total operating costs",
+          "asOf": "2025",
+          "urls": [
+            "https://esmis.nal.usda.gov/sites/default/release-files/795791/cpvl0226.pdf",
+            "https://cap.unl.edu/sites/unl.edu.ianr.agecon.center-for-ag-profitability/files/media/file/2026-nebraska-crop-budgets.pdf"
+          ],
+          "note": "CO and NE $4.35/bu. #76 Panhandle no-till W-F $240.83/ac, 70 bu.",
+          "verified": false,
+          "verifiedBy": null
+        },
+        "corn": {
+          "price": {
+            "value": 173.2,
+            "unit": "$/t"
+          },
+          "variableCost": {
+            "value": 1399,
+            "unit": "$/ha"
+          },
+          "yieldRef": {
+            "value": 10.98,
+            "unit": "t/ha"
+          },
+          "dryland": {
+            "variableCost": {
+              "value": 903,
+              "unit": "$/ha"
+            },
+            "yieldRef": {
+              "value": 8.16,
+              "unit": "t/ha"
+            }
+          },
+          "source": "Price: USDA NASS Crop Values 2025 Summary (preliminary), Colorado (Nebraska where Colorado has no row). Costs and yields: UNL 2026 Nebraska Crop Budgets, Panhandle / Southwest, total operating costs",
+          "asOf": "2025",
+          "urls": [
+            "https://esmis.nal.usda.gov/sites/default/release-files/795791/cpvl0226.pdf",
+            "https://cap.unl.edu/sites/unl.edu.ianr.agecon.center-for-ag-profitability/files/media/file/2026-nebraska-crop-budgets.pdf"
+          ],
+          "note": "CO $4.40/bu (NE $4.10). #38 Panhandle pivot $566.27/ac, 175 bu; #25 SW ecofallow after wheat $365.23/ac, 130 bu.",
+          "verified": false,
+          "verifiedBy": null
+        },
+        "millet": {
+          "price": {
+            "value": 164.0,
+            "unit": "$/t"
+          },
+          "variableCost": {
+            "value": null,
+            "unit": "$/ha"
+          },
+          "yieldRef": {
+            "value": null,
+            "unit": "t/ha"
+          },
+          "dryland": {
+            "variableCost": {
+              "value": 304,
+              "unit": "$/ha"
+            },
+            "yieldRef": {
+              "value": 2.47,
+              "unit": "t/ha"
+            }
+          },
+          "source": "Price: USDA NASS Crop Values 2025 Summary (preliminary), Colorado (Nebraska where Colorado has no row). Costs and yields: UNL 2026 Nebraska Crop Budgets, Panhandle / Southwest, total operating costs",
+          "asOf": "2025",
+          "urls": [
+            "https://esmis.nal.usda.gov/sites/default/release-files/795791/cpvl0226.pdf",
+            "https://cap.unl.edu/sites/unl.edu.ianr.agecon.center-for-ag-profitability/files/media/file/2026-nebraska-crop-budgets.pdf"
+          ],
+          "note": "CO $3.72/bu at 50 lb. #53 Panhandle $122.83/ac, 22 cwt.",
+          "verified": false,
+          "verifiedBy": null
+        },
+        "sunflower": {
+          "price": {
+            "value": 573.2,
+            "unit": "$/t"
+          },
+          "variableCost": {
+            "value": 964,
+            "unit": "$/ha"
+          },
+          "yieldRef": {
+            "value": 3.36,
+            "unit": "t/ha"
+          },
+          "dryland": {
+            "variableCost": {
+              "value": 528,
+              "unit": "$/ha"
+            },
+            "yieldRef": {
+              "value": 1.79,
+              "unit": "t/ha"
+            }
+          },
+          "source": "Price: USDA NASS Crop Values 2025 Summary (preliminary), Colorado (Nebraska where Colorado has no row). Costs and yields: UNL 2026 Nebraska Crop Budgets, Panhandle / Southwest, total operating costs",
+          "asOf": "2025",
+          "urls": [
+            "https://esmis.nal.usda.gov/sites/default/release-files/795791/cpvl0226.pdf",
+            "https://cap.unl.edu/sites/unl.edu.ianr.agecon.center-for-ag-profitability/files/media/file/2026-nebraska-crop-budgets.pdf"
+          ],
+          "note": "CO all-type $26.00/cwt (oil withheld). #73 Panhandle pivot $390.13/ac, 30 cwt; #72 after wheat $213.58/ac, 16 cwt.",
+          "verified": false,
+          "verifiedBy": null
+        },
+        "soybean": {
+          "price": {
+            "value": 365.6,
+            "unit": "$/t"
+          },
+          "variableCost": {
+            "value": 809,
+            "unit": "$/ha"
+          },
+          "yieldRef": {
+            "value": 4.51,
+            "unit": "t/ha"
+          },
+          "dryland": {
+            "variableCost": {
+              "value": 419,
+              "unit": "$/ha"
+            },
+            "yieldRef": {
+              "value": 1.68,
+              "unit": "t/ha"
+            }
+          },
+          "source": "Price: USDA NASS 2025, Nebraska (no Colorado row). Irrigated: UNL 2026 #62 statewide pivot. Dryland: K-State 2027 Northwest KS W-SB-F (UNL dryland is statewide, too optimistic here)",
+          "asOf": "2025",
+          "urls": [
+            "https://esmis.nal.usda.gov/sites/default/release-files/795791/cpvl0226.pdf",
+            "https://cap.unl.edu/sites/unl.edu.ianr.agecon.center-for-ag-profitability/files/media/file/2026-nebraska-crop-budgets.pdf",
+            "https://agmanager.info/node/34291"
+          ],
+          "note": "$9.95/bu. #62 $327.46/ac, 67 bu; NW KS $169.48/ac, 25 bu.",
+          "verified": false,
+          "verifiedBy": null
+        },
+        "alfalfa": {
+          "price": {
+            "value": 180.8,
+            "unit": "$/t"
+          },
+          "variableCost": {
+            "value": 879,
+            "unit": "$/ha"
+          },
+          "yieldRef": {
+            "value": 14.8,
+            "unit": "t/ha"
+          },
+          "dryland": {
+            "variableCost": {
+              "value": 655,
+              "unit": "$/ha"
+            },
+            "yieldRef": {
+              "value": 6.73,
+              "unit": "t/ha"
+            }
+          },
+          "source": "Price: USDA NASS 2025, Colorado. Irrigated: UNL 2026 #12 Panhandle pivot. Dryland: K-State 2027 Northwest KS",
+          "asOf": "2025",
+          "urls": [
+            "https://esmis.nal.usda.gov/sites/default/release-files/795791/cpvl0226.pdf",
+            "https://cap.unl.edu/sites/unl.edu.ianr.agecon.center-for-ag-profitability/files/media/file/2026-nebraska-crop-budgets.pdf",
+            "https://agmanager.info/node/34291"
+          ],
+          "note": "CO $164/short ton (NE $102). #12 $355.87/ac, 6.6 t; NW KS $265.06/ac, 3 t.",
+          "verified": false,
+          "verifiedBy": null
+        },
+        "fallow": {
+          "price": {
+            "value": 0,
+            "unit": "$/t"
+          },
+          "variableCost": {
+            "value": null,
+            "unit": "$/ha"
+          },
+          "yieldRef": {
+            "value": null,
+            "unit": "t/ha"
+          },
+          "dryland": {
+            "variableCost": {
+              "value": null,
+              "unit": "$/ha"
+            },
+            "yieldRef": {
+              "value": 0,
+              "unit": "t/ha"
+            }
+          },
+          "source": "No budget prices a fallow year on its own",
+          "asOf": "2025",
+          "urls": [
+            "https://cap.unl.edu/sites/unl.edu.ianr.agecon.center-for-ag-profitability/files/media/file/2026-nebraska-crop-budgets.pdf"
+          ],
+          "note": "Cost missing: team decision needed.",
+          "verified": false,
+          "verifiedBy": null
+        }
+      }
+    }
+  },
+  "fallback": {
+    "source": "FAOSTAT producer prices",
+    "label": "Estimate",
+    "byCountry": {}
+  }
 }

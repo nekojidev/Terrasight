@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Inject, Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from "@nestjs/common";
-import { GoogleGenAI, type Content, type Part } from "@google/genai";
+import { GoogleGenAI, ThinkingLevel, type Content, type Part } from "@google/genai";
 import {
   AllowedSet,
   checkSentence,
@@ -315,6 +315,8 @@ export class AssistantService implements OnModuleInit, OnModuleDestroy {
           config: {
             systemInstruction: systemPrompt(lang, localDate(ws.timeZone)),
             temperature: 0.2,
+            // Low thinking keeps a tool-using turn inside the 30 s budget (RFC §12.7).
+            thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
             abortSignal: signal,
             ...(withTools ? { tools: [{ functionDeclarations: functionDeclarations() }] } : {}),
           },
@@ -363,6 +365,8 @@ export class AssistantService implements OnModuleInit, OnModuleDestroy {
     const allowed = new AllowedSet();
     for (const r of runs) allowed.addResult(r.result);
     allowed.addText(question, lang);
+    // The planning horizon comes from the system rules: 5 seasons, 2026–2030 (RFC §7.7).
+    allowed.addText("5 seasons 2026 2027 2028 2029 2030", "en");
     const shown: string[] = [];
     let numbers = 0;
     let failed = false;

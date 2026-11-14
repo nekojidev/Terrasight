@@ -54,8 +54,11 @@ describe("loadLibrary", () => {
     ]);
   });
 
-  it("lists crops without prices while prices.json is empty", () => {
-    expect(missingPrices(lib)["us-southern-plains"]).toContain("corn");
+  it("has prices for every crop of the two demo regions and lists the rest", () => {
+    const missing = missingPrices(lib);
+    expect(missing["us-southern-plains"]).toBeUndefined();
+    expect(missing["us-central-high-plains"]).toBeUndefined();
+    expect(Object.keys(missing).length).toBeGreaterThan(0); // other regions wait for FAOSTAT fallback prices
   });
 
   it("rejects an invalid data directory with every problem listed", () => {

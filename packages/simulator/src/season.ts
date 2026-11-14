@@ -13,6 +13,8 @@ export interface WeatherDay {
   rs?: number | null;
   /** Wind at 2 m, m/s. */
   u2?: number | null;
+  /** Precomputed ET₀, mm (the engine computes it once per weather day; ignored when climate deltas apply). */
+  et0?: number;
 }
 
 export interface Site {
@@ -78,6 +80,7 @@ const addDays = (iso: string, n: number) =>
   new Date(Date.parse(`${iso}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
 
 function et0(day: WeatherDay, site: Site, dT: number): number {
+  if (day.et0 !== undefined && dT === 0) return day.et0;
   const doy = dayOfYear(day.date);
   const tmin = day.tmin + dT;
   const tmax = day.tmax + dT;

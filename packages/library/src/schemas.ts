@@ -169,10 +169,18 @@ const Amount = z.object({ value: z.number().nullable(), unit: z.string().min(1) 
 
 export const CropPrice = z.object({
   price: Amount,
+  /** Irrigated budget (or the only one); null when no irrigated budget exists. */
   variableCost: Amount,
   yieldRef: Amount,
+  /** Dryland budget, when it differs (RFC §16). */
+  dryland: z.object({ variableCost: Amount, yieldRef: Amount }).optional(),
   source: z.string().min(1),
   asOf: z.string().min(4),
+  urls: z.array(z.string()).default([]),
+  note: z.string().optional(),
+  /** Reviewed by the team (like pest thresholds); scenarios use only verified prices. */
+  verified: z.boolean().default(false),
+  verifiedBy: z.string().nullable().default(null),
 });
 
 export const PricesFile = z.object({

@@ -34,9 +34,12 @@ const recPath = (lang) => join(here, "recordings", `${lang}.json`);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ---------- live ----------
+// One session for the whole run: a refresh token is single-use, so the jar is shared across languages.
+const jar = new Map();
+let signedIn = false;
+
 async function runLive(lang) {
   const base = process.env.GOLDEN_API ?? "http://localhost:4000";
-  const jar = new Map();
   const call = async (path, init = {}) => {
     const headers = {
       "X-Requested-With": "golden",
@@ -57,7 +60,9 @@ async function runLive(lang) {
       throw new Error(`${init.method ?? "GET"} ${path} → ${res.status} ${await res.text()}`);
     return res.status === 204 ? null : res.json();
   };
-  if (process.env.GOLDEN_COOKIE_JAR) {
+  if (signedIn) {
+    // already signed in for the previous language
+  } else if (process.env.GOLDEN_COOKIE_JAR) {
     // A curl / Netscape cookie jar from a signed-in session; the refresh cookie gets a fresh access token.
     for (const line of readFileSync(process.env.GOLDEN_COOKIE_JAR, "utf8").split("\n")) {
       const parts = line.replace(/^#HttpOnly_/, "").split("\t");
@@ -75,6 +80,7 @@ async function runLive(lang) {
   const ws = process.env.GOLDEN_WORKSPACE ?? me.workspaces[0].id;
   const out = [];
   for (const q of load(lang)) {
+    await call("/api/auth/refresh", { method: "POST" });
     const conv = await call(`/api/w/${ws}/conversations`, {
       method: "POST",
       body: { title: `golden ${q.id}` },
