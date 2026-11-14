@@ -202,3 +202,34 @@ describe("scenario engine (RFC §8)", () => {
     expect(performance.now() - t0).toBeLessThan(5_000);
   });
 });
+
+describe("rotation yield effects (verified 2026-11-14)", () => {
+  it("penalise a crop following itself", async () => {
+    const { rotationEffect } = await import("./rotation-effects.js");
+    expect(rotationEffect("corn", ["corn"], true)).toBe(0.88);
+    expect(rotationEffect("corn", ["corn"], false)).toBe(0.9);
+    expect(rotationEffect("corn", ["soybean"], true)).toBe(1);
+    expect(rotationEffect("sorghum", ["sorghum"], false)).toBe(0.65);
+    expect(rotationEffect("winter_wheat", ["winter_wheat"], false)).toBe(0.74);
+  });
+  it("continuous corn loses margin against corn in rotation", () => {
+    const only = (ids: string[]) =>
+      runScenarios(
+        input({
+          rotations: rotations.filter((r) => ids.includes(r.id)),
+          current: {
+            rotationId: null,
+            sequence: ["corn", "soybean", "winter_wheat"],
+            position: 0,
+            label: "detected",
+          },
+          history: ["winter_wheat"],
+        }),
+      );
+    const r = only(["continuous-corn"]);
+    const cc = r.alternatives.find((a) => a.id === "continuous-corn")!;
+    // 4 of 5 corn seasons follow corn: margin is lower than without the effect would give
+    expect(cc.pestPressure[0]!.seasons).toBe(4);
+    expect(cc.marginBySeason[1]!).toBeLessThan(cc.marginBySeason[0]!);
+  });
+});

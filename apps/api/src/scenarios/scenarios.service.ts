@@ -3,7 +3,13 @@ import { Worker } from "node:worker_threads";
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import type { Library } from "@terrasight/library";
 import { stableStringify } from "@terrasight/evaluators";
-import { withEt0, type EngineInput, type EngineResult, type Rotation } from "@terrasight/scenario-engine";
+import {
+  ENGINE_VERSION,
+  withEt0,
+  type EngineInput,
+  type EngineResult,
+  type Rotation,
+} from "@terrasight/scenario-engine";
 import type { HydGroup, WeatherDay } from "@terrasight/simulator";
 import type { DailyWeather as PowerSeries, SoilSummary } from "@terrasight/sources";
 import { ENV, type Env } from "../config/config.js";
@@ -192,6 +198,7 @@ export class ScenariosService {
           weatherByYear: [...input.weatherByYear.keys()],
           weatherDate: input.weatherByYear.get(Math.max(...input.weatherByYear.keys()))?.at(-1)?.date,
           versions: this.lib.versions,
+          engine: ENGINE_VERSION,
         }),
       )
       .digest("hex");
@@ -311,7 +318,11 @@ export class ScenariosService {
     for (const c of crops)
       if (c.mainCrop === crops[0]?.mainCrop) inRow++;
       else break;
-    const deadline = this.seasons.typicalSowing(regionId, firstCrop, firstSeason);
+    // Default deadline: the first crop's typical sowing date; with the fixed horizon (PLAN_FIRST_SEASON) it may already
+    // be past, so the next such date counts.
+    let deadline = this.seasons.typicalSowing(regionId, firstCrop, firstSeason);
+    const today = new Date().toISOString().slice(0, 10);
+    while (deadline && deadline < today) deadline = `${Number(deadline.slice(0, 4)) + 1}${deadline.slice(4)}`;
     const alt = result.alternatives[0];
     const keyNumbers = [
       { id: "hostSeasonsInPlan", value: `${hostSeasons(result.current)}/5`, weight: 1 },

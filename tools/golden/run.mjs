@@ -138,6 +138,7 @@ function evaluate(lang, answers) {
     const allowed = new core.AllowedSet();
     for (const t of a.tools) allowed.addResult(t.result);
     allowed.addText(a.question, lang);
+    allowed.addText("5 seasons 2026 2027 2028 2029 2030", "en"); // horizon from the system rules, as in the service
     const refused = REFUSAL_TEXTS.includes(a.answer);
     if (!a.error && !refused) {
       const shown = (a.answer ?? "").replace(/Showing the data directly\.|Показуємо дані напряму\./, "");

@@ -165,6 +165,17 @@ export function extractNumbers(sentence: string, lang: Lang): Extracted[] {
     if (!mo || !validDay(mo, d)) return null;
     return { raw: m[0], kind: "date", date: { md: md(mo, d), ...(m[3] ? { year: Number(m[3]) } : {}) } };
   });
+  // Day ranges before a month: "14–15 листопада", "14-15 November" → two dates.
+  take(new RegExp(`\\b(\\d{1,2})\\s*[–-]\\s*(\\d{1,2})\\s+(${MONTH_WORD})`, "g"), (m) => {
+    const mo = month(m[3]!);
+    const d1 = Number(m[1]);
+    const d2 = Number(m[2]);
+    if (!mo || !validDay(mo, d1) || !validDay(mo, d2)) return null;
+    return [
+      { raw: m[0], kind: "date" as const, date: { md: md(mo, d1) } },
+      { raw: m[0], kind: "date" as const, date: { md: md(mo, d2) } },
+    ];
+  });
   // "25 April", "25 квітня 2027"
   take(new RegExp(`\\b(\\d{1,2})\\s+(${MONTH_WORD})(?:\\s+(\\d{4}))?`, "g"), (m) => {
     const mo = month(m[2]!);
@@ -238,7 +249,7 @@ export class AllowedSet {
       if (/^-?\d+(\.\d+)?$/.test(node)) return this.addNumber(Number(node), unit);
       // Numbers inside tool text ("crop for 2026 not known yet", "Plan for 2027: …") are tool output too.
       for (const n of node.match(/\d{4}-\d{2}-\d{2}/g) ?? []) this.addDate(n);
-      for (const e of extractNumbers(node, "en")) {
+      for (const e of [...extractNumbers(node, "en"), ...extractNumbers(node, "uk")]) {
         if (e.value !== undefined) this.addNumber(e.value, undefined, e.decimals);
         if (e.date) {
           this.dates.add(e.date.md);

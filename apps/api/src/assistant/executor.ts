@@ -126,7 +126,7 @@ export class ToolExecutor {
       where: { fieldId: { in: fields.map((f) => f.id) } },
       orderBy: { season: "desc" },
     });
-    return fields
+    const list = fields
       .map((f) => ({
         field: `F${f.aliasNo}`,
         region: f.regionId,
@@ -142,6 +142,7 @@ export class ToolExecutor {
         urgency: urgencyOf.get(f.id) ?? "all_good",
       }))
       .filter((f) => !a.urgency || f.urgency === a.urgency);
+    return { count: list.length, fields: list };
   }
 
   private async getBrief(scope: Scope) {
@@ -241,6 +242,7 @@ export class ToolExecutor {
           source: s.source,
           confidence: q(s.confidence, "share", 2),
         })),
+      stressYearCount: (h.stressYears as Array<{ season: number }>).filter((s) => inRange(s.season)).length,
       stressYears: (h.stressYears as Array<{ season: number; reasons: string[] }>)
         .filter((s) => inRange(s.season))
         .map((s) => ({ season: s.season, reasons: s.reasons })),
@@ -324,6 +326,7 @@ export class ToolExecutor {
       maxTemperature: q(cur.tmax, "°C", 1),
       frostDays: q(cur.frost, "days", 0),
       percentileVsPastYears: {
+        since: 1981,
         precipitation: q(
           pct(
             past.map((p) => p.precip),

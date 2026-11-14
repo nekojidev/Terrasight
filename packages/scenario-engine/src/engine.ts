@@ -11,6 +11,7 @@ import {
   type WeatherDay,
 } from "@terrasight/simulator";
 import { priceScenarios } from "./prices.js";
+import { rotationEffect } from "./rotation-effects.js";
 import { Pcg32, seedFrom } from "./random.js";
 import { bootstrapRuns, SEASONS, stressRuns, type WeatherRun } from "./weather-runs.js";
 
@@ -228,7 +229,10 @@ function simulateRun(
       if (c.crop !== "alfalfa") alfalfaYears = 0;
       // Budget yields are typical yields: a median weather year on this field reproduces them (quick-pass calibration).
       const median = input.calibration?.[c.crop] ?? 1;
-      const tonnes = ((e?.yieldRef ?? 0) * c.yieldRatio * est) / Math.max(0.2, median);
+      // Rotation effect when the crop follows itself (corn after corn, sorghum after sorghum, wheat after wheat).
+      const previous = k > 0 ? plan[k - 1]!.crops : (input.history ?? []).slice(-1);
+      const rot = rotationEffect(c.crop, previous, input.irrigated);
+      const tonnes = ((e?.yieldRef ?? 0) * c.yieldRatio * est * rot) / Math.max(0.2, median);
       parts.push({ crop: c.crop, tonnes });
       cost += e?.variableCost ?? 0;
       residue += tonnes * (CROPS[c.crop]?.residueC ?? 0.3);
@@ -536,3 +540,6 @@ export function runScenarios(engineInput: EngineInput, weights: Weights = EQUAL_
 }
 
 export { addDays };
+
+/** Bumped whenever the engine or simulator changes results; part of the scenario cache key. */
+export const ENGINE_VERSION = "2026-11-14.2";

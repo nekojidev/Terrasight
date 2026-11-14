@@ -5,6 +5,8 @@ import { functionDeclarations, parseArgs } from "./tools.js";
 
 /** Tool results of a typical turn about Pivot 12 (F1) and Pivot 14 (F2). */
 const RESULTS = [
+  { prevent: "Знищте падалицю за два тижні до сівби." },
+  { forecast: ["2026-11-25"] },
   {
     field: "F1",
     areaHa: { value: 47.63, unit: "ha", precision: 1 },
@@ -85,6 +87,8 @@ const PASS: Array<[Lang, string, string?]> = [
   ["uk", "Є два варіанти, які варто порівняти."],
   ["uk", "Впевненість 80%."],
   ["uk", "Огляньте поле, щоб підтвердити."],
+  ["uk", "Після дощів 20–25 листопада очікується потепління.", ""],
+  ["uk", "Знищуйте падалицю щонайменше за 2 тижні до сівби."],
 ];
 
 const FAIL: Array<[Lang, string]> = [
