@@ -139,7 +139,7 @@ export function Brief({
     i.keyNumbers.slice(0, 3).map((k) => ({
       value:
         typeof k.value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(k.value)
-          ? dateShort(k.value)
+          ? fmt(k.value, { day: "numeric", month: "short" })
           : String(k.value),
       label: t.has(`kn_${k.id}`) ? t(`kn_${k.id}`) : k.id,
       weight: k.weight,
@@ -295,15 +295,15 @@ export function Brief({
                 <li key={g.fieldId}>
                   <Link
                     href={g.plan ? `/recommendations/${g.plan.id}` : `/fields/${g.fieldId}`}
-                    className="focus-ring flex items-center gap-2 rounded-chip border border-line bg-surface px-4 py-2 text-small font-semibold text-ink hover:bg-muted"
+                    className="focus-ring flex max-w-full flex-wrap items-center gap-2 rounded-chip border border-line bg-surface px-4 py-2 text-small font-semibold text-ink hover:bg-muted"
                   >
-                    {g.name}
+                    <span className="whitespace-nowrap">{g.name}</span>
                     <SeasonStrip
                       size="sm"
                       seasons={g.seasons.map((x) => ({ crop: x.crop, name: x.crop, year: x.season }))}
                     />
                     {g.plan && (
-                      <Chip tone="signal">
+                      <Chip tone="signal" className="max-w-full truncate">
                         {t("planChip", {
                           title: g.plan.title[locale],
                           date: g.plan.deadline ? dateShort(g.plan.deadline) : "—",

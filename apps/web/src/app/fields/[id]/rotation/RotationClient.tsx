@@ -535,12 +535,14 @@ export function RotationClient({
                     {pct === null ? "—" : pct === 0 ? "0%" : `${pct > 0 ? "−" : "+"}${Math.abs(pct)}%`}
                   </span>
                 </p>
-                <span aria-hidden className="mt-2 block h-2.5 overflow-hidden rounded-chip bg-muted">
-                  <span
-                    className={`block h-full ${s.id === pick?.id ? "bg-ink" : "bg-ink-2"}`}
-                    style={{ width: `${pct === null ? 0 : Math.min(100, Math.max(2, pct))}%` }}
-                  />
-                </span>
+                {pct !== 0 && (
+                  <span aria-hidden className="mt-2 block h-2.5 overflow-hidden rounded-chip bg-muted">
+                    <span
+                      className={`block h-full ${s.id === pick?.id ? "bg-ink" : "bg-ink-2"}`}
+                      style={{ width: `${pct === null ? 0 : Math.min(100, Math.max(2, pct))}%` }}
+                    />
+                  </span>
+                )}
                 {pct === 0 && <p className="mt-1 text-small text-ink-3">{t("rot2022Covered")}</p>}
                 {pct !== null && pct !== 0 && (
                   <p className="mt-1 text-small text-ink-3">
