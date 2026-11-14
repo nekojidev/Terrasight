@@ -351,7 +351,7 @@ export function Brief({
       <aside className="hidden flex-col gap-4 md:flex">
         <RailCard title={m("rail_day")}>
           <div className="grid grid-cols-3 gap-2">
-            <p className="rounded-input bg-signal p-3 text-ink">
+            <p className="rounded-input bg-signal p-3 text-on-signal">
               <span className="block font-mono text-h2">{b.counts.urgent}</span>
               <span className="text-small">{m("d1")}</span>
             </p>

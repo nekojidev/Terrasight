@@ -67,6 +67,7 @@
   --ts-urgent: #FF8A7A; --ts-urgent-soft: #3A1E1A;
   --ts-week: #F2B45A;   --ts-week-soft: #352813;
   --ts-ok: #7FD49A;     --ts-ok-soft: #16301D;
+  --ts-info: #8DB4F0;   --ts-info-soft: #18263D;
   /* the primary button turns light: background var(--ts-ink), text var(--ts-surface) */
 }
 
