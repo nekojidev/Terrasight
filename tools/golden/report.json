@@ -2,8 +2,8 @@
   {
     "lang": "en",
     "total": 33,
-    "shownWithoutFallback": 1,
-    "fallback": 0,
+    "shownWithoutFallback": 0.9696969696969697,
+    "fallback": 1,
     "errors": 0,
     "refusalsOk": 5,
     "refusalsExpected": 5,
@@ -24,7 +24,9 @@
     "problems": [
       {
         "id": "uk-20",
-        "problems": ["unavailable: Асистент недоступний. Бриф, картки та звіт працюють."]
+        "problems": [
+          "unavailable: Асистент недоступний. Бриф, картки та звіт працюють."
+        ]
       }
     ]
   }

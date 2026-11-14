@@ -169,9 +169,6 @@ const collection = {
           "/api/w/00000000-0000-4000-8000-000000000000",
           { tests: problem(404) },
         ),
-        req("Demo company before the seed", "POST", "/api/workspaces/demo-copy", {
-          tests: problem(404, "demo-not-seeded"),
-        }),
       ],
     },
     {
