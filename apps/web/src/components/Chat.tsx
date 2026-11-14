@@ -218,7 +218,7 @@ export function Chat({
         />
         <Button type="submit" variant="icon" label={a("send")} icon={<Send />} />
       </form>
-      <p className="mt-2 text-micro text-ink-3">{a("disclaimer")}</p>
+      <p className="mt-2 text-small text-ink-3">{a("disclaimer")}</p>
     </div>
   );
 }

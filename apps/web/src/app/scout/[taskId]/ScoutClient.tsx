@@ -147,17 +147,17 @@ export function ScoutClient({ workspaceId, initial }: { workspaceId: string; ini
         viewBox="0 0 320 320"
         role="img"
         aria-label={s("route_label")}
-        className="mx-4 my-3 rounded-card bg-surface"
+        className="my-3 block w-full bg-ink"
       >
         {sketch.rings.map((r, i) => (
-          <polygon key={i} points={r} className="fill-muted stroke-line-strong" strokeWidth="2" />
+          <polygon key={i} points={r} className="fill-ok/40 stroke-signal" strokeWidth="2.5" />
         ))}
         <polyline
           points={sketch.points.map((p) => p.join(",")).join(" ")}
           fill="none"
-          className="stroke-ink-3"
-          strokeDasharray="4 4"
-          strokeWidth="1.5"
+          className="stroke-surface"
+          strokeDasharray="5 5"
+          strokeWidth="2"
         />
         {sketch.points.map(([x, y], i) => (
           <g key={i} onClick={() => setAt(i)} className="cursor-pointer">
@@ -169,7 +169,7 @@ export function ScoutClient({ workspaceId, initial }: { workspaceId: string; ini
                 i === at
                   ? "fill-signal stroke-ink"
                   : counts[i] !== null
-                    ? "fill-ink"
+                    ? "fill-ok stroke-surface"
                     : "fill-surface stroke-ink"
               }
               strokeWidth="2"

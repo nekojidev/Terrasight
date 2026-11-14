@@ -2,7 +2,8 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@terrasight/ui";
-import { MessageSquare, Plus, Trash2 } from "lucide-react";
+import { FileText, MessageSquare, Play, Plus, RefreshCw, Trash2 } from "lucide-react";
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import { Chat } from "@/components/Chat";
@@ -17,9 +18,11 @@ interface Item {
 /** Conversation list + chat (design 14). */
 export function AssistantClient({
   workspaceId,
+  fieldCount,
   context,
 }: {
   workspaceId: string;
+  fieldCount: number;
   context: { fieldId?: string; recommendationId?: string };
 }) {
   const t = useTranslations("Assistant");
@@ -34,6 +37,17 @@ export function AssistantClient({
     const c = await api<{ id: string }>(`/api/w/${workspaceId}/conversations`, { body: {} });
     await client.invalidateQueries({ queryKey: key });
     setCurrent(c.id);
+  }
+  const [ran, setRan] = useState<"idle" | "busy" | "done" | "error">("idle");
+  async function analyze() {
+    setRan("busy");
+    try {
+      await api(`/api/w/${workspaceId}/analysis-runs`, { body: {} });
+      void client.invalidateQueries({ queryKey: ["brief", workspaceId] });
+      setRan("done");
+    } catch {
+      setRan("error");
+    }
   }
   async function remove(id: string) {
     await api(`/api/w/${workspaceId}/conversations/${id}`, { method: "DELETE" });
@@ -79,8 +93,50 @@ export function AssistantClient({
             </li>
           ))}
         </ul>
+        <h2 className="mt-4 font-mono text-small tracking-wide text-ink-2 uppercase">{t("cmds")}</h2>
+        <div className="flex flex-col gap-2">
+          <Button
+            variant="outline"
+            icon={<Play />}
+            onClick={() => void analyze()}
+            disabled={ran === "busy"}
+            aria-busy={ran === "busy"}
+            className="justify-start"
+          >
+            {t("k1")}
+          </Button>
+          {ran === "done" && (
+            <p role="status" className="text-small text-ok">
+              {app("aiAnalyzeStarted")}
+            </p>
+          )}
+          {ran === "error" && (
+            <p role="alert" className="text-small text-urgent">
+              {app("errGeneric")}
+            </p>
+          )}
+          <Link
+            href="/reports"
+            className="focus-ring inline-flex min-h-tap items-center gap-2 rounded-btn border border-line-strong px-4 text-body font-semibold text-ink hover:bg-muted"
+          >
+            <FileText aria-hidden className="size-4" strokeWidth={1.7} />
+            {t("k2")}
+          </Link>
+          <Link
+            href="/rotation"
+            className="focus-ring inline-flex min-h-tap items-center gap-2 rounded-btn border border-line-strong px-4 text-body font-semibold text-ink hover:bg-muted"
+          >
+            <RefreshCw aria-hidden className="size-4" strokeWidth={1.7} />
+            {t("k3")}
+          </Link>
+        </div>
       </aside>
       <section className="min-w-0 rounded-card border border-line bg-surface p-5">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <span className="rounded-chip bg-muted px-3 py-1 text-small font-semibold text-ink">
+            {hasContext ? app("aiScopeContext") : app("aiScopeAll", { n: fieldCount })}
+          </span>
+        </div>
         {current && (
           <Chat key={current} workspaceId={workspaceId} conversationId={current} context={context} />
         )}

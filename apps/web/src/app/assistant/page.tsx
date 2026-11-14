@@ -38,6 +38,7 @@ export default async function AssistantPage({
     >
       <AssistantClient
         workspaceId={ws.data.id}
+        fieldCount={ws.data.fieldCount}
         context={{
           ...(sp.field ? { fieldId: sp.field } : {}),
           ...(sp.rec ? { recommendationId: sp.rec } : {}),
