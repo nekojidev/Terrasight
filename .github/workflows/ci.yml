@@ -74,6 +74,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm turbo run build --filter=@terrasight/api...
       - run: pnpm --filter @terrasight/api db:migrate
+      # Counties and admin-1 for field previews (Natural Earth, downloaded into data/boundaries/).
+      - run: pnpm --filter @terrasight/api boundaries:load
       - name: Start the API
         run: |
           (cd apps/api && node dist/main.js > /tmp/api.log 2>&1 &)

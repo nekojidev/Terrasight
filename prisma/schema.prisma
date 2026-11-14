@@ -357,6 +357,8 @@ model GatherJob {
   status     JobStatus @default(queued)
   startedAt  DateTime  @default(now()) @map("started_at") @db.Timestamptz(3)
   finishedAt DateTime? @map("finished_at") @db.Timestamptz(3)
+  /** Set once when the provisional history was queued (claimed under a row lock). */
+  provisionalAt DateTime? @map("provisional_at") @db.Timestamptz(3)
 
   field Field        @relation(fields: [fieldId], references: [id], onDelete: Cascade)
   tasks GatherTask[]
@@ -370,6 +372,9 @@ model GatherTask {
   status     JobStatus @default(queued)
   attempts   Int       @default(0)
   error      String?
+  /** source_cache key of the result this task produced (read by the history builder). */
+  cacheKey   String?   @map("cache_key")
+  dataDate   DateTime? @map("data_date") @db.Date
   finishedAt DateTime? @map("finished_at") @db.Timestamptz(3)
 
   job GatherJob @relation(fields: [jobId], references: [id], onDelete: Cascade)

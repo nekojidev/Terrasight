@@ -3,17 +3,17 @@
 **Goal:** the current rotation and 2 alternatives over 5 seasons, explained, with a decision for 2026.
 **RFC:** D4, D5 (§7, §8), §9. **Tech Design:** §6.2, §9. **Design:** 10 Rotation.
 
-### S-06.01 Port the simulator
+### S-06.01 Write the simulator
 
 | Priority | Points | RFC | Tech Design | Design | Depends on |
 | --- | --- | --- | --- | --- | --- |
-| P0 | 5 | §7.1 | §9.1 | — | S-00.01 |
+| P0 | 8 | §7.1 | §9.1 | — | S-00.01 |
 
-As a developer, I want the PoC simulator in `packages/simulator` with its tests, so that we start from tested science.
+As a developer, I want the simulator in `packages/simulator` with reference tests, so that we start from tested science (there is no PoC).
 
 **Acceptance criteria**
 
-- FAO-56 water balance, FAO-33 Ky, SCS-CN, relative RUSLE index and ICBM moved with their PoC tests green before any change.
+- FAO-56 water balance, FAO-33 Ky, SCS-CN, relative RUSLE index and ICBM implemented with tests against published worked examples (FAO-56 examples for ET₀ and the water balance).
 - Double cropping: `main` then `second` in one season on their own calendars, soil water carried over (new tests).
 - Deficit irrigation under a water cap follows `1 − Ya/Ym = Ky × (1 − ETa/ETc)`.
 

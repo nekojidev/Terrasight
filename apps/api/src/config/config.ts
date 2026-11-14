@@ -18,6 +18,13 @@ export const EnvSchema = z.object({
   WEB_ORIGIN: z.string().url().default("http://localhost:3000"),
   /** HS256 key for the 15-minute access JWT (Tech Design §14.1). At least 32 characters. */
   JWT_SECRET: z.string().min(32, "must be at least 32 characters"),
+  /** Source credentials (Tech Design §17). Optional: without them those sources report "not configured". */
+  CDSE_CLIENT_ID: z.string().optional(),
+  CDSE_CLIENT_SECRET: z.string().optional(),
+  OPENET_API_KEY: z.string().optional(),
+  EARTHDATA_TOKEN: z.string().optional(),
+  /** Recorded real responses served when a live call fails (RFC §5.4). */
+  FIXTURES_DIR: z.string().default(fileURLToPath(new URL("../../../../fixtures/", import.meta.url))),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

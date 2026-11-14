@@ -223,7 +223,7 @@ erDiagram
 | `tool_calls` | id, message_id, tool, args jsonb, result jsonb, duration_ms | |
 | `outbox` | id, topic, routing_key, payload jsonb, created_at, published_at | Transactional outbox (§7) |
 | `audit_log` | id, workspace_id, user_id, action, target, at | Accept, commit, publish, role changes |
-| `admin_areas`, `us_counties` | code, name, country, geom | Loaded at deploy from Natural Earth admin-1 and US Census TIGER counties (§6.4) |
+| `admin_areas`, `us_counties` | code, name, country, geom | Loaded at deploy from Natural Earth admin-1 and Natural Earth admin-2 US counties (§6.4) |
 
 ### 5.2 Key constraints
 
@@ -300,13 +300,13 @@ Each file's content hash is its **version**, stored with every recommendation an
 `packages/library/region.ts` implements RFC §6.3 exactly as the Python validator does (`tools/build_rotations_v2.py`): ISO 3166-2 code or ISO 3166-1 country code in `admin`, optional `lat` / `lon` bounds, first match in file order. **Known test points:** [`data/region-test-points.json`](../data/region-test-points.json) holds at least one point per library region (24 regions, 27 points, plus one point with no region). Both checks read it:
 
 - `tools/build_rotations_v2.py --check` matches each point with its stated ISO 3166-2 code and fails if a region has no point;
-- `packages/library/region.test.ts` derives each point's code from the loaded Natural Earth / TIGER boundaries (§6.4) and must reach the same region.
+- `apps/api/scripts/check-region-points.mjs` (`pnpm --filter @terrasight/api boundaries:check`) derives each point's code from the loaded Natural Earth boundaries in PostGIS (§6.4) and must reach the same region. It lives in the API because it needs the database; `packages/library` stays free of I/O.
 
-**ISO code aliases:** where Natural Earth uses an outdated ISO 3166-2 code for a library country, `packages/library/admin-aliases.ts` maps old → current code before matching; `rotations.json` is never edited for this. Likely candidates to check when the boundaries are loaded: China's numeric codes replaced in 2017 (`CN-13` → `CN-HE`, `CN-37` → `CN-SD`, `CN-41` → `CN-HA`). `region.test.ts` fails on any point whose derived code doesn't match a rule, which shows where an alias is needed.
+**ISO code aliases:** where Natural Earth uses an outdated ISO 3166-2 code for a library country, `packages/library/admin-aliases.ts` maps old → current code before matching; `rotations.json` is never edited for this. Likely candidates to check when the boundaries are loaded: China's numeric codes replaced in 2017 (`CN-13` → `CN-HE`, `CN-37` → `CN-SD`, `CN-41` → `CN-HA`). `boundaries:check` fails on any point whose derived code doesn't match a rule, which shows where an alias is needed.
 
 ### 6.4 Reverse geocoding
 
-No external geocoding API. At deploy, `tools/load-boundaries` loads **Natural Earth admin-1** (has `iso_3166_2` codes) and **US Census TIGER/Line counties** into `admin_areas` and `us_counties`. A field's centroid is matched with `ST_Contains`; the US county name feeds the UI region ("Logan County, CO", PD §9) and the ISO code feeds region matching.
+No external geocoding API for placing a field. At deploy, `pnpm --filter @terrasight/api boundaries:load` loads **Natural Earth admin-1** (has `iso_3166_2` codes) and **Natural Earth admin-2 US counties** into `admin_areas` and `us_counties` (census.gov blocks scripted TIGER downloads). Place search on the Add field map (typing a town name) goes through a rate-limited Nominatim proxy (`GET /api/geocode`); coordinates typed as `lat, lon` need no call. A field's centroid is matched with `ST_Contains`; the US county name feeds the UI region ("Logan County, CO", PD §9) and the ISO code feeds region matching.
 
 ---
 
@@ -324,7 +324,7 @@ RabbitMQ (version pinned at kickoff). Exchanges:
 | Queue | Message | Consumer | Prefetch | Retries |
 | --- | --- | --- | --- | --- |
 | `gather.field` | `{fieldId, jobId}` | fans out one `gather.source` per source | 4 | 2 |
-| `gather.source` | `{jobId, source}` | source adapter, ~20 s timeout | 8 | 2 (5 s, 30 s) |
+| `gather.source` | `{jobId, source}` | source adapter; per-request timeout 20 s, per-source task timeout 60–300 s (`SOURCE_TIMEOUT_MS`) | 8 | 2 (5 s, 30 s) |
 | `history.build` | `{fieldId, provisional}` | history builder | 2 | 2 |
 | `scenarios.run` | `{fieldId, inputsHash}` | scenario engine (worker threads) | 1 per CPU | 1 |
 | `field.check` | `{runId, fieldId, asOf}` | analysis pipeline | 4 | 2 |
@@ -404,7 +404,7 @@ runScenarios(field: FieldContext, lib: Library, prices: Prices, opts: ScenarioOp
 - **Determinism:** a seeded PRNG (PCG32) with seed = hash(field id, inputs hash); same inputs → same output.
 - **Scale:** 15 × 155 × 5 × 365 ≈ 4.2 M daily steps (RFC §7.2); runs in a Piscina worker-thread pool; budget < 5 s per field on the demo host.
 - **Cache:** results by `field + inputs hash` in `scenario_runs` (durable) and Redis (6 h); priority weights re-rank in the browser (< 50 ms, RFC §7.5).
-- **Port:** the PoC simulator moves into `packages/simulator` with its tests kept green before any change.
+- **From scratch:** there is no PoC (confirmed 2026-11-14); `packages/simulator` is written and tested from the FAO-56 / FAO-33 / SCS-CN / RUSLE / ICBM references.
 
 ### 9.2 Field brief numbers (PD §9, design 08)
 
@@ -504,14 +504,14 @@ As in RFC §12.3: `list_fields`, `get_brief`, `get_field_summary`, `get_field_hi
 
 | Source | Use | Access | Rate limit / cache |
 | --- | --- | --- | --- |
-| NASA POWER | Daily weather 1981+ | POWER daily point API (as in the PoC) | Per cell; history cached permanently, recent days daily |
-| MODIS NDVI | Crop stage, history, irrigation | As in the PoC | Per field; 16-day composites |
+| NASA POWER | Daily weather 1981+ | POWER daily point API (`/api/temporal/daily/point`, community AG) | Per cell; history cached permanently, recent days daily |
+| MODIS NDVI | Crop stage, history, irrigation | Microsoft Planetary Computer `modis-13Q1-061` (STAC + COG range reads, anonymous SAS token). The ORNL DAAC subset API returned 503 on 2026-11-14 | Per field; 16-day composites |
 | Sentinel-2 | NDVI (10 m) for `green_bridge`, field thumbnails | **Copernicus Data Space Ecosystem** (free account; Sentinel Hub Statistical + Process APIs). Documented fallback only: Microsoft Planetary Computer (STAC + COGs) | Per field; thumbnails stored in S3 |
-| USDA CDL | Crop per year (US) | CropScape service (as in the PoC) | Permanent |
-| SSURGO / SoilGrids | Soil water capacity, texture | Soil Data Access / SoilGrids REST (as in the PoC for SSURGO) | Permanent |
+| USDA CDL | Crop per year (US) | CropScape service (GMU); Planetary Computer `usda-cdl` covers only 2008–2021, so it is a fallback for those years | Permanent |
+| SSURGO / SoilGrids | Soil water capacity, texture | Soil Data Access (SQL over REST, area-weighted by map unit) / SoilGrids REST | Permanent |
 | OpenET | Irrigation detection, model check | OpenET API (key) | Permanent per year |
 | SMAP, GPM IMERG | Soil-moisture check, recent rain | NASA Earthdata (account) | Daily |
-| DEM | Slope | A free global DEM tile service (decided in EP-02) | Permanent |
+| DEM | Slope | Copernicus DEM GLO-30 on Planetary Computer (`cop-dem-glo-30`, COG) | Permanent |
 | Open-Meteo | Forecast, recent observed days, soil temperature, ET₀ | Commercial API key | Per 0.1° cell, 6 h |
 | NOAA NWS | US forecast fallback | `api.weather.gov` points → gridpoint forecast, generic User-Agent | Per 0.1° cell, 6 h |
 
@@ -694,5 +694,10 @@ All resolved on 2026-11-14.
 | 2026-11-14 | Open questions 1–4 resolved: EC2 + laptop fallback, CDSE for Sentinel-2, NASS + K-State prices, edge inset `min(30 m, 10%)` | Answers to Tech Design v1 §20 |
 | 2026-11-14 | Hackathon simplifications (§1.1): no Terraform, no OpenTelemetry, no screenshot diff, P0-only contract tests, focused Testcontainers tests | Fit 48 hours; the production design stays unchanged and each item is in the backlog (L-18–L-22) |
 | 2026-11-14 | Undo works for Snooze too, same 8 s window and endpoint | RFC §10.4: the done row shows the countdown for both actions |
-| 2026-11-14 | One known test point per library region, shared by the Python validator and the TS region test; ISO-code alias map in `packages/library` | Region matching is checked against real boundaries without editing `rotations.json` |
+| 2026-11-14 | One known test point per library region, shared by the Python validator and the API boundary check; ISO-code alias map in `packages/library` | Region matching is checked against real boundaries without editing `rotations.json` |
 | 2026-11-14 | Framework versions pinned at kickoff instead of fixed in the document | The document stays valid; exact versions live in the lockfile and compose file |
+| 2026-11-14 | Natural Earth admin-2 counties instead of US Census TIGER | census.gov answers scripted downloads with a Cloudflare challenge; Natural Earth has every US county with names and FIPS |
+| 2026-11-14 | Region test point check runs as an API script against PostGIS, not in `packages/library` | It needs the loaded boundaries; the library package stays pure |
+| 2026-11-14 | Per-source task timeouts 60–300 s; each HTTP request still times out at 20 s | One source is many requests (MODIS: ~1,100 composites in ~2 min); RFC's "about 20 s" holds per request |
+| 2026-11-14 | Irrigation test uses root-zone storage (SSURGO `aws0100wta`, 0–100 cm), not the 0–150 cm profile | The full profile can't be drawn down and refilled every season; with it the Garden City pivot read as "unknown" |
+| 2026-11-14 | No PoC: adapters and simulator written from scratch; MODIS and DEM through Planetary Computer, CDL through CropScape | The PoC named in early docs doesn't exist; ORNL MODIS API was down (503); Planetary Computer CDL stops at 2021 |

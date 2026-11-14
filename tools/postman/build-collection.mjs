@@ -252,6 +252,163 @@ const collection = {
         req("Remove the member", "DELETE", "/api/w/{{ws}}/members/{{viewerId}}", { tests: [status(204)] }),
       ],
     },
+    {
+      name: "Fields & history (EP-02)",
+      item: [
+        req("Bow-tie boundary is rejected", "POST", "/api/w/{{ws}}/fields/preview", {
+          body: {
+            geometry: {
+              type: "Polygon",
+              coordinates: [
+                [
+                  [-101.06, 38.095],
+                  [-101.055, 38.099],
+                  [-101.055, 38.095],
+                  [-101.06, 38.099],
+                  [-101.06, 38.095],
+                ],
+              ],
+            },
+          },
+          tests: problem(422, "invalid-geometry"),
+        }),
+        req("A 10 m square is too small", "POST", "/api/w/{{ws}}/fields/preview", {
+          body: {
+            geometry: {
+              type: "Polygon",
+              coordinates: [
+                [
+                  [-101.06, 38.095],
+                  [-101.0599, 38.095],
+                  [-101.0599, 38.0951],
+                  [-101.06, 38.0951],
+                  [-101.06, 38.095],
+                ],
+              ],
+            },
+          },
+          tests: problem(422, "field-size"),
+        }),
+        req("Preview a field near Garden City, KS", "POST", "/api/w/{{ws}}/fields/preview", {
+          body: {
+            geometry: {
+              type: "Polygon",
+              coordinates: [
+                [
+                  [-101.06, 38.095],
+                  [-101.055, 38.095],
+                  [-101.055, 38.099],
+                  [-101.06, 38.099],
+                  [-101.06, 38.095],
+                ],
+              ],
+            },
+          },
+          tests: [
+            status(200),
+            `const p = pm.response.json();`,
+            `pm.test("area about 19 ha", () => pm.expect(p.areaHa).to.be.within(17, 21));`,
+            `pm.test("US sources", () => pm.expect(p.sources).to.include.members(["power", "ssurgo", "cdl"]));`,
+            `pm.test("tier", () => pm.expect(["A", "B", "C"]).to.include(p.tier));`,
+          ],
+        }),
+        req("Add the field (gather starts in the same transaction)", "POST", "/api/w/{{ws}}/fields", {
+          body: {
+            name: "Contract field",
+            irrigated: "unknown",
+            geometry: {
+              type: "Polygon",
+              coordinates: [
+                [
+                  [-101.06, 38.095],
+                  [-101.055, 38.095],
+                  [-101.055, 38.099],
+                  [-101.06, 38.099],
+                  [-101.06, 38.095],
+                ],
+              ],
+            },
+          },
+          tests: [
+            status(201),
+            `const f = pm.response.json(); pm.test("gather job", () => pm.expect(f.gatherJobId).to.be.a("string")); pm.collectionVariables.set("fieldId", f.id);`,
+          ],
+        }),
+        req("List fields", "GET", "/api/w/{{ws}}/fields", {
+          tests: [
+            status(200),
+            `pm.test("contains the field", () => pm.expect(pm.response.json().map((f) => f.id)).to.include(pm.collectionVariables.get("fieldId")));`,
+          ],
+        }),
+        req("Read the field", "GET", "/api/w/{{ws}}/fields/{{fieldId}}", {
+          tests: [
+            status(200),
+            `pm.test("polygon", () => pm.expect(pm.response.json().geometry.type).to.match(/Polygon/));`,
+          ],
+        }),
+        req("Gather status lists one task per source", "GET", "/api/w/{{ws}}/fields/{{fieldId}}/gather", {
+          tests: [
+            status(200),
+            `const g = pm.response.json();`,
+            `pm.test("tasks", () => pm.expect(g.sources.length).to.be.above(3));`,
+            `pm.test("known statuses", () => g.sources.forEach((s) => pm.expect(["queued", "running", "done", "partial", "failed", "cached"]).to.include(s.status)));`,
+          ],
+        }),
+        req(
+          "Unknown source cannot be retried",
+          "POST",
+          "/api/w/{{ws}}/fields/{{fieldId}}/gather/sources/nope/retry",
+          { tests: problem(404) },
+        ),
+        req("History is readable while gathering", "GET", "/api/w/{{ws}}/fields/{{fieldId}}/history", {
+          tests: [
+            status(200),
+            `const h = pm.response.json(); pm.test("shape", () => { pm.expect(h.seasons).to.be.an("array"); pm.expect(h.cropNames.corn.uk).to.be.a("string"); });`,
+          ],
+        }),
+        req(
+          "Unknown crop cannot be set for a past season",
+          "PUT",
+          "/api/w/{{ws}}/fields/{{fieldId}}/crop-seasons/2020",
+          {
+            body: { mainCrop: "banana" },
+            tests: problem(422, "unknown-crop"),
+          },
+        ),
+        req(
+          "Season record names the source of each value",
+          "GET",
+          "/api/w/{{ws}}/fields/{{fieldId}}/season-records/current",
+          {
+            tests: [
+              status(200),
+              `const r = pm.response.json(); pm.collectionVariables.set("season", r.season); pm.test("sources", () => ["crop", "sowingDate", "emergenceDate", "tillage"].forEach((k) => pm.expect(r[k]).to.have.property("source")));`,
+            ],
+          },
+        ),
+        req(
+          "Agronomist confirms crop and sowing date",
+          "PUT",
+          "/api/w/{{ws}}/fields/{{fieldId}}/season-records/{{season}}",
+          {
+            body: { crop: "winter_wheat", sowingDate: "2026-10-01", tillage: "no_till" },
+            tests: [
+              status(200),
+              `const r = pm.response.json(); pm.test("confirmed", () => { pm.expect(r.crop).to.eql({ value: "winter_wheat", source: "confirmed" }); pm.expect(r.sowingDate.source).to.eql("confirmed"); });`,
+            ],
+          },
+        ),
+        req("Agronomist confirms irrigation", "PATCH", "/api/w/{{ws}}/fields/{{fieldId}}", {
+          body: { irrigation: "irrigated" },
+          tests: [
+            status(200),
+            `pm.test("confirmed", () => pm.expect(pm.response.json()).to.include({ irrigation: "irrigated", irrigationSource: "confirmed" }));`,
+          ],
+        }),
+        req("Archive the field", "DELETE", "/api/w/{{ws}}/fields/{{fieldId}}", { tests: [status(204)] }),
+        req("An archived field is gone", "GET", "/api/w/{{ws}}/fields/{{fieldId}}", { tests: problem(404) }),
+      ],
+    },
   ],
 };
 

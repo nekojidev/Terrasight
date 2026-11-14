@@ -12,7 +12,7 @@ We build this project in three documented stages. Each one builds on the stage b
    - **Design** — `design/` (v4 "Morning brief", 17 screens) ✅ handed off; see "Design" below
 3. **Tech Design** — `docs/03-tech-design.md` — architecture, data model, API, modules, testing, deploy ✅ v1.1 agreed; backlog in `docs/epics/`
 
-Build: epic by epic in P0-path order (`docs/epics/README.md`). EP-00 Foundation ✅, EP-01 Onboarding & workspace ✅.
+Build: epic by epic in P0-path order (`docs/epics/README.md`). EP-00 Foundation ✅, EP-01 Onboarding & workspace ✅, EP-02 Fields & history ✅ (CropScape 2022+ is flaky: fixtures in S-09.02).
 
 Rules:
 
@@ -70,5 +70,5 @@ Design source: `design/README.md` (screens, components, behaviour), `design/toke
 
 ## Existing assets (not in this folder yet)
 
-- A Next.js proof of concept with live NASA POWER, MODIS, CDL and SSURGO calls and a tested rotation simulator
+- No proof of concept exists (confirmed 2026-11-14): source adapters and the simulator are written from scratch in `packages/sources` and `packages/simulator`.
 - UI design: `design/` (v4 "Morning brief", 17 screens UA / EN; see "Design" above). Replaces the old "Clean agritech" palette (#0F766E)

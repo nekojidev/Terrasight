@@ -5,15 +5,17 @@
   "type": "module",
   "scripts": {
     "build": "prisma generate && tsc -p tsconfig.build.json",
-    "dev": "prisma generate && tsc -p tsconfig.build.json && concurrently -k \"tsc -p tsconfig.build.json -w --preserveWatchOutput\" \"node --watch --enable-source-maps dist/main.js\"",
-    "start": "node --enable-source-maps dist/main.js",
+    "dev": "prisma generate && tsc -p tsconfig.build.json && concurrently -k \"tsc -p tsconfig.build.json -w --preserveWatchOutput\" \"node --env-file-if-exists=../../.env --watch --enable-source-maps dist/main.js\"",
+    "start": "node --env-file-if-exists=../../.env --enable-source-maps dist/main.js",
     "typecheck": "prisma generate && tsc --noEmit",
     "lint": "eslint src test",
     "test": "prisma generate && vitest run",
     "test:integration": "prisma generate && vitest run -c vitest.integration.config.ts",
     "db:migrate": "prisma migrate deploy",
     "db:diff": "prisma migrate diff --from-empty --to-schema ../../prisma/schema.prisma --script",
-    "test:contract": "node ../../tools/postman/build-collection.mjs && postman collection run postman/terrasight-p0.postman_collection.json --env-var baseUrl=${API_BASE_URL:-http://localhost:4000}"
+    "test:contract": "node ../../tools/postman/build-collection.mjs && postman collection run postman/terrasight-p0.postman_collection.json --env-var baseUrl=${API_BASE_URL:-http://localhost:4000}",
+    "boundaries:load": "node --env-file-if-exists=../../.env scripts/load-boundaries.mjs",
+    "boundaries:check": "node --env-file-if-exists=../../.env scripts/check-region-points.mjs"
   },
   "dependencies": {
     "@nestjs/common": "12.5.0",
@@ -23,6 +25,7 @@
     "@prisma/client": "7.10.1",
     "@terrasight/library": "workspace:*",
     "@terrasight/shared": "workspace:*",
+    "@terrasight/sources": "workspace:*",
     "amqplib": "2.3.1",
     "argon2": "0.45.2",
     "cookie-parser": "1.4.7",

@@ -28,10 +28,10 @@ As an agronomist, I want each field placed in its county and agronomic region, s
 
 **Acceptance criteria**
 
-- `tools/load-boundaries` loads Natural Earth admin-1 and TIGER counties into PostGIS; the field centroid yields ISO 3166-2, country and (US) county.
-- Region matching follows file order. `packages/library/region.test.ts` derives each point in `data/region-test-points.json` (≥ 1 per library region) from the loaded boundaries and reaches the expected region; e.g. Garden City → `us-southern-plains`, Chase County NE and Logan County CO → `us-central-high-plains`.
+- `boundaries:load` loads Natural Earth admin-1 and admin-2 US counties into PostGIS; the field centroid yields ISO 3166-2, country and (US) county.
+- Region matching follows file order. `boundaries:check` (API script) derives each point in `data/region-test-points.json` (≥ 1 per library region) from the loaded boundaries and reaches the expected region; e.g. Garden City → `us-southern-plains`, Chase County NE and Logan County CO → `us-central-high-plains`.
 - Outdated Natural Earth ISO 3166-2 codes are mapped in `packages/library/admin-aliases.ts` (old → current); `rotations.json` is not edited.
-- No external geocoding call is made.
+- No external geocoding call is made to place a field (place search on the map uses a rate-limited Nominatim proxy).
 
 ### S-02.03 Source adapters
 
@@ -43,8 +43,8 @@ As the system, I want one adapter per data source with caching and rate limits, 
 
 **Acceptance criteria**
 
-- Adapters for NASA POWER, MODIS NDVI, USDA CDL and SSURGO are ported from the PoC; Sentinel-2 (Copernicus Data Space Ecosystem, free account; Planetary Computer documented as fallback only), OpenET, SoilGrids and DEM are added. SMAP and GPM are P1.
-- Each returns `done` / `partial` / `failed`, a payload, `dataDate` and attribution, with a ~20 s timeout.
+- Adapters for NASA POWER, MODIS NDVI (Planetary Computer), USDA CDL (CropScape) and SSURGO are written from scratch (there is no PoC); Sentinel-2 (Copernicus Data Space Ecosystem, free account; Planetary Computer documented as fallback only), OpenET, SoilGrids and DEM are added. SMAP and GPM are P1.
+- Each returns `done` / `partial` / `failed`, a payload, `dataDate` and attribution, with a 20 s timeout per request (task timeouts per source, Tech Design §7).
 - Responses are stored in `source_cache` by key; historical data is reused, current-year data refreshed after 7 days.
 - Per-source token buckets in Redis; a half-rate in-process limit when Redis is down.
 - When a live call fails and a fixture exists, the fixture is served labelled `cached` with its date.

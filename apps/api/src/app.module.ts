@@ -5,6 +5,7 @@ import { AuthModule } from "./auth/auth.module.js";
 import { ConfigModule } from "./config/config.module.js";
 import { DbModule } from "./db/db.module.js";
 import { EventsModule } from "./events/events.module.js";
+import { FieldsModule } from "./fields/fields.module.js";
 import { HealthController } from "./health/health.controller.js";
 import { LibraryModule } from "./library/library.module.js";
 import { MessagingModule } from "./messaging/messaging.module.js";
@@ -33,6 +34,7 @@ const env = loadEnv();
     AuthModule,
     EventsModule,
     WorkspacesModule,
+    FieldsModule,
   ],
   controllers: [HealthController],
 })

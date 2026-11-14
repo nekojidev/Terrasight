@@ -1006,6 +1006,447 @@
           }
         }
       ]
+    },
+    {
+      "name": "Fields & history (EP-02)",
+      "item": [
+        {
+          "name": "Bow-tie boundary is rejected",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 422\", () => pm.response.to.have.status(422));",
+                  "pm.test(\"problem+json\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"));",
+                  "pm.test(\"type invalid-geometry\", () => pm.expect(pm.response.json().type).to.include(\"invalid-geometry\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/fields/preview",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"geometry\": {\n    \"type\": \"Polygon\",\n    \"coordinates\": [\n      [\n        [\n          -101.06,\n          38.095\n        ],\n        [\n          -101.055,\n          38.099\n        ],\n        [\n          -101.055,\n          38.095\n        ],\n        [\n          -101.06,\n          38.099\n        ],\n        [\n          -101.06,\n          38.095\n        ]\n      ]\n    ]\n  }\n}"
+            }
+          }
+        },
+        {
+          "name": "A 10 m square is too small",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 422\", () => pm.response.to.have.status(422));",
+                  "pm.test(\"problem+json\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"));",
+                  "pm.test(\"type field-size\", () => pm.expect(pm.response.json().type).to.include(\"field-size\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/fields/preview",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"geometry\": {\n    \"type\": \"Polygon\",\n    \"coordinates\": [\n      [\n        [\n          -101.06,\n          38.095\n        ],\n        [\n          -101.0599,\n          38.095\n        ],\n        [\n          -101.0599,\n          38.0951\n        ],\n        [\n          -101.06,\n          38.0951\n        ],\n        [\n          -101.06,\n          38.095\n        ]\n      ]\n    ]\n  }\n}"
+            }
+          }
+        },
+        {
+          "name": "Preview a field near Garden City, KS",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "const p = pm.response.json();",
+                  "pm.test(\"area about 19 ha\", () => pm.expect(p.areaHa).to.be.within(17, 21));",
+                  "pm.test(\"US sources\", () => pm.expect(p.sources).to.include.members([\"power\", \"ssurgo\", \"cdl\"]));",
+                  "pm.test(\"tier\", () => pm.expect([\"A\", \"B\", \"C\"]).to.include(p.tier));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/fields/preview",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"geometry\": {\n    \"type\": \"Polygon\",\n    \"coordinates\": [\n      [\n        [\n          -101.06,\n          38.095\n        ],\n        [\n          -101.055,\n          38.095\n        ],\n        [\n          -101.055,\n          38.099\n        ],\n        [\n          -101.06,\n          38.099\n        ],\n        [\n          -101.06,\n          38.095\n        ]\n      ]\n    ]\n  }\n}"
+            }
+          }
+        },
+        {
+          "name": "Add the field (gather starts in the same transaction)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "const f = pm.response.json(); pm.test(\"gather job\", () => pm.expect(f.gatherJobId).to.be.a(\"string\")); pm.collectionVariables.set(\"fieldId\", f.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/fields",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Contract field\",\n  \"irrigated\": \"unknown\",\n  \"geometry\": {\n    \"type\": \"Polygon\",\n    \"coordinates\": [\n      [\n        [\n          -101.06,\n          38.095\n        ],\n        [\n          -101.055,\n          38.095\n        ],\n        [\n          -101.055,\n          38.099\n        ],\n        [\n          -101.06,\n          38.099\n        ],\n        [\n          -101.06,\n          38.095\n        ]\n      ]\n    ]\n  }\n}"
+            }
+          }
+        },
+        {
+          "name": "List fields",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"contains the field\", () => pm.expect(pm.response.json().map((f) => f.id)).to.include(pm.collectionVariables.get(\"fieldId\")));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/fields"
+          }
+        },
+        {
+          "name": "Read the field",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"polygon\", () => pm.expect(pm.response.json().geometry.type).to.match(/Polygon/));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/fields/{{fieldId}}"
+          }
+        },
+        {
+          "name": "Gather status lists one task per source",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "const g = pm.response.json();",
+                  "pm.test(\"tasks\", () => pm.expect(g.sources.length).to.be.above(3));",
+                  "pm.test(\"known statuses\", () => g.sources.forEach((s) => pm.expect([\"queued\", \"running\", \"done\", \"partial\", \"failed\", \"cached\"]).to.include(s.status)));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/fields/{{fieldId}}/gather"
+          }
+        },
+        {
+          "name": "Unknown source cannot be retried",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"problem+json\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/fields/{{fieldId}}/gather/sources/nope/retry"
+          }
+        },
+        {
+          "name": "History is readable while gathering",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "const h = pm.response.json(); pm.test(\"shape\", () => { pm.expect(h.seasons).to.be.an(\"array\"); pm.expect(h.cropNames.corn.uk).to.be.a(\"string\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/fields/{{fieldId}}/history"
+          }
+        },
+        {
+          "name": "Unknown crop cannot be set for a past season",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 422\", () => pm.response.to.have.status(422));",
+                  "pm.test(\"problem+json\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"));",
+                  "pm.test(\"type unknown-crop\", () => pm.expect(pm.response.json().type).to.include(\"unknown-crop\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/fields/{{fieldId}}/crop-seasons/2020",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mainCrop\": \"banana\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Season record names the source of each value",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "const r = pm.response.json(); pm.collectionVariables.set(\"season\", r.season); pm.test(\"sources\", () => [\"crop\", \"sowingDate\", \"emergenceDate\", \"tillage\"].forEach((k) => pm.expect(r[k]).to.have.property(\"source\")));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/fields/{{fieldId}}/season-records/current"
+          }
+        },
+        {
+          "name": "Agronomist confirms crop and sowing date",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "const r = pm.response.json(); pm.test(\"confirmed\", () => { pm.expect(r.crop).to.eql({ value: \"winter_wheat\", source: \"confirmed\" }); pm.expect(r.sowingDate.source).to.eql(\"confirmed\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/fields/{{fieldId}}/season-records/{{season}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"crop\": \"winter_wheat\",\n  \"sowingDate\": \"2026-10-01\",\n  \"tillage\": \"no_till\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Agronomist confirms irrigation",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"confirmed\", () => pm.expect(pm.response.json()).to.include({ irrigation: \"irrigated\", irrigationSource: \"confirmed\" }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/fields/{{fieldId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"irrigation\": \"irrigated\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Archive the field",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test(\"status 204\", () => pm.response.to.have.status(204));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/fields/{{fieldId}}"
+          }
+        },
+        {
+          "name": "An archived field is gone",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"problem+json\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/fields/{{fieldId}}"
+          }
+        }
+      ]
     }
   ]
 }

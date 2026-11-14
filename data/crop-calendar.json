@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "about": "Typical sowing dates (MM-DD) per region and crop: the last fallback for a season record's sowing date (RFC §6.4, source 'regional'). Agronomic rules of thumb for the demo regions only; verify: true until checked against K-State / UNL / CSU planting guides. Autumn dates (Sep–Nov) belong to the next harvest year.",
+  "regions": {
+    "us-southern-plains": {
+      "verify": true,
+      "sowing": {
+        "winter_wheat": "10-01",
+        "corn": "04-25",
+        "sorghum": "06-01",
+        "soybean": "05-20",
+        "sunflower": "06-05",
+        "cotton": "05-15",
+        "winter_canola": "09-10",
+        "millet": "06-15",
+        "forage_sorghum": "06-01"
+      }
+    },
+    "us-central-high-plains": {
+      "verify": true,
+      "sowing": {
+        "winter_wheat": "09-20",
+        "corn": "05-01",
+        "soybean": "05-15",
+        "sunflower": "06-01",
+        "millet": "06-10"
+      }
+    }
+  }
+}

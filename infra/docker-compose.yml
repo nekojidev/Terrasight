@@ -41,7 +41,10 @@ services:
     build:
       context: ..
       dockerfile: infra/api.Dockerfile
-    env_file: [../.env.example]
+    env_file:
+      - ../.env.example
+      - path: ../.env
+        required: false
     environment:
       DATABASE_URL: postgresql://terrasight:terrasight@postgres:5432/terrasight
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672

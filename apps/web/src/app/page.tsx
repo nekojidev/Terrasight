@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { AppShell } from "@/components/AppShell";
 import { EmptyHome } from "@/components/EmptyHome";
+import { FieldList, type FieldRow } from "@/components/FieldList";
 import { SessionRefresher } from "@/components/SessionRefresher";
 import { activeWorkspace, serverGet, type Me } from "@/lib/server-api";
 
@@ -10,6 +11,7 @@ interface WorkspaceDetail {
   name: string;
   fieldCount: number;
   isDemo: boolean;
+  units: "metric" | "imperial";
   role: Me["workspaces"][number]["role"];
 }
 
@@ -28,6 +30,7 @@ export default async function Home() {
   const ws = await serverGet<WorkspaceDetail>(`/api/w/${active.id}`);
   if (!ws.ok) redirect("/onboarding");
   const t = await getTranslations("EmptyHome");
+  const fields = ws.data.fieldCount > 0 ? await serverGet<FieldRow[]>(`/api/w/${active.id}/fields`) : null;
 
   return (
     <AppShell
@@ -39,7 +42,11 @@ export default async function Home() {
         <EmptyHome firstName={me.data.name.split(/\s+/)[0] ?? me.data.name} />
       ) : (
         // The morning brief replaces this in EP-04 (S-04.03).
-        <p className="text-body text-ink-2">{ws.data.fieldCount}</p>
+        <FieldList
+          fields={fields?.ok ? fields.data : []}
+          units={ws.data.units}
+          canEdit={ws.data.role !== "viewer"}
+        />
       )}
     </AppShell>
   );
