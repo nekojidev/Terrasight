@@ -405,6 +405,36 @@ const collection = {
             `pm.test("confirmed", () => pm.expect(pm.response.json()).to.include({ irrigation: "irrigated", irrigationSource: "confirmed" }));`,
           ],
         }),
+        req("Analyze fields starts a manual run (S-03.02)", "POST", "/api/w/{{ws}}/analysis-runs", {
+          body: {},
+          tests: [
+            status(202),
+            `const r = pm.response.json(); pm.collectionVariables.set("runId", r.id);`,
+            `pm.test("manual run with the field", () => { pm.expect(r.trigger).to.eql("manual"); pm.expect(r.fields.map((f) => f.fieldId)).to.include(pm.collectionVariables.get("fieldId")); });`,
+            `pm.test("known statuses", () => r.fields.forEach((f) => pm.expect(["waiting", "running", "ok", "stale", "failed"]).to.include(f.status)));`,
+          ],
+        }),
+        req("Unknown field cannot be analysed", "POST", "/api/w/{{ws}}/analysis-runs", {
+          body: { fieldIds: ["00000000-0000-4000-8000-000000000000"] },
+          tests: problem(404),
+        }),
+        req("Latest run", "GET", "/api/w/{{ws}}/analysis-runs/latest", {
+          tests: [
+            status(200),
+            `pm.test("is the run just started", () => pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get("runId")));`,
+          ],
+        }),
+        req(
+          "Retry one field as a new run",
+          "POST",
+          "/api/w/{{ws}}/analysis-runs/{{runId}}/fields/{{fieldId}}/retry",
+          {
+            tests: [
+              status(202),
+              `pm.test("one field", () => pm.expect(pm.response.json().fields).to.have.length(1));`,
+            ],
+          },
+        ),
         req("Archive the field", "DELETE", "/api/w/{{ws}}/fields/{{fieldId}}", { tests: [status(204)] }),
         req("An archived field is gone", "GET", "/api/w/{{ws}}/fields/{{fieldId}}", { tests: problem(404) }),
       ],

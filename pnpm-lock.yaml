@@ -53,6 +53,9 @@ importers:
       '@prisma/client':
         specifier: 7.10.1
         version: 7.10.1(prisma@7.10.1(@types/node@26.6.6)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@6.0.3))(typescript@6.0.3)
+      '@terrasight/evaluators':
+        specifier: workspace:*
+        version: link:../../packages/evaluators
       '@terrasight/library':
         specifier: workspace:*
         version: link:../../packages/library
@@ -208,7 +211,11 @@ importers:
 
   packages/assistant-core: {}
 
-  packages/evaluators: {}
+  packages/evaluators:
+    dependencies:
+      '@terrasight/library':
+        specifier: workspace:*
+        version: link:../library
 
   packages/library:
     dependencies:

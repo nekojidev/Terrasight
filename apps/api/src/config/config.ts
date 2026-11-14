@@ -22,6 +22,8 @@ export const EnvSchema = z.object({
   CDSE_CLIENT_ID: z.string().optional(),
   CDSE_CLIENT_SECRET: z.string().optional(),
   OPENET_API_KEY: z.string().optional(),
+  /** Open-Meteo commercial key (RFC §13); without it the free endpoint is used (development, hackathon demo). */
+  OPEN_METEO_API_KEY: z.string().optional(),
   EARTHDATA_TOKEN: z.string().optional(),
   /** Recorded real responses served when a live call fails (RFC §5.4). */
   FIXTURES_DIR: z.string().default(fileURLToPath(new URL("../../../../fixtures/", import.meta.url))),

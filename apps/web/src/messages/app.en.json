@@ -80,6 +80,23 @@
     "till_reduced": "Reduced",
     "till_no_till": "No-till",
     "fieldsTitle": "Fields",
-    "addField": "Add a field"
+    "addField": "Add a field",
+    "anLast": "Last analysis: {when} · {n, plural, one {# field} other {# fields}}",
+    "anNever": "No analysis yet. Terrasight checks fields every morning at 06:00.",
+    "anDone": "Done: {checked} of {total} fields checked, {n, plural, =0 {no new recommendations} one {# new recommendation} other {# new recommendations}}",
+    "anStale": "{name}: {reason} — showing data from {date}",
+    "anFailed": "{name}: {reason}",
+    "anRetryField": "Retry {name}",
+    "anWaiting": "waiting",
+    "anRunning": "checking",
+    "anOk": "done",
+    "anAutumn1": "Rotation risk for next season (corn after corn)",
+    "anAutumn2": "Aphids and barley yellow dwarf on emerged winter wheat",
+    "anAutumn3": "Volunteer wheat before sowing (wheat streak mosaic)",
+    "anAutumn4": "Frost in the 7-day forecast",
+    "anSpring1": "Pest and disease risk for the current crop stage",
+    "anSpring2": "Frost and heat in the 7-day forecast",
+    "anToday": "today at {time}",
+    "anOn": "{date} at {time}"
   }
 }

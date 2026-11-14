@@ -25,6 +25,14 @@ export { cdlCrop, cdlName, type CdlCrop } from "./cdl-classes.js";
 export { soilgrids, type SoilGridsSummary } from "./others.js";
 export { openetAdapter, type EtSeries } from "./openet.js";
 export { sentinel2Adapter, parseStats, type S2Ndvi, type S2Result } from "./sentinel2.js";
+export {
+  forecastCell,
+  nextFrostDay,
+  nwsForecast,
+  openMeteoForecast,
+  type Forecast,
+  type ForecastDay,
+} from "./forecast.js";
 
 import { cdl } from "./cdl.js";
 import { dem } from "./dem.js";

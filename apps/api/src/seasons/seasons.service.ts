@@ -46,6 +46,14 @@ export class SeasonsService {
     ) as CropCalendar;
   }
 
+  /** Typical sowing date of a crop in a region for a harvest year (crop calendar, `regional`); autumn sowing falls in the year before. */
+  typicalSowing(regionId: string | null, crop: string | null, season: number): string | null {
+    const mmdd = regionId && crop ? this.calendar.regions[regionId]?.sowing[crop] : undefined;
+    if (!mmdd) return null;
+    const year = Number(mmdd.slice(0, 2)) >= 8 ? season - 1 : season;
+    return `${year}-${mmdd}`;
+  }
+
   /** The season a field is in on `date`: harvest year; autumn-sown winter crops count toward next year. */
   static currentSeason(date = new Date()): number {
     return date.getUTCMonth() >= 7 ? date.getUTCFullYear() + 1 : date.getUTCFullYear();

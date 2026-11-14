@@ -124,6 +124,51 @@ export class SourcesService {
     await this.prisma.system.sourceCache.upsert({ where: { key }, create: { key, ...data }, update: data });
   }
 
+  /**
+   * For field checks (S-03.03): fresh cache → live (rate-limited) → fixture → the last good result of the past
+   * 7 days (`stale`, with its date) → null. Never throws.
+   */
+  async fresh<T>(
+    source: SourceId,
+    field: FieldGeometry,
+    today: string,
+    take: () => Promise<void>,
+  ): Promise<{
+    result: SourceResult<T>;
+    origin: "cache" | "live" | "fixture" | "stale";
+    error?: string;
+  } | null> {
+    const adapter = this.adapter(source);
+    if (!adapter || !adapter.appliesTo(field)) return null;
+    const key = this.key(adapter, field, today);
+    const hit = await this.cached<T>(key);
+    if (hit) return { result: hit.result, origin: "cache" };
+    let error = "did not respond";
+    try {
+      await take();
+      const result = (await adapter.fetch(field, {
+        signal: AbortSignal.timeout(SOURCE_TIMEOUT_MS[source]),
+        fetch,
+        today,
+      })) as SourceResult<T>;
+      if (result.status !== "failed") {
+        await this.store(adapter, key, { source, today }, result, "live");
+        return { result, origin: "live" };
+      }
+      error = result.reason ?? error;
+    } catch (e) {
+      error = (e as Error).message;
+    }
+    const fixture = this.fixture<T>(adapter, key);
+    if (fixture) return { result: fixture, origin: "fixture", error };
+    for (let back = 1; back <= 7; back++) {
+      const day = new Date(Date.parse(`${today}T00:00:00Z`) - back * 864e5).toISOString().slice(0, 10);
+      const old = await this.cached<T>(this.key(adapter, field, day), true);
+      if (old) return { result: old.result, origin: "stale", error };
+    }
+    return null;
+  }
+
   /** Recorded real response for this exact request, if one exists (fixtures/<source>/<key>.json, S-09.02). */
   fixture<T>(adapter: SourceAdapter, key: string): SourceResult<T> | null {
     const path = join(this.env.FIXTURES_DIR, adapter.id, `${key}.json`);

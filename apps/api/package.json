@@ -23,6 +23,7 @@
     "@nestjs/platform-express": "12.5.0",
     "@prisma/adapter-pg": "7.10.1",
     "@prisma/client": "7.10.1",
+    "@terrasight/evaluators": "workspace:*",
     "@terrasight/library": "workspace:*",
     "@terrasight/shared": "workspace:*",
     "@terrasight/sources": "workspace:*",
