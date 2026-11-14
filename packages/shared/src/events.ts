@@ -20,24 +20,27 @@ export const EventKeys = {
   analysis: (workspaceId: string) => `workspace.${workspaceId}.analysis`,
   brief: (workspaceId: string) => `workspace.${workspaceId}.brief`,
   conversation: (conversationId: string) => `conversation.${conversationId}.answer`,
+  notifications: (workspaceId: string, userId: string) => `workspace.${workspaceId}.notifications.${userId}`,
 } as const;
 
 /**
  * Topics a browser can subscribe to on the SSE stream:
- * `brief`, `analysis`, `field:<uuid>`, `conversation:<uuid>`.
+ * `brief`, `analysis`, `notifications` (the caller's own), `field:<uuid>`, `conversation:<uuid>`.
  */
 export const StreamTopic = z.union([
   z.literal("brief"),
   z.literal("analysis"),
+  z.literal("notifications"),
   z.string().regex(/^field:[0-9a-f-]{36}$/),
   z.string().regex(/^conversation:[0-9a-f-]{36}$/),
 ]);
 export type StreamTopic = z.infer<typeof StreamTopic>;
 
 /** The routing-key pattern (AMQP topic syntax) a stream topic listens to. */
-export function topicPattern(topic: StreamTopic, workspaceId: string): string {
+export function topicPattern(topic: StreamTopic, workspaceId: string, userId?: string): string {
   if (topic === "brief") return `workspace.${workspaceId}.brief`;
   if (topic === "analysis") return `workspace.${workspaceId}.analysis`;
+  if (topic === "notifications") return `workspace.${workspaceId}.notifications.${userId ?? "none"}`;
   const [kind, id] = topic.split(":");
   return kind === "field" ? `field.${id}.#` : `conversation.${id}.answer`;
 }

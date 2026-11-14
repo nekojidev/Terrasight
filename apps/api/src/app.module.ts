@@ -13,6 +13,7 @@ import { LibraryModule } from "./library/library.module.js";
 import { MessagingModule } from "./messaging/messaging.module.js";
 import { RecommendationsModule } from "./recommendations/recommendations.module.js";
 import { ScenariosModule } from "./scenarios/scenarios.module.js";
+import { NotificationsModule } from "./notifications/notifications.module.js";
 import { ReportsModule } from "./reports/reports.module.js";
 import { ScoutingModule } from "./scouting/scouting.module.js";
 import { RedisModule } from "./redis/redis.module.js";
@@ -47,6 +48,7 @@ const env = loadEnv();
     ScenariosModule,
     ScoutingModule,
     ReportsModule,
+    NotificationsModule,
   ],
   controllers: [HealthController],
 })

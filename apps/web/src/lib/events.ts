@@ -17,6 +17,7 @@ export const defaultTopicKeys: TopicKeys = (topic, ws) => {
       ["analysis", ws],
       ["brief", ws],
     ];
+  if (topic === "notifications") return [["notifications", ws]];
   const [kind, id] = topic.split(":");
   return kind === "field" ? [["field", ws, id]] : [["conversation", ws, id]];
 };

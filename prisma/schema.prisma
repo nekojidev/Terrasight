@@ -158,6 +158,7 @@ model User {
 
   memberships   Membership[]
   refreshTokens RefreshToken[]
+  notifications Notification[]
 
   @@map("users")
 }
@@ -197,6 +198,7 @@ model Workspace {
   reportItems   ReportItem[]
   conversations Conversation[]
   auditLog      AuditLog[]
+  notifications Notification[]
 
   @@map("workspaces")
 }
@@ -714,6 +716,23 @@ model AuditLog {
 
   @@index([workspaceId, at])
   @@map("audit_log")
+}
+
+/// In-app notifications (RFC §15.4, L-06): one row per recipient; the client builds the text from kind + payload.
+model Notification {
+  id          String    @id @default(uuid()) @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  kind        String
+  payload     Json      @default("{}")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  readAt      DateTime? @map("read_at") @db.Timestamptz(3)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, userId, createdAt])
+  @@map("notifications")
 }
 
 model AdminArea {

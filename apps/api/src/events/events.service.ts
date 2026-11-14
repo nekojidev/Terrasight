@@ -58,8 +58,13 @@ export class EventsService implements OnModuleInit {
     this.incoming.next({ routingKey, envelope });
   }
 
-  stream(workspaceId: string, topics: StreamTopic[], heartbeatMs = HEARTBEAT_MS): Observable<StreamEvent> {
-    const patterns = topics.map((t) => ({ topic: t, pattern: topicPattern(t, workspaceId) }));
+  stream(
+    workspaceId: string,
+    topics: StreamTopic[],
+    heartbeatMs = HEARTBEAT_MS,
+    userId?: string,
+  ): Observable<StreamEvent> {
+    const patterns = topics.map((t) => ({ topic: t, pattern: topicPattern(t, workspaceId, userId) }));
 
     const initial = from(topics).pipe(
       concatMap(async (topic): Promise<StreamEvent | null> => {

@@ -272,10 +272,7 @@ export function ScoutClient({ workspaceId, initial }: { workspaceId: string; ini
           </p>
           {queued ? (
             <div className="mt-3">
-              <OfflineCard
-                title={t("offlineTitle")}
-                body={t("scQueued", { field: task.fieldName })}
-              />
+              <OfflineCard title={t("offlineTitle")} body={t("scQueued", { field: task.fieldName })} />
             </div>
           ) : checked === 5 ? (
             <Button

@@ -23,6 +23,7 @@ import type { EventsService } from "../src/events/events.service.js";
 import { GeoService } from "../src/geo/geo.service.js";
 import { FakeBroker } from "../src/messaging/fake-broker.js";
 import { OutboxService } from "../src/messaging/outbox.service.js";
+import { NotificationsService } from "../src/notifications/notifications.service.js";
 import { QUEUES } from "../src/messaging/topology.js";
 import { RedisService } from "../src/redis/redis.service.js";
 import { SeasonsService } from "../src/seasons/seasons.service.js";
@@ -191,7 +192,7 @@ beforeAll(async () => {
   const lib: Library = { ...real, enabledModels: [verifiedRootworm(real)] };
   geo = new GeoService(prisma, lib);
   sources = new SourcesService(prisma, env);
-  analysis = new AnalysisService(prisma, outbox, events);
+  analysis = new AnalysisService(prisma, outbox, events, new NotificationsService(prisma, outbox));
   const inputsService = new EvalInputsService(
     lib,
     prisma,

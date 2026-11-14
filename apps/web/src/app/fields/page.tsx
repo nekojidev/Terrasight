@@ -31,7 +31,7 @@ export default async function FieldsPage() {
   const t = await getTranslations("App");
   return (
     <AppShell
-      workspace={{ name: ws.data.name, fieldCount: ws.data.fieldCount }}
+      workspace={{ id: ws.data.id, name: ws.data.name, fieldCount: ws.data.fieldCount }}
       user={{ name: me.data.name, role: ws.data.role }}
       crumb={t("fieldsTitle")}
     >

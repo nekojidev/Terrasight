@@ -7,10 +7,12 @@ import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import { api, setCookie } from "@/lib/api";
 import { Brand } from "./Brand";
+import { NotificationsBell } from "./NotificationsBell";
 import { OfflineBanner } from "./OfflineBanner";
 import { ThemeToggle } from "./ThemeToggle";
 
 export interface ShellWorkspace {
+  id: string;
   name: string;
   fieldCount: number;
 }
@@ -29,7 +31,7 @@ function initials(name: string): string {
     .join("");
 }
 
-/** Desktop shell (design 03/04): sidebar with company card, top bar with search and UA/EN (no bell: there are no real notifications yet). */
+/** Desktop shell (design 03/04): sidebar with company card, top bar with search and UA/EN and the notifications bell. */
 export function AppShell({
   workspace,
   user,
@@ -118,7 +120,12 @@ export function AppShell({
             { code: "uk", label: "UA", active: locale === "uk", onSelect: () => setLocale("uk") },
             { code: "en", label: "EN", active: locale === "en", onSelect: () => setLocale("en") },
           ]}
-          extra={<ThemeToggle className="lg:hidden" />}
+          extra={
+            <>
+              <ThemeToggle className="lg:hidden" />
+              <NotificationsBell workspaceId={workspace.id} />
+            </>
+          }
         />
         <main className="mx-auto w-full max-w-[1180px] px-4 pt-6 pb-24 sm:px-8 sm:py-10 lg:pb-10">
           <div className="mb-4 empty:hidden">
