@@ -5,6 +5,7 @@ export {
   confidence,
   evaluate,
   modelApplies,
+  modelCovers,
   nextFrost,
   resolver,
   snapshotHash,

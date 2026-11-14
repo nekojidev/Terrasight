@@ -159,7 +159,7 @@ export class SourcesService {
     } catch (e) {
       error = (e as Error).message;
     }
-    const fixture = this.fixture<T>(adapter, key);
+    const fixture = this.fixture<T>(adapter, field);
     if (fixture) return { result: fixture, origin: "fixture", error };
     for (let back = 1; back <= 7; back++) {
       const day = new Date(Date.parse(`${today}T00:00:00Z`) - back * 864e5).toISOString().slice(0, 10);
@@ -169,10 +169,26 @@ export class SourcesService {
     return null;
   }
 
-  /** Recorded real response for this exact request, if one exists (fixtures/<source>/<key>.json, S-09.02). */
-  fixture<T>(adapter: SourceAdapter, key: string): SourceResult<T> | null {
-    const path = join(this.env.FIXTURES_DIR, adapter.id, `${key}.json`);
+  /**
+   * Stable key for a recorded response (S-09.02): the adapter's cache key with "fixture" in place of today's date, so
+   * a recording made today is found on the demo day. Shared with tools/record-fixtures.
+   */
+  fixtureKey(adapter: SourceAdapter, field: FieldGeometry): string {
+    return createHash("sha256")
+      .update(`${adapter.id}:${adapter.cacheKey(field, { today: "fixture" })}`)
+      .digest("hex");
+  }
+
+  /** Recorded real response for this field, if one exists (fixtures/<source>/<fixtureKey>.json, S-09.02). */
+  fixture<T>(adapter: SourceAdapter, field: FieldGeometry): SourceResult<T> | null {
+    const path = join(this.env.FIXTURES_DIR, adapter.id, `${this.fixtureKey(adapter, field)}.json`);
     if (!existsSync(path)) return null;
     return JSON.parse(readFileSync(path, "utf8")) as SourceResult<T>;
+  }
+
+  /** Recorded forecast for a 0.1° cell (fixtures/forecast/<cell>.json), the last step before "no forecast". */
+  forecastFixture<T>(cellKey: string): T | null {
+    const path = join(this.env.FIXTURES_DIR, "forecast", `${cellKey}.json`);
+    return existsSync(path) ? (JSON.parse(readFileSync(path, "utf8")) as T) : null;
   }
 }

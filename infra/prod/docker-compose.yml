@@ -1,0 +1,75 @@
+# Terrasight demo host (S-09.01, Tech Design §17): one EC2 instance, TLS by Caddy, api ROLE=all.
+#   TAG=v0.9.0 DOMAIN=demo.example.com docker compose -f infra/prod/docker-compose.yml up -d
+# Secrets come from SSM Parameter Store into /opt/terrasight/.env (infra/prod/ssm-env.sh). Images are built on the host
+# from a git tag (infra/prod/deploy.sh) and kept per tag, so a rollback is one command (infra/prod/rollback.sh).
+name: terrasight
+
+services:
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [web, api]
+
+  postgres:
+    image: terrasight-postgis:17
+    build: ../postgis
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: terrasight
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: terrasight
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U terrasight -d terrasight"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  rabbitmq:
+    image: rabbitmq:4-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+
+  api:
+    image: terrasight-api:${TAG:?set TAG}
+    restart: unless-stopped
+    env_file: [/opt/terrasight/.env]
+    environment:
+      NODE_ENV: production
+      ROLE: all
+      DATABASE_URL: postgresql://terrasight:${POSTGRES_PASSWORD}@postgres:5432/terrasight
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      REDIS_URL: redis://redis:6379
+      WEB_ORIGIN: https://${DOMAIN}
+    depends_on:
+      postgres: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    logging: { driver: json-file, options: { max-size: "20m", max-file: "5" } }
+
+  web:
+    image: terrasight-web:${TAG:?set TAG}
+    restart: unless-stopped
+    environment:
+      API_URL: http://api:4000
+    depends_on: [api]
+    logging: { driver: json-file, options: { max-size: "20m", max-file: "5" } }
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

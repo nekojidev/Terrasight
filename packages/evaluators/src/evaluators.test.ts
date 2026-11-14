@@ -417,6 +417,20 @@ describe("regional thresholds (RFC §11.3)", () => {
   });
 });
 
+describe("model coverage by region (RFC §11.3)", () => {
+  it("a model whose required threshold has no source for the region does not run there", async () => {
+    const { modelCovers } = await import("./index.js");
+    const ks = {
+      ...threshold(910, "MMDD"),
+      source: { ...threshold(910, "MMDD").source, appliesTo: ["us-southern-plains"] },
+    };
+    const m = { ...rootworm, thresholds: { bpmpDate: ks, bufferM: { ...ks, value: 805 } } };
+    expect(modelCovers(m, "us-southern-plains")).toBe(true);
+    expect(modelCovers(m, "us-central-high-plains")).toBe(false);
+    expect(modelCovers({ ...m, thresholds: { bufferM: ks } }, "us-central-high-plains")).toBe(true); // optional only
+  });
+});
+
 describe("input snapshot hash", () => {
   it("is stable across key order and changes with inputs", () => {
     const a = inputs();

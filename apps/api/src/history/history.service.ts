@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { Inject, Injectable, type OnModuleInit } from "@nestjs/common";
+import { Inject, Injectable, Logger, type OnModuleInit } from "@nestjs/common";
+import { ModuleRef } from "@nestjs/core";
 import type { Library } from "@terrasight/library";
 import { EventKeys, type Envelope } from "@terrasight/shared";
 import type {
@@ -51,6 +52,7 @@ export class HistoryService extends JobConsumer<BuildJob> implements OnModuleIni
     @Inject(LIBRARY) private readonly lib: Library,
     private readonly prisma: PrismaService,
     private readonly outbox: OutboxService,
+    private readonly moduleRef?: ModuleRef,
   ) {
     super(broker, { queue: QUEUES.historyBuild, prefetch: 2, retries: 2 });
   }
@@ -173,9 +175,28 @@ export class HistoryService extends JobConsumer<BuildJob> implements OnModuleIni
         }),
       ]);
     });
+    // New field pipeline (Tech Design §8.1): once the final history is in, check the field so its first
+    // recommendations appear without waiting for the next 06:00 run.
+    if (!provisional) await this.firstCheck(field.workspaceId, fieldId);
     this.log.log(
       `history for ${fieldId}: ${crops.length} seasons, irrigation ${irrigation.status}, ${baseline.label}${provisional ? " (provisional)" : ""}`,
     );
+  }
+
+  private async firstCheck(workspaceId: string, fieldId: string): Promise<void> {
+    try {
+      const { AnalysisService } = await import("../analysis/analysis.service.js");
+      const { localDate } = await import("../analysis/scheduler.js");
+      const analysis = this.moduleRef?.get(AnalysisService, { strict: false });
+      if (!analysis) return;
+      const ws = await this.prisma.system.workspace.findUniqueOrThrow({
+        where: { id: workspaceId },
+        select: { timeZone: true },
+      });
+      await analysis.start(workspaceId, "manual", null, localDate(ws.timeZone), [fieldId]);
+    } catch (e) {
+      new Logger(HistoryService.name).warn(`first check for ${fieldId} skipped: ${(e as Error).message}`);
+    }
   }
 
   /** History view for the field page (design 08): 18-season strip, stress years, irrigation, current rotation. */

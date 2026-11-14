@@ -12,7 +12,7 @@ We build this project in three documented stages. Each one builds on the stage b
    - **Design** — `design/` (v4 "Morning brief", 17 screens) ✅ handed off; see "Design" below
 3. **Tech Design** — `docs/03-tech-design.md` — architecture, data model, API, modules, testing, deploy ✅ v1.1 agreed; backlog in `docs/epics/`
 
-Build: epic by epic in P0-path order (`docs/epics/README.md`). EP-00 ✅, EP-01 ✅, EP-02 ✅ (CropScape 2022+ is flaky: fixtures in S-09.02), EP-03 ✅ (S-03.08 waits for S-06.03), EP-04 P0 ✅ (field-brief rotation numbers wait for S-06.03; S-04.05/S-04.08 are P1), EP-05 ✅ (golden questions recorded locally; live job outside CI).
+Build: epic by epic in P0-path order (`docs/epics/README.md`). EP-00 … EP-08 ✅ (S-04.05/S-04.08 are P1), EP-09 ✅ except the public host (files in `infra/prod/`, runbook `docs/runbook-demo-host.md`; the team deploys). Demo template: `apps/api/scripts/seed-demo.mjs`; fixtures: `scripts/record-fixtures.mjs`; E2E: `apps/e2e` (Cypress); demo script: `docs/demo-script.md`.
 
 Rules:
 

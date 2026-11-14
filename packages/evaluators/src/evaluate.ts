@@ -132,6 +132,20 @@ export function snapshotHash(inputs: EvalInputs, asOf: string, modelVersion: str
   return createHash("sha256").update(stableStringify({ inputs, asOf, modelVersion })).digest("hex");
 }
 
+/** Thresholds that only shape the wording (e.g. the neighbourhood distance) and never block a model. */
+const OPTIONAL_THRESHOLDS = new Set(["bufferM"]);
+
+/**
+ * Whether a model's thresholds are sourced for this region (RFC §11.3): every required threshold has a regional value or
+ * a source that applies here. Otherwise the pest stays "library only" for the region and produces no item.
+ */
+export function modelCovers(model: PestModel, regionId: string | null): boolean {
+  const resolve = resolver(model, regionId);
+  return Object.keys(model.thresholds).every(
+    (k) => OPTIONAL_THRESHOLDS.has(k) || resolve({ ref: k }) !== null,
+  );
+}
+
 /** Which models run for a field today: the stage window must match the season state (RFC §10.2). */
 export function modelApplies(model: PestModel, state: { crop: string | null; stage: SeasonStage }): boolean {
   const w = model.stageWindow;

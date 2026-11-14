@@ -3,6 +3,7 @@ import { forecastCell, nwsForecast, openMeteoForecast, type Forecast } from "@te
 import { RateLimitService } from "../auth/rate-limit.js";
 import { ENV, type Env } from "../config/config.js";
 import { PrismaService } from "../db/prisma.service.js";
+import { SourcesService } from "../sources/sources.service.js";
 import type { Prisma } from "../generated/prisma/client.js";
 
 /** Forecasts are shared per 0.1° cell and refreshed after 6 h (RFC §13). */
@@ -29,6 +30,7 @@ export class ForecastService {
     private readonly prisma: PrismaService,
     private readonly limits: RateLimitService,
     @Inject(ENV) private readonly env: Env,
+    private readonly sources: SourcesService,
   ) {}
 
   async get(lat: number, lon: number, country: string | null, today: string): Promise<ForecastView | null> {
@@ -76,6 +78,15 @@ export class ForecastService {
       }
     }
     if (cached) return { forecast: cached, origin: "stale", ageHours: Math.round(age / 3600_000), failures };
+    // Recorded forecast (demo fields, S-09.02): labelled stale with its age.
+    const recorded = this.sources.forecastFixture<Forecast>(cell.key);
+    if (recorded)
+      return {
+        forecast: recorded,
+        origin: "stale",
+        ageHours: Math.round((Date.now() - Date.parse(recorded.issuedAt)) / 3600_000),
+        failures,
+      };
     return null;
   }
 

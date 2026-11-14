@@ -13,3 +13,4 @@ data/boundaries/
 .DS_Store
 apps/web/next-env.d.ts
 uploads/
+apps/e2e/cypress/screenshots/

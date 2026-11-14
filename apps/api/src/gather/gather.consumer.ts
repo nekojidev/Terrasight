@@ -99,7 +99,7 @@ export class GatherSourceConsumer extends JobConsumer<GatherSourceJob> implement
       const err = e as Error;
       const retryable = err instanceof SourceError ? err.retryable : true;
       if (retryable && attempt < this.options.retries) throw err; // consumer base schedules the retry
-      const fixture = this.sources.fixture(adapter, key);
+      const fixture = this.sources.fixture(adapter, field);
       if (fixture) {
         await this.sources.store(adapter, key, { source }, fixture, "fixture");
         return this.finish(

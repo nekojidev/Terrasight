@@ -1,5 +1,11 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { modelApplies, winterWheatStage, type EvalInputs, type SeasonStage } from "@terrasight/evaluators";
+import {
+  modelApplies,
+  modelCovers,
+  winterWheatStage,
+  type EvalInputs,
+  type SeasonStage,
+} from "@terrasight/evaluators";
 import type { Library, PestModel } from "@terrasight/library";
 import type { DailyWeather as PowerSeries, S2Result } from "@terrasight/sources";
 import { RateLimitService } from "../auth/rate-limit.js";
@@ -110,14 +116,21 @@ export class EvalInputsService {
     return {
       inputs,
       stage,
-      due: models.filter((m) => modelApplies(m, { crop: record.crop.value, stage })),
+      due: models.filter(
+        (m) => modelCovers(m, field.regionId) && modelApplies(m, { crop: record.crop.value, stage }),
+      ),
       dataDate: observedUntil(weather),
       powerDate: power?.result.dataDate ?? null,
       problems,
-      planningDeadline: (model) =>
-        this.seasons.typicalSowing(field.regionId, nextCrop, season) ??
-        this.seasons.typicalSowing(field.regionId, hostCrop(model), season) ??
-        this.seasons.typicalSowing(field.regionId, lastCrop, season),
+      planningDeadline: (model) => {
+        let d =
+          this.seasons.typicalSowing(field.regionId, nextCrop, season) ??
+          this.seasons.typicalSowing(field.regionId, hostCrop(model), season) ??
+          this.seasons.typicalSowing(field.regionId, lastCrop, season);
+        // A typical date already past (fixed plan horizon) rolls to the next one.
+        while (d && d < asOf) d = `${Number(d.slice(0, 4)) + 1}${d.slice(4)}`;
+        return d;
+      },
     };
   }
 }
