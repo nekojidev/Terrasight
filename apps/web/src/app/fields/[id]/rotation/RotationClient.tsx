@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { rank, type Metric, type ScenarioResult } from "@terrasight/scenario-engine";
-import { Button, Chip, SeasonStrip, cropColour } from "@terrasight/ui";
+import { Button, Chip, Skeleton, SeasonStrip, cropColour } from "@terrasight/ui";
 import { Check, Droplet, Leaf, PiggyBank, ShieldCheck, Sparkles, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
@@ -139,7 +139,7 @@ export function RotationClient({
       }),
   });
 
-  if (run.isPending) return <p className="text-body text-ink-2">{t("rotLoading")}</p>;
+  if (run.isPending) return <Skeleton label={t("rotLoading")} />;
   if (run.isError || !run.data) return <p className="text-body text-urgent">{t("errGeneric")}</p>;
   if (run.data.noLibrary)
     return (
