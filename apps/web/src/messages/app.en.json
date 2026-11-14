@@ -168,6 +168,11 @@
     "type_rotation": "Rotation",
     "type_irrigation": "Irrigation",
     "type_sowing": "Sowing",
-    "type_weather": "Weather"
+    "type_weather": "Weather",
+    "fieldAllFine": "Nothing needs attention on this field right now",
+    "fieldInRow": "seasons of {crop} in a row ({from}–{to}, USDA CDL)",
+    "fieldCompareSoon": "Rotation comparison arrives with the scenario engine",
+    "fieldNoRisks": "No open risks on this field.",
+    "forecastAge": "forecast from {h} h ago"
   }
 }

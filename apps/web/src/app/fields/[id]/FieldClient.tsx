@@ -7,6 +7,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useState, type FormEvent } from "react";
 import { api } from "@/lib/api";
 import { useWorkspaceEvents } from "@/lib/events";
+import { FieldBrief, FieldTabs, RisksCard, WeatherCard, type Risk } from "./Overview";
 
 export interface FieldView {
   id: string;
@@ -93,6 +94,11 @@ export function FieldClient({
     queryFn: () => api<GatherStatus | null>(`${base}/gather`),
     refetchInterval: (q) => (q.state.data?.status === "running" ? 10_000 : false),
   });
+  const locale = useLocale();
+  const risks = useQuery({
+    queryKey: ["field", workspaceId, id, "risks"],
+    queryFn: () => api<Risk[]>(`${base}/recommendations`),
+  });
   const history = useQuery({
     queryKey: ["field", workspaceId, id, "history"],
     queryFn: () => api<History>(`${base}/history`),
@@ -122,6 +128,19 @@ export function FieldClient({
           </Chip>
         </p>
       </header>
+      <FieldTabs />
+
+      {history.data && (
+        <FieldBrief
+          risks={risks.data ?? []}
+          seasons={history.data.seasons}
+          cropName={(c) => cropLabel(history.data!.cropNames, locale, c)}
+        />
+      )}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <RisksCard risks={risks.data ?? []} />
+        <WeatherCard workspaceId={workspaceId} fieldId={id} units={units} />
+      </div>
 
       {gather.data && (
         <GatherPanel

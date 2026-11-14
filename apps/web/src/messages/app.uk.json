@@ -168,6 +168,11 @@
     "type_rotation": "Сівозміна",
     "type_irrigation": "Полив",
     "type_sowing": "Сівба",
-    "type_weather": "Погода"
+    "type_weather": "Погода",
+    "fieldAllFine": "Зараз на цьому полі нічого не потребує уваги",
+    "fieldInRow": "сезонів {crop} поспіль ({from}–{to}, USDA CDL)",
+    "fieldCompareSoon": "Порівняння сівозмін з'явиться разом зі сценарним рушієм",
+    "fieldNoRisks": "Відкритих ризиків на цьому полі немає.",
+    "forecastAge": "прогноз від {h} год тому"
   }
 }
