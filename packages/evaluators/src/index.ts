@@ -12,3 +12,12 @@ export {
   winterWheatStage,
   type SeasonStage,
 } from "./evaluate.js";
+export {
+  classifyUrgency,
+  compareItems,
+  daysUntil,
+  localDay,
+  PLANNING_LEAD_DAYS,
+  type Urgency,
+  type UrgencyItem,
+} from "./urgency.js";

@@ -10,6 +10,7 @@ import { FieldsModule } from "./fields/fields.module.js";
 import { HealthController } from "./health/health.controller.js";
 import { LibraryModule } from "./library/library.module.js";
 import { MessagingModule } from "./messaging/messaging.module.js";
+import { RecommendationsModule } from "./recommendations/recommendations.module.js";
 import { RedisModule } from "./redis/redis.module.js";
 import { WorkspacesModule } from "./workspaces/workspaces.module.js";
 
@@ -37,6 +38,7 @@ const env = loadEnv();
     WorkspacesModule,
     FieldsModule,
     AnalysisModule,
+    RecommendationsModule,
   ],
   controllers: [HealthController],
 })

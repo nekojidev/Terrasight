@@ -197,6 +197,15 @@ export class FieldCheckConsumer extends JobConsumer<FieldCheckJob> implements On
       )
         created += 1;
     }
+    // Open or snoozed items whose deadline has passed leave the brief (RFC §10.4: Open → Expired).
+    await this.prisma.system.recommendation.updateMany({
+      where: {
+        fieldId,
+        status: { in: ["open", "snoozed"] },
+        deadline: { lt: new Date(`${asOf}T00:00:00Z`) },
+      },
+      data: { status: "expired" },
+    });
     this.logger.log(
       `field ${fieldId}: ${due.length}/${models.length} models due (stage ${stage}), ${created} new, data ${dataDate}`,
     );

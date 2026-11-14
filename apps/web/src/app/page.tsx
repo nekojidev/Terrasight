@@ -1,9 +1,8 @@
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { AppShell } from "@/components/AppShell";
-import { AnalysisCard } from "@/components/AnalysisCard";
+import { Brief } from "@/components/Brief";
 import { EmptyHome } from "@/components/EmptyHome";
-import { FieldList, type FieldRow } from "@/components/FieldList";
 import { SessionRefresher } from "@/components/SessionRefresher";
 import { activeWorkspace, serverGet, type Me } from "@/lib/server-api";
 
@@ -32,7 +31,6 @@ export default async function Home() {
   const ws = await serverGet<WorkspaceDetail>(`/api/w/${active.id}`);
   if (!ws.ok) redirect("/onboarding");
   const t = await getTranslations("EmptyHome");
-  const fields = ws.data.fieldCount > 0 ? await serverGet<FieldRow[]>(`/api/w/${active.id}/fields`) : null;
 
   return (
     <AppShell
@@ -43,19 +41,12 @@ export default async function Home() {
       {ws.data.fieldCount === 0 ? (
         <EmptyHome firstName={me.data.name.split(/\s+/)[0] ?? me.data.name} />
       ) : (
-        // The morning brief replaces this in EP-04 (S-04.03).
-        <div className="flex flex-col gap-6">
-          <AnalysisCard
-            workspaceId={ws.data.id}
-            timeZone={ws.data.timeZone}
-            canRun={ws.data.role !== "viewer"}
-          />
-          <FieldList
-            fields={fields?.ok ? fields.data : []}
-            units={ws.data.units}
-            canEdit={ws.data.role !== "viewer"}
-          />
-        </div>
+        <Brief
+          workspaceId={ws.data.id}
+          firstName={me.data.name.split(/\s+/)[0] ?? me.data.name}
+          units={ws.data.units}
+          canAct={ws.data.role !== "viewer"}
+        />
       )}
     </AppShell>
   );
