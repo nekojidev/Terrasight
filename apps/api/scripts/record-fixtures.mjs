@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-// Record fixtures for the demo fields (S-09.02): the real responses gathered for the demo template's fields are copied
+// Record fixtures (S-09.02) for one workspace's fields: the real responses gathered for them are copied
 // from source_cache into fixtures/<source>/<fixtureKey>.json (stable key, no date) and fixtures/forecast/<cell>.json.
 // Fixtures are served only when a live call fails, labelled "cached" with their date. Never synthetic.
 //
-// Usage: node --env-file=../../.env scripts/record-fixtures.mjs   (after seed-demo.mjs and a finished gather)
+// Usage: node --env-file=../../.env scripts/record-fixtures.mjs <workspace-id>   (after a finished gather)
 import { createHash } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -20,16 +20,19 @@ const adapters = createAdapters({
   openetApiKey: process.env.OPENET_API_KEY,
 });
 
+const workspaceId = process.argv[2];
+if (!workspaceId) throw new Error("usage: record-fixtures.mjs <workspace-id>");
 const db = new pg.Client({ connectionString: process.env.DATABASE_URL });
 await db.connect();
 const fields = (
   await db.query(
     `SELECT f.id, f.name, f.country, ST_AsGeoJSON(f.geom, 7) AS mp, ST_X(f.centroid) AS lon, ST_Y(f.centroid) AS lat,
             ST_XMin(f.geom) AS xmin, ST_YMin(f.geom) AS ymin, ST_XMax(f.geom) AS xmax, ST_YMax(f.geom) AS ymax
-     FROM fields f JOIN workspaces w ON w.id = f.workspace_id WHERE w.slug = 'demo-template' AND f.archived_at IS NULL`,
+     FROM fields f JOIN workspaces w ON w.id = f.workspace_id WHERE w.id = $1 AND f.archived_at IS NULL`,
+    [workspaceId],
   )
 ).rows;
-if (!fields.length) throw new Error("no demo template fields: run seed-demo.mjs first");
+if (!fields.length) throw new Error("no fields in that workspace");
 
 let written = 0;
 for (const f of fields) {

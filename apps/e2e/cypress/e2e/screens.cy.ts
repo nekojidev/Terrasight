@@ -1,12 +1,12 @@
-/** Visual check of the demo company's screens (run on demand: CYPRESS_DEMO_EMAIL / CYPRESS_DEMO_PASSWORD). */
+/** Visual check of the main screens for a real account (run on demand: --env E2E_EMAIL=…,E2E_PASSWORD=…). */
 describe("screens", () => {
   beforeEach(() => {
-    cy.env(["DEMO_EMAIL", "DEMO_PASSWORD"]).then(({ DEMO_EMAIL, DEMO_PASSWORD }) =>
+    cy.env(["E2E_EMAIL", "E2E_PASSWORD"]).then(({ E2E_EMAIL, E2E_PASSWORD }) =>
       cy.request({
         method: "POST",
         url: "/api/auth/login",
         headers: { "X-Requested-With": "cypress" },
-        body: { email: DEMO_EMAIL, password: DEMO_PASSWORD },
+        body: { email: E2E_EMAIL, password: E2E_PASSWORD },
       }),
     );
   });

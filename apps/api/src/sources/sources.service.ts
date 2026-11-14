@@ -171,7 +171,7 @@ export class SourcesService {
 
   /**
    * Stable key for a recorded response (S-09.02): the adapter's cache key with "fixture" in place of today's date, so
-   * a recording made today is found on the demo day. Shared with tools/record-fixtures.
+   * a recording made today is still found later. Shared with tools/record-fixtures.
    */
   fixtureKey(adapter: SourceAdapter, field: FieldGeometry): string {
     return createHash("sha256")

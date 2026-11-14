@@ -9,7 +9,6 @@ interface WorkspaceDetail {
   id: string;
   name: string;
   fieldCount: number;
-  isDemo: boolean;
   units: "metric" | "imperial";
   role: Me["workspaces"][number]["role"];
 }
@@ -33,7 +32,7 @@ export default async function RotationPage({ params }: { params: Promise<{ id: s
   const t = await getTranslations("Rotation");
   return (
     <AppShell
-      workspace={{ name: ws.data.name, fieldCount: ws.data.fieldCount, isDemo: ws.data.isDemo }}
+      workspace={{ name: ws.data.name, fieldCount: ws.data.fieldCount }}
       user={{ name: me.data.name, role: ws.data.role }}
       crumb={`${field.data.name} / ${t("crumb_r")}`}
     >

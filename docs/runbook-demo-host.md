@@ -31,12 +31,11 @@ chmod 600 /opt/terrasight/prod.env
 /opt/terrasight/repo/infra/prod/ssm-env.sh            # writes /opt/terrasight/.env from SSM
 ```
 
-## 3. Deploy, seed, back up
+## 3. Deploy, back up
 
 ```bash
 /opt/terrasight/repo/infra/prod/deploy.sh v0.9.0       # build images for the tag, start, keep the previous tag
 docker compose -f /opt/terrasight/repo/infra/prod/docker-compose.yml exec api npm run boundaries:load
-docker compose -f /opt/terrasight/repo/infra/prod/docker-compose.yml exec api node scripts/seed-demo.mjs
 (crontab -l; echo "15 3 * * * /opt/terrasight/repo/infra/prod/backup.sh >> /var/log/terrasight-backup.log 2>&1") | crontab -
 ```
 
@@ -49,5 +48,5 @@ docker compose -f /opt/terrasight/repo/infra/prod/docker-compose.yml exec api no
 ## 4. Checks after a deploy
 
 1. `https://<domain>/api/readyz` → 200.
-2. Sign in, **Explore the demo company**: the brief shows the seeded items; Analyze fields finishes in < 30 s.
+2. Sign up, create the company, add a real field: its history is gathered (MODIS ~2 min); Analyze fields finishes in < 30 s once history is built. There is no demo company (product definition v2.6).
 3. A rotation run returns in < 5 s; the Owner report link opens on a phone.

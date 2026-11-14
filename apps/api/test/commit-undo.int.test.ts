@@ -75,7 +75,7 @@ beforeAll(async () => {
     JWT_SECRET: "integration-test-secret-0123456789abcdef",
     NODE_ENV: "test",
     DATA_DIR,
-    // Tests never see the demo recordings.
+    // Tests never see the recorded fixtures.
     FIXTURES_DIR: "/nonexistent/fixtures",
   });
   prisma = new PrismaService(env);

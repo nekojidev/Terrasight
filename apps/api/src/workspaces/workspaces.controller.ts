@@ -30,11 +30,6 @@ export class WorkspacesController {
     return this.workspaces.create(req.user!.id, body);
   }
 
-  @Post("workspaces/demo-copy")
-  demoCopy(@Req() req: AuthedRequest) {
-    return this.workspaces.demoCopy(req.user!.id);
-  }
-
   @Post("invitations/:token/accept")
   @HttpCode(200)
   accept(@Param("token") token: string, @Req() req: AuthedRequest) {

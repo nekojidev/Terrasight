@@ -6,7 +6,6 @@ import type { Language, Role, Units } from "../generated/prisma/enums.js";
 import { ProblemException } from "../http/problem.js";
 
 export const INVITE_TTL_DAYS = 7;
-export const DEMO_TEMPLATE_SLUG = "demo-template";
 
 /** True for a valid IANA time zone name ("America/Chicago"). */
 export function isTimeZone(tz: string): boolean {
@@ -209,93 +208,6 @@ export class WorkspacesService {
       await tx.auditLog.create({
         data: { workspaceId, userId: actor.id, action: "member.remove", target: userId },
       });
-    });
-  }
-
-  // ---------- demo company (S-01.06) ----------
-
-  /**
-   * Copies the seeded template (Prairie Field Co., S-09.03) into a new workspace marked as demo, with the user
-   * as Owner. Fields, crop history, season records, field history and plans are copied in SQL; the source
-   * cache is shared, so the copy is cheap.
-   */
-  async demoCopy(userId: string) {
-    const template = await this.prisma.system.workspace.findUnique({ where: { slug: DEMO_TEMPLATE_SLUG } });
-    if (!template)
-      throw new ProblemException(404, "demo-not-seeded", "The demo company is not available yet");
-    return this.prisma.system.$transaction(async (tx) => {
-      const ws = await tx.workspace.create({
-        data: {
-          name: template.name,
-          slug: slugify(template.name),
-          timeZone: template.timeZone,
-          units: template.units,
-          reportLanguage: template.reportLanguage,
-          currency: template.currency,
-          isDemo: true,
-          demoTemplateId: template.id,
-        },
-      });
-      await tx.membership.create({ data: { workspaceId: ws.id, userId, role: "owner" } });
-      await tx.$executeRaw`
-        CREATE TEMP TABLE field_map ON COMMIT DROP AS
-        SELECT id AS old_id, gen_random_uuid() AS new_id FROM fields WHERE workspace_id = ${template.id}::uuid AND archived_at IS NULL`;
-      await tx.$executeRaw`
-        INSERT INTO fields (id, workspace_id, name, alias_no, geom, centroid, area_ha, admin_code, country, county_name,
-                            region_id, tier, irrigation, irrigation_source, slope_pct, thumbnail_key, created_by)
-        SELECT m.new_id, ${ws.id}::uuid, f.name, f.alias_no, f.geom, f.centroid, f.area_ha, f.admin_code, f.country,
-               f.county_name, f.region_id, f.tier, f.irrigation, f.irrigation_source, f.slope_pct, f.thumbnail_key, ${userId}::uuid
-        FROM fields f JOIN field_map m ON m.old_id = f.id`;
-      await tx.$executeRaw`
-        INSERT INTO crop_seasons (field_id, season, main_crop, second_crop, confidence, source, is_override, updated_at)
-        SELECT m.new_id, c.season, c.main_crop, c.second_crop, c.confidence, c.source, c.is_override, now()
-        FROM crop_seasons c JOIN field_map m ON m.old_id = c.field_id`;
-      await tx.$executeRaw`
-        INSERT INTO season_records (field_id, season, crop, crop_source, sowing_date, sowing_source, emergence_date,
-                                    emergence_source, irrigated, tillage, updated_at)
-        SELECT m.new_id, s.season, s.crop, s.crop_source, s.sowing_date, s.sowing_source, s.emergence_date,
-               s.emergence_source, s.irrigated, s.tillage, now()
-        FROM season_records s JOIN field_map m ON m.old_id = s.field_id`;
-      await tx.$executeRaw`
-        INSERT INTO field_history (field_id, built_at, inputs_hash, provisional, bare_months, stress_years, ndvi_peaks,
-                                   irrigation_detection, baseline_match)
-        SELECT m.new_id, h.built_at, h.inputs_hash, h.provisional, h.bare_months, h.stress_years, h.ndvi_peaks,
-               h.irrigation_detection, h.baseline_match
-        FROM field_history h JOIN field_map m ON m.old_id = h.field_id`;
-      await tx.$executeRaw`
-        INSERT INTO plans (field_id, season, crop, rotation_id, saved_by, saved_at)
-        SELECT m.new_id, p.season, p.crop, p.rotation_id, ${userId}::uuid, now()
-        FROM plans p JOIN field_map m ON m.old_id = p.field_id`;
-      // The brief, the report and the owner's open question come along, so the demo tells its story at once.
-      await tx.$executeRaw`
-        CREATE TEMP TABLE rec_map ON COMMIT DROP AS
-        SELECT r.id AS old_id, gen_random_uuid() AS new_id FROM recommendations r JOIN field_map m ON m.old_id = r.field_id
-        WHERE r.status IN ('open', 'accepted', 'snoozed', 'in_report')`;
-      await tx.$executeRaw`
-        INSERT INTO recommendations (id, workspace_id, field_id, type, subject, season, status, level, confidence, tier, deadline,
-                                     irreversible, planning, key_numbers, drivers, evidence, unknowns, model_ref, versions,
-                                     input_snapshot_id, text_override, committed_at, updated_at)
-        SELECT rm.new_id, ${ws.id}::uuid, fm.new_id, r.type, r.subject, r.season,
-               CASE WHEN r.status = 'in_report' THEN 'in_report'::"RecStatus" ELSE 'open'::"RecStatus" END,
-               r.level, r.confidence, r.tier, r.deadline, r.irreversible, r.planning, r.key_numbers, r.drivers, r.evidence,
-               r.unknowns, r.model_ref, r.versions, r.input_snapshot_id, r.text_override, r.committed_at, now()
-        FROM recommendations r JOIN rec_map rm ON rm.old_id = r.id JOIN field_map fm ON fm.old_id = r.field_id`;
-      await tx.$executeRaw`
-        CREATE TEMP TABLE item_map ON COMMIT DROP AS
-        SELECT i.id AS old_id, gen_random_uuid() AS new_id FROM report_items i JOIN rec_map rm ON rm.old_id = i.recommendation_id
-        WHERE i.superseded_by IS NULL`;
-      await tx.$executeRaw`
-        INSERT INTO report_items (id, workspace_id, recommendation_id, text, note, committed_at)
-        SELECT im.new_id, ${ws.id}::uuid, rm.new_id, i.text, i.note, i.committed_at
-        FROM report_items i JOIN item_map im ON im.old_id = i.id JOIN rec_map rm ON rm.old_id = i.recommendation_id`;
-      await tx.$executeRaw`
-        INSERT INTO owner_answers (id, report_item_id, answer, text, via, user_id, created_at)
-        SELECT gen_random_uuid(), im.new_id, a.answer, a.text, a.via, NULL, a.created_at
-        FROM owner_answers a JOIN item_map im ON im.old_id = a.report_item_id`;
-      await tx.auditLog.create({
-        data: { workspaceId: ws.id, userId, action: "workspace.demo-copy", target: template.id },
-      });
-      return { ...ws, role: "owner" as Role };
     });
   }
 }

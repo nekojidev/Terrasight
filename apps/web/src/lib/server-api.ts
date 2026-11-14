@@ -13,7 +13,6 @@ export interface Me {
     timeZone: string;
     units: "metric" | "imperial";
     reportLanguage: "uk" | "en";
-    isDemo: boolean;
     role: "owner" | "admin" | "agronomist" | "viewer";
   }>;
 }

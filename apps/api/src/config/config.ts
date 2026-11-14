@@ -22,12 +22,12 @@ export const EnvSchema = z.object({
   CDSE_CLIENT_ID: z.string().optional(),
   CDSE_CLIENT_SECRET: z.string().optional(),
   OPENET_API_KEY: z.string().optional(),
-  /** Open-Meteo commercial key (RFC §13); without it the free endpoint is used (development, hackathon demo). */
+  /** Open-Meteo commercial key (RFC §13); without it the free endpoint is used (development only). */
   OPEN_METEO_API_KEY: z.string().optional(),
   EARTHDATA_TOKEN: z.string().optional(),
   /** Gemini API (RFC D9); without a key the assistant answers "Assistant unavailable". */
   GEMINI_API_KEY: z.string().optional(),
-  GEMINI_MODEL: z.string().default("gemini-3.8-flash"),
+  GEMINI_MODEL: z.string().default("gemini-3.5-flash-lite"),
   /** Private bucket for scouting photos (Tech Design §11); without it photos go to UPLOADS_DIR (development). */
   S3_BUCKET: z.string().optional(),
   AWS_REGION: z.string().default("us-east-1"),

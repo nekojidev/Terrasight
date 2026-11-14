@@ -186,8 +186,6 @@ model Workspace {
   units            Units    @default(metric)
   reportLanguage   Language @default(en) @map("report_language")
   currency         String   @default("USD")
-  isDemo           Boolean  @default(false) @map("is_demo")
-  demoTemplateId   String?  @map("demo_template_id") @db.Uuid
   createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   memberships   Membership[]

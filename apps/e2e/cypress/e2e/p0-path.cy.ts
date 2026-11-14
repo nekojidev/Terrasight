@@ -1,7 +1,7 @@
 /**
  * The P0 path (S-09.04): sign up → onboarding → add field → history → Analyze fields → brief → Accept + Undo + Accept →
  * assistant "why?" → rotation Save to the 2026 plan → scouting Send → Owner report answer via link.
- * The field reuses the demo pivot's outline so its sources come from the cache (no multi-minute gather).
+ * The field reuses the Garden City pivot's outline so its sources come from the cache (no multi-minute gather).
  */
 const run = Date.now().toString(36);
 const email = `e2e-${run}@example.com`;

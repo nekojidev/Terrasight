@@ -9,13 +9,13 @@ describe("all screens", () => {
   });
 
   it("logged in", () => {
-    cy.env(["DEMO_EMAIL", "DEMO_PASSWORD", "PIVOT12", "REC"]).then(
-      ({ DEMO_EMAIL, DEMO_PASSWORD, PIVOT12, REC }) => {
+    cy.env(["E2E_EMAIL", "E2E_PASSWORD", "PIVOT12", "REC"]).then(
+      ({ E2E_EMAIL, E2E_PASSWORD, PIVOT12, REC }) => {
         cy.request({
           method: "POST",
           url: "/api/auth/login",
           headers: { "X-Requested-With": "cypress" },
-          body: { email: DEMO_EMAIL, password: DEMO_PASSWORD },
+          body: { email: E2E_EMAIL, password: E2E_PASSWORD },
         });
         shoot(PIVOT12 as string, REC as string);
       },

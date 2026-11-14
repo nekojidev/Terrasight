@@ -78,7 +78,7 @@ export class ForecastService {
       }
     }
     if (cached) return { forecast: cached, origin: "stale", ageHours: Math.round(age / 3600_000), failures };
-    // Recorded forecast (demo fields, S-09.02): labelled stale with its age.
+    // Recorded forecast (fixtures, S-09.02): labelled stale with its age.
     const recorded = this.sources.forecastFixture<Forecast>(cell.key);
     if (recorded)
       return {

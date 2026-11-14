@@ -11,7 +11,6 @@ import { Brand } from "./Brand";
 export interface ShellWorkspace {
   name: string;
   fieldCount: number;
-  isDemo: boolean;
 }
 
 export interface ShellUser {
@@ -78,7 +77,7 @@ export function AppShell({
               <span className="min-w-0">
                 <span className="block truncate text-body font-semibold text-ink">{workspace.name}</span>
                 <span className="block text-small text-ink-2">
-                  {workspace.isDemo ? a("demoBadge") : workspace.fieldCount === 0 ? t("co_m") : ""}
+                  {workspace.fieldCount === 0 ? t("co_m") : ""}
                 </span>
               </span>
             </div>

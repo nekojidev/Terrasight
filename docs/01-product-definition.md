@@ -1,8 +1,8 @@
-# Terrasight — Product Definition (v2.5.2)
+# Terrasight — Product Definition (v2.6)
 
 | | |
 | --- | --- |
-| **Status** | Draft v2.5.2 — **supersedes v1** (direction change on 2026-11-14) |
+| **Status** | Draft v2.6 — **supersedes v1** (direction change on 2026-11-14) |
 | **Date** | 2026-11-14 |
 | **Stage** | 1 of 3 — Product Definition → RFC → Tech Design |
 | **Context** | NASA Space Apps Challenge 2026, *Field Shift: Adapting Farms with NASA Data* |
@@ -11,6 +11,7 @@
 | **What changed in v2.2** | Competitors & differentiation (EOSDA Crop Monitoring, §7); new requirements: scouting tasks, stable zones, yield range, work log, integrations (§9); non-goals updated: zones are in scope, prescribing rates is not, open imagery only. Full analysis: [`competitor-eos.md`](competitor-eos.md) |
 | **What changed in v2.3** | Rotation horizon is **5 seasons (2026–2030)** instead of 10. The headline is the decision for next season; the 5-season comparison is its evidence; the plan is recomputed every autumn (§5, Rotation horizon) |
 | **What changed in v2.4** | Design review outcomes (v2.4.1: wording aligned across the whole document): urgency rules (§9), confidence on every home card, partial-failure state of **Analyze fields**, first-run onboarding and empty home, notifications, Fields map, rotation call to action, scouting completion and ownership, "Owner report" naming, honest "Coming soon" for integrations; review decisions in §12 (6–10) |
+| **What changed in v2.6** | **No demo and no example data in the product (2026-11-15):** no demo company ("Explore the demo company" removed), no greyed example card on the empty home, no static mock of zones or yield. The field tab "Zones & yield" becomes **Work log** (real events only) until FR-ZN-1 / FR-YF-1 are built on real data (§9) |
 | **What changed in v2.5** | (v2.5.2: rotation library v2, 113 rotations in 24 regions and 34 countries (§8); field-brief numbers that can be computed in November (§9); Chase County, NE → `us-central-high-plains` (§12).) (v2.5.1: region = county in the UI, neutral-data wording, a P0 hero example, dates by UI language, competitor sources pending) Competitor research beyond EOS (§7); the **morning brief** home and in-card Accept / Snooze with Undo (§9); field-page brief, scouting map with a bottom sheet, mobile home and dark theme (§9); the **v4 design system** (§9, Design system); neutrality as a product principle (§10); decisions 11–15 (§12) |
 
 ---
@@ -242,7 +243,7 @@ Sources for these competitors are not in `docs/` yet: they go into `competitor-e
 | --- | --- | --- |
 | Time from boundary to first recommendations | < 60 s | < 30 s |
 | Recommendations with evidence + confidence | 100% | 100% |
-| "Analyze fields" for all fields (history already built) | < 30 s for the demo company | < 2 min for 100 fields |
+| "Analyze fields" for all fields (history already built) | < 30 s for a company with 4 fields | < 2 min for 100 fields |
 | Morning check finished by 06:30 | — | 99% of days |
 | Assistant answers whose numbers match tool results | 100% (enforced) | 100% |
 | Agronomists who'd act on a recommendation without re-checking the data | 3 of 5 interviewed | 60% |
@@ -299,7 +300,7 @@ Data tiers stay as in v1: **A Full data** (US), **B Basic data** (EU), **C Estim
 | UA / EN | P1 | Yes |
 | First-run onboarding: company, time zone, units, report language | P0 | Yes |
 | Invite the owner or manager as a Viewer (onboarding step 2 or the Reports page) | P1 | Yes |
-| Empty home (no fields yet) with the three steps and a link to the demo company | P1 | Yes |
+| Empty home (no fields yet) with the three steps and **Add your first field** (no demo company, v2.6) | P1 | Yes |
 | **Analyze fields** partial failure: per-field "No data", the run summary says what failed, "Retry" for that field | P0 | Yes |
 | Notifications (bell): owner questions, new urgent items, scouting results | P2 | Design only |
 | Morning-brief home: hero item with key numbers, queue with Why, in-place Accept / Snooze with Undo, right rail | P0 | Yes |
@@ -314,20 +315,20 @@ Data tiers stay as in v1: **A Full data** (US), **B Basic data** (EU), **C Estim
 | FR-SC-1 | **Scouting task.** Any pest or disease recommendation can become a scouting task: a W-route with 5 points, a count out of 20 plants per point, and optional photos. The last point's button is **Finish the check**; **Send** appears only after all 5 points, and the summary shows "Points checked: N / 5" | P0 (demo) | **Build** | The task opens from a home card; a partial check can't be sent; the summary percentage is computed from all 5 points and sent to the agronomist |
 | FR-SC-2 | Scouting works offline and syncs when back online. Until it is built, the UI promises only **"Saved automatically"** (the draft is kept in the browser), never "works offline" | P1 | No | Entries made offline appear after reconnect with no duplicates |
 | FR-SC-3 | A scouting result updates the field's pest risk (observed beats modelled) and is shown as evidence in the recommendation | P1 | No | The recommendation's "Why" list includes "Scouted on <date>: N%" |
-| FR-ZN-1 | **Stable zones.** Split each field into 3 zones (always strong / depends on the year / always weak) from per-season NDVI percentiles, using Sentinel-2 + Landsat for ≥ 5 seasons | P1 | **Static mock** on "Zones & yield" | Zone areas sum to the field area; cloudy scenes are masked |
+| FR-ZN-1 | **Stable zones.** Split each field into 3 zones (always strong / depends on the year / always weak) from per-season NDVI percentiles, using Sentinel-2 + Landsat for ≥ 5 seasons | P1 | No (v2.6: no mock; only real data) | Zone areas sum to the field area; cloudy scenes are masked |
 | FR-ZN-2 | Map layer switch: stable zones ↔ latest NDVI | P1 | No | Switching does not reload the page |
 | FR-ZN-3 | Rate-map export (Shapefile first; ISOXML later). The agronomist enters each rate; Terrasight never suggests product rates | P2 | No | The exported file opens in QGIS with 3 polygons and a rate attribute |
-| FR-YF-1 | **Yield range** for the planned crop from the simulator: P10 / P50 / P90, with known pest losses included in the P10 | P1 | **Static mock** on "Zones & yield" | Numbers match the simulator output for the same field and plan |
+| FR-YF-1 | **Yield range** for the planned crop from the simulator: P10 / P50 / P90, with known pest losses included in the P10 | P1 | No (v2.6: no mock; only real data) | Numbers match the simulator output for the same field and plan |
 | FR-YF-2 | In-season weekly yield update (satellite + 14-day weather) | P2 (later) | No | — |
 | FR-LOG-1 | **Work log** per field, merging assistant runs, owner replies, the agronomist's own entries and imported machine records | P1 | **Mock in the design** | Entries are shown newest first with their source |
 | FR-INT-1 | John Deere Operations Center import (boundaries, planting, harvest). Shown in the UI with a **"Coming soon"** badge, never as connected | P2 (later) | No | — |
 | FR-INT-2 | Public read-only API for fields and recommendations. Shown as **"Coming soon"** | P2 (later) | No | — |
 
-**Hackathon cut:** build FR-SC-1, plus a static mock of FR-ZN-1 and FR-YF-1 on the "Zones & yield" tab; mock the work log in the design; leave out everything at P2.
+**Hackathon cut:** build FR-SC-1 and the real work log; no mocks of FR-ZN-1 / FR-YF-1 (v2.6); leave out everything at P2.
 
 ### Field page (design note)
 
-- Field tabs: **Overview · Zones & yield · Rotation · Owner report**.
+- Field tabs: **Overview · Work log · Rotation · Owner report** (v2.6; "Zones & yield" returns when built on real data).
 - Design canvas screens: **7 · Огляд поля** (`Scout.dc.html`, phone) for the scouting task; **8 · Зони, урожай і журнал робіт** (`Zones.dc.html`) for zones, yield range and the work log.
 
 ### Home page (design note)
@@ -378,7 +379,7 @@ The urgency rules below still decide what goes where.
 
 ### First run (design note)
 
-- Sign up → **Create the company** (2 steps, §4 step 0) → **empty home**: "Let's start with your first field", the three steps (add a field → 18 seasons of history → advice every morning at 06:00), **Add your first field** (primary), **Explore the demo company** (secondary) and a greyed example card.
+- Sign up → **Create the company** (2 steps, §4 step 0) → **empty home**: "Let's start with your first field", the three steps (add a field → 18 seasons of history → advice every morning at 06:00), **Add your first field**. No demo company and no example card (v2.6): everything shown is the company's own data.
 
 ### Rotation screen (design note)
 

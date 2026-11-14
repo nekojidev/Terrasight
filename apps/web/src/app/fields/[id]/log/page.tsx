@@ -2,22 +2,21 @@ import { notFound, redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { SessionRefresher } from "@/components/SessionRefresher";
 import { activeWorkspace, serverGet, type Me } from "@/lib/server-api";
-import { ZonesClient } from "./ZonesClient";
+import { LogClient } from "./LogClient";
 
 interface WorkspaceDetail {
   id: string;
   name: string;
   fieldCount: number;
-  isDemo: boolean;
   role: Me["workspaces"][number]["role"];
 }
 
-/** Design 11: Zones & yield (FR-ZN-1, FR-YF-1 — a preview in the hackathon) with the field's real work log. */
-export default async function ZonesPage({ params }: { params: Promise<{ id: string }> }) {
+/** A field's work log (replaces the design 11 mock: no example data in the product). */
+export default async function LogPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const me = await serverGet<Me>("/api/me");
   if (!me.ok) {
-    if (me.status === 401) return <SessionRefresher next={`/fields/${id}/zones`} />;
+    if (me.status === 401) return <SessionRefresher next={`/fields/${id}/log`} />;
     redirect("/login");
   }
   const active = await activeWorkspace(me.data);
@@ -30,11 +29,11 @@ export default async function ZonesPage({ params }: { params: Promise<{ id: stri
   if (!field.ok) notFound();
   return (
     <AppShell
-      workspace={{ name: ws.data.name, fieldCount: ws.data.fieldCount, isDemo: ws.data.isDemo }}
+      workspace={{ name: ws.data.name, fieldCount: ws.data.fieldCount }}
       user={{ name: me.data.name, role: ws.data.role }}
       crumb={field.data.name}
     >
-      <ZonesClient workspaceId={ws.data.id} fieldId={id} fieldName={field.data.name} />
+      <LogClient workspaceId={ws.data.id} fieldId={id} fieldName={field.data.name} />
     </AppShell>
   );
 }

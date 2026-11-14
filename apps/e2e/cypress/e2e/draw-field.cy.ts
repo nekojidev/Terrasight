@@ -1,12 +1,12 @@
 /** Add field (design 13): press-and-drag traces the outline without panning the map; clicks add vertices. */
 describe("draw a field", () => {
   beforeEach(() => {
-    cy.env(["DEMO_EMAIL", "DEMO_PASSWORD"]).then(({ DEMO_EMAIL, DEMO_PASSWORD }) =>
+    cy.env(["E2E_EMAIL", "E2E_PASSWORD"]).then(({ E2E_EMAIL, E2E_PASSWORD }) =>
       cy.request({
         method: "POST",
         url: "/api/auth/login",
         headers: { "X-Requested-With": "cypress" },
-        body: { email: DEMO_EMAIL, password: DEMO_PASSWORD },
+        body: { email: E2E_EMAIL, password: E2E_PASSWORD },
       }),
     );
   });

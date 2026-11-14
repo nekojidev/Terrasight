@@ -119,7 +119,6 @@ export class AuthService {
                 timeZone: true,
                 units: true,
                 reportLanguage: true,
-                isDemo: true,
               },
             },
           },

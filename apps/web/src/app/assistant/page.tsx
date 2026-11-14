@@ -9,7 +9,6 @@ interface WorkspaceDetail {
   id: string;
   name: string;
   fieldCount: number;
-  isDemo: boolean;
   role: Me["workspaces"][number]["role"];
 }
 
@@ -33,7 +32,7 @@ export default async function AssistantPage({
   const t = await getTranslations("Assistant");
   return (
     <AppShell
-      workspace={{ name: ws.data.name, fieldCount: ws.data.fieldCount, isDemo: ws.data.isDemo }}
+      workspace={{ name: ws.data.name, fieldCount: ws.data.fieldCount }}
       user={{ name: me.data.name, role: ws.data.role }}
       crumb={t("crumb")}
     >

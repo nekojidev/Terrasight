@@ -1,6 +1,6 @@
 import { defineConfig } from "cypress";
 
-/** P0 path end to end (S-09.04): against the local stack or the demo host (CYPRESS_BASE_URL). */
+/** P0 path end to end (S-09.04): against the local stack or the public host (CYPRESS_BASE_URL). */
 export default defineConfig({
   e2e: {
     baseUrl: process.env.CYPRESS_BASE_URL ?? "http://localhost:3000",

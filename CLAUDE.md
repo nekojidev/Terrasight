@@ -7,12 +7,12 @@ Built for NASA Space Apps Challenge 2026, challenge _"Field Shift: Adapting Farm
 
 We build this project in three documented stages. Each one builds on the stage before it:
 
-1. **Product Definition** — `docs/01-product-definition.md` — what we build and why ✅ v2.5 (AI assistant for agronomists; competitors in `docs/competitor-eos.md`), open questions resolved
+1. **Product Definition** — `docs/01-product-definition.md` — what we build and why ✅ v2.6 (no demo or example data in the product) (AI assistant for agronomists; competitors in `docs/competitor-eos.md`), open questions resolved
 2. **RFC** — `docs/02-rfc.md` — proposed solution, alternatives, trade-offs, decisions ⏳ v2.2 draft in review (open questions in §19)
    - **Design** — `design/` (v4 "Morning brief", 17 screens) ✅ handed off; see "Design" below
 3. **Tech Design** — `docs/03-tech-design.md` — architecture, data model, API, modules, testing, deploy ✅ v1.1 agreed; backlog in `docs/epics/`
 
-Build: epic by epic in P0-path order (`docs/epics/README.md`). EP-00 … EP-08 ✅ (S-04.05/S-04.08 are P1), EP-09 ✅ except the public host (files in `infra/prod/`, runbook `docs/runbook-demo-host.md`; the team deploys). Demo template: `apps/api/scripts/seed-demo.mjs`; fixtures: `scripts/record-fixtures.mjs`; E2E: `apps/e2e` (Cypress); demo script: `docs/demo-script.md`.
+Build: epic by epic in P0-path order (`docs/epics/README.md`). EP-00 … EP-08 ✅ (S-04.05/S-04.08 are P1), EP-09 ✅ except the public host (files in `infra/prod/`, runbook `docs/runbook-demo-host.md`; the team deploys). No demo company or example data in the product (v2.6); fixtures (real recorded responses): `scripts/record-fixtures.mjs <workspace-id>`; E2E: `apps/e2e` (Cypress); demo script: `docs/demo-script.md`.
 
 Rules:
 

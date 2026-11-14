@@ -178,12 +178,15 @@ export class FieldOverviewController {
       this.prisma.system.plan.findMany({ where: { fieldId }, orderBy: { savedAt: "desc" }, take: 5 }),
     ]);
     const entries: Array<{ kind: string; at: Date; source: string; data: Record<string, unknown> }> = [
-      ...checks.map((c) => ({
-        kind: "check",
-        at: c.updatedAt,
-        source: c.run.requestedBy ? "you" : "assistant",
-        data: { status: c.status, newRecommendations: c.newRecommendations, error: c.error },
-      })),
+      // Routine checks with nothing new are noise: keep the latest one and those that found or failed something.
+      ...checks
+        .filter((c, i) => i === 0 || c.newRecommendations > 0 || c.status !== "ok")
+        .map((c) => ({
+          kind: "check",
+          at: c.updatedAt,
+          source: c.run.requestedBy ? "you" : "assistant",
+          data: { status: c.status, newRecommendations: c.newRecommendations, error: c.error },
+        })),
       ...scouting.map((t) => ({
         kind: "scouting",
         at: t.sentAt!,
