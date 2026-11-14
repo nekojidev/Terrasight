@@ -3,6 +3,7 @@ import { classifyUrgency, compareItems, localDay, type Urgency } from "@terrasig
 import { forecastCell, nextFrostDay, type Forecast } from "@terrasight/sources";
 import { AnalysisService } from "../analysis/analysis.service.js";
 import { PrismaService } from "../db/prisma.service.js";
+import { thumbPath } from "../geo/thumb.js";
 import { ProblemException } from "../http/problem.js";
 import { RecommendationsService } from "../recommendations/recommendations.service.js";
 
@@ -40,9 +41,11 @@ export class BriefService {
           admin_code: string | null;
           lat: number;
           lon: number;
+          thumb_geojson: string | null;
         }>
       >`
-        SELECT id, name, alias_no, area_ha, county_name, admin_code, ST_Y(centroid) AS lat, ST_X(centroid) AS lon
+        SELECT id, name, alias_no, area_ha, county_name, admin_code, ST_Y(centroid) AS lat, ST_X(centroid) AS lon,
+          ST_AsGeoJSON(ST_SimplifyPreserveTopology(geom, GREATEST(ST_XMax(geom) - ST_XMin(geom), ST_YMax(geom) - ST_YMin(geom)) / 40), 6) AS thumb_geojson
         FROM fields WHERE workspace_id = ${workspaceId}::uuid AND archived_at IS NULL ORDER BY alias_no`,
       this.prisma.system.recommendation.findMany({
         where: { workspaceId, status: "open", field: { archivedAt: null } },
@@ -115,6 +118,7 @@ export class BriefService {
         .filter((c) => c.fieldId === fieldId)
         .slice(-5)
         .map((c) => ({ season: c.season, crop: c.mainCrop, secondCrop: c.secondCrop }));
+    const thumbs = new Map(fields.map((f) => [f.id, thumbPath(f.thumb_geojson)]));
     const topOf = new Map(top.map((t) => [t.fieldId, t]));
     const allGood = fields
       .filter((f) => {
@@ -129,6 +133,7 @@ export class BriefService {
           areaHa: f.area_ha,
           county: f.county_name,
           seasons: strip(f.id),
+          thumb: thumbs.get(f.id) ?? null,
           // A planning item under All good shows as "Plan: … · by <date>" (RFC §10.5).
           plan:
             t && t.actionable && t.planning ? { id: t.id, title: t.text.title, deadline: t.deadline } : null,
@@ -146,9 +151,9 @@ export class BriefService {
         thisWeek: thisWeek.length,
         allGood: allGood.length,
       },
-      hero: hero ? { ...hero, seasons: strip(hero.fieldId) } : null,
-      urgent: urgent.filter((i) => i.id !== hero?.id).map((i) => ({ ...i, seasons: strip(i.fieldId) })),
-      thisWeek: thisWeek.filter((i) => i.id !== hero?.id).map((i) => ({ ...i, seasons: strip(i.fieldId) })),
+      hero: hero ? { ...hero, seasons: strip(hero.fieldId), thumb: thumbs.get(hero.fieldId) ?? null } : null,
+      urgent: urgent.filter((i) => i.id !== hero?.id).map((i) => ({ ...i, seasons: strip(i.fieldId), thumb: thumbs.get(i.fieldId) ?? null })),
+      thisWeek: thisWeek.filter((i) => i.id !== hero?.id).map((i) => ({ ...i, seasons: strip(i.fieldId), thumb: thumbs.get(i.fieldId) ?? null })),
       allGood,
       lastRun: run
         ? { id: run.id, status: run.status, finishedAt: run.finishedAt, summary: run.summary }

@@ -25,10 +25,14 @@ export default async function RotationPage({ params }: { params: Promise<{ id: s
   if (!active) redirect("/onboarding");
   const [ws, field] = await Promise.all([
     serverGet<WorkspaceDetail>(`/api/w/${active.id}`),
-    serverGet<{ id: string; name: string }>(`/api/w/${active.id}/fields/${id}`),
+    serverGet<{ id: string; name: string; thumb?: string | null }>(`/api/w/${active.id}/fields/${id}`),
   ]);
   if (!ws.ok) redirect("/");
   if (!field.ok) notFound();
+  const history = await serverGet<{ seasons: Array<{ mainCrop: string }> }>(
+    `/api/w/${active.id}/fields/${id}/history`,
+  );
+  const lastCrop = history.ok ? (history.data.seasons.at(-1)?.mainCrop ?? null) : null;
   const t = await getTranslations("Rotation");
   return (
     <AppShell
@@ -40,6 +44,8 @@ export default async function RotationPage({ params }: { params: Promise<{ id: s
         workspaceId={ws.data.id}
         fieldId={id}
         fieldName={field.data.name}
+        thumb={field.data.thumb ?? null}
+        crop={lastCrop}
         units={ws.data.units}
         canSave={ws.data.role !== "viewer"}
       />

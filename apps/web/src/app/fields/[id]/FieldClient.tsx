@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, Chip, SelectField, TextField, cropColour } from "@terrasight/ui";
+import { Button, Chip, FieldThumb, SelectField, TextField, cropColour } from "@terrasight/ui";
 import {
   AlertTriangle,
   CalendarDays,
@@ -29,6 +29,7 @@ export interface FieldView {
   tier: "A" | "B" | "C";
   irrigation: "irrigated" | "dryland" | "unknown";
   irrigationSource: string;
+  thumb?: string | null;
 }
 
 type TaskStatus = "queued" | "running" | "done" | "partial" | "failed" | "cached";
@@ -154,7 +155,15 @@ export function FieldClient({
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
       <div className="flex min-w-0 flex-col gap-6">
         <header className="flex flex-col gap-2">
-          <h1 className="text-h1 text-ink">{field.data.name}</h1>
+          <div className="flex items-center gap-4">
+            <FieldThumb
+              name={field.data.name}
+              outline={field.data.thumb ?? null}
+              crop={history.data?.seasons.at(-1)?.mainCrop ?? null}
+              size={64}
+            />
+            <h1 className="text-h1 text-ink">{field.data.name}</h1>
+          </div>
           <p className="flex flex-wrap items-center gap-3 text-body text-ink-2">
             {meta}
             <Chip

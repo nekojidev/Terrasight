@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { BigNumber, Button, DoneRow, QueueRow, SeasonStrip } from "../index";
+import { BigNumber, Button, DoneRow, FieldThumb, QueueRow, SeasonStrip } from "../index";
 
 afterEach(cleanup);
 
@@ -94,5 +94,22 @@ describe("QueueRow", () => {
     fireEvent.click(why);
     expect(why.getAttribute("aria-expanded")).toBe("true");
     expect(screen.getByText("Warm autumn")).toBeTruthy();
+  });
+});
+
+describe("FieldThumb", () => {
+  it("draws the real outline in the crop colour", () => {
+    const { container } = render(<FieldThumb name="Pivot 14" outline="M0 0L100 0L100 60L0 60Z" crop="corn" />);
+    const path = container.querySelector("path")!;
+    expect(path.getAttribute("d")).toBe("M0 0L100 0L100 60L0 60Z");
+    expect(path.getAttribute("fill")).toContain("var(--");
+    expect(screen.getByRole("img").getAttribute("aria-label")).toBe("Pivot 14");
+  });
+  it("uses a neutral fill without a crop and no shape without an outline", () => {
+    const { container } = render(<FieldThumb name="A" outline="M0 0L10 0L10 10Z" />);
+    expect(container.querySelector("path")!.getAttribute("fill")).toBe("var(--ts-line-strong)");
+    cleanup();
+    const again = render(<FieldThumb name="B" />);
+    expect(again.container.querySelector("path")).toBeNull();
   });
 });

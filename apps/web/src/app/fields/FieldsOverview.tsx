@@ -1,6 +1,6 @@
 "use client";
 
-import { Chip } from "@terrasight/ui";
+import { Chip, FieldThumb } from "@terrasight/ui";
 import { ChevronRight, MapPin, Plus } from "lucide-react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
@@ -13,6 +13,8 @@ interface Row {
   name: string;
   areaHa: number;
   lastCrop: Localised | null;
+  lastCropId?: string | null;
+  thumb?: string | null;
   urgency: Urgency;
   next: { id: string; title: Localised; deadline: string | null; more: number; plan?: boolean } | null;
 }
@@ -223,6 +225,7 @@ export function FieldsOverview({
               href={`/fields/${f.fieldId}`}
               className="focus-ring flex flex-wrap items-center gap-4 rounded-card border border-line bg-surface p-4 hover:bg-muted"
             >
+              <FieldThumb name={f.name} outline={f.thumb ?? null} crop={f.lastCropId ?? null} size={40} />
               <span className="min-w-48 flex-1">
                 <span className="block text-body font-semibold text-ink">{f.name}</span>
                 <span className="text-small text-ink-2">
