@@ -1,0 +1,32 @@
+{
+  "about": "Known points for region matching (RFC §6.3). Each library region has at least one point. Read by tools/build_rotations_v2.py --check (with the given ISO 3166-2 code) and by packages/library/region.test.ts (which derives the code from the loaded Natural Earth / TIGER boundaries and must reach the same region). Coordinates are town centres, well inside their region.",
+  "points": [
+    { "name": "Garden City, KS (Kansas pivots)", "admin": "US-KS", "lat": 37.97, "lon": -100.87, "region": "us-southern-plains" },
+    { "name": "Imperial, Chase County, NE (demo Nebraska field)", "admin": "US-NE", "lat": 40.52, "lon": -101.64, "region": "us-central-high-plains" },
+    { "name": "Sterling, Logan County, CO (wheat streak mosaic field)", "admin": "US-CO", "lat": 40.63, "lon": -103.21, "region": "us-central-high-plains" },
+    { "name": "Ames, IA", "admin": "US-IA", "lat": 42.03, "lon": -93.62, "region": "us-corn-belt" },
+    { "name": "Lincoln, NE (eastern Nebraska)", "admin": "US-NE", "lat": 40.81, "lon": -96.70, "region": "us-corn-belt" },
+    { "name": "Minot, ND", "admin": "US-ND", "lat": 48.23, "lon": -101.30, "region": "us-northern-plains" },
+    { "name": "Pullman, WA (Palouse)", "admin": "US-WA", "lat": 46.73, "lon": -117.18, "region": "us-pacific-northwest" },
+    { "name": "Stuttgart, AR", "admin": "US-AR", "lat": 34.50, "lon": -91.55, "region": "us-delta" },
+    { "name": "Tifton, GA", "admin": "US-GA", "lat": 31.45, "lon": -83.51, "region": "us-southeast" },
+    { "name": "Regina, SK", "admin": "CA-SK", "lat": 50.45, "lon": -104.61, "region": "ca-prairies" },
+    { "name": "Odesa, UA", "admin": "UA-51", "lat": 46.48, "lon": 30.73, "region": "ua-steppe" },
+    { "name": "Kharkiv, UA", "admin": "UA-63", "lat": 49.99, "lon": 36.23, "region": "ua-forest-steppe" },
+    { "name": "Zhytomyr, UA", "admin": "UA-18", "lat": 50.25, "lon": 28.66, "region": "ua-polissia" },
+    { "name": "Magdeburg, DE", "admin": "DE-ST", "lat": 52.13, "lon": 11.63, "region": "eu-central" },
+    { "name": "Chartres, FR", "admin": "FR-CVL", "lat": 48.45, "lon": 1.49, "region": "eu-west" },
+    { "name": "Craiova, RO", "admin": "RO-DJ", "lat": 44.32, "lon": 23.80, "region": "eu-south-east" },
+    { "name": "Valladolid, ES", "admin": "ES-VA", "lat": 41.65, "lon": -4.72, "region": "eu-mediterranean" },
+    { "name": "Odense, DK", "admin": "DK-83", "lat": 55.40, "lon": 10.39, "region": "eu-north" },
+    { "name": "Cambridge, GB", "admin": "GB-CAM", "lat": 52.21, "lon": 0.12, "region": "gb-arable" },
+    { "name": "Kostanay, KZ", "admin": "KZ-39", "lat": 53.21, "lon": 63.62, "region": "kz-north" },
+    { "name": "Sorriso, Mato Grosso, BR", "admin": "BR-MT", "lat": -12.55, "lon": -55.71, "region": "br-cerrado" },
+    { "name": "Pergamino, Buenos Aires, AR", "admin": "AR-B", "lat": -33.89, "lon": -60.57, "region": "ar-pampas" },
+    { "name": "Merredin, WA, AU", "admin": "AU-WA", "lat": -31.48, "lon": 118.28, "region": "au-wheatbelt" },
+    { "name": "Bethlehem, Free State, ZA", "admin": "ZA-FS", "lat": -28.23, "lon": 28.31, "region": "za-highveld" },
+    { "name": "Ludhiana, Punjab, IN", "admin": "IN-PB", "lat": 30.90, "lon": 75.85, "region": "in-indo-gangetic" },
+    { "name": "Shijiazhuang, Hebei, CN", "admin": "CN-HE", "lat": 38.04, "lon": 114.51, "region": "cn-north-china-plain" },
+    { "name": "Reykjavík, IS (no library)", "admin": "IS-1", "lat": 64.15, "lon": -21.94, "region": null }
+  ]
+}

@@ -1,0 +1,75 @@
+/* Terrasight design tokens — v4 "Morning brief". Source of truth for colours, type, spacing, radii and motion.
+   Use these variables in Tailwind (theme.extend) or CSS modules; never hard-code hex values in components. */
+
+:root {
+  /* neutrals — warm paper */
+  --ts-bg: #F5F3EE;          /* page */
+  --ts-surface: #FFFFFF;     /* cards, sheets */
+  --ts-surface-2: #FAF8F4;   /* inset panels ("Why", drafts) */
+  --ts-muted: #F0EDE6;       /* chips, secondary buttons, skeleton base */
+  --ts-line: #E6E1D6;        /* borders, dividers */
+  --ts-line-strong: #CFC8BA; /* input borders, outline buttons */
+  --ts-ink: #191714;         /* text, primary button */
+  --ts-ink-2: #4F4A43;       /* secondary text */
+  --ts-ink-3: #6B645A;       /* tertiary text (AA on surface and bg) */
+
+  /* signal — fill only, always with ink text, never as a text colour */
+  --ts-signal: #C8F169;
+  --ts-on-signal: #14130F;
+
+  /* semantic */
+  --ts-urgent: #B42318;   --ts-urgent-soft: #FCEDEA;
+  --ts-week: #A15C07;     --ts-week-mark: #D98A0B; --ts-week-soft: #FBF1DE;
+  --ts-ok: #23733A;       --ts-ok-soft: #E7F3E8;
+  --ts-info: #1F5FBF;     --ts-info-soft: #E8F0FB;
+
+  /* crop colours (5-season strip, thumbnails, charts) */
+  --crop-corn: #F2C230; --crop-wheat: #B7791F; --crop-sorghum: #E8743B;
+  --crop-soy: #22A06B;  --crop-alfalfa: #7C5CDB; --crop-fallow: #A8A29E;
+
+  /* type */
+  --ts-font: 'Onest', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --ts-mono: 'JetBrains Mono', ui-monospace, monospace;   /* numbers, dates, source stamps, kickers */
+  --ts-display: 44px/50px;  /* hero headline, letter-spacing -0.035em */
+  --ts-h1: 40px/46px;       /* page title, -0.035em */
+  --ts-h2: 22px/28px;       /* section, -0.02em */
+  --ts-body: 16px/24px;
+  --ts-small: 14px/20px;
+  --ts-micro: 12px/16px;    /* uppercase mono labels, letter-spacing .06–.08em */
+  --ts-big-number: 40px/44px; /* mono, 600, -0.03em */
+
+  /* spacing (4 / 8 grid) */
+  --ts-s1: 4px; --ts-s2: 8px; --ts-s3: 12px; --ts-s4: 16px; --ts-s5: 20px; --ts-s6: 24px; --ts-s8: 32px; --ts-s10: 40px;
+
+  /* radii */
+  --ts-r-btn: 12px; --ts-r-input: 14px; --ts-r-card: 20px; --ts-r-hero: 28px; --ts-r-sheet: 28px; --ts-r-chip: 999px;
+
+  /* depth — only the hero and sheets are raised */
+  --ts-shadow-hero: 0 1px 2px rgba(25,23,20,.04), 0 18px 40px -18px rgba(25,23,20,.18);
+  --ts-shadow-sheet: 0 -12px 30px -14px rgba(25,23,20,.35);
+
+  /* motion */
+  --ts-ease: cubic-bezier(.2,.7,.2,1);
+  --ts-rise: 420ms;     /* blocks rise in, staggered 80–90 ms */
+  --ts-bar: 300ms;      /* weight bars grow */
+  --ts-sheet: 280ms;    /* bottom sheet slides in */
+  --ts-undo: 8s;        /* Accept / Snooze undo window (RFC §10.4) */
+
+  /* sizes */
+  --ts-tap: 44px;       /* minimum tap target */
+}
+
+/* Dark theme — design only in the hackathon (decision 14). Same roles, inverted. */
+[data-theme="dark"] {
+  --ts-bg: #12110F; --ts-surface: #1A1916; --ts-surface-2: #1F1D19; --ts-muted: #26231F;
+  --ts-line: #2E2B26; --ts-line-strong: #4A453E;
+  --ts-ink: #F3F0E8; --ts-ink-2: #CEC7BA; --ts-ink-3: #A9A193;
+  --ts-urgent: #FF8A7A; --ts-urgent-soft: #3A1E1A;
+  --ts-week: #F2B45A;   --ts-week-soft: #352813;
+  --ts-ok: #7FD49A;     --ts-ok-soft: #16301D;
+  /* the primary button turns light: background var(--ts-ink), text var(--ts-surface) */
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}

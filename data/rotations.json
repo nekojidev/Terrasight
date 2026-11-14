@@ -1,537 +1,4003 @@
 {
-  "version": 1,
-  "notes": "Curated rotation library for Terrasight. Sequences repeat to fill the 10-year horizon. 'fallow' is a year without a crop. irrigation: required = needs irrigation, optional = works with or without, none = designed for dryland. water: relative irrigation/water demand. baseline = typical current practice in the region (used to match the detected current rotation). Values are agronomic rules of thumb for scenario screening, not field prescriptions.",
+  "version": 2,
+  "notes": "Curated rotation library for Terrasight. The planner simulates exactly 5 seasons (2026-2030): sequences repeat or are cut to fill 5 seasons, with no padding. 'fallow' is a season without a crop. A sequence item is either a crop id (one crop in the season) or {\"main\": crop, \"second\": crop} for double cropping (e.g. soybean then safrinha corn in Brazil, wheat then soybean in Argentina, wheat then summer maize in the North China Plain). irrigation: required = needs irrigation, optional = works with or without, none = designed for dryland. water: relative irrigation/water demand. baseline = typical current practice in the region (used to match the detected current rotation). cover = cover crop between cash crops. minPrecipMm / minSeasonDays = optional filters. Regions: 'match' is a list of rules; a field belongs to the first region (in file order) with a rule that matches its centroid: ISO 3166-1/3166-2 codes in 'admin', optional 'lat' / 'lon' [min, max] bounds. 'hemisphere' S means the season is labelled by its harvest year (2026 = 2025/26). Values are agronomic rules of thumb for scenario screening, not field prescriptions; regions marked verify: true need review by a regional agronomist before production.",
   "crops": {
-    "corn":           { "en": "Corn (grain)",        "uk": "Кукурудза на зерно",    "family": "grass" },
-    "silage_corn":    { "en": "Corn (silage)",       "uk": "Кукурудза на силос",    "family": "grass" },
-    "sorghum":        { "en": "Grain sorghum",       "uk": "Сорго зернове",         "family": "grass" },
-    "forage_sorghum": { "en": "Forage sorghum",      "uk": "Сорго кормове",         "family": "grass" },
-    "winter_wheat":   { "en": "Winter wheat",        "uk": "Пшениця озима",         "family": "grass" },
-    "spring_wheat":   { "en": "Spring wheat",        "uk": "Пшениця яра",           "family": "grass" },
-    "winter_barley":  { "en": "Winter barley",       "uk": "Ячмінь озимий",         "family": "grass" },
-    "spring_barley":  { "en": "Spring barley",       "uk": "Ячмінь ярий",           "family": "grass" },
-    "winter_rye":     { "en": "Winter rye",          "uk": "Жито озиме",            "family": "grass" },
-    "oat":            { "en": "Oat",                 "uk": "Овес",                  "family": "grass" },
-    "triticale":      { "en": "Triticale",           "uk": "Тритикале",             "family": "grass" },
-    "millet":         { "en": "Proso millet",        "uk": "Просо",                 "family": "grass" },
-    "soybean":        { "en": "Soybean",             "uk": "Соя",                   "family": "legume" },
-    "pea":            { "en": "Field pea",           "uk": "Горох",                 "family": "legume" },
-    "chickpea":       { "en": "Chickpea",            "uk": "Нут",                   "family": "legume" },
-    "lentil":         { "en": "Lentil",              "uk": "Сочевиця",              "family": "legume" },
-    "faba_bean":      { "en": "Faba bean",           "uk": "Кормові боби",          "family": "legume" },
-    "lupin":          { "en": "Lupin",               "uk": "Люпин",                 "family": "legume" },
-    "alfalfa":        { "en": "Alfalfa",             "uk": "Люцерна",               "family": "legume" },
-    "clover":         { "en": "Red clover",          "uk": "Конюшина",              "family": "legume" },
-    "clover_grass":   { "en": "Clover-grass ley",    "uk": "Конюшино-злакова суміш","family": "legume" },
-    "sunflower":      { "en": "Sunflower",           "uk": "Соняшник",              "family": "aster" },
-    "winter_canola":  { "en": "Winter canola / rapeseed", "uk": "Ріпак озимий",     "family": "brassica" },
-    "flax":           { "en": "Flax",                "uk": "Льон олійний",          "family": "flax" },
-    "sugar_beet":     { "en": "Sugar beet",          "uk": "Цукровий буряк",        "family": "amaranth" },
-    "potato":         { "en": "Potato",              "uk": "Картопля",              "family": "nightshade" },
-    "buckwheat":      { "en": "Buckwheat",           "uk": "Гречка",                "family": "buckwheat" },
-    "cotton":         { "en": "Cotton",              "uk": "Бавовник",              "family": "mallow" },
-    "fallow":         { "en": "Fallow",              "uk": "Пар",                   "family": "none" }
+    "corn": {
+      "en": "Corn (grain)",
+      "uk": "Кукурудза на зерно",
+      "family": "grass"
+    },
+    "silage_corn": {
+      "en": "Corn (silage)",
+      "uk": "Кукурудза на силос",
+      "family": "grass"
+    },
+    "sorghum": {
+      "en": "Grain sorghum",
+      "uk": "Сорго зернове",
+      "family": "grass"
+    },
+    "forage_sorghum": {
+      "en": "Forage sorghum",
+      "uk": "Сорго кормове",
+      "family": "grass"
+    },
+    "winter_wheat": {
+      "en": "Winter wheat",
+      "uk": "Пшениця озима",
+      "family": "grass"
+    },
+    "spring_wheat": {
+      "en": "Spring wheat",
+      "uk": "Пшениця яра",
+      "family": "grass"
+    },
+    "winter_barley": {
+      "en": "Winter barley",
+      "uk": "Ячмінь озимий",
+      "family": "grass"
+    },
+    "spring_barley": {
+      "en": "Spring barley",
+      "uk": "Ячмінь ярий",
+      "family": "grass"
+    },
+    "winter_rye": {
+      "en": "Winter rye",
+      "uk": "Жито озиме",
+      "family": "grass"
+    },
+    "oat": {
+      "en": "Oat",
+      "uk": "Овес",
+      "family": "grass"
+    },
+    "triticale": {
+      "en": "Triticale",
+      "uk": "Тритикале",
+      "family": "grass"
+    },
+    "millet": {
+      "en": "Proso millet",
+      "uk": "Просо",
+      "family": "grass"
+    },
+    "soybean": {
+      "en": "Soybean",
+      "uk": "Соя",
+      "family": "legume"
+    },
+    "pea": {
+      "en": "Field pea",
+      "uk": "Горох",
+      "family": "legume"
+    },
+    "chickpea": {
+      "en": "Chickpea",
+      "uk": "Нут",
+      "family": "legume"
+    },
+    "lentil": {
+      "en": "Lentil",
+      "uk": "Сочевиця",
+      "family": "legume"
+    },
+    "faba_bean": {
+      "en": "Faba bean",
+      "uk": "Кормові боби",
+      "family": "legume"
+    },
+    "lupin": {
+      "en": "Lupin",
+      "uk": "Люпин",
+      "family": "legume"
+    },
+    "alfalfa": {
+      "en": "Alfalfa",
+      "uk": "Люцерна",
+      "family": "legume"
+    },
+    "clover": {
+      "en": "Red clover",
+      "uk": "Конюшина",
+      "family": "legume"
+    },
+    "clover_grass": {
+      "en": "Clover-grass ley",
+      "uk": "Конюшино-злакова суміш",
+      "family": "legume"
+    },
+    "sunflower": {
+      "en": "Sunflower",
+      "uk": "Соняшник",
+      "family": "aster"
+    },
+    "winter_canola": {
+      "en": "Winter canola / rapeseed",
+      "uk": "Ріпак озимий",
+      "family": "brassica"
+    },
+    "flax": {
+      "en": "Flax",
+      "uk": "Льон олійний",
+      "family": "flax"
+    },
+    "sugar_beet": {
+      "en": "Sugar beet",
+      "uk": "Цукровий буряк",
+      "family": "amaranth"
+    },
+    "potato": {
+      "en": "Potato",
+      "uk": "Картопля",
+      "family": "nightshade"
+    },
+    "buckwheat": {
+      "en": "Buckwheat",
+      "uk": "Гречка",
+      "family": "buckwheat"
+    },
+    "cotton": {
+      "en": "Cotton",
+      "uk": "Бавовник",
+      "family": "mallow"
+    },
+    "fallow": {
+      "en": "Fallow",
+      "uk": "Пар",
+      "family": "none"
+    },
+    "durum_wheat": {
+      "en": "Durum wheat",
+      "uk": "Пшениця тверда",
+      "family": "grass"
+    },
+    "spring_canola": {
+      "en": "Spring canola",
+      "uk": "Ріпак ярий",
+      "family": "brassica"
+    },
+    "mustard": {
+      "en": "Mustard (rapeseed-mustard)",
+      "uk": "Гірчиця",
+      "family": "brassica"
+    },
+    "rice": {
+      "en": "Rice",
+      "uk": "Рис",
+      "family": "grass"
+    },
+    "peanut": {
+      "en": "Peanut",
+      "uk": "Арахіс",
+      "family": "legume"
+    },
+    "brachiaria": {
+      "en": "Brachiaria (cover / forage)",
+      "uk": "Брахіарія (покривна / кормова)",
+      "family": "grass"
+    }
   },
   "regions": {
-    "us-southern-plains": { "en": "US Southern High Plains (W Kansas, Oklahoma panhandle, NE Colorado)", "uk": "Південні Великі рівнини США (захід Канзасу)", "precipMm": [350, 550], "tier": "A" },
-    "us-corn-belt":       { "en": "US Corn Belt (Iowa, Illinois, Indiana, E Nebraska)", "uk": "Кукурудзяний пояс США", "precipMm": [700, 1000], "tier": "A" },
-    "us-northern-plains": { "en": "US Northern Plains (Dakotas, Montana)", "uk": "Північні Великі рівнини США", "precipMm": [350, 550], "tier": "A" },
-    "ua-steppe":          { "en": "Ukraine — Steppe (south and east)", "uk": "Україна — Степ (південь і схід)", "precipMm": [350, 480], "tier": "C" },
-    "ua-forest-steppe":   { "en": "Ukraine — Forest-Steppe (centre)", "uk": "Україна — Лісостеп (центр)", "precipMm": [500, 650], "tier": "C" },
-    "ua-polissia":        { "en": "Ukraine — Polissia (north)", "uk": "Україна — Полісся (північ)", "precipMm": [600, 750], "tier": "C" },
-    "eu-central":         { "en": "Central Europe (Germany, Poland, Czechia)", "uk": "Центральна Європа", "precipMm": [550, 800], "tier": "B" }
+    "us-southern-plains": {
+      "en": "US Southern High Plains (SW Kansas, SE Colorado, Oklahoma and Texas panhandles)",
+      "uk": "Південні Великі рівнини США (захід Канзасу)",
+      "precipMm": [
+        350,
+        550
+      ],
+      "tier": "A",
+      "hemisphere": "N",
+      "countries": [
+        "US"
+      ],
+      "match": [
+        {
+          "admin": [
+            "US-KS",
+            "US-CO",
+            "US-OK",
+            "US-TX",
+            "US-NM"
+          ],
+          "lat": [
+            33.5,
+            38.5
+          ],
+          "lon": [
+            -105.5,
+            -98.0
+          ]
+        }
+      ],
+      "verify": false
+    },
+    "us-central-high-plains": {
+      "en": "US Central High Plains (W and central Nebraska, NE Colorado, NW Kansas)",
+      "uk": "Центральні Великі рівнини США (захід і центр Небраски, північний схід Колорадо)",
+      "precipMm": [
+        380,
+        620
+      ],
+      "tier": "A",
+      "hemisphere": "N",
+      "countries": [
+        "US"
+      ],
+      "match": [
+        {
+          "admin": [
+            "US-NE",
+            "US-CO",
+            "US-KS",
+            "US-WY"
+          ],
+          "lat": [
+            38.5,
+            43.1
+          ],
+          "lon": [
+            -105.5,
+            -98.0
+          ]
+        }
+      ],
+      "verify": true
+    },
+    "us-corn-belt": {
+      "en": "US Corn Belt (Iowa, Illinois, Indiana, E Nebraska)",
+      "uk": "Кукурудзяний пояс США",
+      "precipMm": [
+        700,
+        1000
+      ],
+      "tier": "A",
+      "hemisphere": "N",
+      "countries": [
+        "US"
+      ],
+      "match": [
+        {
+          "admin": [
+            "US-IA",
+            "US-IL",
+            "US-IN",
+            "US-OH"
+          ]
+        },
+        {
+          "admin": [
+            "US-NE",
+            "US-KS"
+          ],
+          "lon": [
+            -98.0,
+            -94.5
+          ]
+        },
+        {
+          "admin": [
+            "US-MN",
+            "US-MO",
+            "US-WI",
+            "US-SD"
+          ],
+          "lat": [
+            37.0,
+            45.5
+          ],
+          "lon": [
+            -97.5,
+            -87.0
+          ]
+        }
+      ],
+      "verify": false
+    },
+    "us-northern-plains": {
+      "en": "US Northern Plains (Dakotas, Montana)",
+      "uk": "Північні Великі рівнини США",
+      "precipMm": [
+        350,
+        550
+      ],
+      "tier": "A",
+      "hemisphere": "N",
+      "countries": [
+        "US"
+      ],
+      "match": [
+        {
+          "admin": [
+            "US-ND",
+            "US-SD",
+            "US-MT"
+          ]
+        }
+      ],
+      "verify": false
+    },
+    "us-pacific-northwest": {
+      "en": "US Pacific Northwest (Palouse and dryland wheat: WA, OR, ID)",
+      "uk": "Тихоокеанський північний захід США (Палуз)",
+      "precipMm": [
+        250,
+        650
+      ],
+      "tier": "A",
+      "hemisphere": "N",
+      "countries": [
+        "US"
+      ],
+      "match": [
+        {
+          "admin": [
+            "US-WA",
+            "US-OR",
+            "US-ID"
+          ],
+          "lon": [
+            -121.5,
+            -116.0
+          ]
+        }
+      ],
+      "verify": true
+    },
+    "us-delta": {
+      "en": "US Mid-South / Mississippi Delta (AR, MS, LA, SE Missouri)",
+      "uk": "Дельта Міссісіпі (США)",
+      "precipMm": [
+        1100,
+        1450
+      ],
+      "tier": "A",
+      "hemisphere": "N",
+      "countries": [
+        "US"
+      ],
+      "match": [
+        {
+          "admin": [
+            "US-AR",
+            "US-MS",
+            "US-LA"
+          ]
+        },
+        {
+          "admin": [
+            "US-MO",
+            "US-TN"
+          ],
+          "lat": [
+            35.0,
+            37.0
+          ],
+          "lon": [
+            -91.0,
+            -89.0
+          ]
+        }
+      ],
+      "verify": true
+    },
+    "us-southeast": {
+      "en": "US Southeast Coastal Plain (GA, AL, SC, NC, N Florida)",
+      "uk": "Південний схід США",
+      "precipMm": [
+        1100,
+        1400
+      ],
+      "tier": "A",
+      "hemisphere": "N",
+      "countries": [
+        "US"
+      ],
+      "match": [
+        {
+          "admin": [
+            "US-GA",
+            "US-AL",
+            "US-SC",
+            "US-NC",
+            "US-FL"
+          ]
+        }
+      ],
+      "verify": true
+    },
+    "ca-prairies": {
+      "en": "Canadian Prairies (Alberta, Saskatchewan, Manitoba)",
+      "uk": "Канадські прерії",
+      "precipMm": [
+        300,
+        500
+      ],
+      "tier": "C",
+      "hemisphere": "N",
+      "countries": [
+        "CA"
+      ],
+      "match": [
+        {
+          "admin": [
+            "CA-AB",
+            "CA-SK",
+            "CA-MB"
+          ]
+        }
+      ],
+      "verify": true
+    },
+    "ua-steppe": {
+      "en": "Ukraine — Steppe (south and east)",
+      "uk": "Україна — Степ (південь і схід)",
+      "precipMm": [
+        350,
+        480
+      ],
+      "tier": "C",
+      "hemisphere": "N",
+      "countries": [
+        "UA"
+      ],
+      "match": [
+        {
+          "admin": [
+            "UA-23",
+            "UA-65",
+            "UA-48",
+            "UA-51",
+            "UA-12",
+            "UA-14",
+            "UA-09",
+            "UA-43",
+            "UA-40",
+            "UA-35"
+          ]
+        }
+      ],
+      "verify": false
+    },
+    "ua-forest-steppe": {
+      "en": "Ukraine — Forest-Steppe (centre)",
+      "uk": "Україна — Лісостеп (центр)",
+      "precipMm": [
+        500,
+        650
+      ],
+      "tier": "C",
+      "hemisphere": "N",
+      "countries": [
+        "UA"
+      ],
+      "match": [
+        {
+          "admin": [
+            "UA-05",
+            "UA-71",
+            "UA-53",
+            "UA-63",
+            "UA-32",
+            "UA-30",
+            "UA-68",
+            "UA-61",
+            "UA-46",
+            "UA-26",
+            "UA-77"
+          ]
+        }
+      ],
+      "verify": false
+    },
+    "ua-polissia": {
+      "en": "Ukraine — Polissia (north)",
+      "uk": "Україна — Полісся (північ)",
+      "precipMm": [
+        600,
+        750
+      ],
+      "tier": "C",
+      "hemisphere": "N",
+      "countries": [
+        "UA"
+      ],
+      "match": [
+        {
+          "admin": [
+            "UA-18",
+            "UA-56",
+            "UA-07",
+            "UA-74",
+            "UA-59"
+          ]
+        }
+      ],
+      "verify": false
+    },
+    "eu-central": {
+      "en": "Central Europe (Germany, Poland, Czechia)",
+      "uk": "Центральна Європа",
+      "precipMm": [
+        550,
+        800
+      ],
+      "tier": "B",
+      "hemisphere": "N",
+      "countries": [
+        "AT",
+        "CZ",
+        "DE",
+        "PL",
+        "SK"
+      ],
+      "match": [
+        {
+          "admin": [
+            "DE",
+            "PL",
+            "CZ",
+            "SK",
+            "AT"
+          ]
+        }
+      ],
+      "verify": false
+    },
+    "eu-west": {
+      "en": "Western Europe (France, Belgium, Netherlands, Luxembourg)",
+      "uk": "Західна Європа (Франція, Бенілюкс)",
+      "precipMm": [
+        600,
+        950
+      ],
+      "tier": "B",
+      "hemisphere": "N",
+      "countries": [
+        "BE",
+        "FR",
+        "LU",
+        "NL"
+      ],
+      "match": [
+        {
+          "admin": [
+            "FR",
+            "BE",
+            "NL",
+            "LU"
+          ]
+        }
+      ],
+      "verify": true
+    },
+    "eu-south-east": {
+      "en": "South-East Europe (Romania, Bulgaria, Hungary, Moldova)",
+      "uk": "Південно-Східна Європа (Румунія, Болгарія, Угорщина, Молдова)",
+      "precipMm": [
+        450,
+        650
+      ],
+      "tier": "B",
+      "hemisphere": "N",
+      "countries": [
+        "BG",
+        "HU",
+        "MD",
+        "RO"
+      ],
+      "match": [
+        {
+          "admin": [
+            "RO",
+            "BG",
+            "HU",
+            "MD"
+          ]
+        }
+      ],
+      "verify": true
+    },
+    "eu-mediterranean": {
+      "en": "Mediterranean Europe (Spain, Portugal, Italy, Greece)",
+      "uk": "Середземноморська Європа",
+      "precipMm": [
+        300,
+        700
+      ],
+      "tier": "B",
+      "hemisphere": "N",
+      "countries": [
+        "ES",
+        "GR",
+        "IT",
+        "PT"
+      ],
+      "match": [
+        {
+          "admin": [
+            "ES",
+            "PT",
+            "IT",
+            "GR"
+          ]
+        }
+      ],
+      "verify": true
+    },
+    "eu-north": {
+      "en": "Northern Europe (Denmark, Sweden, Finland, Baltics)",
+      "uk": "Північна Європа (Данія, Швеція, Балтія)",
+      "precipMm": [
+        500,
+        800
+      ],
+      "tier": "B",
+      "hemisphere": "N",
+      "countries": [
+        "DK",
+        "EE",
+        "FI",
+        "LT",
+        "LV",
+        "SE"
+      ],
+      "match": [
+        {
+          "admin": [
+            "DK",
+            "SE",
+            "FI",
+            "EE",
+            "LV",
+            "LT"
+          ]
+        }
+      ],
+      "verify": true
+    },
+    "gb-arable": {
+      "en": "Great Britain — arable east and south",
+      "uk": "Велика Британія — орні землі сходу й півдня",
+      "precipMm": [
+        550,
+        850
+      ],
+      "tier": "C",
+      "hemisphere": "N",
+      "countries": [
+        "GB"
+      ],
+      "match": [
+        {
+          "admin": [
+            "GB"
+          ]
+        }
+      ],
+      "verify": true
+    },
+    "kz-north": {
+      "en": "Northern Kazakhstan and the Siberian steppe edge",
+      "uk": "Північний Казахстан",
+      "precipMm": [
+        250,
+        400
+      ],
+      "tier": "C",
+      "hemisphere": "N",
+      "countries": [
+        "KZ"
+      ],
+      "match": [
+        {
+          "admin": [
+            "KZ"
+          ],
+          "lat": [
+            49.5,
+            55.5
+          ]
+        }
+      ],
+      "verify": true
+    },
+    "br-cerrado": {
+      "en": "Brazil — Cerrado (Mato Grosso, Goiás, MS, MATOPIBA)",
+      "uk": "Бразилія — Серрадо",
+      "precipMm": [
+        1200,
+        1900
+      ],
+      "tier": "C",
+      "hemisphere": "S",
+      "countries": [
+        "BR"
+      ],
+      "match": [
+        {
+          "admin": [
+            "BR-MT",
+            "BR-GO",
+            "BR-MS",
+            "BR-DF",
+            "BR-TO",
+            "BR-MA",
+            "BR-PI",
+            "BR-BA",
+            "BR-MG"
+          ]
+        }
+      ],
+      "verify": true
+    },
+    "ar-pampas": {
+      "en": "Argentina — Pampas (Buenos Aires, Santa Fe, Córdoba, Entre Ríos, La Pampa)",
+      "uk": "Аргентина — Пампа",
+      "precipMm": [
+        600,
+        1100
+      ],
+      "tier": "C",
+      "hemisphere": "S",
+      "countries": [
+        "AR"
+      ],
+      "match": [
+        {
+          "admin": [
+            "AR-B",
+            "AR-S",
+            "AR-X",
+            "AR-E",
+            "AR-L"
+          ]
+        }
+      ],
+      "verify": true
+    },
+    "au-wheatbelt": {
+      "en": "Australia — grain belt (WA, SA, Victoria, NSW)",
+      "uk": "Австралія — зерновий пояс",
+      "precipMm": [
+        250,
+        550
+      ],
+      "tier": "C",
+      "hemisphere": "S",
+      "countries": [
+        "AU"
+      ],
+      "match": [
+        {
+          "admin": [
+            "AU-WA",
+            "AU-SA",
+            "AU-VIC",
+            "AU-NSW"
+          ]
+        }
+      ],
+      "verify": true
+    },
+    "za-highveld": {
+      "en": "South Africa — Highveld (Free State, Mpumalanga, North West)",
+      "uk": "ПАР — Гайвельд",
+      "precipMm": [
+        500,
+        800
+      ],
+      "tier": "C",
+      "hemisphere": "S",
+      "countries": [
+        "ZA"
+      ],
+      "match": [
+        {
+          "admin": [
+            "ZA-FS",
+            "ZA-MP",
+            "ZA-NW"
+          ]
+        }
+      ],
+      "verify": true
+    },
+    "in-indo-gangetic": {
+      "en": "India — Indo-Gangetic Plain (Punjab, Haryana, Uttar Pradesh, Bihar)",
+      "uk": "Індія — Індо-Гангська рівнина",
+      "precipMm": [
+        500,
+        1200
+      ],
+      "tier": "C",
+      "hemisphere": "N",
+      "countries": [
+        "IN"
+      ],
+      "match": [
+        {
+          "admin": [
+            "IN-PB",
+            "IN-HR",
+            "IN-UP",
+            "IN-BR"
+          ]
+        }
+      ],
+      "verify": true
+    },
+    "cn-north-china-plain": {
+      "en": "China — North China Plain (Hebei, Shandong, Henan)",
+      "uk": "Китай — Північнокитайська рівнина",
+      "precipMm": [
+        500,
+        800
+      ],
+      "tier": "C",
+      "hemisphere": "N",
+      "countries": [
+        "CN"
+      ],
+      "match": [
+        {
+          "admin": [
+            "CN-HE",
+            "CN-SD",
+            "CN-HA"
+          ]
+        }
+      ],
+      "verify": true
+    }
   },
   "rotations": [
     {
       "id": "us-sp-corn2-wheat-sorghum",
       "region": "us-southern-plains",
-      "name": { "en": "Corn-heavy (corn ×2 → wheat → sorghum)", "uk": "Кукурудзяна (кукурудза ×2 → пшениця → сорго)" },
-      "sequence": ["corn", "corn", "winter_wheat", "sorghum"],
-      "irrigation": "required", "water": "high", "baseline": true,
-      "goals": ["margin"],
-      "rationale": { "en": "Typical pivot rotation: corn earns most under irrigation; wheat and sorghum break corn pests.", "uk": "Типова сівозміна під півотом: кукурудза найприбутковіша на поливі, пшениця і сорго розривають цикл шкідників кукурудзи." },
-      "risks": { "en": "High water use; corn-on-corn yield drag and rootworm; large losses if well capacity drops in a drought.", "uk": "Великі витрати води; повторна кукурудза знижує врожай і накопичує кукурудзяного жука; великі втрати в посуху при нестачі води." }
+      "name": {
+        "en": "Corn-heavy (corn ×2 → wheat → sorghum)",
+        "uk": "Кукурудзяна (кукурудза ×2 → пшениця → сорго)"
+      },
+      "sequence": [
+        "corn",
+        "corn",
+        "winter_wheat",
+        "sorghum"
+      ],
+      "irrigation": "required",
+      "water": "high",
+      "baseline": true,
+      "goals": [
+        "margin"
+      ],
+      "rationale": {
+        "en": "Typical pivot rotation: corn earns most under irrigation; wheat and sorghum break corn pests.",
+        "uk": "Типова сівозміна під півотом: кукурудза найприбутковіша на поливі, пшениця і сорго розривають цикл шкідників кукурудзи."
+      },
+      "risks": {
+        "en": "High water use; corn-on-corn yield drag and rootworm; large losses if well capacity drops in a drought.",
+        "uk": "Великі витрати води; повторна кукурудза знижує врожай і накопичує кукурудзяного жука; великі втрати в посуху при нестачі води."
+      }
     },
     {
       "id": "us-sp-continuous-corn",
       "region": "us-southern-plains",
-      "name": { "en": "Continuous corn", "uk": "Кукурудза безперервно" },
-      "sequence": ["corn"],
-      "irrigation": "required", "water": "high", "baseline": true,
-      "goals": ["margin"],
-      "rationale": { "en": "Simplest high-input irrigated system; maximises corn acres and feedlot demand.", "uk": "Найпростіша інтенсивна система на поливі; максимум кукурудзи під попит відгодівельних майданчиків." },
-      "risks": { "en": "Highest water demand, yield drag, rootworm and residue problems; most exposed to Ogallala decline.", "uk": "Найвища потреба у воді, падіння врожайності, шкідники й рештки; найбільш вразлива до виснаження водоносного горизонту Огаллала." }
+      "name": {
+        "en": "Continuous corn",
+        "uk": "Кукурудза безперервно"
+      },
+      "sequence": [
+        "corn"
+      ],
+      "irrigation": "required",
+      "water": "high",
+      "baseline": true,
+      "goals": [
+        "margin"
+      ],
+      "rationale": {
+        "en": "Simplest high-input irrigated system; maximises corn acres and feedlot demand.",
+        "uk": "Найпростіша інтенсивна система на поливі; максимум кукурудзи під попит відгодівельних майданчиків."
+      },
+      "risks": {
+        "en": "Highest water demand, yield drag, rootworm and residue problems; most exposed to Ogallala decline.",
+        "uk": "Найвища потреба у воді, падіння врожайності, шкідники й рештки; найбільш вразлива до виснаження водоносного горизонту Огаллала."
+      }
     },
     {
       "id": "us-sp-alfalfa3-corn-wheat",
       "region": "us-southern-plains",
-      "name": { "en": "Alfalfa-based (alfalfa ×3 → corn → wheat)", "uk": "Люцерна в основі (люцерна ×3 → кукурудза → пшениця)" },
-      "sequence": ["alfalfa", "alfalfa", "alfalfa", "corn", "winter_wheat"],
-      "irrigation": "required", "water": "high",
-      "goals": ["margin", "soil"],
-      "rationale": { "en": "Perennial legume covers soil year-round, fixes nitrogen for the next corn and sells into dairy hay demand.", "uk": "Багаторічна бобова вкриває ґрунт цілий рік, фіксує азот для наступної кукурудзи і продається як сіно для молочних ферм." },
-      "risks": { "en": "Uses more water than corn over a season; margin depends on hay price; needs haying equipment or a buyer.", "uk": "За сезон споживає більше води, ніж кукурудза; маржа залежить від ціни сіна; потрібна техніка для сіна або покупець." }
+      "name": {
+        "en": "Alfalfa-based (alfalfa ×3 → corn → wheat)",
+        "uk": "Люцерна в основі (люцерна ×3 → кукурудза → пшениця)"
+      },
+      "sequence": [
+        "alfalfa",
+        "alfalfa",
+        "alfalfa",
+        "corn",
+        "winter_wheat"
+      ],
+      "irrigation": "required",
+      "water": "high",
+      "goals": [
+        "margin",
+        "soil"
+      ],
+      "rationale": {
+        "en": "Perennial legume covers soil year-round, fixes nitrogen for the next corn and sells into dairy hay demand.",
+        "uk": "Багаторічна бобова вкриває ґрунт цілий рік, фіксує азот для наступної кукурудзи і продається як сіно для молочних ферм."
+      },
+      "risks": {
+        "en": "Uses more water than corn over a season; margin depends on hay price; needs haying equipment or a buyer.",
+        "uk": "За сезон споживає більше води, ніж кукурудза; маржа залежить від ціни сіна; потрібна техніка для сіна або покупець."
+      }
     },
     {
       "id": "us-sp-alfalfa4-corn2",
       "region": "us-southern-plains",
-      "name": { "en": "Long alfalfa (alfalfa ×4 → corn ×2)", "uk": "Довга люцерна (люцерна ×4 → кукурудза ×2)" },
-      "sequence": ["alfalfa", "alfalfa", "alfalfa", "alfalfa", "corn", "corn"],
-      "irrigation": "required", "water": "high",
-      "goals": ["soil", "margin"],
-      "rationale": { "en": "Longer stand spreads establishment cost; two corn years use the stored nitrogen.", "uk": "Довший травостій розподіляє витрати на закладку; два роки кукурудзи використовують накопичений азот." },
-      "risks": { "en": "Stand thins by year 4; very high water use; hay market risk.", "uk": "Травостій зріджується на 4-й рік; дуже високі витрати води; ризик ринку сіна." }
+      "name": {
+        "en": "Long alfalfa (alfalfa ×4 → corn ×2)",
+        "uk": "Довга люцерна (люцерна ×4 → кукурудза ×2)"
+      },
+      "sequence": [
+        "alfalfa",
+        "alfalfa",
+        "alfalfa",
+        "alfalfa",
+        "corn",
+        "corn"
+      ],
+      "irrigation": "required",
+      "water": "high",
+      "goals": [
+        "soil",
+        "margin"
+      ],
+      "rationale": {
+        "en": "Longer stand spreads establishment cost; two corn years use the stored nitrogen.",
+        "uk": "Довший травостій розподіляє витрати на закладку; два роки кукурудзи використовують накопичений азот."
+      },
+      "risks": {
+        "en": "Stand thins by year 4; very high water use; hay market risk.",
+        "uk": "Травостій зріджується на 4-й рік; дуже високі витрати води; ризик ринку сіна."
+      }
     },
     {
       "id": "us-sp-corn-soy-wheat-irr",
       "region": "us-southern-plains",
-      "name": { "en": "Corn → soybean → wheat (irrigated)", "uk": "Кукурудза → соя → пшениця (полив)" },
-      "sequence": ["corn", "soybean", "winter_wheat"],
-      "irrigation": "required", "water": "medium",
-      "goals": ["margin", "soil"],
-      "rationale": { "en": "Soybean uses less water than corn and adds nitrogen; wheat gives a winter cover and spreads workload.", "uk": "Соя потребує менше води, ніж кукурудза, і додає азот; пшениця дає зимове покриття і розподіляє роботи." },
-      "risks": { "en": "Soybean yields are modest in hot, windy Plains summers; lower margin than corn-heavy rotations.", "uk": "Соя дає помірний урожай у спекотне вітряне літо рівнин; маржа нижча, ніж у кукурудзяних сівозмін." }
+      "name": {
+        "en": "Corn → soybean → wheat (irrigated)",
+        "uk": "Кукурудза → соя → пшениця (полив)"
+      },
+      "sequence": [
+        "corn",
+        "soybean",
+        "winter_wheat"
+      ],
+      "irrigation": "required",
+      "water": "medium",
+      "goals": [
+        "margin",
+        "soil"
+      ],
+      "rationale": {
+        "en": "Soybean uses less water than corn and adds nitrogen; wheat gives a winter cover and spreads workload.",
+        "uk": "Соя потребує менше води, ніж кукурудза, і додає азот; пшениця дає зимове покриття і розподіляє роботи."
+      },
+      "risks": {
+        "en": "Soybean yields are modest in hot, windy Plains summers; lower margin than corn-heavy rotations.",
+        "uk": "Соя дає помірний урожай у спекотне вітряне літо рівнин; маржа нижча, ніж у кукурудзяних сівозмін."
+      }
     },
     {
       "id": "us-sp-corn-sorghum-wheat-limited",
       "region": "us-southern-plains",
-      "name": { "en": "Limited irrigation (corn → sorghum → wheat)", "uk": "Обмежений полив (кукурудза → сорго → пшениця)" },
-      "sequence": ["corn", "sorghum", "winter_wheat"],
-      "irrigation": "optional", "water": "medium",
-      "goals": ["water", "drought"],
-      "rationale": { "en": "Concentrates scarce water on one corn year; sorghum and wheat tolerate deficit irrigation.", "uk": "Зосереджує обмежену воду на одному році кукурудзи; сорго й пшениця витримують дефіцитний полив." },
-      "risks": { "en": "Corn yield suffers if the well cannot meet peak July demand.", "uk": "Кукурудза втрачає врожай, якщо свердловина не покриває пікову потребу в липні." }
+      "name": {
+        "en": "Limited irrigation (corn → sorghum → wheat)",
+        "uk": "Обмежений полив (кукурудза → сорго → пшениця)"
+      },
+      "sequence": [
+        "corn",
+        "sorghum",
+        "winter_wheat"
+      ],
+      "irrigation": "optional",
+      "water": "medium",
+      "goals": [
+        "water",
+        "drought"
+      ],
+      "rationale": {
+        "en": "Concentrates scarce water on one corn year; sorghum and wheat tolerate deficit irrigation.",
+        "uk": "Зосереджує обмежену воду на одному році кукурудзи; сорго й пшениця витримують дефіцитний полив."
+      },
+      "risks": {
+        "en": "Corn yield suffers if the well cannot meet peak July demand.",
+        "uk": "Кукурудза втрачає врожай, якщо свердловина не покриває пікову потребу в липні."
+      }
     },
     {
       "id": "us-sp-cotton-wheat-sorghum",
       "region": "us-southern-plains",
-      "name": { "en": "Cotton → wheat → sorghum", "uk": "Бавовник → пшениця → сорго" },
-      "sequence": ["cotton", "winter_wheat", "sorghum"],
-      "irrigation": "optional", "water": "medium",
+      "name": {
+        "en": "Cotton → wheat → sorghum",
+        "uk": "Бавовник → пшениця → сорго"
+      },
+      "sequence": [
+        "cotton",
+        "winter_wheat",
+        "sorghum"
+      ],
+      "irrigation": "optional",
+      "water": "medium",
       "minSeasonDays": 180,
-      "goals": ["water", "margin"],
-      "rationale": { "en": "Cotton is spreading north into SW Kansas as a lower-water cash crop; wheat residue protects soil.", "uk": "Бавовник поширюється на південний захід Канзасу як прибуткова культура з меншою потребою у воді; рештки пшениці захищають ґрунт." },
-      "risks": { "en": "Needs a long frost-free season and access to a gin; little residue after cotton.", "uk": "Потрібен довгий безморозний сезон і доступ до переробки; після бавовника мало решток." }
+      "goals": [
+        "water",
+        "margin"
+      ],
+      "rationale": {
+        "en": "Cotton is spreading north into SW Kansas as a lower-water cash crop; wheat residue protects soil.",
+        "uk": "Бавовник поширюється на південний захід Канзасу як прибуткова культура з меншою потребою у воді; рештки пшениці захищають ґрунт."
+      },
+      "risks": {
+        "en": "Needs a long frost-free season and access to a gin; little residue after cotton.",
+        "uk": "Потрібен довгий безморозний сезон і доступ до переробки; після бавовника мало решток."
+      }
     },
     {
       "id": "us-sp-canola-wheat-sorghum",
       "region": "us-southern-plains",
-      "name": { "en": "Winter canola → wheat → sorghum", "uk": "Ріпак озимий → пшениця → сорго" },
-      "sequence": ["winter_canola", "winter_wheat", "sorghum"],
-      "irrigation": "optional", "water": "medium",
-      "goals": ["margin", "soil"],
-      "rationale": { "en": "Canola breaks wheat diseases and grassy weeds; wheat after canola typically yields more.", "uk": "Ріпак розриває цикл хвороб пшениці та злакових бур'янів; пшениця після ріпаку зазвичай дає більший урожай." },
-      "risks": { "en": "Winterkill in cold dry winters; limited local crushing markets.", "uk": "Вимерзання в холодні сухі зими; мало місцевих покупців." }
+      "name": {
+        "en": "Winter canola → wheat → sorghum",
+        "uk": "Ріпак озимий → пшениця → сорго"
+      },
+      "sequence": [
+        "winter_canola",
+        "winter_wheat",
+        "sorghum"
+      ],
+      "irrigation": "optional",
+      "water": "medium",
+      "goals": [
+        "margin",
+        "soil"
+      ],
+      "rationale": {
+        "en": "Canola breaks wheat diseases and grassy weeds; wheat after canola typically yields more.",
+        "uk": "Ріпак розриває цикл хвороб пшениці та злакових бур'янів; пшениця після ріпаку зазвичай дає більший урожай."
+      },
+      "risks": {
+        "en": "Winterkill in cold dry winters; limited local crushing markets.",
+        "uk": "Вимерзання в холодні сухі зими; мало місцевих покупців."
+      }
     },
     {
       "id": "us-sp-wheat-sorghum-fallow",
       "region": "us-southern-plains",
-      "name": { "en": "Less water (wheat → sorghum → fallow)", "uk": "Менше води (пшениця → сорго → пар)" },
-      "sequence": ["winter_wheat", "sorghum", "fallow"],
-      "irrigation": "none", "water": "low", "baseline": true,
-      "goals": ["water", "drought"],
-      "rationale": { "en": "Classic dryland system: fallow stores rain for the next wheat; sorghum is the most drought-tolerant summer crop.", "uk": "Класична богарна система: пар накопичує вологу для пшениці; сорго — найпосухостійкіша літня культура." },
-      "risks": { "en": "One year in three earns nothing; fallow raises wind-erosion risk without residue.", "uk": "Один рік із трьох без доходу; пар без решток підвищує ризик вітрової ерозії." }
+      "name": {
+        "en": "Less water (wheat → sorghum → fallow)",
+        "uk": "Менше води (пшениця → сорго → пар)"
+      },
+      "sequence": [
+        "winter_wheat",
+        "sorghum",
+        "fallow"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "baseline": true,
+      "goals": [
+        "water",
+        "drought"
+      ],
+      "rationale": {
+        "en": "Classic dryland system: fallow stores rain for the next wheat; sorghum is the most drought-tolerant summer crop.",
+        "uk": "Класична богарна система: пар накопичує вологу для пшениці; сорго — найпосухостійкіша літня культура."
+      },
+      "risks": {
+        "en": "One year in three earns nothing; fallow raises wind-erosion risk without residue.",
+        "uk": "Один рік із трьох без доходу; пар без решток підвищує ризик вітрової ерозії."
+      }
     },
     {
       "id": "us-sp-wheat-fallow",
       "region": "us-southern-plains",
-      "name": { "en": "Wheat → fallow", "uk": "Пшениця → пар" },
-      "sequence": ["winter_wheat", "fallow"],
-      "irrigation": "none", "water": "low", "baseline": true,
-      "goals": ["drought"],
-      "rationale": { "en": "Lowest-risk dryland system for the driest areas; each wheat crop gets two seasons of rain.", "uk": "Найменш ризикована богарна система для найсухіших районів; кожна пшениця отримує опади двох сезонів." },
-      "risks": { "en": "Half the years earn nothing; slow loss of soil organic carbon; erosion in fallow.", "uk": "Половина років без доходу; поступова втрата органіки ґрунту; ерозія на пару." }
+      "name": {
+        "en": "Wheat → fallow",
+        "uk": "Пшениця → пар"
+      },
+      "sequence": [
+        "winter_wheat",
+        "fallow"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "baseline": true,
+      "goals": [
+        "drought"
+      ],
+      "rationale": {
+        "en": "Lowest-risk dryland system for the driest areas; each wheat crop gets two seasons of rain.",
+        "uk": "Найменш ризикована богарна система для найсухіших районів; кожна пшениця отримує опади двох сезонів."
+      },
+      "risks": {
+        "en": "Half the years earn nothing; slow loss of soil organic carbon; erosion in fallow.",
+        "uk": "Половина років без доходу; поступова втрата органіки ґрунту; ерозія на пару."
+      }
     },
     {
       "id": "us-sp-wheat-corn-fallow",
       "region": "us-southern-plains",
-      "name": { "en": "Wheat → corn → fallow (dryland)", "uk": "Пшениця → кукурудза → пар (богара)" },
-      "sequence": ["winter_wheat", "corn", "fallow"],
-      "irrigation": "none", "water": "low",
+      "name": {
+        "en": "Wheat → corn → fallow (dryland)",
+        "uk": "Пшениця → кукурудза → пар (богара)"
+      },
+      "sequence": [
+        "winter_wheat",
+        "corn",
+        "fallow"
+      ],
+      "irrigation": "none",
+      "water": "low",
       "minPrecipMm": 400,
-      "goals": ["margin", "water"],
-      "rationale": { "en": "Intensifies wheat-fallow with a summer crop planted into wheat stubble that holds snow and rain.", "uk": "Інтенсифікує пшеницю-пар літньою культурою, посіяною в стерню, яка затримує сніг і дощ." },
-      "risks": { "en": "Dryland corn fails in hot, dry Julys; sorghum is safer in the driest years.", "uk": "Богарна кукурудза гине в спекотний сухий липень; у найсухіші роки сорго надійніше." }
+      "goals": [
+        "margin",
+        "water"
+      ],
+      "rationale": {
+        "en": "Intensifies wheat-fallow with a summer crop planted into wheat stubble that holds snow and rain.",
+        "uk": "Інтенсифікує пшеницю-пар літньою культурою, посіяною в стерню, яка затримує сніг і дощ."
+      },
+      "risks": {
+        "en": "Dryland corn fails in hot, dry Julys; sorghum is safer in the driest years.",
+        "uk": "Богарна кукурудза гине в спекотний сухий липень; у найсухіші роки сорго надійніше."
+      }
     },
     {
       "id": "us-sp-wheat-sorghum-sunflower-fallow",
       "region": "us-southern-plains",
-      "name": { "en": "Wheat → sorghum → sunflower → fallow", "uk": "Пшениця → сорго → соняшник → пар" },
-      "sequence": ["winter_wheat", "sorghum", "sunflower", "fallow"],
-      "irrigation": "none", "water": "low",
+      "name": {
+        "en": "Wheat → sorghum → sunflower → fallow",
+        "uk": "Пшениця → сорго → соняшник → пар"
+      },
+      "sequence": [
+        "winter_wheat",
+        "sorghum",
+        "sunflower",
+        "fallow"
+      ],
+      "irrigation": "none",
+      "water": "low",
       "minPrecipMm": 420,
-      "goals": ["margin", "drought"],
-      "rationale": { "en": "Fewer fallow years; sunflower's deep roots use water below the reach of grains.", "uk": "Менше парових років; глибоке коріння соняшнику бере воду, недоступну зерновим." },
-      "risks": { "en": "Sunflower dries the profile, so the next year needs fallow; bird and head-moth damage.", "uk": "Соняшник висушує профіль, тому далі потрібен пар; шкода від птахів і шкідників кошика." }
+      "goals": [
+        "margin",
+        "drought"
+      ],
+      "rationale": {
+        "en": "Fewer fallow years; sunflower's deep roots use water below the reach of grains.",
+        "uk": "Менше парових років; глибоке коріння соняшнику бере воду, недоступну зерновим."
+      },
+      "risks": {
+        "en": "Sunflower dries the profile, so the next year needs fallow; bird and head-moth damage.",
+        "uk": "Соняшник висушує профіль, тому далі потрібен пар; шкода від птахів і шкідників кошика."
+      }
     },
     {
       "id": "us-sp-wheat-forage-sorghum",
       "region": "us-southern-plains",
-      "name": { "en": "Grazed wheat → forage sorghum", "uk": "Пшениця на випас → кормове сорго" },
-      "sequence": ["winter_wheat", "forage_sorghum"],
-      "irrigation": "optional", "water": "medium",
-      "goals": ["margin", "soil"],
-      "rationale": { "en": "Fits farms with cattle: wheat is grazed in winter, forage sorghum gives summer hay or silage.", "uk": "Підходить фермам із худобою: пшениця — зимовий випас, кормове сорго — літнє сіно або силос." },
-      "risks": { "en": "Value depends on own livestock or a forage buyer; heavy residue removal.", "uk": "Цінність залежить від власної худоби чи покупця кормів; рештки майже повністю вивозяться." }
+      "name": {
+        "en": "Grazed wheat → forage sorghum",
+        "uk": "Пшениця на випас → кормове сорго"
+      },
+      "sequence": [
+        "winter_wheat",
+        "forage_sorghum"
+      ],
+      "irrigation": "optional",
+      "water": "medium",
+      "goals": [
+        "margin",
+        "soil"
+      ],
+      "rationale": {
+        "en": "Fits farms with cattle: wheat is grazed in winter, forage sorghum gives summer hay or silage.",
+        "uk": "Підходить фермам із худобою: пшениця — зимовий випас, кормове сорго — літнє сіно або силос."
+      },
+      "risks": {
+        "en": "Value depends on own livestock or a forage buyer; heavy residue removal.",
+        "uk": "Цінність залежить від власної худоби чи покупця кормів; рештки майже повністю вивозяться."
+      }
     },
     {
       "id": "us-sp-wheat-millet-fallow",
       "region": "us-southern-plains",
-      "name": { "en": "Wheat → proso millet → fallow", "uk": "Пшениця → просо → пар" },
-      "sequence": ["winter_wheat", "millet", "fallow"],
-      "irrigation": "none", "water": "low",
-      "goals": ["water", "drought"],
-      "rationale": { "en": "Proso has the shortest season and lowest water need of summer crops; common in NE Colorado and W Nebraska.", "uk": "Просо має найкоротший сезон і найменшу потребу у воді серед літніх культур." },
-      "risks": { "en": "Thin, volatile market; little residue.", "uk": "Вузький і нестабільний ринок; мало решток." }
+      "name": {
+        "en": "Wheat → proso millet → fallow",
+        "uk": "Пшениця → просо → пар"
+      },
+      "sequence": [
+        "winter_wheat",
+        "millet",
+        "fallow"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "goals": [
+        "water",
+        "drought"
+      ],
+      "rationale": {
+        "en": "Proso has the shortest season and lowest water need of summer crops; common in NE Colorado and W Nebraska.",
+        "uk": "Просо має найкоротший сезон і найменшу потребу у воді серед літніх культур."
+      },
+      "risks": {
+        "en": "Thin, volatile market; little residue.",
+        "uk": "Вузький і нестабільний ринок; мало решток."
+      }
     },
-
     {
       "id": "us-cb-corn-soy",
       "region": "us-corn-belt",
-      "name": { "en": "Corn → soybean", "uk": "Кукурудза → соя" },
-      "sequence": ["corn", "soybean"],
-      "irrigation": "none", "water": "medium", "baseline": true,
-      "goals": ["margin"],
-      "rationale": { "en": "Dominant Corn Belt system: soybean breaks corn rootworm and supplies nitrogen credit.", "uk": "Основна система Кукурудзяного поясу: соя розриває цикл кукурудзяного жука і залишає азот." },
-      "risks": { "en": "Low diversity; soybean cyst nematode and herbicide-resistant weeds; bare soil in winter.", "uk": "Низьке різноманіття; соєва нематода і стійкі бур'яни; ґрунт голий узимку." }
+      "name": {
+        "en": "Corn → soybean",
+        "uk": "Кукурудза → соя"
+      },
+      "sequence": [
+        "corn",
+        "soybean"
+      ],
+      "irrigation": "none",
+      "water": "medium",
+      "baseline": true,
+      "goals": [
+        "margin"
+      ],
+      "rationale": {
+        "en": "Dominant Corn Belt system: soybean breaks corn rootworm and supplies nitrogen credit.",
+        "uk": "Основна система Кукурудзяного поясу: соя розриває цикл кукурудзяного жука і залишає азот."
+      },
+      "risks": {
+        "en": "Low diversity; soybean cyst nematode and herbicide-resistant weeds; bare soil in winter.",
+        "uk": "Низьке різноманіття; соєва нематода і стійкі бур'яни; ґрунт голий узимку."
+      }
     },
     {
       "id": "us-cb-corn2-soy",
       "region": "us-corn-belt",
-      "name": { "en": "Corn ×2 → soybean", "uk": "Кукурудза ×2 → соя" },
-      "sequence": ["corn", "corn", "soybean"],
-      "irrigation": "none", "water": "medium", "baseline": true,
-      "goals": ["margin"],
-      "rationale": { "en": "More corn acres when corn prices are strong.", "uk": "Більше кукурудзи, коли ціни на неї високі." },
-      "risks": { "en": "Second-year corn yields 5–15% less and needs more nitrogen.", "uk": "Кукурудза другого року дає на 5–15% менше і потребує більше азоту." }
+      "name": {
+        "en": "Corn ×2 → soybean",
+        "uk": "Кукурудза ×2 → соя"
+      },
+      "sequence": [
+        "corn",
+        "corn",
+        "soybean"
+      ],
+      "irrigation": "none",
+      "water": "medium",
+      "baseline": true,
+      "goals": [
+        "margin"
+      ],
+      "rationale": {
+        "en": "More corn acres when corn prices are strong.",
+        "uk": "Більше кукурудзи, коли ціни на неї високі."
+      },
+      "risks": {
+        "en": "Second-year corn yields 5–15% less and needs more nitrogen.",
+        "uk": "Кукурудза другого року дає на 5–15% менше і потребує більше азоту."
+      }
     },
     {
       "id": "us-cb-continuous-corn",
       "region": "us-corn-belt",
-      "name": { "en": "Continuous corn", "uk": "Кукурудза безперервно" },
-      "sequence": ["corn"],
-      "irrigation": "none", "water": "medium", "baseline": true,
-      "goals": ["margin"],
-      "rationale": { "en": "Common near ethanol plants and feedlots.", "uk": "Поширена поблизу етанолових заводів і відгодівельних майданчиків." },
-      "risks": { "en": "Yield drag, rootworm resistance, highest nitrogen and nitrate leaching.", "uk": "Падіння врожайності, стійкість жука, найбільше азоту та вимивання нітратів." }
+      "name": {
+        "en": "Continuous corn",
+        "uk": "Кукурудза безперервно"
+      },
+      "sequence": [
+        "corn"
+      ],
+      "irrigation": "none",
+      "water": "medium",
+      "baseline": true,
+      "goals": [
+        "margin"
+      ],
+      "rationale": {
+        "en": "Common near ethanol plants and feedlots.",
+        "uk": "Поширена поблизу етанолових заводів і відгодівельних майданчиків."
+      },
+      "risks": {
+        "en": "Yield drag, rootworm resistance, highest nitrogen and nitrate leaching.",
+        "uk": "Падіння врожайності, стійкість жука, найбільше азоту та вимивання нітратів."
+      }
     },
     {
       "id": "us-cb-corn-soy-wheat",
       "region": "us-corn-belt",
-      "name": { "en": "Corn → soybean → wheat", "uk": "Кукурудза → соя → пшениця" },
-      "sequence": ["corn", "soybean", "winter_wheat"],
-      "irrigation": "none", "water": "medium",
-      "goals": ["soil", "margin"],
-      "rationale": { "en": "Adding a small grain cuts erosion, breaks disease cycles and leaves a window for a summer cover crop.", "uk": "Дрібнозернова культура зменшує ерозію, розриває цикл хвороб і дає вікно для літньої покривної культури." },
-      "risks": { "en": "Wheat earns less per hectare; fusarium head blight after corn.", "uk": "Пшениця дає менше доходу з гектара; фузаріоз колосу після кукурудзи." }
+      "name": {
+        "en": "Corn → soybean → wheat",
+        "uk": "Кукурудза → соя → пшениця"
+      },
+      "sequence": [
+        "corn",
+        "soybean",
+        "winter_wheat"
+      ],
+      "irrigation": "none",
+      "water": "medium",
+      "goals": [
+        "soil",
+        "margin"
+      ],
+      "rationale": {
+        "en": "Adding a small grain cuts erosion, breaks disease cycles and leaves a window for a summer cover crop.",
+        "uk": "Дрібнозернова культура зменшує ерозію, розриває цикл хвороб і дає вікно для літньої покривної культури."
+      },
+      "risks": {
+        "en": "Wheat earns less per hectare; fusarium head blight after corn.",
+        "uk": "Пшениця дає менше доходу з гектара; фузаріоз колосу після кукурудзи."
+      }
     },
     {
       "id": "us-cb-corn-soy-oat-alfalfa",
       "region": "us-corn-belt",
-      "name": { "en": "Extended: corn → soybean → oat → alfalfa", "uk": "Розширена: кукурудза → соя → овес → люцерна" },
-      "sequence": ["corn", "soybean", "oat", "alfalfa"],
-      "irrigation": "none", "water": "medium",
-      "goals": ["soil"],
-      "rationale": { "en": "Iowa long-term trials show similar profit to corn-soy with far less fertiliser, herbicide and erosion.", "uk": "Довгострокові досліди в Айові: прибуток подібний до кукурудза-соя, але значно менше добрив, гербіцидів і ерозії." },
-      "risks": { "en": "Needs a market for oats and hay and more labour.", "uk": "Потрібен збут вівса й сіна та більше праці." }
+      "name": {
+        "en": "Extended: corn → soybean → oat → alfalfa",
+        "uk": "Розширена: кукурудза → соя → овес → люцерна"
+      },
+      "sequence": [
+        "corn",
+        "soybean",
+        "oat",
+        "alfalfa"
+      ],
+      "irrigation": "none",
+      "water": "medium",
+      "goals": [
+        "soil"
+      ],
+      "rationale": {
+        "en": "Iowa long-term trials show similar profit to corn-soy with far less fertiliser, herbicide and erosion.",
+        "uk": "Довгострокові досліди в Айові: прибуток подібний до кукурудза-соя, але значно менше добрив, гербіцидів і ерозії."
+      },
+      "risks": {
+        "en": "Needs a market for oats and hay and more labour.",
+        "uk": "Потрібен збут вівса й сіна та більше праці."
+      }
     },
     {
       "id": "us-cb-corn-soy-rye-cover",
       "region": "us-corn-belt",
-      "name": { "en": "Corn → soybean with cereal rye cover", "uk": "Кукурудза → соя з покривним житом" },
-      "sequence": ["corn", "soybean"],
+      "name": {
+        "en": "Corn → soybean with cereal rye cover",
+        "uk": "Кукурудза → соя з покривним житом"
+      },
+      "sequence": [
+        "corn",
+        "soybean"
+      ],
       "cover": "winter_rye",
-      "irrigation": "none", "water": "medium",
-      "goals": ["soil"],
-      "rationale": { "en": "Same cash crops, but a winter rye cover protects soil and holds nitrogen.", "uk": "Ті самі товарні культури, але покривне жито взимку захищає ґрунт і утримує азот." },
-      "risks": { "en": "Extra seed and termination cost; can reduce corn yield if terminated late.", "uk": "Додаткові витрати на насіння і знищення покриву; пізнє знищення може знизити врожай кукурудзи." }
+      "irrigation": "none",
+      "water": "medium",
+      "goals": [
+        "soil"
+      ],
+      "rationale": {
+        "en": "Same cash crops, but a winter rye cover protects soil and holds nitrogen.",
+        "uk": "Ті самі товарні культури, але покривне жито взимку захищає ґрунт і утримує азот."
+      },
+      "risks": {
+        "en": "Extra seed and termination cost; can reduce corn yield if terminated late.",
+        "uk": "Додаткові витрати на насіння і знищення покриву; пізнє знищення може знизити врожай кукурудзи."
+      }
     },
-
     {
       "id": "us-np-wheat-fallow",
       "region": "us-northern-plains",
-      "name": { "en": "Spring wheat → fallow", "uk": "Яра пшениця → пар" },
-      "sequence": ["spring_wheat", "fallow"],
-      "irrigation": "none", "water": "low", "baseline": true,
-      "goals": ["drought"],
-      "rationale": { "en": "Traditional system in the driest northern areas.", "uk": "Традиційна система в найсухіших північних районах." },
-      "risks": { "en": "Half the years without income; saline seeps and erosion.", "uk": "Половина років без доходу; засолення і ерозія." }
+      "name": {
+        "en": "Spring wheat → fallow",
+        "uk": "Яра пшениця → пар"
+      },
+      "sequence": [
+        "spring_wheat",
+        "fallow"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "baseline": true,
+      "goals": [
+        "drought"
+      ],
+      "rationale": {
+        "en": "Traditional system in the driest northern areas.",
+        "uk": "Традиційна система в найсухіших північних районах."
+      },
+      "risks": {
+        "en": "Half the years without income; saline seeps and erosion.",
+        "uk": "Половина років без доходу; засолення і ерозія."
+      }
     },
     {
       "id": "us-np-wheat-pea",
       "region": "us-northern-plains",
-      "name": { "en": "Spring wheat → pea", "uk": "Яра пшениця → горох" },
-      "sequence": ["spring_wheat", "pea"],
-      "irrigation": "none", "water": "low",
-      "goals": ["water", "soil"],
-      "rationale": { "en": "Pea replaces fallow: shallow roots and early harvest leave water for the next wheat and add nitrogen.", "uk": "Горох замінює пар: неглибоке коріння і ранній збір залишають воду для пшениці та додають азот." },
-      "risks": { "en": "Lower wheat yield than after fallow in dry years; pulse price volatility.", "uk": "Урожай пшениці в сухі роки нижчий, ніж після пару; волатильні ціни на бобові." }
+      "name": {
+        "en": "Spring wheat → pea",
+        "uk": "Яра пшениця → горох"
+      },
+      "sequence": [
+        "spring_wheat",
+        "pea"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "goals": [
+        "water",
+        "soil"
+      ],
+      "rationale": {
+        "en": "Pea replaces fallow: shallow roots and early harvest leave water for the next wheat and add nitrogen.",
+        "uk": "Горох замінює пар: неглибоке коріння і ранній збір залишають воду для пшениці та додають азот."
+      },
+      "risks": {
+        "en": "Lower wheat yield than after fallow in dry years; pulse price volatility.",
+        "uk": "Урожай пшениці в сухі роки нижчий, ніж після пару; волатильні ціни на бобові."
+      }
     },
     {
       "id": "us-np-wheat-lentil-flax",
       "region": "us-northern-plains",
-      "name": { "en": "Spring wheat → lentil → flax", "uk": "Яра пшениця → сочевиця → льон" },
-      "sequence": ["spring_wheat", "lentil", "flax"],
-      "irrigation": "none", "water": "low",
-      "goals": ["water", "margin"],
-      "rationale": { "en": "Continuous cropping with low-water crops from three families.", "uk": "Безперервне використання поля культурами з низькою потребою у воді з трьох родин." },
-      "risks": { "en": "Several small markets; flax leaves little residue.", "uk": "Кілька вузьких ринків; льон залишає мало решток." }
+      "name": {
+        "en": "Spring wheat → lentil → flax",
+        "uk": "Яра пшениця → сочевиця → льон"
+      },
+      "sequence": [
+        "spring_wheat",
+        "lentil",
+        "flax"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "goals": [
+        "water",
+        "margin"
+      ],
+      "rationale": {
+        "en": "Continuous cropping with low-water crops from three families.",
+        "uk": "Безперервне використання поля культурами з низькою потребою у воді з трьох родин."
+      },
+      "risks": {
+        "en": "Several small markets; flax leaves little residue.",
+        "uk": "Кілька вузьких ринків; льон залишає мало решток."
+      }
     },
-
     {
       "id": "ua-st-wheat-sunflower-barley-fallow",
       "region": "ua-steppe",
-      "name": { "en": "Wheat → sunflower → barley → fallow", "uk": "Пшениця → соняшник → ячмінь → пар" },
-      "sequence": ["winter_wheat", "sunflower", "spring_barley", "fallow"],
-      "irrigation": "none", "water": "low", "baseline": true,
-      "goals": ["drought"],
-      "rationale": { "en": "Recommended steppe rotation: black fallow restores moisture for winter wheat, the key crop in dry years.", "uk": "Рекомендована степова сівозміна: чорний пар відновлює вологу для озимої пшениці — ключової культури в сухі роки." },
-      "risks": { "en": "Fallow year earns nothing; sunflower every 4 years is above the 7-year guideline (broomrape, diseases).", "uk": "Рік пару без доходу; соняшник раз на 4 роки — частіше за рекомендовані 7 років (вовчок, хвороби)." }
+      "name": {
+        "en": "Wheat → sunflower → barley → fallow",
+        "uk": "Пшениця → соняшник → ячмінь → пар"
+      },
+      "sequence": [
+        "winter_wheat",
+        "sunflower",
+        "spring_barley",
+        "fallow"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "baseline": true,
+      "goals": [
+        "drought"
+      ],
+      "rationale": {
+        "en": "Recommended steppe rotation: black fallow restores moisture for winter wheat, the key crop in dry years.",
+        "uk": "Рекомендована степова сівозміна: чорний пар відновлює вологу для озимої пшениці — ключової культури в сухі роки."
+      },
+      "risks": {
+        "en": "Fallow year earns nothing; sunflower every 4 years is above the 7-year guideline (broomrape, diseases).",
+        "uk": "Рік пару без доходу; соняшник раз на 4 роки — частіше за рекомендовані 7 років (вовчок, хвороби)."
+      }
     },
     {
       "id": "ua-st-wheat-sunflower",
       "region": "ua-steppe",
-      "name": { "en": "Wheat ↔ sunflower (commercial)", "uk": "Пшениця ↔ соняшник (комерційна)" },
-      "sequence": ["winter_wheat", "sunflower"],
-      "irrigation": "none", "water": "low", "baseline": true,
-      "goals": ["margin"],
-      "rationale": { "en": "Widespread in practice: the two most liquid crops in Ukraine.", "uk": "Дуже поширена на практиці: дві найліквідніші культури в Україні." },
-      "risks": { "en": "Sunflower every 2 years: broomrape, sclerotinia, dried-out subsoil; yields decline over time.", "uk": "Соняшник раз на 2 роки: вовчок, біла гниль, пересушений підґрунт; врожайність з часом падає." }
+      "name": {
+        "en": "Wheat ↔ sunflower (commercial)",
+        "uk": "Пшениця ↔ соняшник (комерційна)"
+      },
+      "sequence": [
+        "winter_wheat",
+        "sunflower"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "baseline": true,
+      "goals": [
+        "margin"
+      ],
+      "rationale": {
+        "en": "Widespread in practice: the two most liquid crops in Ukraine.",
+        "uk": "Дуже поширена на практиці: дві найліквідніші культури в Україні."
+      },
+      "risks": {
+        "en": "Sunflower every 2 years: broomrape, sclerotinia, dried-out subsoil; yields decline over time.",
+        "uk": "Соняшник раз на 2 роки: вовчок, біла гниль, пересушений підґрунт; врожайність з часом падає."
+      }
     },
     {
       "id": "ua-st-pea-wheat-sunflower-barley",
       "region": "ua-steppe",
-      "name": { "en": "Pea → wheat → sunflower → barley", "uk": "Горох → пшениця → соняшник → ячмінь" },
-      "sequence": ["pea", "winter_wheat", "sunflower", "spring_barley"],
-      "irrigation": "none", "water": "low",
-      "goals": ["margin", "soil"],
-      "rationale": { "en": "Pea is the best predecessor for winter wheat after fallow: early harvest, nitrogen and saved moisture, with no idle year.", "uk": "Горох — найкращий попередник озимої пшениці після пару: ранній збір, азот і збережена волога без року простою." },
-      "risks": { "en": "Pea yields drop in hot springs; sunflower interval still short.", "uk": "Урожай гороху падає в спекотну весну; інтервал соняшнику все ще короткий." }
+      "name": {
+        "en": "Pea → wheat → sunflower → barley",
+        "uk": "Горох → пшениця → соняшник → ячмінь"
+      },
+      "sequence": [
+        "pea",
+        "winter_wheat",
+        "sunflower",
+        "spring_barley"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "goals": [
+        "margin",
+        "soil"
+      ],
+      "rationale": {
+        "en": "Pea is the best predecessor for winter wheat after fallow: early harvest, nitrogen and saved moisture, with no idle year.",
+        "uk": "Горох — найкращий попередник озимої пшениці після пару: ранній збір, азот і збережена волога без року простою."
+      },
+      "risks": {
+        "en": "Pea yields drop in hot springs; sunflower interval still short.",
+        "uk": "Урожай гороху падає в спекотну весну; інтервал соняшнику все ще короткий."
+      }
     },
     {
       "id": "ua-st-chickpea-wheat-sunflower",
       "region": "ua-steppe",
-      "name": { "en": "Chickpea → wheat → sunflower", "uk": "Нут → пшениця → соняшник" },
-      "sequence": ["chickpea", "winter_wheat", "sunflower"],
-      "irrigation": "none", "water": "low",
-      "goals": ["drought", "margin"],
-      "rationale": { "en": "Chickpea is the most drought-tolerant legume; strong export demand.", "uk": "Нут — найпосухостійкіша бобова; високий експортний попит." },
-      "risks": { "en": "Ascochyta blight in wet years; thin domestic market.", "uk": "Аскохітоз у вологі роки; вузький внутрішній ринок." }
+      "name": {
+        "en": "Chickpea → wheat → sunflower",
+        "uk": "Нут → пшениця → соняшник"
+      },
+      "sequence": [
+        "chickpea",
+        "winter_wheat",
+        "sunflower"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "goals": [
+        "drought",
+        "margin"
+      ],
+      "rationale": {
+        "en": "Chickpea is the most drought-tolerant legume; strong export demand.",
+        "uk": "Нут — найпосухостійкіша бобова; високий експортний попит."
+      },
+      "risks": {
+        "en": "Ascochyta blight in wet years; thin domestic market.",
+        "uk": "Аскохітоз у вологі роки; вузький внутрішній ринок."
+      }
     },
     {
       "id": "ua-st-fallow-wheat2-sunflower-barley",
       "region": "ua-steppe",
-      "name": { "en": "Fallow → wheat ×2 → sunflower → barley", "uk": "Пар → пшениця ×2 → соняшник → ячмінь" },
-      "sequence": ["fallow", "winter_wheat", "winter_wheat", "sunflower", "spring_barley"],
-      "irrigation": "none", "water": "low",
-      "goals": ["drought", "soil"],
-      "rationale": { "en": "Classic 5-field steppe rotation: one fallow per five years and a longer sunflower interval.", "uk": "Класична п'ятипільна степова сівозміна: один пар на п'ять років і довший інтервал соняшнику." },
-      "risks": { "en": "Second wheat after wheat has more root rot and lower yield.", "uk": "Друга пшениця після пшениці більше уражається кореневими гнилями і дає менше." }
+      "name": {
+        "en": "Fallow → wheat ×2 → sunflower → barley",
+        "uk": "Пар → пшениця ×2 → соняшник → ячмінь"
+      },
+      "sequence": [
+        "fallow",
+        "winter_wheat",
+        "winter_wheat",
+        "sunflower",
+        "spring_barley"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "goals": [
+        "drought",
+        "soil"
+      ],
+      "rationale": {
+        "en": "Classic 5-field steppe rotation: one fallow per five years and a longer sunflower interval.",
+        "uk": "Класична п'ятипільна степова сівозміна: один пар на п'ять років і довший інтервал соняшнику."
+      },
+      "risks": {
+        "en": "Second wheat after wheat has more root rot and lower yield.",
+        "uk": "Друга пшениця після пшениці більше уражається кореневими гнилями і дає менше."
+      }
     },
     {
       "id": "ua-st-sorghum-wheat-sunflower-barley",
       "region": "ua-steppe",
-      "name": { "en": "Sorghum → wheat → sunflower → barley", "uk": "Сорго → пшениця → соняшник → ячмінь" },
-      "sequence": ["sorghum", "winter_wheat", "sunflower", "spring_barley"],
-      "irrigation": "none", "water": "low",
-      "goals": ["drought"],
-      "rationale": { "en": "Sorghum replaces corn in the dry south: similar use, much better drought tolerance.", "uk": "Сорго замінює кукурудзу на сухому півдні: схоже використання, значно краща посухостійкість." },
-      "risks": { "en": "Sorghum dries the soil late, so wheat after it needs good autumn rain.", "uk": "Сорго пізно висушує ґрунт, тож пшениці після нього потрібні осінні дощі." }
+      "name": {
+        "en": "Sorghum → wheat → sunflower → barley",
+        "uk": "Сорго → пшениця → соняшник → ячмінь"
+      },
+      "sequence": [
+        "sorghum",
+        "winter_wheat",
+        "sunflower",
+        "spring_barley"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "goals": [
+        "drought"
+      ],
+      "rationale": {
+        "en": "Sorghum replaces corn in the dry south: similar use, much better drought tolerance.",
+        "uk": "Сорго замінює кукурудзу на сухому півдні: схоже використання, значно краща посухостійкість."
+      },
+      "risks": {
+        "en": "Sorghum dries the soil late, so wheat after it needs good autumn rain.",
+        "uk": "Сорго пізно висушує ґрунт, тож пшениці після нього потрібні осінні дощі."
+      }
     },
     {
       "id": "ua-st-canola-wheat-sunflower-barley",
       "region": "ua-steppe",
-      "name": { "en": "Rapeseed → wheat → sunflower → barley", "uk": "Ріпак → пшениця → соняшник → ячмінь" },
-      "sequence": ["winter_canola", "winter_wheat", "sunflower", "spring_barley"],
-      "irrigation": "none", "water": "low",
+      "name": {
+        "en": "Rapeseed → wheat → sunflower → barley",
+        "uk": "Ріпак → пшениця → соняшник → ячмінь"
+      },
+      "sequence": [
+        "winter_canola",
+        "winter_wheat",
+        "sunflower",
+        "spring_barley"
+      ],
+      "irrigation": "none",
+      "water": "low",
       "minPrecipMm": 420,
-      "goals": ["margin"],
-      "rationale": { "en": "High-value export oilseed; early harvest gives wheat a long window.", "uk": "Цінна експортна олійна; ранній збір дає пшениці довге вікно для сівби." },
-      "risks": { "en": "Establishment fails in dry Augusts, common in the south; shares sclerotinia with sunflower.", "uk": "Сходи гинуть у сухий серпень, що часто на півдні; спільна з соняшником біла гниль." }
+      "goals": [
+        "margin"
+      ],
+      "rationale": {
+        "en": "High-value export oilseed; early harvest gives wheat a long window.",
+        "uk": "Цінна експортна олійна; ранній збір дає пшениці довге вікно для сівби."
+      },
+      "risks": {
+        "en": "Establishment fails in dry Augusts, common in the south; shares sclerotinia with sunflower.",
+        "uk": "Сходи гинуть у сухий серпень, що часто на півдні; спільна з соняшником біла гниль."
+      }
     },
     {
       "id": "ua-st-irr-soy-corn-wheat",
       "region": "ua-steppe",
-      "name": { "en": "Irrigated: soybean → corn → wheat", "uk": "Зрошення: соя → кукурудза → пшениця" },
-      "sequence": ["soybean", "corn", "winter_wheat"],
-      "irrigation": "required", "water": "high",
-      "goals": ["margin"],
-      "rationale": { "en": "Standard on irrigated southern land: soybean and corn reach full potential with water.", "uk": "Стандарт на зрошуваних землях півдня: соя й кукурудза розкривають потенціал з водою." },
-      "risks": { "en": "Depends entirely on irrigation water (many systems lost water after the Kakhovka dam destruction).", "uk": "Повністю залежить від води для зрошення (багато систем втратили воду після руйнування Каховської ГЕС)." }
+      "name": {
+        "en": "Irrigated: soybean → corn → wheat",
+        "uk": "Зрошення: соя → кукурудза → пшениця"
+      },
+      "sequence": [
+        "soybean",
+        "corn",
+        "winter_wheat"
+      ],
+      "irrigation": "required",
+      "water": "high",
+      "goals": [
+        "margin"
+      ],
+      "rationale": {
+        "en": "Standard on irrigated southern land: soybean and corn reach full potential with water.",
+        "uk": "Стандарт на зрошуваних землях півдня: соя й кукурудза розкривають потенціал з водою."
+      },
+      "risks": {
+        "en": "Depends entirely on irrigation water (many systems lost water after the Kakhovka dam destruction).",
+        "uk": "Повністю залежить від води для зрошення (багато систем втратили воду після руйнування Каховської ГЕС)."
+      }
     },
     {
       "id": "ua-st-irr-alfalfa3-corn-wheat",
       "region": "ua-steppe",
-      "name": { "en": "Irrigated: alfalfa ×3 → corn → wheat", "uk": "Зрошення: люцерна ×3 → кукурудза → пшениця" },
-      "sequence": ["alfalfa", "alfalfa", "alfalfa", "corn", "winter_wheat"],
-      "irrigation": "required", "water": "high",
-      "goals": ["soil"],
-      "rationale": { "en": "Restores structure and organic matter on irrigated land; reduces salinisation.", "uk": "Відновлює структуру та органіку на зрошуваних землях; зменшує засолення." },
-      "risks": { "en": "Needs a hay or dairy buyer; high water use.", "uk": "Потрібен покупець сіна або молочна ферма; високі витрати води." }
+      "name": {
+        "en": "Irrigated: alfalfa ×3 → corn → wheat",
+        "uk": "Зрошення: люцерна ×3 → кукурудза → пшениця"
+      },
+      "sequence": [
+        "alfalfa",
+        "alfalfa",
+        "alfalfa",
+        "corn",
+        "winter_wheat"
+      ],
+      "irrigation": "required",
+      "water": "high",
+      "goals": [
+        "soil"
+      ],
+      "rationale": {
+        "en": "Restores structure and organic matter on irrigated land; reduces salinisation.",
+        "uk": "Відновлює структуру та органіку на зрошуваних землях; зменшує засолення."
+      },
+      "risks": {
+        "en": "Needs a hay or dairy buyer; high water use.",
+        "uk": "Потрібен покупець сіна або молочна ферма; високі витрати води."
+      }
     },
-
     {
       "id": "ua-fs-soy-wheat-corn-sunflower",
       "region": "ua-forest-steppe",
-      "name": { "en": "Soybean → wheat → corn → sunflower", "uk": "Соя → пшениця → кукурудза → соняшник" },
-      "sequence": ["soybean", "winter_wheat", "corn", "sunflower"],
-      "irrigation": "none", "water": "medium", "baseline": true,
-      "goals": ["margin"],
-      "rationale": { "en": "Common commercial rotation in central Ukraine: four liquid crops, a legume before wheat.", "uk": "Поширена комерційна сівозміна центру: чотири ліквідні культури, бобова перед пшеницею." },
-      "risks": { "en": "Sunflower every 4 years; soybean and sunflower share sclerotinia.", "uk": "Соняшник раз на 4 роки; соя і соняшник мають спільну білу гниль." }
+      "name": {
+        "en": "Soybean → wheat → corn → sunflower",
+        "uk": "Соя → пшениця → кукурудза → соняшник"
+      },
+      "sequence": [
+        "soybean",
+        "winter_wheat",
+        "corn",
+        "sunflower"
+      ],
+      "irrigation": "none",
+      "water": "medium",
+      "baseline": true,
+      "goals": [
+        "margin"
+      ],
+      "rationale": {
+        "en": "Common commercial rotation in central Ukraine: four liquid crops, a legume before wheat.",
+        "uk": "Поширена комерційна сівозміна центру: чотири ліквідні культури, бобова перед пшеницею."
+      },
+      "risks": {
+        "en": "Sunflower every 4 years; soybean and sunflower share sclerotinia.",
+        "uk": "Соняшник раз на 4 роки; соя і соняшник мають спільну білу гниль."
+      }
     },
     {
       "id": "ua-fs-corn-soy",
       "region": "ua-forest-steppe",
-      "name": { "en": "Corn ↔ soybean", "uk": "Кукурудза ↔ соя" },
-      "sequence": ["corn", "soybean"],
-      "irrigation": "none", "water": "medium", "baseline": true,
-      "goals": ["margin"],
-      "rationale": { "en": "Simplified, high-margin system copied from the US Corn Belt.", "uk": "Спрощена високомаржинальна система за зразком Кукурудзяного поясу США." },
-      "risks": { "en": "Sensitive to July droughts, which are becoming more frequent; low diversity.", "uk": "Вразлива до липневих посух, які частішають; низьке різноманіття." }
+      "name": {
+        "en": "Corn ↔ soybean",
+        "uk": "Кукурудза ↔ соя"
+      },
+      "sequence": [
+        "corn",
+        "soybean"
+      ],
+      "irrigation": "none",
+      "water": "medium",
+      "baseline": true,
+      "goals": [
+        "margin"
+      ],
+      "rationale": {
+        "en": "Simplified, high-margin system copied from the US Corn Belt.",
+        "uk": "Спрощена високомаржинальна система за зразком Кукурудзяного поясу США."
+      },
+      "risks": {
+        "en": "Sensitive to July droughts, which are becoming more frequent; low diversity.",
+        "uk": "Вразлива до липневих посух, які частішають; низьке різноманіття."
+      }
     },
     {
       "id": "ua-fs-canola-wheat-corn-soy",
       "region": "ua-forest-steppe",
-      "name": { "en": "Rapeseed → wheat → corn → soybean", "uk": "Ріпак → пшениця → кукурудза → соя" },
-      "sequence": ["winter_canola", "winter_wheat", "corn", "soybean"],
-      "irrigation": "none", "water": "medium",
-      "goals": ["margin", "soil"],
-      "rationale": { "en": "Replaces sunflower with rapeseed: no broomrape, early harvest, ground covered in winter.", "uk": "Замінює соняшник ріпаком: без вовчка, ранній збір, ґрунт укритий узимку." },
-      "risks": { "en": "Rapeseed winterkill and dry-autumn establishment risk.", "uk": "Ризик вимерзання ріпаку і поганих сходів у суху осінь." }
+      "name": {
+        "en": "Rapeseed → wheat → corn → soybean",
+        "uk": "Ріпак → пшениця → кукурудза → соя"
+      },
+      "sequence": [
+        "winter_canola",
+        "winter_wheat",
+        "corn",
+        "soybean"
+      ],
+      "irrigation": "none",
+      "water": "medium",
+      "goals": [
+        "margin",
+        "soil"
+      ],
+      "rationale": {
+        "en": "Replaces sunflower with rapeseed: no broomrape, early harvest, ground covered in winter.",
+        "uk": "Замінює соняшник ріпаком: без вовчка, ранній збір, ґрунт укритий узимку."
+      },
+      "risks": {
+        "en": "Rapeseed winterkill and dry-autumn establishment risk.",
+        "uk": "Ризик вимерзання ріпаку і поганих сходів у суху осінь."
+      }
     },
     {
       "id": "ua-fs-beet-barley-pea-wheat-corn",
       "region": "ua-forest-steppe",
-      "name": { "en": "Sugar beet → barley → pea → wheat → corn", "uk": "Цукровий буряк → ячмінь → горох → пшениця → кукурудза" },
-      "sequence": ["sugar_beet", "spring_barley", "pea", "winter_wheat", "corn"],
-      "irrigation": "none", "water": "medium",
-      "goals": ["soil", "margin"],
-      "rationale": { "en": "Classic beet rotation: long break for beet nematode, legume before wheat.", "uk": "Класична бурякова сівозміна: довга перерва від бурякової нематоди, бобова перед пшеницею." },
-      "risks": { "en": "Needs a contract with a sugar plant; beet harvest compacts wet soil.", "uk": "Потрібен контракт із цукровим заводом; збір буряку ущільнює вологий ґрунт." }
+      "name": {
+        "en": "Sugar beet → barley → pea → wheat → corn",
+        "uk": "Цукровий буряк → ячмінь → горох → пшениця → кукурудза"
+      },
+      "sequence": [
+        "sugar_beet",
+        "spring_barley",
+        "pea",
+        "winter_wheat",
+        "corn"
+      ],
+      "irrigation": "none",
+      "water": "medium",
+      "goals": [
+        "soil",
+        "margin"
+      ],
+      "rationale": {
+        "en": "Classic beet rotation: long break for beet nematode, legume before wheat.",
+        "uk": "Класична бурякова сівозміна: довга перерва від бурякової нематоди, бобова перед пшеницею."
+      },
+      "risks": {
+        "en": "Needs a contract with a sugar plant; beet harvest compacts wet soil.",
+        "uk": "Потрібен контракт із цукровим заводом; збір буряку ущільнює вологий ґрунт."
+      }
     },
     {
       "id": "ua-fs-pea-wheat-corn-soy",
       "region": "ua-forest-steppe",
-      "name": { "en": "Pea → wheat → corn → soybean", "uk": "Горох → пшениця → кукурудза → соя" },
-      "sequence": ["pea", "winter_wheat", "corn", "soybean"],
-      "irrigation": "none", "water": "medium",
-      "goals": ["soil", "drought"],
-      "rationale": { "en": "No sunflower, two legumes: lower nitrogen bill and better soil.", "uk": "Без соняшнику, дві бобові: менше витрат на азот і кращий ґрунт." },
-      "risks": { "en": "Pea margins are thinner than sunflower.", "uk": "Маржа гороху нижча, ніж соняшнику." }
+      "name": {
+        "en": "Pea → wheat → corn → soybean",
+        "uk": "Горох → пшениця → кукурудза → соя"
+      },
+      "sequence": [
+        "pea",
+        "winter_wheat",
+        "corn",
+        "soybean"
+      ],
+      "irrigation": "none",
+      "water": "medium",
+      "goals": [
+        "soil",
+        "drought"
+      ],
+      "rationale": {
+        "en": "No sunflower, two legumes: lower nitrogen bill and better soil.",
+        "uk": "Без соняшнику, дві бобові: менше витрат на азот і кращий ґрунт."
+      },
+      "risks": {
+        "en": "Pea margins are thinner than sunflower.",
+        "uk": "Маржа гороху нижча, ніж соняшнику."
+      }
     },
     {
       "id": "ua-fs-wheat-corn-sunflower",
       "region": "ua-forest-steppe",
-      "name": { "en": "Wheat → corn → sunflower", "uk": "Пшениця → кукурудза → соняшник" },
-      "sequence": ["winter_wheat", "corn", "sunflower"],
-      "irrigation": "none", "water": "medium", "baseline": true,
-      "goals": ["margin"],
-      "rationale": { "en": "Three main export crops, common on large agroholdings.", "uk": "Три головні експортні культури, поширена в агрохолдингах." },
-      "risks": { "en": "Wheat after sunflower suffers from dry soil; sunflower every 3 years.", "uk": "Пшениця після соняшнику страждає від сухого ґрунту; соняшник раз на 3 роки." }
+      "name": {
+        "en": "Wheat → corn → sunflower",
+        "uk": "Пшениця → кукурудза → соняшник"
+      },
+      "sequence": [
+        "winter_wheat",
+        "corn",
+        "sunflower"
+      ],
+      "irrigation": "none",
+      "water": "medium",
+      "baseline": true,
+      "goals": [
+        "margin"
+      ],
+      "rationale": {
+        "en": "Three main export crops, common on large agroholdings.",
+        "uk": "Три головні експортні культури, поширена в агрохолдингах."
+      },
+      "risks": {
+        "en": "Wheat after sunflower suffers from dry soil; sunflower every 3 years.",
+        "uk": "Пшениця після соняшнику страждає від сухого ґрунту; соняшник раз на 3 роки."
+      }
     },
     {
       "id": "ua-fs-alfalfa2-wheat-corn-soy",
       "region": "ua-forest-steppe",
-      "name": { "en": "Alfalfa ×2 → wheat → corn → soybean", "uk": "Люцерна ×2 → пшениця → кукурудза → соя" },
-      "sequence": ["alfalfa", "alfalfa", "winter_wheat", "corn", "soybean"],
-      "irrigation": "none", "water": "medium",
-      "goals": ["soil"],
-      "rationale": { "en": "For mixed farms with cattle: perennial forage restores organic matter on eroded slopes.", "uk": "Для змішаних господарств із худобою: багаторічна трава відновлює органіку на еродованих схилах." },
-      "risks": { "en": "Value depends on livestock; alfalfa dries the subsoil before wheat.", "uk": "Цінність залежить від худоби; люцерна пересушує підґрунт перед пшеницею." }
+      "name": {
+        "en": "Alfalfa ×2 → wheat → corn → soybean",
+        "uk": "Люцерна ×2 → пшениця → кукурудза → соя"
+      },
+      "sequence": [
+        "alfalfa",
+        "alfalfa",
+        "winter_wheat",
+        "corn",
+        "soybean"
+      ],
+      "irrigation": "none",
+      "water": "medium",
+      "goals": [
+        "soil"
+      ],
+      "rationale": {
+        "en": "For mixed farms with cattle: perennial forage restores organic matter on eroded slopes.",
+        "uk": "Для змішаних господарств із худобою: багаторічна трава відновлює органіку на еродованих схилах."
+      },
+      "risks": {
+        "en": "Value depends on livestock; alfalfa dries the subsoil before wheat.",
+        "uk": "Цінність залежить від худоби; люцерна пересушує підґрунт перед пшеницею."
+      }
     },
-
     {
       "id": "ua-po-lupin-rye-potato-oat",
       "region": "ua-polissia",
-      "name": { "en": "Lupin → rye → potato → oat", "uk": "Люпин → жито → картопля → овес" },
-      "sequence": ["lupin", "winter_rye", "potato", "oat"],
-      "irrigation": "none", "water": "medium", "baseline": true,
-      "goals": ["soil"],
-      "rationale": { "en": "Typical for light sandy soils: lupin tolerates acidity and adds nitrogen; rye is the most reliable grain on sand.", "uk": "Типова для легких піщаних ґрунтів: люпин витримує кислотність і додає азот; жито — найнадійніше зерно на піску." },
-      "risks": { "en": "Low margins; potato needs labour and storage.", "uk": "Низька маржа; картопля потребує праці та сховища." }
+      "name": {
+        "en": "Lupin → rye → potato → oat",
+        "uk": "Люпин → жито → картопля → овес"
+      },
+      "sequence": [
+        "lupin",
+        "winter_rye",
+        "potato",
+        "oat"
+      ],
+      "irrigation": "none",
+      "water": "medium",
+      "baseline": true,
+      "goals": [
+        "soil"
+      ],
+      "rationale": {
+        "en": "Typical for light sandy soils: lupin tolerates acidity and adds nitrogen; rye is the most reliable grain on sand.",
+        "uk": "Типова для легких піщаних ґрунтів: люпин витримує кислотність і додає азот; жито — найнадійніше зерно на піску."
+      },
+      "risks": {
+        "en": "Low margins; potato needs labour and storage.",
+        "uk": "Низька маржа; картопля потребує праці та сховища."
+      }
     },
     {
       "id": "ua-po-clover2-wheat-potato-barley",
       "region": "ua-polissia",
-      "name": { "en": "Clover ×2 → wheat → potato → barley", "uk": "Конюшина ×2 → пшениця → картопля → ячмінь" },
-      "sequence": ["clover", "clover", "winter_wheat", "potato", "spring_barley"],
-      "irrigation": "none", "water": "medium",
-      "goals": ["soil"],
-      "rationale": { "en": "Clover rebuilds humus on poor podzolic soils and feeds cattle.", "uk": "Конюшина відновлює гумус на бідних дерново-підзолистих ґрунтах і годує худобу." },
-      "risks": { "en": "Needs livestock or a forage buyer.", "uk": "Потрібна худоба або покупець кормів." }
+      "name": {
+        "en": "Clover ×2 → wheat → potato → barley",
+        "uk": "Конюшина ×2 → пшениця → картопля → ячмінь"
+      },
+      "sequence": [
+        "clover",
+        "clover",
+        "winter_wheat",
+        "potato",
+        "spring_barley"
+      ],
+      "irrigation": "none",
+      "water": "medium",
+      "goals": [
+        "soil"
+      ],
+      "rationale": {
+        "en": "Clover rebuilds humus on poor podzolic soils and feeds cattle.",
+        "uk": "Конюшина відновлює гумус на бідних дерново-підзолистих ґрунтах і годує худобу."
+      },
+      "risks": {
+        "en": "Needs livestock or a forage buyer.",
+        "uk": "Потрібна худоба або покупець кормів."
+      }
     },
     {
       "id": "ua-po-buckwheat-rye-lupin",
       "region": "ua-polissia",
-      "name": { "en": "Buckwheat → rye → lupin", "uk": "Гречка → жито → люпин" },
-      "sequence": ["buckwheat", "winter_rye", "lupin"],
-      "irrigation": "none", "water": "low",
-      "goals": ["water", "soil"],
-      "rationale": { "en": "Low-input rotation for the poorest sandy fields; buckwheat suppresses weeds.", "uk": "Малозатратна сівозміна для найбідніших піщаних полів; гречка пригнічує бур'яни." },
-      "risks": { "en": "Volatile buckwheat price; low yields.", "uk": "Нестабільна ціна гречки; невисокі врожаї." }
+      "name": {
+        "en": "Buckwheat → rye → lupin",
+        "uk": "Гречка → жито → люпин"
+      },
+      "sequence": [
+        "buckwheat",
+        "winter_rye",
+        "lupin"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "goals": [
+        "water",
+        "soil"
+      ],
+      "rationale": {
+        "en": "Low-input rotation for the poorest sandy fields; buckwheat suppresses weeds.",
+        "uk": "Малозатратна сівозміна для найбідніших піщаних полів; гречка пригнічує бур'яни."
+      },
+      "risks": {
+        "en": "Volatile buckwheat price; low yields.",
+        "uk": "Нестабільна ціна гречки; невисокі врожаї."
+      }
     },
     {
       "id": "ua-po-corn-soy-rye",
       "region": "ua-polissia",
-      "name": { "en": "Corn → soybean → rye", "uk": "Кукурудза → соя → жито" },
-      "sequence": ["corn", "soybean", "winter_rye"],
-      "irrigation": "none", "water": "medium",
-      "goals": ["margin"],
-      "rationale": { "en": "Warmer summers now allow early corn and soybean hybrids in Polissia.", "uk": "Тепліше літо тепер дозволяє ранні гібриди кукурудзи та сої на Поліссі." },
-      "risks": { "en": "Short-season hybrids needed; sandy soils dry out quickly.", "uk": "Потрібні ранньостиглі гібриди; піщані ґрунти швидко пересихають." }
+      "name": {
+        "en": "Corn → soybean → rye",
+        "uk": "Кукурудза → соя → жито"
+      },
+      "sequence": [
+        "corn",
+        "soybean",
+        "winter_rye"
+      ],
+      "irrigation": "none",
+      "water": "medium",
+      "goals": [
+        "margin"
+      ],
+      "rationale": {
+        "en": "Warmer summers now allow early corn and soybean hybrids in Polissia.",
+        "uk": "Тепліше літо тепер дозволяє ранні гібриди кукурудзи та сої на Поліссі."
+      },
+      "risks": {
+        "en": "Short-season hybrids needed; sandy soils dry out quickly.",
+        "uk": "Потрібні ранньостиглі гібриди; піщані ґрунти швидко пересихають."
+      }
     },
-
     {
       "id": "eu-ce-canola-wheat-barley",
       "region": "eu-central",
-      "name": { "en": "Rapeseed → wheat → winter barley", "uk": "Ріпак → пшениця → ячмінь озимий" },
-      "sequence": ["winter_canola", "winter_wheat", "winter_barley"],
-      "irrigation": "none", "water": "medium", "baseline": true,
-      "goals": ["margin"],
-      "rationale": { "en": "Standard arable rotation in Germany and Poland; all crops autumn-sown, soil covered in winter.", "uk": "Стандартна сівозміна Німеччини та Польщі; усі культури озимі, ґрунт укритий узимку." },
-      "risks": { "en": "Grass-weed resistance (blackgrass); rapeseed pests.", "uk": "Стійкість злакових бур'янів (лисохвіст); шкідники ріпаку." }
+      "name": {
+        "en": "Rapeseed → wheat → winter barley",
+        "uk": "Ріпак → пшениця → ячмінь озимий"
+      },
+      "sequence": [
+        "winter_canola",
+        "winter_wheat",
+        "winter_barley"
+      ],
+      "irrigation": "none",
+      "water": "medium",
+      "baseline": true,
+      "goals": [
+        "margin"
+      ],
+      "rationale": {
+        "en": "Standard arable rotation in Germany and Poland; all crops autumn-sown, soil covered in winter.",
+        "uk": "Стандартна сівозміна Німеччини та Польщі; усі культури озимі, ґрунт укритий узимку."
+      },
+      "risks": {
+        "en": "Grass-weed resistance (blackgrass); rapeseed pests.",
+        "uk": "Стійкість злакових бур'янів (лисохвіст); шкідники ріпаку."
+      }
     },
     {
       "id": "eu-ce-beet-wheat-barley",
       "region": "eu-central",
-      "name": { "en": "Sugar beet → wheat → winter barley", "uk": "Цукровий буряк → пшениця → ячмінь озимий" },
-      "sequence": ["sugar_beet", "winter_wheat", "winter_barley"],
-      "irrigation": "none", "water": "medium", "baseline": true,
-      "goals": ["margin"],
-      "rationale": { "en": "High-value rotation on fertile loess soils near sugar factories.", "uk": "Високодохідна сівозміна на родючих лесових ґрунтах біля цукрових заводів." },
-      "risks": { "en": "Beet contract required; soil compaction at harvest.", "uk": "Потрібен контракт на буряк; ущільнення ґрунту під час збору." }
+      "name": {
+        "en": "Sugar beet → wheat → winter barley",
+        "uk": "Цукровий буряк → пшениця → ячмінь озимий"
+      },
+      "sequence": [
+        "sugar_beet",
+        "winter_wheat",
+        "winter_barley"
+      ],
+      "irrigation": "none",
+      "water": "medium",
+      "baseline": true,
+      "goals": [
+        "margin"
+      ],
+      "rationale": {
+        "en": "High-value rotation on fertile loess soils near sugar factories.",
+        "uk": "Високодохідна сівозміна на родючих лесових ґрунтах біля цукрових заводів."
+      },
+      "risks": {
+        "en": "Beet contract required; soil compaction at harvest.",
+        "uk": "Потрібен контракт на буряк; ущільнення ґрунту під час збору."
+      }
     },
     {
       "id": "eu-ce-corn-wheat-canola-wheat-barley",
       "region": "eu-central",
-      "name": { "en": "Corn → wheat → rapeseed → wheat → barley", "uk": "Кукурудза → пшениця → ріпак → пшениця → ячмінь" },
-      "sequence": ["corn", "winter_wheat", "winter_canola", "winter_wheat", "winter_barley"],
-      "irrigation": "none", "water": "medium",
-      "goals": ["margin", "soil"],
-      "rationale": { "en": "Adding a spring crop breaks blackgrass cycles.", "uk": "Додавання ярої культури розриває цикл лисохвосту." },
-      "risks": { "en": "Fusarium in wheat after corn.", "uk": "Фузаріоз пшениці після кукурудзи." }
+      "name": {
+        "en": "Corn → wheat → rapeseed → wheat → barley",
+        "uk": "Кукурудза → пшениця → ріпак → пшениця → ячмінь"
+      },
+      "sequence": [
+        "corn",
+        "winter_wheat",
+        "winter_canola",
+        "winter_wheat",
+        "winter_barley"
+      ],
+      "irrigation": "none",
+      "water": "medium",
+      "goals": [
+        "margin",
+        "soil"
+      ],
+      "rationale": {
+        "en": "Adding a spring crop breaks blackgrass cycles.",
+        "uk": "Додавання ярої культури розриває цикл лисохвосту."
+      },
+      "risks": {
+        "en": "Fusarium in wheat after corn.",
+        "uk": "Фузаріоз пшениці після кукурудзи."
+      }
     },
     {
       "id": "eu-ce-faba-wheat-canola-wheat",
       "region": "eu-central",
-      "name": { "en": "Faba bean → wheat → rapeseed → wheat", "uk": "Боби → пшениця → ріпак → пшениця" },
-      "sequence": ["faba_bean", "winter_wheat", "winter_canola", "winter_wheat"],
-      "irrigation": "none", "water": "medium",
-      "goals": ["soil"],
-      "rationale": { "en": "Legume supports EU greening and protein goals and reduces nitrogen purchase.", "uk": "Бобова відповідає вимогам ЄС щодо екологізації і білка та зменшує закупівлю азоту." },
-      "risks": { "en": "Faba bean yields unstable in dry summers.", "uk": "Урожай бобів нестабільний у сухе літо." }
+      "name": {
+        "en": "Faba bean → wheat → rapeseed → wheat",
+        "uk": "Боби → пшениця → ріпак → пшениця"
+      },
+      "sequence": [
+        "faba_bean",
+        "winter_wheat",
+        "winter_canola",
+        "winter_wheat"
+      ],
+      "irrigation": "none",
+      "water": "medium",
+      "goals": [
+        "soil"
+      ],
+      "rationale": {
+        "en": "Legume supports EU greening and protein goals and reduces nitrogen purchase.",
+        "uk": "Бобова відповідає вимогам ЄС щодо екологізації і білка та зменшує закупівлю азоту."
+      },
+      "risks": {
+        "en": "Faba bean yields unstable in dry summers.",
+        "uk": "Урожай бобів нестабільний у сухе літо."
+      }
     },
     {
       "id": "eu-ce-organic-ley2-wheat-rye-potato",
       "region": "eu-central",
-      "name": { "en": "Organic: clover-grass ×2 → wheat → rye → potato", "uk": "Органіка: конюшина зі злаками ×2 → пшениця → жито → картопля" },
-      "sequence": ["clover_grass", "clover_grass", "winter_wheat", "winter_rye", "potato"],
-      "irrigation": "none", "water": "medium",
-      "goals": ["soil"],
-      "rationale": { "en": "Ley supplies all nitrogen in organic systems and controls weeds.", "uk": "Конюшино-злакова суміш дає весь азот в органічній системі і контролює бур'яни." },
-      "risks": { "en": "Two years with low cash income unless there is livestock; organic certification required.", "uk": "Два роки з малим доходом без худоби; потрібна органічна сертифікація." }
+      "name": {
+        "en": "Organic: clover-grass ×2 → wheat → rye → potato",
+        "uk": "Органіка: конюшина зі злаками ×2 → пшениця → жито → картопля"
+      },
+      "sequence": [
+        "clover_grass",
+        "clover_grass",
+        "winter_wheat",
+        "winter_rye",
+        "potato"
+      ],
+      "irrigation": "none",
+      "water": "medium",
+      "goals": [
+        "soil"
+      ],
+      "rationale": {
+        "en": "Ley supplies all nitrogen in organic systems and controls weeds.",
+        "uk": "Конюшино-злакова суміш дає весь азот в органічній системі і контролює бур'яни."
+      },
+      "risks": {
+        "en": "Two years with low cash income unless there is livestock; organic certification required.",
+        "uk": "Два роки з малим доходом без худоби; потрібна органічна сертифікація."
+      }
+    },
+    {
+      "id": "us-chp-wheat-corn-fallow",
+      "region": "us-central-high-plains",
+      "name": {
+        "en": "Wheat → corn → fallow (dryland)",
+        "uk": "Пшениця → кукурудза → пар (без поливу)"
+      },
+      "sequence": [
+        "winter_wheat",
+        "corn",
+        "fallow"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "baseline": true,
+      "goals": [
+        "drought",
+        "water"
+      ],
+      "rationale": {
+        "en": "Classic dryland system of the High Plains: fallow stores rain for wheat, corn uses summer rain.",
+        "uk": "Класична богарна система Великих рівнин: пар накопичує вологу для пшениці, кукурудза використовує літні дощі."
+      },
+      "risks": {
+        "en": "A bare fallow year erodes in wind; low income in dry years.",
+        "uk": "Рік пару без рослин — вітрова ерозія; мало доходу в сухі роки."
+      },
+      "minPrecipMm": 380
+    },
+    {
+      "id": "us-chp-corn2-soy-irr",
+      "region": "us-central-high-plains",
+      "name": {
+        "en": "Corn ×2 → soybean (pivot)",
+        "uk": "Кукурудза ×2 → соя (півот)"
+      },
+      "sequence": [
+        "corn",
+        "corn",
+        "soybean"
+      ],
+      "irrigation": "required",
+      "water": "high",
+      "baseline": true,
+      "goals": [
+        "margin"
+      ],
+      "rationale": {
+        "en": "Typical pivot rotation in Nebraska: high corn yields, soybean breaks rootworm and adds nitrogen.",
+        "uk": "Типова сівозміна під півотом у Небрасці: висока врожайність кукурудзи, соя розриває цикл жука й додає азот."
+      },
+      "risks": {
+        "en": "High pumping from the Ogallala aquifer; corn after corn drags yield.",
+        "uk": "Великий забір води з водоносного горизонту Огаллала; кукурудза після кукурудзи знижує врожай."
+      }
+    },
+    {
+      "id": "us-chp-wheat-corn-millet",
+      "region": "us-central-high-plains",
+      "name": {
+        "en": "Wheat → corn → proso millet",
+        "uk": "Пшениця → кукурудза → просо"
+      },
+      "sequence": [
+        "winter_wheat",
+        "corn",
+        "millet"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "baseline": false,
+      "goals": [
+        "soil",
+        "margin"
+      ],
+      "rationale": {
+        "en": "Intensified no-till dryland: millet replaces fallow, so the soil stays covered and earns every year.",
+        "uk": "Інтенсифікована богара без оранки: просо замінює пар, ґрунт укритий і щороку дає дохід."
+      },
+      "risks": {
+        "en": "Needs good stored soil water at millet sowing; millet markets are thin.",
+        "uk": "Потрібен запас вологи до сівби проса; ринок проса вузький."
+      },
+      "minPrecipMm": 420
+    },
+    {
+      "id": "us-chp-wheat-sunflower-fallow",
+      "region": "us-central-high-plains",
+      "name": {
+        "en": "Wheat → sunflower → fallow",
+        "uk": "Пшениця → соняшник → пар"
+      },
+      "sequence": [
+        "winter_wheat",
+        "sunflower",
+        "fallow"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "baseline": false,
+      "goals": [
+        "drought"
+      ],
+      "rationale": {
+        "en": "Deep-rooted sunflower uses water below the corn root zone in dry years.",
+        "uk": "Глибоке коріння соняшнику бере воду, недоступну кукурудзі, у сухі роки."
+      },
+      "risks": {
+        "en": "Sunflower leaves little residue; keep at least 4 years between sunflower crops.",
+        "uk": "Соняшник лишає мало решток; інтервал між соняшниками — щонайменше 4 роки."
+      }
+    },
+    {
+      "id": "us-chp-alfalfa4-corn2",
+      "region": "us-central-high-plains",
+      "name": {
+        "en": "Alfalfa ×4 → corn ×2 (pivot)",
+        "uk": "Люцерна ×4 → кукурудза ×2 (півот)"
+      },
+      "sequence": [
+        "alfalfa",
+        "alfalfa",
+        "alfalfa",
+        "alfalfa",
+        "corn",
+        "corn"
+      ],
+      "irrigation": "required",
+      "water": "high",
+      "baseline": false,
+      "goals": [
+        "soil",
+        "margin"
+      ],
+      "rationale": {
+        "en": "Hay for local dairies and feedlots; corn after alfalfa needs little nitrogen and has no rootworm.",
+        "uk": "Сіно для місцевих ферм і відгодівельних майданчиків; кукурудзі після люцерни мало потрібно азоту, жука немає."
+      },
+      "risks": {
+        "en": "Needs a hay buyer and the most water of all options.",
+        "uk": "Потрібен покупець сіна і найбільше води з усіх варіантів."
+      }
+    },
+    {
+      "id": "us-pnw-wheat-barley-pea",
+      "region": "us-pacific-northwest",
+      "name": {
+        "en": "Winter wheat → spring barley → pea",
+        "uk": "Пшениця озима → ячмінь ярий → горох"
+      },
+      "sequence": [
+        "winter_wheat",
+        "spring_barley",
+        "pea"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "baseline": true,
+      "goals": [
+        "margin",
+        "soil"
+      ],
+      "rationale": {
+        "en": "Palouse three-year rotation; pea fixes nitrogen and breaks cereal diseases.",
+        "uk": "Трипілля Палузу: горох фіксує азот і розриває хвороби зернових."
+      },
+      "risks": {
+        "en": "Steep slopes erode under tillage; pea prices swing.",
+        "uk": "Круті схили еродують при оранці; ціни на горох нестабільні."
+      },
+      "minPrecipMm": 450
+    },
+    {
+      "id": "us-pnw-wheat-lentil",
+      "region": "us-pacific-northwest",
+      "name": {
+        "en": "Winter wheat → lentil",
+        "uk": "Пшениця озима → сочевиця"
+      },
+      "sequence": [
+        "winter_wheat",
+        "lentil"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "baseline": false,
+      "goals": [
+        "margin",
+        "soil"
+      ],
+      "rationale": {
+        "en": "Two-year cereal–pulse system for the intermediate rainfall zone.",
+        "uk": "Дворічна система зернові–бобові для зони середніх опадів."
+      },
+      "risks": {
+        "en": "Short interval for pulses raises root-rot risk.",
+        "uk": "Короткий інтервал між бобовими підвищує ризик кореневих гнилей."
+      },
+      "minPrecipMm": 350
+    },
+    {
+      "id": "us-pnw-wheat-fallow",
+      "region": "us-pacific-northwest",
+      "name": {
+        "en": "Winter wheat → fallow",
+        "uk": "Пшениця озима → пар"
+      },
+      "sequence": [
+        "winter_wheat",
+        "fallow"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "baseline": true,
+      "goals": [
+        "drought"
+      ],
+      "rationale": {
+        "en": "The only reliable system below about 300 mm of rain.",
+        "uk": "Єдина надійна система, коли опадів менше ~300 мм."
+      },
+      "risks": {
+        "en": "Half the years earn nothing; dust and soil-carbon loss in fallow.",
+        "uk": "Половина років без доходу; пил і втрата вуглецю під паром."
+      }
+    },
+    {
+      "id": "us-pnw-wheat-canola-wheat",
+      "region": "us-pacific-northwest",
+      "name": {
+        "en": "Winter wheat → winter canola → spring wheat",
+        "uk": "Пшениця озима → ріпак озимий → пшениця яра"
+      },
+      "sequence": [
+        "winter_wheat",
+        "winter_canola",
+        "spring_wheat"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "baseline": false,
+      "goals": [
+        "margin"
+      ],
+      "rationale": {
+        "en": "Canola breaks grass weeds and cereal diseases, with a taproot that opens the subsoil.",
+        "uk": "Ріпак розриває злакові бур'яни й хвороби зернових, стрижневий корінь розпушує підґрунтя."
+      },
+      "risks": {
+        "en": "Winter-kill risk for canola in cold years.",
+        "uk": "Ризик вимерзання ріпаку в холодні зими."
+      },
+      "minPrecipMm": 400
+    },
+    {
+      "id": "us-dl-rice-soy",
+      "region": "us-delta",
+      "name": {
+        "en": "Rice → soybean",
+        "uk": "Рис → соя"
+      },
+      "sequence": [
+        "rice",
+        "soybean"
+      ],
+      "irrigation": "required",
+      "water": "high",
+      "baseline": true,
+      "goals": [
+        "margin"
+      ],
+      "rationale": {
+        "en": "Standard Delta rotation: soybean breaks rice weeds and diseases.",
+        "uk": "Стандартна сівозміна Дельти: соя розриває бур'яни й хвороби рису."
+      },
+      "risks": {
+        "en": "Flood irrigation uses a lot of water; herbicide-resistant weeds.",
+        "uk": "Затоплення потребує багато води; бур'яни, стійкі до гербіцидів."
+      }
+    },
+    {
+      "id": "us-dl-soy-corn",
+      "region": "us-delta",
+      "name": {
+        "en": "Soybean → corn",
+        "uk": "Соя → кукурудза"
+      },
+      "sequence": [
+        "soybean",
+        "corn"
+      ],
+      "irrigation": "optional",
+      "water": "medium",
+      "baseline": true,
+      "goals": [
+        "margin"
+      ],
+      "rationale": {
+        "en": "Furrow-irrigated corn–soybean on silt-loam soils.",
+        "uk": "Кукурудза–соя з поливом по борознах на пилуватих суглинках."
+      },
+      "risks": {
+        "en": "Aflatoxin in corn in hot, dry Augusts.",
+        "uk": "Афлатоксини в кукурудзі в спекотному сухому серпні."
+      }
+    },
+    {
+      "id": "us-dl-cotton-corn",
+      "region": "us-delta",
+      "name": {
+        "en": "Cotton → corn",
+        "uk": "Бавовник → кукурудза"
+      },
+      "sequence": [
+        "cotton",
+        "corn"
+      ],
+      "irrigation": "optional",
+      "water": "medium",
+      "baseline": false,
+      "goals": [
+        "soil",
+        "margin"
+      ],
+      "rationale": {
+        "en": "Corn residue rebuilds soil after cotton and cuts nematode pressure.",
+        "uk": "Рештки кукурудзи відновлюють ґрунт після бавовнику й зменшують тиск нематод."
+      },
+      "risks": {
+        "en": "Two very different machinery sets and markets.",
+        "uk": "Два різні набори техніки і ринки."
+      }
+    },
+    {
+      "id": "us-dl-wheat-soy-dc-corn",
+      "region": "us-delta",
+      "name": {
+        "en": "Wheat + double-crop soybean → corn",
+        "uk": "Пшениця + соя повторно → кукурудза"
+      },
+      "sequence": [
+        {
+          "main": "winter_wheat",
+          "second": "soybean"
+        },
+        "corn"
+      ],
+      "irrigation": "optional",
+      "water": "medium",
+      "baseline": false,
+      "goals": [
+        "margin",
+        "soil"
+      ],
+      "rationale": {
+        "en": "Three crops in two years; winter wheat covers the soil.",
+        "uk": "Три врожаї за два роки; озима пшениця вкриває ґрунт узимку."
+      },
+      "risks": {
+        "en": "Late-planted soybean yields less in dry summers.",
+        "uk": "Пізня соя дає менше в сухе літо."
+      }
+    },
+    {
+      "id": "us-se-cotton2-peanut",
+      "region": "us-southeast",
+      "name": {
+        "en": "Cotton ×2 → peanut",
+        "uk": "Бавовник ×2 → арахіс"
+      },
+      "sequence": [
+        "cotton",
+        "cotton",
+        "peanut"
+      ],
+      "irrigation": "optional",
+      "water": "low",
+      "baseline": true,
+      "goals": [
+        "margin"
+      ],
+      "rationale": {
+        "en": "Common Georgia rotation; peanut needs at least 2 years out to limit leaf spot and nematodes.",
+        "uk": "Типова сівозміна Джорджії; арахісу потрібен інтервал 2+ роки проти плямистості й нематод."
+      },
+      "risks": {
+        "en": "Sandy soils lose organic matter; peanut harvest leaves soil bare.",
+        "uk": "Піщані ґрунти втрачають органіку; після збирання арахісу ґрунт голий."
+      }
+    },
+    {
+      "id": "us-se-cotton-peanut-corn",
+      "region": "us-southeast",
+      "name": {
+        "en": "Cotton → peanut → corn",
+        "uk": "Бавовник → арахіс → кукурудза"
+      },
+      "sequence": [
+        "cotton",
+        "peanut",
+        "corn"
+      ],
+      "irrigation": "optional",
+      "water": "medium",
+      "baseline": false,
+      "goals": [
+        "soil",
+        "margin"
+      ],
+      "rationale": {
+        "en": "Corn adds residue and breaks peanut disease cycles.",
+        "uk": "Кукурудза додає рештки й розриває цикли хвороб арахісу."
+      },
+      "risks": {
+        "en": "Corn needs irrigation on sandy soils.",
+        "uk": "Кукурудзі на пісках потрібен полив."
+      }
+    },
+    {
+      "id": "us-se-wheat-soy-dc-cotton-corn",
+      "region": "us-southeast",
+      "name": {
+        "en": "Wheat + double-crop soybean → cotton → corn",
+        "uk": "Пшениця + соя повторно → бавовник → кукурудза"
+      },
+      "sequence": [
+        {
+          "main": "winter_wheat",
+          "second": "soybean"
+        },
+        "cotton",
+        "corn"
+      ],
+      "irrigation": "optional",
+      "water": "medium",
+      "baseline": false,
+      "goals": [
+        "soil"
+      ],
+      "rationale": {
+        "en": "Winter cover on half the years and more crop diversity.",
+        "uk": "Зимове вкриття ґрунту і більше різноманіття культур."
+      },
+      "risks": {
+        "en": "Tight planting windows after wheat harvest.",
+        "uk": "Стислі строки сівби після збирання пшениці."
+      }
+    },
+    {
+      "id": "ca-pr-canola-wheat",
+      "region": "ca-prairies",
+      "name": {
+        "en": "Canola → spring wheat",
+        "uk": "Ріпак ярий → пшениця яра"
+      },
+      "sequence": [
+        "spring_canola",
+        "spring_wheat"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "baseline": true,
+      "goals": [
+        "margin"
+      ],
+      "rationale": {
+        "en": "The most common Prairie rotation.",
+        "uk": "Найпоширеніша сівозміна прерій."
+      },
+      "risks": {
+        "en": "Canola every second year builds clubroot and blackleg.",
+        "uk": "Ріпак через рік накопичує килу і фомоз."
+      }
+    },
+    {
+      "id": "ca-pr-canola-wheat-pea",
+      "region": "ca-prairies",
+      "name": {
+        "en": "Canola → wheat → pea",
+        "uk": "Ріпак → пшениця → горох"
+      },
+      "sequence": [
+        "spring_canola",
+        "spring_wheat",
+        "pea"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "baseline": false,
+      "goals": [
+        "soil",
+        "margin"
+      ],
+      "rationale": {
+        "en": "Pea adds nitrogen and stretches the canola interval to 3 years.",
+        "uk": "Горох додає азот і подовжує інтервал ріпаку до 3 років."
+      },
+      "risks": {
+        "en": "Root rot (Aphanomyces) in wet pea years.",
+        "uk": "Коренева гниль гороху у вологі роки."
+      }
+    },
+    {
+      "id": "ca-pr-canola-barley-lentil-wheat",
+      "region": "ca-prairies",
+      "name": {
+        "en": "Canola → barley → lentil → wheat",
+        "uk": "Ріпак → ячмінь → сочевиця → пшениця"
+      },
+      "sequence": [
+        "spring_canola",
+        "spring_barley",
+        "lentil",
+        "spring_wheat"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "baseline": false,
+      "goals": [
+        "soil",
+        "drought"
+      ],
+      "rationale": {
+        "en": "Four-year diverse rotation for the Dark Brown soil zone.",
+        "uk": "Чотирипільна різноманітна сівозміна для темно-каштанових ґрунтів."
+      },
+      "risks": {
+        "en": "More crops to market and store.",
+        "uk": "Більше культур для збуту й зберігання."
+      }
+    },
+    {
+      "id": "ca-pr-durum-lentil",
+      "region": "ca-prairies",
+      "name": {
+        "en": "Durum wheat → lentil",
+        "uk": "Тверда пшениця → сочевиця"
+      },
+      "sequence": [
+        "durum_wheat",
+        "lentil"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "baseline": true,
+      "goals": [
+        "drought"
+      ],
+      "rationale": {
+        "en": "Brown soil zone system in SW Saskatchewan.",
+        "uk": "Система зони каштанових ґрунтів південного заходу Саскачевану."
+      },
+      "risks": {
+        "en": "Short lentil interval; low residue cover.",
+        "uk": "Короткий інтервал сочевиці; мало решток."
+      }
+    },
+    {
+      "id": "eu-w-canola-wheat-barley",
+      "region": "eu-west",
+      "name": {
+        "en": "Winter canola → winter wheat → winter barley",
+        "uk": "Ріпак озимий → пшениця озима → ячмінь озимий"
+      },
+      "sequence": [
+        "winter_canola",
+        "winter_wheat",
+        "winter_barley"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "baseline": true,
+      "goals": [
+        "margin"
+      ],
+      "rationale": {
+        "en": "Standard French arable rotation.",
+        "uk": "Стандартна сівозміна орних земель Франції."
+      },
+      "risks": {
+        "en": "Only winter crops: grass weeds (black-grass) build up.",
+        "uk": "Лише озимі: накопичуються злакові бур'яни (лисохвіст)."
+      }
+    },
+    {
+      "id": "eu-w-beet-wheat-potato-wheat",
+      "region": "eu-west",
+      "name": {
+        "en": "Sugar beet → wheat → potato → wheat",
+        "uk": "Цукровий буряк → пшениця → картопля → пшениця"
+      },
+      "sequence": [
+        "sugar_beet",
+        "winter_wheat",
+        "potato",
+        "winter_wheat"
+      ],
+      "irrigation": "optional",
+      "water": "medium",
+      "baseline": true,
+      "goals": [
+        "margin"
+      ],
+      "rationale": {
+        "en": "High-value rotation of northern France and Belgium.",
+        "uk": "Високомаржинальна сівозміна півночі Франції та Бельгії."
+      },
+      "risks": {
+        "en": "Heavy harvest traffic compacts the soil; nematodes in beet.",
+        "uk": "Важка техніка на збиранні ущільнює ґрунт; нематоди в буряку."
+      }
+    },
+    {
+      "id": "eu-w-corn-wheat-irr",
+      "region": "eu-west",
+      "name": {
+        "en": "Corn → winter wheat (irrigated)",
+        "uk": "Кукурудза → пшениця озима (полив)"
+      },
+      "sequence": [
+        "corn",
+        "winter_wheat"
+      ],
+      "irrigation": "optional",
+      "water": "high",
+      "baseline": false,
+      "goals": [
+        "margin"
+      ],
+      "rationale": {
+        "en": "South-west France grain system.",
+        "uk": "Зернова система південного заходу Франції."
+      },
+      "risks": {
+        "en": "Summer irrigation limits in drought years.",
+        "uk": "Обмеження поливу влітку в посушливі роки."
+      }
+    },
+    {
+      "id": "eu-w-pea-wheat-canola-barley",
+      "region": "eu-west",
+      "name": {
+        "en": "Pea → wheat → canola → barley",
+        "uk": "Горох → пшениця → ріпак → ячмінь"
+      },
+      "sequence": [
+        "pea",
+        "winter_wheat",
+        "winter_canola",
+        "spring_barley"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "baseline": false,
+      "goals": [
+        "soil",
+        "margin"
+      ],
+      "rationale": {
+        "en": "A spring crop and a legume break the winter-only cycle and cut nitrogen use.",
+        "uk": "Ярі й бобові розривають суто озимий цикл і зменшують потребу в азоті."
+      },
+      "risks": {
+        "en": "Pea yields vary a lot.",
+        "uk": "Урожай гороху дуже мінливий."
+      }
+    },
+    {
+      "id": "eu-se-corn-wheat-sunflower",
+      "region": "eu-south-east",
+      "name": {
+        "en": "Corn → winter wheat → sunflower",
+        "uk": "Кукурудза → пшениця озима → соняшник"
+      },
+      "sequence": [
+        "corn",
+        "winter_wheat",
+        "sunflower"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "baseline": true,
+      "goals": [
+        "margin"
+      ],
+      "rationale": {
+        "en": "Typical Romanian and Bulgarian rotation.",
+        "uk": "Типова сівозміна Румунії та Болгарії."
+      },
+      "risks": {
+        "en": "Corn suffers in hot, dry summers; sunflower every 3 years is short.",
+        "uk": "Кукурудза страждає в спекотне сухе літо; соняшник раз на 3 роки — замало."
+      }
+    },
+    {
+      "id": "eu-se-sunflower-wheat",
+      "region": "eu-south-east",
+      "name": {
+        "en": "Sunflower → winter wheat",
+        "uk": "Соняшник → пшениця озима"
+      },
+      "sequence": [
+        "sunflower",
+        "winter_wheat"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "baseline": true,
+      "goals": [
+        "margin"
+      ],
+      "rationale": {
+        "en": "Short, profitable rotation in drier areas.",
+        "uk": "Коротка прибуткова сівозміна в сухіших районах."
+      },
+      "risks": {
+        "en": "Sunflower every second year: broomrape and sclerotinia build up.",
+        "uk": "Соняшник через рік: накопичуються вовчок і біла гниль."
+      }
+    },
+    {
+      "id": "eu-se-canola-wheat-corn-soy",
+      "region": "eu-south-east",
+      "name": {
+        "en": "Canola → wheat → corn → soybean",
+        "uk": "Ріпак → пшениця → кукурудза → соя"
+      },
+      "sequence": [
+        "winter_canola",
+        "winter_wheat",
+        "corn",
+        "soybean"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "baseline": false,
+      "goals": [
+        "soil",
+        "margin"
+      ],
+      "rationale": {
+        "en": "Soybean adds nitrogen; a longer break for sunflower diseases.",
+        "uk": "Соя додає азот; довша перерва для хвороб соняшнику."
+      },
+      "risks": {
+        "en": "Soybean needs rain in July–August.",
+        "uk": "Сої потрібні дощі в липні–серпні."
+      },
+      "minPrecipMm": 520
+    },
+    {
+      "id": "eu-se-pea-wheat-corn-sunflower",
+      "region": "eu-south-east",
+      "name": {
+        "en": "Pea → wheat → corn → sunflower",
+        "uk": "Горох → пшениця → кукурудза → соняшник"
+      },
+      "sequence": [
+        "pea",
+        "winter_wheat",
+        "corn",
+        "sunflower"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "baseline": false,
+      "goals": [
+        "drought",
+        "soil"
+      ],
+      "rationale": {
+        "en": "Early-harvested pea leaves water for wheat sowing.",
+        "uk": "Ранній горох лишає вологу для сівби пшениці."
+      },
+      "risks": {
+        "en": "Pea prices are volatile.",
+        "uk": "Ціни на горох нестабільні."
+      }
+    },
+    {
+      "id": "eu-med-barley-fallow",
+      "region": "eu-mediterranean",
+      "name": {
+        "en": "Barley → fallow",
+        "uk": "Ячмінь → пар"
+      },
+      "sequence": [
+        "winter_barley",
+        "fallow"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "baseline": true,
+      "goals": [
+        "drought"
+      ],
+      "rationale": {
+        "en": "Traditional cereal–fallow of inland Spain.",
+        "uk": "Традиційна система зернові–пар внутрішньої Іспанії."
+      },
+      "risks": {
+        "en": "Half the years earn nothing; erosion on bare fallow.",
+        "uk": "Половина років без доходу; ерозія на пару."
+      }
+    },
+    {
+      "id": "eu-med-durum-chickpea",
+      "region": "eu-mediterranean",
+      "name": {
+        "en": "Durum wheat → chickpea",
+        "uk": "Тверда пшениця → нут"
+      },
+      "sequence": [
+        "durum_wheat",
+        "chickpea"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "baseline": false,
+      "goals": [
+        "soil",
+        "drought"
+      ],
+      "rationale": {
+        "en": "Chickpea fixes nitrogen and tolerates dry springs.",
+        "uk": "Нут фіксує азот і витримує сухі весни."
+      },
+      "risks": {
+        "en": "Ascochyta blight in wet springs.",
+        "uk": "Аскохітоз у вологі весни."
+      }
+    },
+    {
+      "id": "eu-med-durum-sunflower",
+      "region": "eu-mediterranean",
+      "name": {
+        "en": "Durum wheat → sunflower",
+        "uk": "Тверда пшениця → соняшник"
+      },
+      "sequence": [
+        "durum_wheat",
+        "sunflower"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "baseline": true,
+      "goals": [
+        "margin"
+      ],
+      "rationale": {
+        "en": "Common in central Italy.",
+        "uk": "Поширена в центральній Італії."
+      },
+      "risks": {
+        "en": "Sunflower every second year: disease build-up.",
+        "uk": "Соняшник через рік: накопичення хвороб."
+      }
+    },
+    {
+      "id": "eu-med-corn2-wheat-irr",
+      "region": "eu-mediterranean",
+      "name": {
+        "en": "Corn ×2 → winter wheat (irrigated)",
+        "uk": "Кукурудза ×2 → пшениця озима (полив)"
+      },
+      "sequence": [
+        "corn",
+        "corn",
+        "winter_wheat"
+      ],
+      "irrigation": "required",
+      "water": "high",
+      "baseline": false,
+      "goals": [
+        "margin"
+      ],
+      "rationale": {
+        "en": "Irrigated valleys (Ebro, Po).",
+        "uk": "Зрошувані долини (Ебро, По)."
+      },
+      "risks": {
+        "en": "Water allocations cut in drought years.",
+        "uk": "Скорочення лімітів води в посушливі роки."
+      }
+    },
+    {
+      "id": "eu-n-barley-wheat-canola-wheat",
+      "region": "eu-north",
+      "name": {
+        "en": "Spring barley → wheat → canola → wheat",
+        "uk": "Ячмінь ярий → пшениця → ріпак → пшениця"
+      },
+      "sequence": [
+        "spring_barley",
+        "winter_wheat",
+        "winter_canola",
+        "winter_wheat"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "baseline": true,
+      "goals": [
+        "margin"
+      ],
+      "rationale": {
+        "en": "Standard Danish arable rotation.",
+        "uk": "Стандартна сівозміна Данії."
+      },
+      "risks": {
+        "en": "Wheat after wheat raises take-all risk.",
+        "uk": "Пшениця після пшениці підвищує ризик офіобольозу."
+      }
+    },
+    {
+      "id": "eu-n-ley3-barley-oat",
+      "region": "eu-north",
+      "name": {
+        "en": "Clover-grass ×3 → spring barley → oat",
+        "uk": "Конюшино-злакова суміш ×3 → ячмінь → овес"
+      },
+      "sequence": [
+        "clover_grass",
+        "clover_grass",
+        "clover_grass",
+        "spring_barley",
+        "oat"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "baseline": false,
+      "goals": [
+        "soil"
+      ],
+      "rationale": {
+        "en": "Dairy-farm rotation that builds soil carbon.",
+        "uk": "Сівозміна молочних ферм, що накопичує вуглець у ґрунті."
+      },
+      "risks": {
+        "en": "Needs livestock or a forage buyer.",
+        "uk": "Потрібна худоба або покупець кормів."
+      }
+    },
+    {
+      "id": "eu-n-wheat-oat-pea-barley",
+      "region": "eu-north",
+      "name": {
+        "en": "Wheat → oat → pea → barley",
+        "uk": "Пшениця → овес → горох → ячмінь"
+      },
+      "sequence": [
+        "winter_wheat",
+        "oat",
+        "pea",
+        "spring_barley"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "baseline": false,
+      "goals": [
+        "soil",
+        "margin"
+      ],
+      "rationale": {
+        "en": "Oat and pea break cereal diseases in the Baltics and Sweden.",
+        "uk": "Овес і горох розривають хвороби зернових у Балтії та Швеції."
+      },
+      "risks": {
+        "en": "Short season limits winter crops in the north.",
+        "uk": "Короткий сезон обмежує озимі на півночі."
+      }
+    },
+    {
+      "id": "gb-wheat2-osr",
+      "region": "gb-arable",
+      "name": {
+        "en": "Wheat ×2 → oilseed rape",
+        "uk": "Пшениця ×2 → ріпак озимий"
+      },
+      "sequence": [
+        "winter_wheat",
+        "winter_wheat",
+        "winter_canola"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "baseline": true,
+      "goals": [
+        "margin"
+      ],
+      "rationale": {
+        "en": "Typical eastern England rotation.",
+        "uk": "Типова сівозміна сходу Англії."
+      },
+      "risks": {
+        "en": "Black-grass and cabbage stem flea beetle.",
+        "uk": "Лисохвіст і ріпакова блішка."
+      }
+    },
+    {
+      "id": "gb-wheat-bean-wheat-osr",
+      "region": "gb-arable",
+      "name": {
+        "en": "Wheat → faba bean → wheat → oilseed rape",
+        "uk": "Пшениця → боби → пшениця → ріпак"
+      },
+      "sequence": [
+        "winter_wheat",
+        "faba_bean",
+        "winter_wheat",
+        "winter_canola"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "baseline": false,
+      "goals": [
+        "soil",
+        "margin"
+      ],
+      "rationale": {
+        "en": "Beans add nitrogen and a spring break.",
+        "uk": "Боби додають азот і ярий розрив."
+      },
+      "risks": {
+        "en": "Bean yields vary with summer drought.",
+        "uk": "Урожай бобів залежить від літньої посухи."
+      }
+    },
+    {
+      "id": "gb-beet-wheat-barley",
+      "region": "gb-arable",
+      "name": {
+        "en": "Sugar beet → wheat → spring barley",
+        "uk": "Цукровий буряк → пшениця → ячмінь ярий"
+      },
+      "sequence": [
+        "sugar_beet",
+        "winter_wheat",
+        "spring_barley"
+      ],
+      "irrigation": "optional",
+      "water": "medium",
+      "baseline": false,
+      "goals": [
+        "margin"
+      ],
+      "rationale": {
+        "en": "East Anglia beet rotation.",
+        "uk": "Сівозміна з буряком Східної Англії."
+      },
+      "risks": {
+        "en": "Late beet harvest damages soil in wet autumns.",
+        "uk": "Пізнє збирання буряку шкодить ґрунту у вологу осінь."
+      }
+    },
+    {
+      "id": "gb-ley2-wheat-oat-barley",
+      "region": "gb-arable",
+      "name": {
+        "en": "Clover-grass ×2 → wheat → oat → barley",
+        "uk": "Конюшино-злакова суміш ×2 → пшениця → овес → ячмінь"
+      },
+      "sequence": [
+        "clover_grass",
+        "clover_grass",
+        "winter_wheat",
+        "oat",
+        "spring_barley"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "baseline": false,
+      "goals": [
+        "soil"
+      ],
+      "rationale": {
+        "en": "Regenerative mixed-farm rotation.",
+        "uk": "Регенеративна сівозміна змішаного господарства."
+      },
+      "risks": {
+        "en": "Needs grazing livestock to pay for the ley.",
+        "uk": "Щоб окупити суміш, потрібна худоба на випасі."
+      }
+    },
+    {
+      "id": "kz-n-wheat3-fallow",
+      "region": "kz-north",
+      "name": {
+        "en": "Spring wheat ×3 → fallow",
+        "uk": "Пшениця яра ×3 → пар"
+      },
+      "sequence": [
+        "spring_wheat",
+        "spring_wheat",
+        "spring_wheat",
+        "fallow"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "baseline": true,
+      "goals": [
+        "drought"
+      ],
+      "rationale": {
+        "en": "Traditional steppe system: fallow stores snowmelt water.",
+        "uk": "Традиційна степова система: пар накопичує талу воду."
+      },
+      "risks": {
+        "en": "Wheat after wheat raises disease; fallow erodes.",
+        "uk": "Пшениця після пшениці — хвороби; пар еродує."
+      }
+    },
+    {
+      "id": "kz-n-wheat-canola-wheat-pea",
+      "region": "kz-north",
+      "name": {
+        "en": "Wheat → spring canola → wheat → pea",
+        "uk": "Пшениця → ріпак ярий → пшениця → горох"
+      },
+      "sequence": [
+        "spring_wheat",
+        "spring_canola",
+        "spring_wheat",
+        "pea"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "baseline": false,
+      "goals": [
+        "margin",
+        "soil"
+      ],
+      "rationale": {
+        "en": "Diversified no-till system replacing fallow.",
+        "uk": "Диверсифікована нульова система замість пару."
+      },
+      "risks": {
+        "en": "Needs no-till seeders and enough snow cover.",
+        "uk": "Потрібні сівалки для нульової технології й достатній сніговий покрив."
+      },
+      "minPrecipMm": 300
+    },
+    {
+      "id": "kz-n-wheat-flax-barley",
+      "region": "kz-north",
+      "name": {
+        "en": "Wheat → flax → barley",
+        "uk": "Пшениця → льон → ячмінь"
+      },
+      "sequence": [
+        "spring_wheat",
+        "flax",
+        "spring_barley"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "baseline": false,
+      "goals": [
+        "margin"
+      ],
+      "rationale": {
+        "en": "Flax is a profitable break crop for the steppe.",
+        "uk": "Льон — прибутковий розрив для степу."
+      },
+      "risks": {
+        "en": "Flax competes poorly with weeds.",
+        "uk": "Льон слабко конкурує з бур'янами."
+      }
+    },
+    {
+      "id": "br-ce-soy-safrinha-corn",
+      "region": "br-cerrado",
+      "name": {
+        "en": "Soybean + safrinha corn (every year)",
+        "uk": "Соя + кукурудза сафринья (щороку)"
+      },
+      "sequence": [
+        {
+          "main": "soybean",
+          "second": "corn"
+        }
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "baseline": true,
+      "goals": [
+        "margin"
+      ],
+      "rationale": {
+        "en": "The Cerrado standard: two crops a year under no-till.",
+        "uk": "Стандарт Серрадо: два врожаї на рік без оранки."
+      },
+      "risks": {
+        "en": "Soybean every year builds nematodes and rust; second-crop corn fails if the rains stop early.",
+        "uk": "Соя щороку накопичує нематод і іржу; сафринья гине, якщо дощі закінчуються рано."
+      }
+    },
+    {
+      "id": "br-ce-soy-cotton-soy-corn",
+      "region": "br-cerrado",
+      "name": {
+        "en": "Soybean + cotton → soybean + corn",
+        "uk": "Соя + бавовник → соя + кукурудза"
+      },
+      "sequence": [
+        {
+          "main": "soybean",
+          "second": "cotton"
+        },
+        {
+          "main": "soybean",
+          "second": "corn"
+        }
+      ],
+      "irrigation": "none",
+      "water": "medium",
+      "baseline": false,
+      "goals": [
+        "margin"
+      ],
+      "rationale": {
+        "en": "High-value Mato Grosso system.",
+        "uk": "Високомаржинальна система Мату-Гросу."
+      },
+      "risks": {
+        "en": "Cotton is costly and needs a long rainy season.",
+        "uk": "Бавовник дорогий і потребує довгого сезону дощів."
+      },
+      "minPrecipMm": 1400
+    },
+    {
+      "id": "br-ce-soy-corn-soy-brachiaria",
+      "region": "br-cerrado",
+      "name": {
+        "en": "Soybean + corn → soybean + brachiaria",
+        "uk": "Соя + кукурудза → соя + брахіарія"
+      },
+      "sequence": [
+        {
+          "main": "soybean",
+          "second": "corn"
+        },
+        {
+          "main": "soybean",
+          "second": "brachiaria"
+        }
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "baseline": false,
+      "goals": [
+        "soil",
+        "drought"
+      ],
+      "rationale": {
+        "en": "Brachiaria straw protects the soil and keeps moisture for the next soybean.",
+        "uk": "Солома брахіарії захищає ґрунт і зберігає вологу для наступної сої."
+      },
+      "risks": {
+        "en": "Brachiaria earns only if it is grazed.",
+        "uk": "Брахіарія дає дохід, лише якщо її випасати."
+      }
+    },
+    {
+      "id": "br-ce-soy-fallow",
+      "region": "br-cerrado",
+      "name": {
+        "en": "Soybean → bare off-season",
+        "uk": "Соя → голий міжсезоння"
+      },
+      "sequence": [
+        {
+          "main": "soybean",
+          "second": "fallow"
+        }
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "baseline": false,
+      "goals": [
+        "margin"
+      ],
+      "rationale": {
+        "en": "Simple system where the rainy season is short.",
+        "uk": "Проста система, де сезон дощів короткий."
+      },
+      "risks": {
+        "en": "Bare dry season: erosion and weeds; soybean every year.",
+        "uk": "Голий сухий сезон: ерозія і бур'яни; соя щороку."
+      }
+    },
+    {
+      "id": "ar-pa-soy2-corn",
+      "region": "ar-pampas",
+      "name": {
+        "en": "Soybean ×2 → corn",
+        "uk": "Соя ×2 → кукурудза"
+      },
+      "sequence": [
+        "soybean",
+        "soybean",
+        "corn"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "baseline": true,
+      "goals": [
+        "margin"
+      ],
+      "rationale": {
+        "en": "Soybean-heavy system common since the 2000s.",
+        "uk": "Соєва система, поширена з 2000-х."
+      },
+      "risks": {
+        "en": "Low residue and soil carbon loss; herbicide-resistant weeds.",
+        "uk": "Мало решток і втрата вуглецю; стійкі бур'яни."
+      }
+    },
+    {
+      "id": "ar-pa-wheat-soy-dc-corn",
+      "region": "ar-pampas",
+      "name": {
+        "en": "Wheat + double-crop soybean → corn",
+        "uk": "Пшениця + соя повторно → кукурудза"
+      },
+      "sequence": [
+        {
+          "main": "winter_wheat",
+          "second": "soybean"
+        },
+        "corn"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "baseline": true,
+      "goals": [
+        "margin",
+        "soil"
+      ],
+      "rationale": {
+        "en": "Three crops in two years under no-till.",
+        "uk": "Три врожаї за два роки без оранки."
+      },
+      "risks": {
+        "en": "Second soybean is weak in dry summers.",
+        "uk": "Повторна соя слабка в сухе літо."
+      }
+    },
+    {
+      "id": "ar-pa-corn-soy-wheat-soy",
+      "region": "ar-pampas",
+      "name": {
+        "en": "Corn → soybean → wheat + soybean",
+        "uk": "Кукурудза → соя → пшениця + соя"
+      },
+      "sequence": [
+        "corn",
+        "soybean",
+        {
+          "main": "winter_wheat",
+          "second": "soybean"
+        }
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "baseline": false,
+      "goals": [
+        "soil",
+        "margin"
+      ],
+      "rationale": {
+        "en": "More corn residue rebuilds soil carbon.",
+        "uk": "Більше решток кукурудзи відновлює вуглець ґрунту."
+      },
+      "risks": {
+        "en": "Corn margins depend on export taxes and prices.",
+        "uk": "Маржа кукурудзи залежить від експортних мит і цін."
+      }
+    },
+    {
+      "id": "ar-pa-barley-soy-corn-soy",
+      "region": "ar-pampas",
+      "name": {
+        "en": "Barley + soybean → corn → soybean",
+        "uk": "Ячмінь + соя → кукурудза → соя"
+      },
+      "sequence": [
+        {
+          "main": "winter_barley",
+          "second": "soybean"
+        },
+        "corn",
+        "soybean"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "baseline": false,
+      "goals": [
+        "margin"
+      ],
+      "rationale": {
+        "en": "Barley is harvested earlier than wheat, so the second soybean is sown sooner.",
+        "uk": "Ячмінь збирають раніше за пшеницю, тож повторну сою сіють швидше."
+      },
+      "risks": {
+        "en": "Malting-barley contracts set quality limits.",
+        "uk": "Контракти на пивоварний ячмінь мають вимоги до якості."
+      }
+    },
+    {
+      "id": "au-wb-canola-wheat-barley",
+      "region": "au-wheatbelt",
+      "name": {
+        "en": "Canola → wheat → barley",
+        "uk": "Ріпак → пшениця → ячмінь"
+      },
+      "sequence": [
+        "winter_canola",
+        "winter_wheat",
+        "winter_barley"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "baseline": true,
+      "goals": [
+        "margin"
+      ],
+      "rationale": {
+        "en": "Standard winter-crop rotation of the grain belt.",
+        "uk": "Стандартна сівозміна зернового поясу."
+      },
+      "risks": {
+        "en": "Herbicide-resistant ryegrass; canola fails in dry starts.",
+        "uk": "Стійкий до гербіцидів райграс; ріпак гине при сухому старті."
+      }
+    },
+    {
+      "id": "au-wb-lupin-wheat-canola-wheat",
+      "region": "au-wheatbelt",
+      "name": {
+        "en": "Lupin → wheat → canola → wheat",
+        "uk": "Люпин → пшениця → ріпак → пшениця"
+      },
+      "sequence": [
+        "lupin",
+        "winter_wheat",
+        "winter_canola",
+        "winter_wheat"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "baseline": false,
+      "goals": [
+        "soil",
+        "margin"
+      ],
+      "rationale": {
+        "en": "Western Australian sandplain rotation; lupin adds nitrogen.",
+        "uk": "Сівозміна піщаних рівнин Західної Австралії; люпин додає азот."
+      },
+      "risks": {
+        "en": "Lupin prices are low.",
+        "uk": "Ціни на люпин низькі."
+      }
+    },
+    {
+      "id": "au-wb-wheat-barley-clover",
+      "region": "au-wheatbelt",
+      "name": {
+        "en": "Wheat → barley → clover pasture",
+        "uk": "Пшениця → ячмінь → конюшина (пасовище)"
+      },
+      "sequence": [
+        "winter_wheat",
+        "winter_barley",
+        "clover"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "baseline": true,
+      "goals": [
+        "drought",
+        "soil"
+      ],
+      "rationale": {
+        "en": "Ley farming of mixed crop–sheep farms.",
+        "uk": "Пасовищно-зернова система змішаних ферм з вівцями."
+      },
+      "risks": {
+        "en": "Needs livestock to use the pasture.",
+        "uk": "Потрібна худоба для пасовища."
+      }
+    },
+    {
+      "id": "au-wb-chickpea-wheat-barley",
+      "region": "au-wheatbelt",
+      "name": {
+        "en": "Chickpea → wheat → barley",
+        "uk": "Нут → пшениця → ячмінь"
+      },
+      "sequence": [
+        "chickpea",
+        "winter_wheat",
+        "winter_barley"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "baseline": false,
+      "goals": [
+        "soil",
+        "margin"
+      ],
+      "rationale": {
+        "en": "Northern NSW system on clay soils.",
+        "uk": "Система північного Нового Південного Уельсу на глинистих ґрунтах."
+      },
+      "risks": {
+        "en": "Ascochyta blight in wet winters.",
+        "uk": "Аскохітоз у вологі зими."
+      }
+    },
+    {
+      "id": "za-hv-corn3-soy",
+      "region": "za-highveld",
+      "name": {
+        "en": "Corn ×3 → soybean",
+        "uk": "Кукурудза ×3 → соя"
+      },
+      "sequence": [
+        "corn",
+        "corn",
+        "corn",
+        "soybean"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "baseline": true,
+      "goals": [
+        "margin"
+      ],
+      "rationale": {
+        "en": "Maize-dominated Highveld system.",
+        "uk": "Кукурудзяна система Гайвельду."
+      },
+      "risks": {
+        "en": "Maize after maize: disease and yield drag in dry years.",
+        "uk": "Кукурудза після кукурудзи: хвороби і спад урожаю в сухі роки."
+      }
+    },
+    {
+      "id": "za-hv-corn-soy",
+      "region": "za-highveld",
+      "name": {
+        "en": "Corn → soybean",
+        "uk": "Кукурудза → соя"
+      },
+      "sequence": [
+        "corn",
+        "soybean"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "baseline": false,
+      "goals": [
+        "margin",
+        "soil"
+      ],
+      "rationale": {
+        "en": "Soybean breaks maize diseases and adds nitrogen.",
+        "uk": "Соя розриває хвороби кукурудзи й додає азот."
+      },
+      "risks": {
+        "en": "Soybean is sensitive to mid-summer drought.",
+        "uk": "Соя чутлива до посухи посеред літа."
+      }
+    },
+    {
+      "id": "za-hv-corn-sunflower-soy",
+      "region": "za-highveld",
+      "name": {
+        "en": "Corn → sunflower → soybean",
+        "uk": "Кукурудза → соняшник → соя"
+      },
+      "sequence": [
+        "corn",
+        "sunflower",
+        "soybean"
+      ],
+      "irrigation": "none",
+      "water": "low",
+      "baseline": false,
+      "goals": [
+        "drought"
+      ],
+      "rationale": {
+        "en": "Sunflower for the drier western Highveld.",
+        "uk": "Соняшник для сухішого заходу Гайвельду."
+      },
+      "risks": {
+        "en": "Sclerotinia when soybean and sunflower follow each other in wet years.",
+        "uk": "Біла гниль, коли соя і соняшник йдуть поспіль у вологі роки."
+      }
+    },
+    {
+      "id": "in-ig-rice-wheat",
+      "region": "in-indo-gangetic",
+      "name": {
+        "en": "Rice (kharif) + wheat (rabi), every year",
+        "uk": "Рис (харіф) + пшениця (рабі), щороку"
+      },
+      "sequence": [
+        {
+          "main": "rice",
+          "second": "winter_wheat"
+        }
+      ],
+      "irrigation": "required",
+      "water": "high",
+      "baseline": true,
+      "goals": [
+        "margin"
+      ],
+      "rationale": {
+        "en": "The dominant system of Punjab and Haryana.",
+        "uk": "Домінантна система Пенджабу і Хар'яни."
+      },
+      "risks": {
+        "en": "Falling groundwater; residue burning; soil degradation.",
+        "uk": "Падіння рівня ґрунтових вод; спалювання решток; деградація ґрунту."
+      }
+    },
+    {
+      "id": "in-ig-maize-wheat",
+      "region": "in-indo-gangetic",
+      "name": {
+        "en": "Maize + wheat, every year",
+        "uk": "Кукурудза + пшениця, щороку"
+      },
+      "sequence": [
+        {
+          "main": "corn",
+          "second": "winter_wheat"
+        }
+      ],
+      "irrigation": "optional",
+      "water": "medium",
+      "baseline": false,
+      "goals": [
+        "water",
+        "margin"
+      ],
+      "rationale": {
+        "en": "Replaces rice to save water.",
+        "uk": "Замінює рис, щоб зберегти воду."
+      },
+      "risks": {
+        "en": "Maize prices and procurement are less secure than rice.",
+        "uk": "Ціни й закупівлі кукурудзи менш гарантовані, ніж рису."
+      }
+    },
+    {
+      "id": "in-ig-rice-chickpea",
+      "region": "in-indo-gangetic",
+      "name": {
+        "en": "Rice + chickpea",
+        "uk": "Рис + нут"
+      },
+      "sequence": [
+        {
+          "main": "rice",
+          "second": "chickpea"
+        }
+      ],
+      "irrigation": "required",
+      "water": "medium",
+      "baseline": false,
+      "goals": [
+        "soil"
+      ],
+      "rationale": {
+        "en": "Chickpea uses residual moisture and adds nitrogen.",
+        "uk": "Нут використовує залишкову вологу й додає азот."
+      },
+      "risks": {
+        "en": "Late rice harvest delays chickpea sowing.",
+        "uk": "Пізнє збирання рису затримує сівбу нуту."
+      }
+    },
+    {
+      "id": "in-ig-cotton-wheat",
+      "region": "in-indo-gangetic",
+      "name": {
+        "en": "Cotton + wheat",
+        "uk": "Бавовник + пшениця"
+      },
+      "sequence": [
+        {
+          "main": "cotton",
+          "second": "winter_wheat"
+        }
+      ],
+      "irrigation": "required",
+      "water": "medium",
+      "baseline": true,
+      "goals": [
+        "margin"
+      ],
+      "rationale": {
+        "en": "South-west Punjab and Haryana system.",
+        "uk": "Система південного заходу Пенджабу і Хар'яни."
+      },
+      "risks": {
+        "en": "Pink bollworm; late cotton picking delays wheat.",
+        "uk": "Рожевий коробочний черв'як; пізній збір бавовнику затримує пшеницю."
+      }
+    },
+    {
+      "id": "cn-ncp-wheat-maize",
+      "region": "cn-north-china-plain",
+      "name": {
+        "en": "Winter wheat + summer maize, every year",
+        "uk": "Пшениця озима + кукурудза літня, щороку"
+      },
+      "sequence": [
+        {
+          "main": "winter_wheat",
+          "second": "corn"
+        }
+      ],
+      "irrigation": "required",
+      "water": "high",
+      "baseline": true,
+      "goals": [
+        "margin"
+      ],
+      "rationale": {
+        "en": "The dominant double-crop system.",
+        "uk": "Домінантна система двох урожаїв на рік."
+      },
+      "risks": {
+        "en": "Wheat irrigation drains groundwater.",
+        "uk": "Полив пшениці виснажує ґрунтові води."
+      }
+    },
+    {
+      "id": "cn-ncp-wheat-maize-fallow-maize",
+      "region": "cn-north-china-plain",
+      "name": {
+        "en": "Wheat + maize → winter fallow + maize",
+        "uk": "Пшениця + кукурудза → зимовий пар + кукурудза"
+      },
+      "sequence": [
+        {
+          "main": "winter_wheat",
+          "second": "corn"
+        },
+        {
+          "main": "fallow",
+          "second": "corn"
+        }
+      ],
+      "irrigation": "required",
+      "water": "medium",
+      "baseline": false,
+      "goals": [
+        "water"
+      ],
+      "rationale": {
+        "en": "Skipping wheat every other winter saves irrigation water.",
+        "uk": "Пропуск пшениці кожну другу зиму економить поливну воду."
+      },
+      "risks": {
+        "en": "Less income in the fallow years.",
+        "uk": "Менше доходу в роки з паром."
+      }
+    },
+    {
+      "id": "cn-ncp-wheat-soy-wheat-maize",
+      "region": "cn-north-china-plain",
+      "name": {
+        "en": "Wheat + soybean → wheat + maize",
+        "uk": "Пшениця + соя → пшениця + кукурудза"
+      },
+      "sequence": [
+        {
+          "main": "winter_wheat",
+          "second": "soybean"
+        },
+        {
+          "main": "winter_wheat",
+          "second": "corn"
+        }
+      ],
+      "irrigation": "required",
+      "water": "medium",
+      "baseline": false,
+      "goals": [
+        "soil"
+      ],
+      "rationale": {
+        "en": "Summer soybean adds nitrogen to the double-crop system.",
+        "uk": "Літня соя додає азот у систему двох урожаїв."
+      },
+      "risks": {
+        "en": "Soybean yields less than maize.",
+        "uk": "Соя дає менше, ніж кукурудза."
+      }
+    },
+    {
+      "id": "cn-ncp-cotton-wheat-maize",
+      "region": "cn-north-china-plain",
+      "name": {
+        "en": "Cotton → wheat + maize",
+        "uk": "Бавовник → пшениця + кукурудза"
+      },
+      "sequence": [
+        "cotton",
+        {
+          "main": "winter_wheat",
+          "second": "corn"
+        }
+      ],
+      "irrigation": "optional",
+      "water": "medium",
+      "baseline": false,
+      "goals": [
+        "water",
+        "margin"
+      ],
+      "rationale": {
+        "en": "Cotton on saline or water-short land in Hebei and Shandong.",
+        "uk": "Бавовник на засолених або маловодних землях Хебею і Шаньдуну."
+      },
+      "risks": {
+        "en": "Cotton needs a lot of labour.",
+        "uk": "Бавовник потребує багато ручної праці."
+      }
     }
   ]
 }

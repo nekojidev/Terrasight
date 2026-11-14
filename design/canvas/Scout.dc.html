@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<title>Terrasight — field check (phone)</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@500;600&amp;display=swap">
+<style>
+body{margin:0;background:#F5F3EE}
+a{color:#191714}a:hover{color:#000000}
+
+@keyframes tsPage{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:none}}
+@keyframes tsUp{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
+@keyframes tsFade{from{opacity:0}to{opacity:1}}
+@keyframes tsGrow{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+@keyframes tsGrowX{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes tsDraw{from{stroke-dashoffset:1}to{stroke-dashoffset:0}}
+@keyframes tsPop{0%{transform:scale(.4);opacity:0}70%{transform:scale(1.12);opacity:1}100%{transform:scale(1);opacity:1}}
+@keyframes tsPulse{0%{transform:scale(.7);opacity:.55}100%{transform:scale(1.9);opacity:0}}
+@keyframes tsSpin{to{transform:rotate(360deg)}}
+@keyframes tsSway{0%,100%{transform:rotate(-3deg)}50%{transform:rotate(3deg)}}
+.ts-page{animation:tsPage .5s cubic-bezier(.2,.7,.2,1) both}
+.ts-up{animation:tsUp .65s cubic-bezier(.2,.7,.2,1) both}
+.ts-fade{animation:tsFade .8s ease both}
+.ts-grow{transform-origin:50% 100%;transform-box:fill-box;animation:tsGrow .9s cubic-bezier(.2,.7,.2,1) both}
+.ts-growx{transform-origin:0 50%;animation:tsGrowX 1s cubic-bezier(.2,.7,.2,1) both}
+.ts-draw{stroke-dasharray:1;animation:tsDraw 1.8s cubic-bezier(.3,.6,.2,1) both}
+.ts-pop{animation:tsPop .5s cubic-bezier(.2,.7,.2,1) both}
+.ts-pulse{animation:tsPulse 1.8s ease-out infinite}
+.ts-spin{animation:tsSpin 1.1s linear infinite;transform-origin:50% 50%}
+.ts-sway{transform-origin:50% 100%;transform-box:fill-box;animation:tsSway 3.2s ease-in-out infinite}
+.ts-lift{transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease}
+.ts-lift:hover{transform:translateY(-3px);box-shadow:0 10px 28px rgba(25,23,20,.09)}
+.ts-btn{transition:background-color .15s ease,transform .1s ease,box-shadow .15s ease}
+.ts-btn:hover{box-shadow:0 4px 14px rgba(25,23,20,.22)}
+.ts-btn:active{transform:scale(.98)}
+.ts-tile{transition:transform .25s ease,box-shadow .25s ease}
+button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid #1F5FBF;outline-offset:2px}
+@media (prefers-reduced-motion: reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+
+</style>
+</helmet>
+<div class="ts-page" style="width: 390px; min-height: 1250px; box-sizing: border-box; background: #F5F3EE; color: #191714; font-family: 'Onest', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 17px; line-height: 26px; padding: 14px 16px 28px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: center; gap: 10px"><a href="Main.dc.html" aria-label="{{t.back}}" style="width: 48px; height: 48px; border-radius: 14px; border: 1px solid #E6E1D6; background: #FFFFFF; color: #191714; display: inline-flex; align-items: center; justify-content: center"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4 L6 10 L12 16"></path></svg></a>
+<span style="flex: 1; font-size: 18px; font-weight: 700">{{t.title}}</span><div role="group" aria-label="{{t.lang_group}}" style="display: inline-flex; gap: 2px; padding: 4px; border-radius: 12px; background: #F5F3EE; border: 1px solid #E6E1D6"><button class="ts-btn" onClick="{{setUk}}" aria-pressed="{{ukOn}}" style="{{ukStyle}}">UA</button><button class="ts-btn" onClick="{{setEn}}" aria-pressed="{{enOn}}" style="{{enStyle}}">EN</button></div></div>
+<div class="ts-up" style="display: flex; flex-direction: column; gap: 8px; padding: 16px; border-radius: 18px; background: #FFFFFF; border: 1px solid #E6E1D6">
+<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap"><span style="font-size: 14px; font-weight: 600; color: #4F4A43">{{t.field}}</span>
+<span style="margin-left: auto; display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; background: #E7F3E8; color: #23733A; font-size: 13px; font-weight: 700"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="#23733A" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M4 10 L8 14 L16 6"></path></svg>{{t.offline}}</span></div>
+<h1 style="margin: 0; font-size: 24px; line-height: 31px">{{t.task}}</h1><p style="margin: 0; font-size: 16px; line-height: 24px; color: #4F4A43">{{t.why}}</p>
+<div style="display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: #191714; font-weight: 600"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M10 2 L11.6 7.4 L17 9 L11.6 10.6 L10 16 L8.4 10.6 L3 9 L8.4 7.4 Z"></path><path d="M16 14 L16.6 15.9 L18.5 16.5 L16.6 17.1 L16 19 L15.4 17.1 L13.5 16.5 L15.4 15.9 Z"></path></svg>{{t.from}}</div></div>
+<div class="ts-up" style="animation-delay: 120ms; position: relative; margin: 0 -16px"><div style="position: absolute; top: 12px; left: 16px; z-index: 2; padding: 5px 12px; border-radius: 999px; background: rgba(20,19,15,.72); color: #FFFFFF; font-size: 13px; font-weight: 700">{{t.route}}</div><svg role="img" aria-label="{{t.route_label}}" viewBox="0 0 380 220" style="display: block; width: 100%; height: auto; border-radius: 0">
+<rect width="380" height="220" fill="#2F3D2A"></rect><circle cx="190" cy="110" r="104" fill="#B7791F" opacity=".9"></circle>
+<path class="ts-draw" pathLength="1" d="M118 82 L152 158 L190 74 L228 158 L262 82" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-dasharray="1" stroke-linecap="round" opacity=".9"></path><g><circle cx="118" cy="82" r="16" fill="{{pt0Fill}}" stroke="#FFFFFF" stroke-width="3" style="transition: fill .3s ease"></circle><text x="118" y="87" text-anchor="middle" font-size="14" font-weight="700" fill="{{pt0Ink}}">1</text></g><g><circle cx="152" cy="158" r="16" fill="{{pt1Fill}}" stroke="#FFFFFF" stroke-width="3" style="transition: fill .3s ease"></circle><text x="152" y="163" text-anchor="middle" font-size="14" font-weight="700" fill="{{pt1Ink}}">2</text></g><g><circle cx="190" cy="74" r="16" fill="{{pt2Fill}}" stroke="#FFFFFF" stroke-width="3" style="transition: fill .3s ease"></circle><text x="190" y="79" text-anchor="middle" font-size="14" font-weight="700" fill="{{pt2Ink}}">3</text></g><g><circle cx="228" cy="158" r="16" fill="{{pt3Fill}}" stroke="#FFFFFF" stroke-width="3" style="transition: fill .3s ease"></circle><text x="228" y="163" text-anchor="middle" font-size="14" font-weight="700" fill="{{pt3Ink}}">4</text></g><g><circle cx="262" cy="82" r="16" fill="{{pt4Fill}}" stroke="#FFFFFF" stroke-width="3" style="transition: fill .3s ease"></circle><text x="262" y="87" text-anchor="middle" font-size="14" font-weight="700" fill="{{pt4Ink}}">5</text></g></svg></div>
+<section class="ts-up" aria-live="polite" style="animation-delay: 220ms; position: relative; z-index: 3; margin: -40px -16px 0; display: flex; flex-direction: column; gap: 12px; padding: 10px 16px 18px; border-radius: 28px 28px 0 0; background: #FFFFFF; box-shadow: 0 -12px 30px -14px rgba(25,23,20,.35)">
+<span aria-hidden="true" style="align-self: center; width: 40px; height: 5px; border-radius: 3px; background: #CFC8BA"></span>
+<div style="display: flex; align-items: baseline; gap: 8px"><span style="font-size: 22px; font-weight: 700">{{t.point}} {{curN}}</span><span style="color: #6B645A">{{t.of5}}</span></div>
+<p style="margin: 0; font-size: 16px; line-height: 24px">{{t.howto}}</p>
+<div role="group" aria-label="{{t.count_label}}" style="display: flex; align-items: center; gap: 12px">
+<button onClick="{{dec}}" aria-label="{{t.minus}}" style="width: 64px; height: 64px; border-radius: 18px; border: 1.5px solid #CFC8BA; background: #FFFFFF; font-size: 32px; font-weight: 600; color: #191714; cursor: pointer">−</button>
+<div style="flex: 1; text-align: center"><div style="font-size: 44px; line-height: 50px; font-weight: 700; font-variant-numeric: tabular-nums">{{curVal}}</div><div style="font-size: 14px; color: #6B645A">{{t.count_label}}</div></div>
+<button onClick="{{inc}}" aria-label="{{t.plus}}" class="ts-btn" style="width: 64px; height: 64px; border-radius: 18px; border: 0; background: #191714; color: #FFFFFF; font-size: 32px; font-weight: 600; cursor: pointer">+</button></div>
+<div style="display: flex; gap: 8px">
+<button onClick="{{prev}}" style="flex: 1; min-height: 52px; border-radius: 14px; border: 1.5px solid #CFC8BA; background: #FFFFFF; font-family: 'Onest', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 16px; font-weight: 600; color: #191714; cursor: pointer">{{t.prev}}</button>
+<button onClick="{{next}}" class="ts-btn" style="flex: 2; min-height: 52px; border-radius: 14px; border: 0; background: #191714; font-family: 'Onest', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 16px; font-weight: 600; color: #FFFFFF; cursor: pointer">{{nextLabel}}</button></div>
+<button style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; border-radius: 14px; border: 1.5px dashed #CFC8BA; background: transparent; font-family: 'Onest', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 16px; font-weight: 600; color: #4F4A43; cursor: pointer"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><line x1="10" y1="4" x2="10" y2="16"></line><line x1="4" y1="10" x2="16" y2="10"></line></svg>{{t.photo}}</button>
+</section>
+<section class="ts-up" style="animation-delay: 320ms; display: flex; flex-direction: column; gap: 10px; padding: 16px; border-radius: 18px; background: #FFFFFF; border: 1px solid #E6E1D6">
+<div style="font-size: 15px; font-weight: 700">{{t.result}}</div>
+<div style="display: flex; align-items: baseline; gap: 8px"><span style="font-size: 34px; font-weight: 700; font-variant-numeric: tabular-nums">{{share}}%</span><span style="color: #4F4A43">{{t.share}}</span></div><div style="margin-top: -6px; font-size: 14px; color: #4F4A43; font-variant-numeric: tabular-nums">{{t.visited_l}}: {{visitedN}} / 5</div>
+<div style="display: flex; gap: 6px"><sc-for list="{{bars}}" as="b" hint-placeholder-count="5"><div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px"><div style="width: 100%; height: 48px; border-radius: 8px; background: #F0EDE6; display: flex; align-items: flex-end; overflow: hidden"><div style="{{b.style}}"></div></div><span style="font-size: 12px; color: #6B645A">{{b.label}}</span></div></sc-for></div>
+<sc-if value="{allDone}" hint-placeholder-val="{false}"><button class="ts-btn"  style="display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 56px; padding: 0 24px; border-radius: 14px; font-family: 'Onest', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 17px; font-weight: 600; text-decoration: none; cursor: pointer; box-sizing: border-box; background: #191714; color: #FFFFFF; border: 0; width: 100%"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M3 10 L17 3 L13 17 L10 11 Z"></path><line x1="10" y1="11" x2="17" y2="3"></line></svg><span>{{t.send}}</span></button></sc-if><sc-if value="{notDone}" hint-placeholder-val="{true}"><div style="min-height: 52px; border-radius: 14px; background: #F0EDE6; color: #4F4A43; font-size: 15px; font-weight: 600; display: flex; align-items: center; justify-content: center; text-align: center; padding: 0 12px">{{t.send_wait}}</div></sc-if>
+<p style="margin: 0; font-size: 14px; line-height: 21px; color: #6B645A">{{t.loop}}</p></section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"lang":{"editor":"enum","options":["uk","en"],"default":"uk","section":"Мова / Language"},"$preview":{"width":390,"height":1250}}'>
+const T = {"uk": {"lang_group": "Мова інтерфейсу", "tier_word": "рівень даних", "tier_A": "Повні дані", "tier_B": "Базові дані", "tier_C": "Оцінка", "close": "Закрити", "back": "Назад", "title": "Огляд поля", "offline": "Зберігається автоматично", "field": "Півот 14 · Канзас, округ Фінні", "task": "Перевірте пшеницю на попелиць", "why": "Осінь тепла, тож попелиці довше активні й можуть переносити вірус жовтої карликовості.", "from": "Завдання від асистента · створено з рекомендації", "route": "Маршрут: 5 точок буквою W", "route_label": "Схема поля з п'ятьма точками огляду", "point": "Точка", "of5": "з 5", "howto": "Огляньте 20 рослин поруч і порахуйте рослини, на яких є попелиці.", "count_label": "Рослин з попелицями з 20", "minus": "Менше", "plus": "Більше", "next": "Наступна точка", "finish": "Завершити огляд", "visited_l": "Оглянуто точок", "send_wait": "Надіслати можна після всіх 5 точок", "prev": "Попередня", "photo": "Додати фото", "result": "Підсумок огляду", "share": "рослин з попелицями", "send": "Надіслати агроному", "loop": "Результат уточнить модель ризику для цього поля. Що робити далі, вирішить агроном — назв препаратів Terrasight не дає."}, "en": {"lang_group": "Interface language", "tier_word": "data tier", "tier_A": "Full data", "tier_B": "Core data", "tier_C": "Estimated", "close": "Close", "back": "Back", "title": "Field check", "offline": "Saved automatically", "field": "Pivot 14 · Kansas, Finney Co.", "task": "Check the wheat for aphids", "why": "The autumn is warm, so aphids stay active longer and can spread yellow dwarf virus.", "from": "Task from the assistant · created from a recommendation", "route": "Route: 5 points in a W", "route_label": "Field sketch with five check points", "point": "Point", "of5": "of 5", "howto": "Look at 20 plants nearby and count the plants that have aphids.", "count_label": "Plants with aphids out of 20", "minus": "Fewer", "plus": "More", "next": "Next point", "finish": "Finish the check", "visited_l": "Points checked", "send_wait": "You can send after all 5 points", "prev": "Previous", "photo": "Add a photo", "result": "Check summary", "share": "of plants with aphids", "send": "Send to the agronomist", "loop": "Your result refines this field's risk model. The agronomist decides what's next — Terrasight never names products."}};
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { lang: null, p: 0, cur: 2, counts: [3, 5, 2, 0, 0] };
+  }
+
+  componentDidMount() {
+    const reduce = typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) { this.setState({ p: 1, reduce: true }); if (this.afterIntro) this.afterIntro(true); return; }
+    const t0 = performance.now();
+    const tick = (now) => {
+      const k = Math.min(1, (now - t0) / 1500);
+      this.setState({ p: k });
+      if (k < 1) this._raf = requestAnimationFrame(tick);
+    };
+    this._raf = requestAnimationFrame(tick);
+    if (this.afterIntro) this.afterIntro(false);
+  }
+  componentWillUnmount() { cancelAnimationFrame(this._raf); clearInterval(this._iv); clearTimeout(this._to); }
+
+
+  renderVals() {
+    const lang = this.state.lang || this.props.lang || "uk";
+    const t = T[lang];
+    const seg = (on) => "min-width: 52px; min-height: 44px; padding: 0 12px; border: 0; border-radius: 10px; font-family: 'Onest', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 15px; font-weight: 600; cursor: pointer; " +
+      (on ? "background: #FFFFFF; color: #191714; box-shadow: 0 1px 3px rgba(25,23,20,0.14)" : "background: transparent; color: #4F4A43");
+    const v = {
+      t, lang,
+      setUk: () => this.setState({ lang: "uk" }),
+      setEn: () => this.setState({ lang: "en" }),
+      ukOn: lang === "uk" ? "true" : "false", enOn: lang === "en" ? "true" : "false",
+      ukStyle: seg(lang === "uk"), enStyle: seg(lang === "en"),
+    };
+
+    const p = this.state.p == null ? 0 : this.state.p;
+    const ease = 1 - Math.pow(1 - p, 3);
+    const loc = lang === "uk" ? "uk-UA" : "en-US";
+    const nf = (x, d) => Number(x).toLocaleString(loc, { minimumFractionDigits: d || 0, maximumFractionDigits: d || 0 });
+    const cu = (x, d) => nf(x * ease, d);
+
+
+    const counts = this.state.counts || [3, 5, 2, 0, 0];
+    const cur = this.state.cur == null ? 2 : this.state.cur;
+    const setC = (d) => () => { const c = counts.slice(); c[cur] = Math.max(0, Math.min(20, c[cur] + d)); this.setState({ counts: c }); };
+    v.inc = setC(1); v.dec = setC(-1);
+    v.next = () => this.setState(cur === 4 ? { finished: true } : { cur: cur + 1 });
+    const fin = !!this.state.finished;
+    v.nextLabel = cur === 4 ? t.finish : t.next + " →";
+    v.allDone = fin; v.notDone = !fin; v.visitedN = fin ? 5 : cur;
+    v.prev = () => this.setState({ cur: Math.max(0, cur - 1) });
+    v.curN = cur + 1; v.curVal = counts[cur];
+    for (let i = 0; i < 5; i++) {
+      const done = i < cur, on = i === cur;
+      v["pt" + i + "Fill"] = on ? "#C8F169" : (done ? "#23733A" : "#FFFFFF");
+      v["pt" + i + "Ink"] = on ? "#14130F" : (done ? "#FFFFFF" : "#191714");
+    }
+    const visited = counts.slice(0, cur + 1);
+    const total = visited.reduce((a, b) => a + b, 0);
+    v.share = Math.round(total / (visited.length * 20) * 100);
+    v.bars = counts.map((c, i) => ({ label: (i + 1), style: "width: 100%; height: " + (c / 20 * 100) + "%; border-radius: 8px; transition: height .3s ease; background: " + (i === cur ? "#191714" : (i < cur ? "#8A8378" : "#E6E1D6")) }));
+
+    return v;
+  }
+}
+</script>
+</body>
+</html>
