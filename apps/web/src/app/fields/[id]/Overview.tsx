@@ -10,6 +10,7 @@ import { api } from "@/lib/api";
 type Localised = { en: string; uk: string };
 interface Risk {
   id: string;
+  type?: string;
   level: "high" | "moderate" | "low" | "none" | "unknown";
   status: string;
   deadline: string | null;
@@ -98,7 +99,11 @@ export function FieldBrief({
   const t = useTranslations("App");
   const r = useTranslations("Field");
   const locale = useLocale() as "en" | "uk";
-  const top = risks.find((x) => x.level === "high" || x.level === "moderate");
+  // The rotation item carries the field brief's three numbers (S-04.07, Tech Design §9.2).
+  const rotation = risks.find((x) => x.type === "rotation");
+  const top =
+    risks.find((x) => x.type !== "rotation" && (x.level === "high" || x.level === "moderate")) ??
+    (rotation?.level === "moderate" ? rotation : undefined);
   const sorted = [...seasons].sort((a, b) => b.season - a.season);
   const last = sorted[0];
   let inRow = 0;
@@ -109,7 +114,18 @@ export function FieldBrief({
       <Chip tone="signal">{r("bf_k")}</Chip>
       <h2 className="text-h1 text-ink">{top ? top.text.title[locale] : t("fieldAllFine")}</h2>
       <div className="grid gap-6 sm:grid-cols-3">
-        {last && (
+        {rotation &&
+          rotation.keyNumbers.slice(0, 3).map((k) => (
+            <div key={k.id} className="border-t-2 border-ink pt-3">
+              <p className="font-mono text-big-number text-ink">
+                {typeof k.value === "number" && k.id === "marginVsCurrent"
+                  ? `${k.value >= 0 ? "+" : "−"}$${Math.abs(k.value)}`
+                  : k.value}
+              </p>
+              <p className="text-small text-ink-2">{t.has(`kn_${k.id}`) ? t(`kn_${k.id}`) : k.id}</p>
+            </div>
+          ))}
+        {!rotation && last && (
           <div className="border-t-2 border-ink pt-3">
             <p className="font-mono text-big-number text-ink">{inRow}</p>
             <p className="text-small text-ink-2">
@@ -121,12 +137,13 @@ export function FieldBrief({
             </p>
           </div>
         )}
-        {top?.keyNumbers.slice(0, 2).map((k) => (
-          <div key={k.id} className="border-t-2 border-ink pt-3">
-            <p className="font-mono text-big-number text-ink">{k.value}</p>
-            <p className="text-small text-ink-2">{t.has(`kn_${k.id}`) ? t(`kn_${k.id}`) : k.id}</p>
-          </div>
-        ))}
+        {!rotation &&
+          top?.keyNumbers.slice(0, 2).map((k) => (
+            <div key={k.id} className="border-t-2 border-ink pt-3">
+              <p className="font-mono text-big-number text-ink">{k.value}</p>
+              <p className="text-small text-ink-2">{t.has(`kn_${k.id}`) ? t(`kn_${k.id}`) : k.id}</p>
+            </div>
+          ))}
       </div>
       {top && <p className="text-body text-ink">{top.text.action[locale]}</p>}
       <div className="flex flex-wrap items-center gap-3">

@@ -13,6 +13,7 @@ import { EvalInputsService } from "../src/analysis/eval-inputs.service.js";
 import { ForecastService } from "../src/analysis/forecast.service.js";
 import { AnalysisScheduler } from "../src/analysis/scheduler.js";
 import { ToolError, ToolExecutor } from "../src/assistant/executor.js";
+import type { ScenariosService } from "../src/scenarios/scenarios.service.js";
 import { HistoryService } from "../src/history/history.service.js";
 import { RateLimitService } from "../src/auth/rate-limit.js";
 import { loadEnv, type Env } from "../src/config/config.js";
@@ -197,7 +198,8 @@ beforeAll(async () => {
     geo,
     limits,
   );
-  consumer = new FieldCheckConsumer(broker, env, lib, prisma, analysis, inputsService);
+  const scenariosStub = { upsertRecommendation: async () => false } as unknown as ScenariosService;
+  consumer = new FieldCheckConsumer(broker, env, lib, prisma, analysis, inputsService, scenariosStub);
   scheduler = new AnalysisScheduler(env, prisma, analysis);
 });
 

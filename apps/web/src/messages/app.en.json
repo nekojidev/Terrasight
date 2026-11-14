@@ -123,7 +123,7 @@
     "noForecast": "No forecast yet",
     "noQuestion": "No open questions from the owner.",
     "kn_hostSeasonsInRow": "seasons of the host crop in a row",
-    "kn_hostSeasonsInPlan": "host-crop seasons in the plan",
+    "kn_hostSeasonsInPlan": "seasons of corn after corn in 5 if the plan stays",
     "kn_autumnPercentile": "autumn warmer than this % of years",
     "kn_autumnMeanC": "°C mean this autumn",
     "kn_daysSinceEmergence": "days since emergence",
@@ -224,6 +224,8 @@
     "rotLoading": "Running 150 weather paths…",
     "rotReadOnly": "Viewers can explore options but can't save the plan.",
     "rotTrendUp": "up",
-    "rotTrendDown": "down"
+    "rotTrendDown": "down",
+    "kn_lastCropInRow": "seasons of the last crop in a row (USDA CDL)",
+    "kn_marginVsCurrent": "$/ha a year vs today with the best other option"
   }
 }

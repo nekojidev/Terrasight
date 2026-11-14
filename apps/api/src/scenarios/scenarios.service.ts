@@ -285,6 +285,103 @@ export class ScenariosService {
     });
   }
 
+  /**
+   * The rotation recommendation (S-03.08): after the history build and every autumn recompute, a planning item with the
+   * best-fit option's first crop, key numbers from the scenarios (Tech Design §9.2) and the next crop's sowing date as
+   * the default deadline. Returns whether the item is new.
+   */
+  async upsertRecommendation(workspaceId: string, fieldId: string, runId: string | null): Promise<boolean> {
+    const view = await this.run(workspaceId, fieldId, {});
+    if (view.noLibrary || !("result" in view)) return false;
+    const { result, firstSeason, regionId } = view;
+    const all = [result.current, ...result.alternatives];
+    const best = all.find((s) => s.id === result.bestFit) ?? result.current;
+    const firstCrop = best.plan[0]?.crops.find((c) => c !== "fallow") ?? best.plan[0]?.crops[0] ?? "fallow";
+    const hostSeasons = (s: typeof best) => s.pestPressure.reduce((n, p) => Math.max(n, p.seasons), 0);
+    const field = await this.prisma.system.field.findUniqueOrThrow({
+      where: { id: fieldId },
+      select: { tier: true },
+    });
+    const crops = await this.prisma.system.cropSeason.findMany({
+      where: { fieldId },
+      orderBy: { season: "desc" },
+      take: 6,
+    });
+    let inRow = 0;
+    for (const c of crops)
+      if (c.mainCrop === crops[0]?.mainCrop) inRow++;
+      else break;
+    const deadline = this.seasons.typicalSowing(regionId, firstCrop, firstSeason);
+    const alt = result.alternatives[0];
+    const keyNumbers = [
+      { id: "hostSeasonsInPlan", value: `${hostSeasons(result.current)}/5`, weight: 1 },
+      { id: "lastCropInRow", value: inRow, unit: "seasons", weight: 0.66 },
+      ...(alt
+        ? [
+            {
+              id: "marginVsCurrent",
+              value: Math.round(alt.delta.margin),
+              unit: "$/ha",
+              weight: 0.33,
+              option: alt.id,
+            },
+          ]
+        : []),
+    ];
+    const level = best.kind === "current" ? "low" : "moderate";
+    const data = {
+      level: level as "low" | "moderate",
+      confidence: (field.tier === "A" ? "medium" : "low") as "medium" | "low",
+      tier: field.tier,
+      deadline: deadline ? new Date(`${deadline}T00:00:00Z`) : null,
+      irreversible: false,
+      planning: true,
+      keyNumbers: keyNumbers as unknown as Prisma.InputJsonValue,
+      drivers: [
+        {
+          driver: "best_option",
+          value: best.kind === "current" ? "current" : best.id,
+          fired: best.kind !== "current",
+        },
+        { driver: "first_crop", value: firstCrop, fired: true },
+      ] as unknown as Prisma.InputJsonValue,
+      evidence: [
+        {
+          source:
+            "Scenario engine (FAO-56, FAO-33, ICBM, RUSLE; NASA POWER 1981–2025; USDA NASS / K-State prices)",
+          value: runId ?? view.id ?? "",
+          note: `${result.candidates + 1} rotations compared`,
+        },
+      ] as unknown as Prisma.InputJsonValue,
+      unknowns: [] as unknown as Prisma.InputJsonValue,
+      modelRef: `scenarios@${this.lib.versions.rotations}`,
+      versions: this.lib.versions as unknown as Prisma.InputJsonValue,
+    };
+    const live = await this.prisma.system.recommendation.findFirst({
+      where: {
+        fieldId,
+        type: "rotation",
+        subject: "rotation",
+        season: firstSeason,
+        status: { in: ["open", "accepted", "snoozed", "in_report", "dismissed"] },
+      },
+    });
+    if (live) {
+      await this.prisma.system.recommendation.update({ where: { id: live.id }, data });
+      await this.prisma.system.recommendationLevel.create({
+        data: { recommendationId: live.id, runId, level: data.level, confidence: data.confidence },
+      });
+      return false;
+    }
+    const rec = await this.prisma.system.recommendation.create({
+      data: { workspaceId, fieldId, type: "rotation", subject: "rotation", season: firstSeason, ...data },
+    });
+    await this.prisma.system.recommendationLevel.create({
+      data: { recommendationId: rec.id, runId, level: data.level, confidence: data.confidence },
+    });
+    return level === "moderate";
+  }
+
   /** "Save to the 2026 plan" (S-06.06): the crop and rotation for the season; the season record reads it as "From plan". */
   async savePlan(
     workspaceId: string,

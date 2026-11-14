@@ -12,6 +12,7 @@ import { JobConsumer } from "../messaging/consumer.js";
 import { QUEUES } from "../messaging/topology.js";
 import { AnalysisService, type FieldCheckJob } from "./analysis.service.js";
 import { EvalInputsService } from "./eval-inputs.service.js";
+import { ScenariosService } from "../scenarios/scenarios.service.js";
 
 const LIVE: RecStatus[] = ["open", "accepted", "snoozed", "in_report", "dismissed"];
 const ORDER: Record<Level, number> = { unknown: -1, none: 0, low: 1, moderate: 2, high: 3 };
@@ -34,6 +35,7 @@ export class FieldCheckConsumer extends JobConsumer<FieldCheckJob> implements On
     private readonly prisma: PrismaService,
     private readonly analysis: AnalysisService,
     private readonly inputsService: EvalInputsService,
+    private readonly scenarios: ScenariosService,
   ) {
     super(broker, { queue: QUEUES.fieldCheck, prefetch: 4, retries: 0 });
   }
@@ -85,6 +87,12 @@ export class FieldCheckConsumer extends JobConsumer<FieldCheckJob> implements On
       const result = evaluate(model, { ...inputs, planningDeadline }, asOf);
       if (await this.upsert(workspaceId, fieldId, runId, model, result, inputs, asOf, built.powerDate))
         created += 1;
+    }
+    // Rotation item (S-03.08): best-fit option from the scenario engine (cached by inputs hash, so cheap daily).
+    try {
+      if (await this.scenarios.upsertRecommendation(workspaceId, fieldId, runId)) created += 1;
+    } catch (e) {
+      this.logger.warn(`rotation scenarios for ${fieldId} skipped: ${(e as Error).message}`);
     }
     // Open or snoozed items whose deadline has passed leave the brief (RFC §10.4: Open → Expired).
     await this.prisma.system.recommendation.updateMany({

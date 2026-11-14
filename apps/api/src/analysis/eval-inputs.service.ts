@@ -75,7 +75,7 @@ export class EvalInputsService {
     const [crops, record, plan, scouted] = await Promise.all([
       this.prisma.system.cropSeason.findMany({ where: { fieldId } }),
       this.seasons.get(workspaceId, fieldId, season),
-      this.prisma.system.plan.findUnique({ where: { fieldId_season: { fieldId, season } } }),
+      this.seasons.planFor(fieldId, season),
       this.prisma.system.scoutingTask.findMany({
         where: { fieldId, status: "sent", recommendation: { season } },
         select: { recommendation: { select: { subject: true } } },

@@ -45,7 +45,48 @@ const DRIVER: Record<string, Localised> = {
  * Plain text for a pest or disease item, built only from the library (names, scouting and prevention text) and the
  * evaluator's drivers — never product names or doses (RFC §11.5).
  */
+/** Rotation item (S-03.08): the best-fit option's first crop for the next season, from the scenario engine. */
+function rotationText(rec: RecLike, lib: Library): RecText {
+  const d = ((rec.drivers as Array<{ driver: string; value: unknown }>) ?? []).reduce<
+    Record<string, unknown>
+  >((acc, x) => ({ ...acc, [x.driver]: x.value }), {});
+  const crop = String(d.first_crop ?? "");
+  const cropName = (lib.rotations.crops[crop] as { en: string; uk: string } | undefined) ?? {
+    en: crop,
+    uk: crop,
+  };
+  const rotation = lib.rotations.rotations.find((r) => r.id === d.best_option) as unknown as
+    { name: Localised } | undefined;
+  const keep = d.best_option === "current";
+  return {
+    title: keep
+      ? {
+          en: `Rotation for ${rec.season}: keep the current rotation`,
+          uk: `Сівозміна на ${rec.season}: залишити поточну`,
+        }
+      : {
+          en: `Rotation for ${rec.season}: ${cropName.en.toLowerCase()} first`,
+          uk: `Сівозміна на ${rec.season}: першою — ${cropName.uk.toLowerCase()}`,
+        },
+    action: keep
+      ? {
+          en: "The current rotation fits your priorities best over the 5 seasons. Compare the options before seed is ordered.",
+          uk: "Поточна сівозміна найкраще відповідає пріоритетам на 5 сезонів. Порівняйте варіанти до замовлення насіння.",
+        }
+      : {
+          en: `Consider "${rotation?.name.en ?? String(d.best_option)}" over the 5 seasons; compare the options and save your choice to the plan.`,
+          uk: `Розгляньте «${rotation?.name.uk ?? String(d.best_option)}» на 5 сезонів; порівняйте варіанти й збережіть вибір у план.`,
+        },
+    why: {
+      en: "Scenario engine: 150 weather paths and 10 price scenarios over 5 seasons.",
+      uk: "Сценарний рушій: 150 погодних шляхів і 10 цінових сценаріїв на 5 сезонів.",
+    },
+    scout: null,
+  };
+}
+
 export function recommendationText(rec: RecLike, lib: Library): RecText {
+  if (rec.type === "rotation") return rotationText(rec, lib);
   const pest = lib.pests.pests.find((p) => p.id === rec.subject);
   const name: Localised = pest
     ? { en: pest.name.en, uk: pest.name.uk }

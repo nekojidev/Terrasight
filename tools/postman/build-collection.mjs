@@ -473,6 +473,37 @@ const collection = {
         req("A deleted chat is gone", "GET", "/api/w/{{ws}}/conversations/{{convId}}", {
           tests: problem(404),
         }),
+        req(
+          "Plan for 2026 is empty at first (S-06.06)",
+          "GET",
+          "/api/w/{{ws}}/fields/{{fieldId}}/plans/2026",
+          {
+            tests: [
+              status(200),
+              `pm.test("no plan", () => pm.expect(pm.response.text()).to.be.oneOf(["", "null"]));`,
+            ],
+          },
+        ),
+        req("Unknown crop can't be saved to the plan", "PUT", "/api/w/{{ws}}/fields/{{fieldId}}/plans/2026", {
+          body: { crop: "banana" },
+          tests: problem(422, "unknown-crop"),
+        }),
+        req("Save alfalfa to the 2026 plan", "PUT", "/api/w/{{ws}}/fields/{{fieldId}}/plans/2026", {
+          body: { crop: "alfalfa", rotationId: "us-sp-alfalfa3-corn-wheat" },
+          tests: [
+            status(200),
+            `pm.test("saved", () => pm.expect(pm.response.json()).to.include({ season: 2026, crop: "alfalfa" }));`,
+          ],
+        }),
+        req(
+          "Scenario run with an out-of-range slider is invalid",
+          "POST",
+          "/api/w/{{ws}}/fields/{{fieldId}}/scenario-runs",
+          {
+            body: { overrides: { deltaT: 9 } },
+            tests: problem(422, "invalid-input"),
+          },
+        ),
         req("Archive the field", "DELETE", "/api/w/{{ws}}/fields/{{fieldId}}", { tests: [status(204)] }),
         req("An archived field is gone", "GET", "/api/w/{{ws}}/fields/{{fieldId}}", { tests: problem(404) }),
       ],

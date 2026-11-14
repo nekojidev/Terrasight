@@ -37,13 +37,30 @@ const iso = (d: Date | null | undefined) => (d ? d.toISOString().slice(0, 10) : 
 export class SeasonsService {
   private readonly calendar: CropCalendar;
 
+  private readonly planFirstSeason: number;
+
   constructor(
     private readonly prisma: PrismaService,
     @Inject(ENV) env: Env,
   ) {
+    this.planFirstSeason = env.PLAN_FIRST_SEASON;
     this.calendar = JSON.parse(
       readFileSync(join(env.DATA_DIR, "crop-calendar.json"), "utf8"),
     ) as CropCalendar;
+  }
+
+  /**
+   * The saved plan for a season. The plan horizon is fixed (PLAN_FIRST_SEASON, RFC §7.7: 2026–2030); while the calendar
+   * season is already past its first season, the plan for the first season stands in for it (decision 2026-11-14).
+   */
+  async planFor(fieldId: string, season: number) {
+    const exact = await this.prisma.system.plan.findUnique({
+      where: { fieldId_season: { fieldId, season } },
+    });
+    if (exact || season <= this.planFirstSeason) return exact;
+    return this.prisma.system.plan.findUnique({
+      where: { fieldId_season: { fieldId, season: this.planFirstSeason } },
+    });
   }
 
   /** The region's typical sowing dates, crop → "MM-DD" (crop calendar). */
@@ -72,7 +89,7 @@ export class SeasonsService {
     if (!field) throw new ProblemException(404, "not-found");
     const [record, plan] = await Promise.all([
       this.prisma.system.seasonRecord.findUnique({ where: { fieldId_season: { fieldId, season } } }),
-      this.prisma.system.plan.findUnique({ where: { fieldId_season: { fieldId, season } } }),
+      this.planFor(fieldId, season),
     ]);
 
     const crop: ResolvedValue<string> =
