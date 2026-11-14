@@ -53,7 +53,7 @@ export function FieldTabs({ fieldId, active = 0 }: { fieldId: string; active?: 0
     { label: r("tab1"), href: `/fields/${fieldId}` },
     { label: r("tab2"), href: null },
     { label: r("tab3"), href: `/fields/${fieldId}/rotation` },
-    { label: r("tab4"), href: null },
+    { label: r("tab4"), href: `/reports?field=${fieldId}` },
   ];
   return (
     <nav aria-label={r("tabs")} className="flex w-fit gap-1 rounded-input bg-muted p-1">

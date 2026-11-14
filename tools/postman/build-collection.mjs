@@ -522,6 +522,25 @@ const collection = {
           "/api/scouting-photos/00000000-0000-4000-8000-000000000000?exp=1&sig=x",
           { tests: problem(403) },
         ),
+        req("Owner report (S-08.02)", "GET", "/api/w/{{ws}}/report", {
+          tests: [
+            status(200),
+            `pm.test("shape", () => { const r = pm.response.json(); pm.expect(r.fields).to.be.an("array"); pm.expect(r.counts).to.have.property("items"); });`,
+          ],
+        }),
+        req("Create a report link (S-08.06)", "POST", "/api/w/{{ws}}/report-links", {
+          body: { language: "uk" },
+          tests: [
+            status(201),
+            `const l = pm.response.json(); pm.collectionVariables.set("linkToken", l.token); pm.collectionVariables.set("linkId", l.id); pm.test("token shown once", () => pm.expect(l.token.length).to.be.above(30));`,
+          ],
+        }),
+        req("The report through the link, in its language", "GET", "/api/r/{{linkToken}}", {
+          tests: [status(200), `pm.test("uk", () => pm.expect(pm.response.json().language).to.eql("uk"));`],
+        }),
+        req("A wrong token reaches nothing", "GET", "/api/r/not-a-real-token", { tests: problem(404) }),
+        req("Revoke the link", "DELETE", "/api/w/{{ws}}/report-links/{{linkId}}", { tests: [status(204)] }),
+        req("A revoked link stops working at once", "GET", "/api/r/{{linkToken}}", { tests: problem(404) }),
         req("Archive the field", "DELETE", "/api/w/{{ws}}/fields/{{fieldId}}", { tests: [status(204)] }),
         req("An archived field is gone", "GET", "/api/w/{{ws}}/fields/{{fieldId}}", { tests: problem(404) }),
       ],

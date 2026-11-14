@@ -589,9 +589,23 @@ model ReportItem {
   workspace      Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   recommendation Recommendation @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
   answers        OwnerAnswer[]
+  replies        ReportReply[]
 
   @@index([workspaceId, committedAt])
   @@map("report_items")
+}
+
+model ReportReply {
+  id           String   @id @default(uuid()) @db.Uuid
+  reportItemId String   @map("report_item_id") @db.Uuid
+  text         String
+  userId       String   @map("user_id") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  reportItem ReportItem @relation(fields: [reportItemId], references: [id], onDelete: Cascade)
+
+  @@index([reportItemId, createdAt])
+  @@map("report_replies")
 }
 
 model OwnerAnswer {
