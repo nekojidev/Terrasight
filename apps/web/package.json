@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@tanstack/react-query": "5.107.1",
+    "@terrasight/scenario-engine": "workspace:*",
     "@terrasight/shared": "workspace:*",
     "@terrasight/ui": "workspace:*",
     "@tmcw/togeojson": "7.1.3",

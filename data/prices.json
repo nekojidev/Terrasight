@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "about": "Default prices and costs per region (RFC §16, Tech Design §6.2). Prices: USDA NASS Crop Values 2025 Summary (preliminary). Variable costs and reference yields: K-State KSU Farm Management Guides (direct expenses, include labour, exclude rent and capital recovery) and UNL Nebraska Crop Budgets (total operating costs). variableCost / yieldRef = irrigated budget; dryland = dryland budget. Unit conversions: 56 lb/bu corn and sorghum, 60 lb wheat and soybean, 50 lb millet and canola; $/acre × 2.471 = $/ha. Researched 2026-11-14; scenarios use a crop only once verified.",
+  "about": "Default prices and costs per region (RFC §16, Tech Design §6.2). Prices: USDA NASS Crop Values 2025 Summary (preliminary). Variable costs and reference yields: K-State KSU Farm Management Guides (direct expenses, include labour, exclude rent and capital recovery) and UNL Nebraska Crop Budgets (total operating costs). variableCost / yieldRef = irrigated budget; dryland = dryland budget. Unit conversions: 56 lb/bu corn and sorghum, 60 lb wheat and soybean, 50 lb millet and canola; $/acre × 2.471 = $/ha. Researched and verified by the team on 2026-11-14; scenarios use a crop only once verified.",
   "currency": "USD",
   "regions": {
     "us-southern-plains": {
@@ -36,8 +36,8 @@
             "https://agmanager.info/node/34291"
           ],
           "note": "$4.00/bu. SW irrigated pivot $580.79/ac, 225 bu; SW W-C-F dryland $281.05/ac, 82 bu.",
-          "verified": false,
-          "verifiedBy": null
+          "verified": true,
+          "verifiedBy": "Oleksandr Baranovskyi"
         },
         "sorghum": {
           "price": {
@@ -70,8 +70,8 @@
             "https://agmanager.info/node/34291"
           ],
           "note": "$6.10/cwt. SW irrigated $403.55/ac, 160 bu; SW W-S-F $225.85/ac, 85 bu.",
-          "verified": false,
-          "verifiedBy": null
+          "verified": true,
+          "verifiedBy": "Oleksandr Baranovskyi"
         },
         "winter_wheat": {
           "price": {
@@ -104,8 +104,8 @@
             "https://www.agmanager.info/farm-budgets/historical-farm-budget-projections/2026-historical-budget-projections-non-irrigated"
           ],
           "note": "$4.60/bu. W KS limited irrigation $284.29/ac, 70 bu; SW W-F $196.30/ac, 54 bu.",
-          "verified": false,
-          "verifiedBy": null
+          "verified": true,
+          "verifiedBy": "Oleksandr Baranovskyi"
         },
         "soybean": {
           "price": {
@@ -138,8 +138,8 @@
             "https://agmanager.info/node/34291"
           ],
           "note": "$9.95/bu. SW irrigated $264.65/ac, 65 bu; SW W-SB-F $168.12/ac, 25 bu.",
-          "verified": false,
-          "verifiedBy": null
+          "verified": true,
+          "verifiedBy": "Oleksandr Baranovskyi"
         },
         "sunflower": {
           "price": {
@@ -172,8 +172,8 @@
             "https://agmanager.info/node/34291"
           ],
           "note": "KS all-sunflower $21.00/cwt (oil-type withheld). W KS irrigated $356.24/ac, 24 cwt; W KS W-SF-F $226.52/ac, 16 cwt.",
-          "verified": false,
-          "verifiedBy": null
+          "verified": true,
+          "verifiedBy": "Oleksandr Baranovskyi"
         },
         "alfalfa": {
           "price": {
@@ -206,8 +206,8 @@
             "https://agmanager.info/node/34291"
           ],
           "note": "Baled hay $121/short ton. W KS irrigated pivot $544.66/ac, 5 t; SW KS dryland $275.15/ac, 3 t.",
-          "verified": false,
-          "verifiedBy": null
+          "verified": true,
+          "verifiedBy": "Oleksandr Baranovskyi"
         },
         "cotton": {
           "price": {
@@ -240,8 +240,8 @@
             "https://agmanager.info/node/34291"
           ],
           "note": "Upland lint $0.611/lb, partial marketing year (Aug–Dec 2025); cottonseed revenue not included. SW irrigated $840.59/ac, 1,500 lb; SW W-CT-F $577.89/ac, 900 lb.",
-          "verified": false,
-          "verifiedBy": null
+          "verified": true,
+          "verifiedBy": "Oleksandr Baranovskyi"
         },
         "winter_canola": {
           "price": {
@@ -274,8 +274,8 @@
             "https://agmanager.info/node/34291"
           ],
           "note": "US $20.50/cwt.",
-          "verified": false,
-          "verifiedBy": null
+          "verified": true,
+          "verifiedBy": "Oleksandr Baranovskyi"
         },
         "forage_sorghum": {
           "price": {
@@ -306,8 +306,8 @@
             "https://agmanager.info/node/34291"
           ],
           "note": "$32.71/ton as harvested, 9 t/ac. Not a NASS price. Irrigated uses the dryland budget.",
-          "verified": false,
-          "verifiedBy": null
+          "verified": true,
+          "verifiedBy": "Oleksandr Baranovskyi"
         },
         "millet": {
           "price": {
@@ -339,8 +339,8 @@
             "https://cap.unl.edu/sites/unl.edu.ianr.agecon.center-for-ag-profitability/files/media/file/2026-nebraska-crop-budgets.pdf"
           ],
           "note": "$3.72/bu at 50 lb; 22 cwt/ac. Proxy for Kansas.",
-          "verified": false,
-          "verifiedBy": null
+          "verified": true,
+          "verifiedBy": "Oleksandr Baranovskyi"
         },
         "fallow": {
           "price": {
@@ -348,16 +348,16 @@
             "unit": "$/t"
           },
           "variableCost": {
-            "value": null,
+            "value": 0,
             "unit": "$/ha"
           },
           "yieldRef": {
-            "value": null,
+            "value": 0,
             "unit": "t/ha"
           },
           "dryland": {
             "variableCost": {
-              "value": null,
+              "value": 0,
               "unit": "$/ha"
             },
             "yieldRef": {
@@ -370,9 +370,9 @@
           "urls": [
             "https://www.agmanager.info/farm-budgets/historical-farm-budget-projections/2026-historical-budget-projections-non-irrigated"
           ],
-          "note": "Cost missing: team decision needed.",
-          "verified": false,
-          "verifiedBy": null
+          "note": "$0 by team decision (2026-11-14): fallow-year weed control is already inside the wheat–fallow budget, so wheat–fallow margins match the K-State / UNL W-F budgets.",
+          "verified": true,
+          "verifiedBy": "Oleksandr Baranovskyi"
         }
       }
     },
@@ -408,8 +408,8 @@
             "https://cap.unl.edu/sites/unl.edu.ianr.agecon.center-for-ag-profitability/files/media/file/2026-nebraska-crop-budgets.pdf"
           ],
           "note": "CO and NE $4.35/bu. #76 Panhandle no-till W-F $240.83/ac, 70 bu.",
-          "verified": false,
-          "verifiedBy": null
+          "verified": true,
+          "verifiedBy": "Oleksandr Baranovskyi"
         },
         "corn": {
           "price": {
@@ -441,8 +441,8 @@
             "https://cap.unl.edu/sites/unl.edu.ianr.agecon.center-for-ag-profitability/files/media/file/2026-nebraska-crop-budgets.pdf"
           ],
           "note": "CO $4.40/bu (NE $4.10). #38 Panhandle pivot $566.27/ac, 175 bu; #25 SW ecofallow after wheat $365.23/ac, 130 bu.",
-          "verified": false,
-          "verifiedBy": null
+          "verified": true,
+          "verifiedBy": "Oleksandr Baranovskyi"
         },
         "millet": {
           "price": {
@@ -474,8 +474,8 @@
             "https://cap.unl.edu/sites/unl.edu.ianr.agecon.center-for-ag-profitability/files/media/file/2026-nebraska-crop-budgets.pdf"
           ],
           "note": "CO $3.72/bu at 50 lb. #53 Panhandle $122.83/ac, 22 cwt.",
-          "verified": false,
-          "verifiedBy": null
+          "verified": true,
+          "verifiedBy": "Oleksandr Baranovskyi"
         },
         "sunflower": {
           "price": {
@@ -507,8 +507,8 @@
             "https://cap.unl.edu/sites/unl.edu.ianr.agecon.center-for-ag-profitability/files/media/file/2026-nebraska-crop-budgets.pdf"
           ],
           "note": "CO all-type $26.00/cwt (oil withheld). #73 Panhandle pivot $390.13/ac, 30 cwt; #72 after wheat $213.58/ac, 16 cwt.",
-          "verified": false,
-          "verifiedBy": null
+          "verified": true,
+          "verifiedBy": "Oleksandr Baranovskyi"
         },
         "soybean": {
           "price": {
@@ -541,8 +541,8 @@
             "https://agmanager.info/node/34291"
           ],
           "note": "$9.95/bu. #62 $327.46/ac, 67 bu; NW KS $169.48/ac, 25 bu.",
-          "verified": false,
-          "verifiedBy": null
+          "verified": true,
+          "verifiedBy": "Oleksandr Baranovskyi"
         },
         "alfalfa": {
           "price": {
@@ -575,8 +575,8 @@
             "https://agmanager.info/node/34291"
           ],
           "note": "CO $164/short ton (NE $102). #12 $355.87/ac, 6.6 t; NW KS $265.06/ac, 3 t.",
-          "verified": false,
-          "verifiedBy": null
+          "verified": true,
+          "verifiedBy": "Oleksandr Baranovskyi"
         },
         "fallow": {
           "price": {
@@ -584,16 +584,16 @@
             "unit": "$/t"
           },
           "variableCost": {
-            "value": null,
+            "value": 0,
             "unit": "$/ha"
           },
           "yieldRef": {
-            "value": null,
+            "value": 0,
             "unit": "t/ha"
           },
           "dryland": {
             "variableCost": {
-              "value": null,
+              "value": 0,
               "unit": "$/ha"
             },
             "yieldRef": {
@@ -606,9 +606,9 @@
           "urls": [
             "https://cap.unl.edu/sites/unl.edu.ianr.agecon.center-for-ag-profitability/files/media/file/2026-nebraska-crop-budgets.pdf"
           ],
-          "note": "Cost missing: team decision needed.",
-          "verified": false,
-          "verifiedBy": null
+          "note": "$0 by team decision (2026-11-14): fallow-year weed control is already inside the wheat–fallow budget, so wheat–fallow margins match the K-State / UNL W-F budgets.",
+          "verified": true,
+          "verifiedBy": "Oleksandr Baranovskyi"
         }
       }
     }

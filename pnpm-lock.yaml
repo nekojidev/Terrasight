@@ -68,9 +68,15 @@ importers:
       '@terrasight/library':
         specifier: workspace:*
         version: link:../../packages/library
+      '@terrasight/scenario-engine':
+        specifier: workspace:*
+        version: link:../../packages/scenario-engine
       '@terrasight/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@terrasight/simulator':
+        specifier: workspace:*
+        version: link:../../packages/simulator
       '@terrasight/sources':
         specifier: workspace:*
         version: link:../../packages/sources
@@ -159,6 +165,9 @@ importers:
       '@tanstack/react-query':
         specifier: 5.107.1
         version: 5.107.1(@types/react@19.3.0)(react@19.3.1)
+      '@terrasight/scenario-engine':
+        specifier: workspace:*
+        version: link:../../packages/scenario-engine
       '@terrasight/shared':
         specifier: workspace:*
         version: link:../../packages/shared

@@ -129,10 +129,11 @@ export function FieldClient({
           </Chip>
         </p>
       </header>
-      <FieldTabs />
+      <FieldTabs fieldId={id} />
 
       {history.data && (
         <FieldBrief
+          fieldId={id}
           risks={risks.data ?? []}
           seasons={history.data.seasons}
           cropName={(c) => cropLabel(history.data!.cropNames, locale, c)}

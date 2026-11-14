@@ -12,6 +12,7 @@ import { HealthController } from "./health/health.controller.js";
 import { LibraryModule } from "./library/library.module.js";
 import { MessagingModule } from "./messaging/messaging.module.js";
 import { RecommendationsModule } from "./recommendations/recommendations.module.js";
+import { ScenariosModule } from "./scenarios/scenarios.module.js";
 import { RedisModule } from "./redis/redis.module.js";
 import { WorkspacesModule } from "./workspaces/workspaces.module.js";
 
@@ -41,6 +42,7 @@ const env = loadEnv();
     AnalysisModule,
     RecommendationsModule,
     AssistantModule,
+    ScenariosModule,
   ],
   controllers: [HealthController],
 })

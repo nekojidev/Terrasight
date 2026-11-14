@@ -46,6 +46,11 @@ export class SeasonsService {
     ) as CropCalendar;
   }
 
+  /** The region's typical sowing dates, crop → "MM-DD" (crop calendar). */
+  sowingCalendar(regionId: string | null): Record<string, string> {
+    return (regionId && this.calendar.regions[regionId]?.sowing) || {};
+  }
+
   /** Typical sowing date of a crop in a region for a harvest year (crop calendar, `regional`); autumn sowing falls in the year before. */
   typicalSowing(regionId: string | null, crop: string | null, season: number): string | null {
     const mmdd = regionId && crop ? this.calendar.regions[regionId]?.sowing[crop] : undefined;

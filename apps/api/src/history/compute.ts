@@ -258,6 +258,8 @@ export interface BaselineMatch {
   share: number;
   /** Crops of the seasons used, oldest first. */
   detected: string[];
+  /** Index in the baseline sequence of the season after the last detected one. */
+  position?: number;
 }
 
 function itemKey(item: SequenceItem | { main: string; second: string | null }): string {
@@ -270,18 +272,25 @@ export function matchBaseline(crops: SeasonCrop[], lib: Library, regionId: strin
   const detected = recent.map((c) => itemKey({ main: c.mainCrop, second: c.secondCrop }));
   if (!regionId || recent.length < 4) return { rotationId: null, label: "detected", share: 0, detected };
   const baselines = lib.rotations.rotations.filter((r: Rotation) => r.region === regionId && r.baseline);
-  let best: { id: string; share: number } | null = null;
+  let best: { id: string; share: number; position: number } | null = null;
   for (const r of baselines) {
     const seq = r.sequence.map(itemKey);
     for (let shift = 0; shift < seq.length; shift++) {
       // Double-crop seasons match only when both crops match (RFC §6.3).
       const hits = detected.filter((d, i) => seq[(i + shift) % seq.length] === d).length;
       const share = hits / detected.length;
-      if (!best || share > best.share) best = { id: r.id, share };
+      if (!best || share > best.share)
+        best = { id: r.id, share, position: (shift + detected.length) % seq.length };
     }
   }
   if (best && best.share >= BASELINE_MATCH)
-    return { rotationId: best.id, label: "baseline", share: round2(best.share), detected };
+    return {
+      rotationId: best.id,
+      label: "baseline",
+      share: round2(best.share),
+      detected,
+      position: best.position,
+    };
   return { rotationId: null, label: "detected", share: round2(best?.share ?? 0), detected };
 }
 

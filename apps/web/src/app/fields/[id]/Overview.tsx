@@ -45,20 +45,37 @@ const LEVEL_TONE = {
 const BARS = { high: 3, moderate: 2, low: 1, none: 0, unknown: 0 } as const;
 
 /** Tabs of the field page (design 08). Only Overview exists until Zones (EP-09 mock), Rotation (EP-06), Report (EP-08). */
-export function FieldTabs() {
+export function FieldTabs({ fieldId, active = 0 }: { fieldId: string; active?: 0 | 2 }) {
   const r = useTranslations("Field");
+  // Zones (EP-09 mock) and the owner report tab (EP-08) come later.
+  const tabs: Array<{ label: string; href: string | null }> = [
+    { label: r("tab1"), href: `/fields/${fieldId}` },
+    { label: r("tab2"), href: null },
+    { label: r("tab3"), href: `/fields/${fieldId}/rotation` },
+    { label: r("tab4"), href: null },
+  ];
   return (
     <nav aria-label={r("tabs")} className="flex w-fit gap-1 rounded-input bg-muted p-1">
-      {[r("tab1"), r("tab2"), r("tab3"), r("tab4")].map((label, i) => (
-        <span
-          key={label}
-          aria-current={i === 0 ? "page" : undefined}
-          aria-disabled={i !== 0}
-          className={`rounded-btn px-4 py-2 text-body font-semibold ${i === 0 ? "bg-ink text-surface" : "text-ink-3"}`}
-        >
-          {label}
-        </span>
-      ))}
+      {tabs.map((tab, i) =>
+        tab.href ? (
+          <Link
+            key={tab.label}
+            href={tab.href}
+            aria-current={i === active ? "page" : undefined}
+            className={`focus-ring rounded-btn px-4 py-2 text-body font-semibold ${i === active ? "bg-ink text-surface" : "text-ink hover:bg-surface"}`}
+          >
+            {tab.label}
+          </Link>
+        ) : (
+          <span
+            key={tab.label}
+            aria-disabled
+            className="rounded-btn px-4 py-2 text-body font-semibold text-ink-3"
+          >
+            {tab.label}
+          </span>
+        ),
+      )}
     </nav>
   );
 }
@@ -68,10 +85,12 @@ export function FieldTabs() {
  * (seasons of corn after corn in the plan, margin of the alfalfa option) arrive with the scenario engine (S-06.03).
  */
 export function FieldBrief({
+  fieldId,
   risks,
   seasons,
   cropName,
 }: {
+  fieldId: string;
   risks: Risk[];
   seasons: Season[];
   cropName: (id: string) => string;
@@ -111,14 +130,13 @@ export function FieldBrief({
       </div>
       {top && <p className="text-body text-ink">{top.text.action[locale]}</p>}
       <div className="flex flex-wrap items-center gap-3">
-        <span
-          aria-disabled
-          title={t("fieldCompareSoon")}
-          className="inline-flex min-h-tap cursor-not-allowed items-center gap-2 rounded-btn bg-muted px-5 text-body font-semibold text-ink-3"
+        <Link
+          href={`/fields/${fieldId}/rotation`}
+          className="focus-ring inline-flex min-h-tap items-center gap-2 rounded-btn bg-ink px-5 text-body font-semibold text-surface"
         >
           <RefreshCw aria-hidden className="size-4" strokeWidth={1.7} />
           {r("bf_cta")}
-        </span>
+        </Link>
         {top && (
           <Link
             href={`/recommendations/${top.id}`}
