@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { LoggerModule } from "nestjs-pino";
 import { loadEnv } from "./config/config.js";
 import { AnalysisModule } from "./analysis/analysis.module.js";
+import { AssistantModule } from "./assistant/assistant.module.js";
 import { AuthModule } from "./auth/auth.module.js";
 import { ConfigModule } from "./config/config.module.js";
 import { DbModule } from "./db/db.module.js";
@@ -39,6 +40,7 @@ const env = loadEnv();
     FieldsModule,
     AnalysisModule,
     RecommendationsModule,
+    AssistantModule,
   ],
   controllers: [HealthController],
 })

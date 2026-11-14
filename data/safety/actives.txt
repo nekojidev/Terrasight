@@ -1,0 +1,99 @@
+# Active ingredients and product names the assistant must never output (RFC §12.5, Tech Design §12.3).
+# One name per line, EN and UA spellings; matching is case-insensitive on whole words. Names shorter than 4 letters are ignored.
+# Maintained list: add a name when a golden question or a log shows it slipping through.
+
+# --- herbicides ---
+glyphosate
+гліфосат
+atrazine
+атразин
+glufosinate
+глюфосинат
+dicamba
+дикамба
+2,4-D
+mesotrione
+мезотріон
+metolachlor
+s-metolachlor
+метолахлор
+acetochlor
+ацетохлор
+paraquat
+паракват
+pendimethalin
+пендиметалін
+imazethapyr
+імазетапір
+tribenuron
+трибенурон
+clopyralid
+клопіралід
+fluroxypyr
+флуроксипір
+saflufenacil
+nicosulfuron
+нікосульфурон
+# --- insecticides ---
+imidacloprid
+імідаклоприд
+thiamethoxam
+тіаметоксам
+clothianidin
+клотіанідин
+chlorpyrifos
+хлорпірифос
+bifenthrin
+біфентрин
+lambda-cyhalothrin
+лямбда-цигалотрин
+cypermethrin
+циперметрин
+deltamethrin
+дельтаметрин
+tefluthrin
+тефлутрин
+chlorantraniliprole
+хлорантраніліпрол
+dimethoate
+диметоат
+flonicamid
+sulfoxaflor
+# --- fungicides ---
+tebuconazole
+тебуконазол
+propiconazole
+пропіконазол
+azoxystrobin
+азоксистробін
+pyraclostrobin
+піраклостробін
+trifloxystrobin
+трифлоксистробін
+prothioconazole
+протіоконазол
+fluxapyroxad
+mancozeb
+манкоцеб
+chlorothalonil
+хлороталоніл
+difenoconazole
+дифеноконазол
+# --- common product names ---
+# Brand names that are ordinary English words (Liberty, Capture, Headline, Tilt…) are left out: they would block normal sentences.
+Roundup
+Раундап
+Dual Magnum
+Callisto
+Acuron
+Lumax
+Force 3G
+Mustang Maxx
+Lorsban
+Gaucho
+Cruiser
+Poncho
+Prosaro
+Miravis
+Trivapro
+Folicur

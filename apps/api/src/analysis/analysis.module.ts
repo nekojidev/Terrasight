@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { FieldsModule } from "../fields/fields.module.js";
 import { AnalysisController } from "./analysis.controller.js";
 import { AnalysisService } from "./analysis.service.js";
+import { EvalInputsService } from "./eval-inputs.service.js";
 import { FieldCheckConsumer } from "./field-check.consumer.js";
 import { ForecastService } from "./forecast.service.js";
 import { AnalysisScheduler } from "./scheduler.js";
@@ -10,7 +11,7 @@ import { AnalysisScheduler } from "./scheduler.js";
 @Module({
   imports: [FieldsModule],
   controllers: [AnalysisController],
-  providers: [ForecastService, AnalysisService, AnalysisScheduler, FieldCheckConsumer],
-  exports: [ForecastService, AnalysisService],
+  providers: [ForecastService, AnalysisService, AnalysisScheduler, FieldCheckConsumer, EvalInputsService],
+  exports: [ForecastService, AnalysisService, EvalInputsService],
 })
 export class AnalysisModule {}

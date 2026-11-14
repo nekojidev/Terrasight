@@ -25,6 +25,9 @@ export const EnvSchema = z.object({
   /** Open-Meteo commercial key (RFC §13); without it the free endpoint is used (development, hackathon demo). */
   OPEN_METEO_API_KEY: z.string().optional(),
   EARTHDATA_TOKEN: z.string().optional(),
+  /** Gemini API (RFC D9); without a key the assistant answers "Assistant unavailable". */
+  GEMINI_API_KEY: z.string().optional(),
+  GEMINI_MODEL: z.string().default("gemini-3.8-flash"),
   /** Recorded real responses served when a live call fails (RFC §5.4). */
   FIXTURES_DIR: z.string().default(fileURLToPath(new URL("../../../../fixtures/", import.meta.url))),
 });

@@ -1,45 +1,23 @@
 import { Inject, Injectable, Logger, type OnModuleInit } from "@nestjs/common";
-import {
-  evaluate,
-  modelApplies,
-  snapshotHash,
-  winterWheatStage,
-  type EvalInputs,
-  type Level,
-  type RiskResult,
-  type SeasonStage,
-} from "@terrasight/evaluators";
+import { evaluate, snapshotHash, type EvalInputs, type Level, type RiskResult } from "@terrasight/evaluators";
 import type { Library, PestModel } from "@terrasight/library";
 import type { Envelope } from "@terrasight/shared";
-import type { DailyWeather as PowerSeries, S2Result } from "@terrasight/sources";
-import { RateLimitService } from "../auth/rate-limit.js";
 import { ENV, runsWorker, type Env } from "../config/config.js";
 import { PrismaService } from "../db/prisma.service.js";
 import type { Prisma } from "../generated/prisma/client.js";
 import type { RecStatus, RecType } from "../generated/prisma/enums.js";
-import { GeoService } from "../geo/geo.service.js";
 import { LIBRARY } from "../library/library.module.js";
 import { BROKER, type Broker } from "../messaging/broker.js";
 import { JobConsumer } from "../messaging/consumer.js";
 import { QUEUES } from "../messaging/topology.js";
-import { SeasonsService } from "../seasons/seasons.service.js";
-import { SOURCE_LABELS, SourcesService } from "../sources/sources.service.js";
 import { AnalysisService, type FieldCheckJob } from "./analysis.service.js";
-import { ForecastService } from "./forecast.service.js";
-import { mergeWeather, ndviObservations, observedUntil } from "./inputs.js";
+import { EvalInputsService } from "./eval-inputs.service.js";
 
 const LIVE: RecStatus[] = ["open", "accepted", "snoozed", "in_report", "dismissed"];
 const ORDER: Record<Level, number> = { unknown: -1, none: 0, low: 1, moderate: 2, high: 3 };
 const DISEASE_KINDS = new Set(["fungus", "oomycete", "bacteria", "virus", "mycotoxin"]);
-const BUCKET = { capacity: 8, refillPerSec: 2 };
 /** Weather kept in a stored snapshot; the full 1981+ series is referenced by its POWER cache date. */
 const SNAPSHOT_WEATHER_DAYS = 430;
-
-/** First host crop named in a model tree (`host_repeat` / `host_interval`). */
-function hostCrop(model: PestModel): string | null {
-  const m = /"host":\["([a-z_]+)"/.exec(JSON.stringify(model.tree));
-  return m?.[1] ?? null;
-}
 
 /**
  * One field check (RFC §10.2, Tech Design §8.2): refresh weather by grid cell → season state → the evaluators whose
@@ -55,11 +33,7 @@ export class FieldCheckConsumer extends JobConsumer<FieldCheckJob> implements On
     @Inject(LIBRARY) private readonly lib: Library,
     private readonly prisma: PrismaService,
     private readonly analysis: AnalysisService,
-    private readonly forecasts: ForecastService,
-    private readonly sources: SourcesService,
-    private readonly seasons: SeasonsService,
-    private readonly geo: GeoService,
-    private readonly limits: RateLimitService,
+    private readonly inputsService: EvalInputsService,
   ) {
     super(broker, { queue: QUEUES.fieldCheck, prefetch: 4, retries: 0 });
   }
@@ -95,106 +69,21 @@ export class FieldCheckConsumer extends JobConsumer<FieldCheckJob> implements On
       select: { asOf: true },
     });
     const asOf = run.asOf.toISOString().slice(0, 10);
-    const field = await this.prisma.system.field.findUniqueOrThrow({
-      where: { id: fieldId },
-      select: { regionId: true, tier: true, country: true },
-    });
-    const geom = await this.geo.fieldGeometry(fieldId);
-    const take = async () => {
-      while (!(await this.limits.take("source:power", BUCKET)))
-        await new Promise((res) => setTimeout(res, 250));
-    };
-
+    const built = await this.inputsService.build(workspaceId, fieldId, asOf);
+    const { inputs, stage, due, dataDate, problems } = built;
     const models = this.lib.enabledModels;
-    const needsNdvi = models.some((m) => JSON.stringify(m.tree).includes('"green_bridge"'));
-    const [power, forecast, s2] = await Promise.all([
-      this.sources.fresh<PowerSeries>("power", geom, asOf, take),
-      this.forecasts.get(geom.centroid.lat, geom.centroid.lon, field.country, asOf),
-      needsNdvi
-        ? this.sources.fresh<S2Result>("sentinel2", geom, asOf, async () => undefined)
-        : Promise.resolve(null),
-    ]);
-
-    const weather = mergeWeather(power?.result.payload ?? null, forecast?.forecast ?? null, asOf);
-    const dataDate = observedUntil(weather);
-    const problems: string[] = [];
-    if (!power || power.origin === "stale")
-      problems.push(`${SOURCE_LABELS.power} ${power?.error ?? "did not respond"}`);
-    if (!forecast) problems.push("Forecast unavailable");
-    else if (forecast.origin === "stale")
-      problems.push(`Forecast from ${forecast.ageHours} h ago (${forecast.failures.join("; ")})`);
-    if (!weather.length)
+    if (!inputs.weather.length)
       return {
         status: "failed" as const,
         dataDate: null,
         error: problems.join(". ") || "no weather data",
         created: 0,
       };
-
-    const season = SeasonsService.currentSeason(new Date(`${asOf}T12:00:00Z`));
-    const [crops, record, plan, scouted] = await Promise.all([
-      this.prisma.system.cropSeason.findMany({ where: { fieldId } }),
-      this.seasons.get(workspaceId, fieldId, season),
-      this.prisma.system.plan.findUnique({ where: { fieldId_season: { fieldId, season } } }),
-      this.prisma.system.scoutingTask.findMany({
-        where: { fieldId, status: "sent", recommendation: { season } },
-        select: { recommendation: { select: { subject: true } } },
-      }),
-    ]);
-    const confirmedCrop = record.crop.source === "confirmed" ? record.crop.value : null;
-    const nextCrop = plan?.crop ?? confirmedCrop;
-    const lastCrop = [...crops].sort((a, b) => b.season - a.season)[0]?.mainCrop ?? null;
-    const inputs: EvalInputs = {
-      fieldId,
-      tier: field.tier,
-      regionId: field.regionId,
-      season,
-      crops: crops.map((c) => ({
-        season: c.season,
-        mainCrop: c.mainCrop,
-        secondCrop: c.secondCrop,
-        confidence: c.confidence,
-        source: c.source,
-        isOverride: c.isOverride,
-      })),
-      nextCrop: { season, crop: nextCrop, source: plan ? "plan" : confirmedCrop ? "plan" : "unknown" },
-      record: {
-        crop: record.crop,
-        sowingDate: record.sowingDate,
-        emergenceDate: record.emergenceDate,
-      },
-      weather,
-      ndvi: ndviObservations(s2?.result.payload ?? null),
-      planningDeadline: null, // per model below
-      scouted: scouted.map((s) => s.recommendation.subject),
-      southernHemisphere: geom.centroid.lat < 0,
-    };
-
-    const stage: SeasonStage =
-      record.crop.value === "winter_wheat" ? winterWheatStage(inputs, asOf) : "unknown";
-    const due = models.filter((m) => modelApplies(m, { crop: record.crop.value, stage }));
     let created = 0;
     for (const model of due) {
-      // Planning deadline: the next crop's typical sowing date; while it isn't chosen, the date the model's host
-      // crop would be sown (the decision has to be made by then), else a repeat of the last crop.
-      const host = hostCrop(model);
-      const planningDeadline =
-        this.seasons.typicalSowing(field.regionId, nextCrop, season) ??
-        this.seasons.typicalSowing(field.regionId, host, season) ??
-        this.seasons.typicalSowing(field.regionId, lastCrop, season);
+      const planningDeadline = built.planningDeadline(model);
       const result = evaluate(model, { ...inputs, planningDeadline }, asOf);
-      if (
-        await this.upsert(
-          workspaceId,
-          fieldId,
-          runId,
-          model,
-          result,
-          inputs,
-          asOf,
-          power?.result.dataDate ?? null,
-        )
-      )
+      if (await this.upsert(workspaceId, fieldId, runId, model, result, inputs, asOf, built.powerDate))
         created += 1;
     }
     // Open or snoozed items whose deadline has passed leave the brief (RFC §10.4: Open → Expired).

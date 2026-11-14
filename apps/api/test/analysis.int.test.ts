@@ -9,6 +9,7 @@ import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { AnalysisService, type FieldCheckJob } from "../src/analysis/analysis.service.js";
 import { FieldCheckConsumer } from "../src/analysis/field-check.consumer.js";
+import { EvalInputsService } from "../src/analysis/eval-inputs.service.js";
 import { ForecastService } from "../src/analysis/forecast.service.js";
 import { AnalysisScheduler } from "../src/analysis/scheduler.js";
 import { RateLimitService } from "../src/auth/rate-limit.js";
@@ -185,18 +186,16 @@ beforeAll(async () => {
   geo = new GeoService(prisma, lib);
   sources = new SourcesService(prisma, env);
   analysis = new AnalysisService(prisma, outbox, events);
-  consumer = new FieldCheckConsumer(
-    broker,
-    env,
+  const inputsService = new EvalInputsService(
     lib,
     prisma,
-    analysis,
     new ForecastService(prisma, limits, env),
     sources,
     new SeasonsService(prisma, env),
     geo,
     limits,
   );
+  consumer = new FieldCheckConsumer(broker, env, lib, prisma, analysis, inputsService);
   scheduler = new AnalysisScheduler(env, prisma, analysis);
 });
 
