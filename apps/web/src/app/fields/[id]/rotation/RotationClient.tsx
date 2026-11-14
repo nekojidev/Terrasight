@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { rank, type Metric, type ScenarioResult } from "@terrasight/scenario-engine";
-import { Button, Chip, SeasonStrip, cropColour } from "@terrasight/ui";
+import { Button, Chip, FieldThumb, SeasonStrip, cropColour } from "@terrasight/ui";
 import { Check, Droplet, Leaf, PiggyBank, ShieldCheck, Sparkles, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
@@ -62,12 +62,16 @@ export function RotationClient({
   workspaceId,
   fieldId,
   fieldName,
+  thumb = null,
+  crop = null,
   units,
   canSave,
 }: {
   workspaceId: string;
   fieldId: string;
   fieldName: string;
+  thumb?: string | null;
+  crop?: string | null;
   units: "metric" | "imperial";
   canSave: boolean;
 }) {
@@ -197,7 +201,10 @@ export function RotationClient({
   return (
     <div className="flex flex-col gap-8">
       <header className="flex flex-col gap-3">
-        <h1 className="text-h1 text-ink">{fieldName}</h1>
+        <div className="flex items-center gap-4">
+          <FieldThumb name={fieldName} outline={thumb} crop={crop} size={56} />
+          <h1 className="text-h1 text-ink">{fieldName}</h1>
+        </div>
         <FieldTabs fieldId={fieldId} active={2} />
       </header>
       <section className="flex flex-wrap items-center justify-between gap-4 rounded-hero bg-ink p-7 text-surface">

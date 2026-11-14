@@ -3,6 +3,7 @@ import { EventKeys } from "@terrasight/shared";
 import { PrismaService } from "../db/prisma.service.js";
 import type { Irrigation } from "../generated/prisma/enums.js";
 import { GeoService, type GeoJsonPolygonal } from "../geo/geo.service.js";
+import { thumbPath } from "../geo/thumb.js";
 import { ProblemException } from "../http/problem.js";
 import { OutboxService } from "../messaging/outbox.service.js";
 import { eventRow, jobRow } from "../messaging/outbox.js";
@@ -153,13 +154,16 @@ export class FieldsService {
         irrigation_source: string;
         slope_pct: number | null;
         geojson: string;
+        thumb_geojson: string | null;
         lon: number;
         lat: number;
         created_at: Date;
       }>
     >`
       SELECT id, name, alias_no, area_ha, county_name, country, admin_code, region_id, tier, irrigation, irrigation_source, slope_pct,
-             ST_AsGeoJSON(geom, 7) AS geojson, ST_X(centroid) AS lon, ST_Y(centroid) AS lat, created_at
+             ST_AsGeoJSON(geom, 7) AS geojson,
+             ST_AsGeoJSON(ST_SimplifyPreserveTopology(geom, GREATEST(ST_XMax(geom) - ST_XMin(geom), ST_YMax(geom) - ST_YMin(geom)) / 40), 6) AS thumb_geojson,
+             ST_X(centroid) AS lon, ST_Y(centroid) AS lat, created_at
       FROM fields WHERE id = ${fieldId}::uuid AND workspace_id = ${workspaceId}::uuid AND archived_at IS NULL`;
     const r = rows[0];
     if (!r) throw new ProblemException(404, "not-found");
@@ -177,6 +181,7 @@ export class FieldsService {
       irrigationSource: r.irrigation_source,
       slopePct: r.slope_pct,
       geometry: JSON.parse(r.geojson) as unknown,
+      thumb: thumbPath(r.thumb_geojson),
       centroid: { lon: r.lon, lat: r.lat },
       createdAt: r.created_at,
     };

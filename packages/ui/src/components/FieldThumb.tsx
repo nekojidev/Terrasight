@@ -4,8 +4,12 @@ import { cropColour } from "./SeasonStrip";
 export interface FieldThumbProps {
   /** Localised field name, used as alt text. */
   name: string;
+  /** Real field outline: SVG path data in a 0–100 box (API `thumb`). */
+  outline?: string | null;
+  /** Schematic fallback used only when no outline is given (stories). */
   shape?: "pivot" | "strip";
-  crop?: string;
+  /** Crop id; the outline is filled with its colour, or a neutral token when unknown. */
+  crop?: string | null;
   /** Sentinel-2 true-colour thumbnail URL in production; without it a schematic tile is drawn. */
   src?: string;
   size?: 40 | 56 | 64;
@@ -15,8 +19,9 @@ export interface FieldThumbProps {
 /** Satellite tile with the field's shape (design/README §3). */
 export function FieldThumb({
   name,
-  shape = "pivot",
-  crop = "fallow",
+  outline,
+  shape,
+  crop,
   src,
   size = 56,
   className,
@@ -24,6 +29,26 @@ export function FieldThumb({
   const box = clsx("shrink-0 overflow-hidden rounded-btn", className);
   if (src) {
     return <img src={src} alt={name} width={size} height={size} className={clsx(box, "object-cover")} />;
+  }
+  const fill = crop ? cropColour(crop) : "var(--ts-line-strong)";
+  if (outline || !shape) {
+    return (
+      <svg role="img" aria-label={name} width={size} height={size} viewBox="0 0 100 100" className={box}>
+        <rect width="100" height="100" fill="var(--ts-muted)" />
+        {outline && (
+          <path
+            d={outline}
+            transform="translate(10 10) scale(0.8)"
+            fill={fill}
+            stroke="var(--ts-ink)"
+            strokeOpacity="0.35"
+            strokeWidth="2.5"
+            strokeLinejoin="round"
+            vectorEffect="non-scaling-stroke"
+          />
+        )}
+      </svg>
+    );
   }
   return (
     <svg role="img" aria-label={name} width={size} height={size} viewBox="0 0 56 56" className={box}>
@@ -34,7 +59,7 @@ export function FieldThumb({
           cx="28"
           cy="28"
           r="22"
-          fill={cropColour(crop)}
+          fill={fill}
           stroke="var(--ts-ink)"
           strokeOpacity="0.25"
           strokeWidth="2"
@@ -46,7 +71,7 @@ export function FieldThumb({
           width="44"
           height="20"
           rx="3"
-          fill={cropColour(crop)}
+          fill={fill}
           stroke="var(--ts-ink)"
           strokeOpacity="0.25"
           strokeWidth="2"

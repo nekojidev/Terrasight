@@ -8,6 +8,7 @@ import {
   HeroItem,
   QueueRow,
   RailCard,
+  FieldThumb,
   SeasonStrip,
   Skeleton,
   type Factor,
@@ -37,6 +38,7 @@ interface Item {
   urgency: "urgent" | "this_week" | "all_good";
   more: number;
   seasons: Array<{ season: number; crop: string }>;
+  thumb?: string | null;
 }
 interface Brief {
   date: string;
@@ -49,6 +51,7 @@ interface Brief {
     fieldId: string;
     name: string;
     seasons: Array<{ season: number; crop: string }>;
+    thumb?: string | null;
     plan: { id: string; title: Localised; deadline: string | null } | null;
     unknown: { id: string; title: Localised } | null;
   }>;
@@ -241,6 +244,12 @@ export function Brief({
                 href={`/fields/${b.hero.fieldId}`}
                 className="flex items-center gap-3 text-small text-ink-2 hover:underline"
               >
+                <FieldThumb
+                  name={b.hero.fieldName}
+                  outline={b.hero.thumb ?? null}
+                  crop={b.hero.seasons.at(-1)?.crop ?? null}
+                  size={40}
+                />
                 <span className="text-body font-semibold text-ink">{b.hero.fieldName}</span>
                 {strip(b.hero.seasons)}
                 {b.hero.more > 0 && <span>{t("more", { n: b.hero.more })}</span>}
@@ -269,7 +278,15 @@ export function Brief({
             {rows.map((i) => (
               <QueueRow
                 key={i.id}
-                thumb={<span aria-hidden className="size-12 shrink-0 rounded-input bg-muted" />}
+                thumb={
+                  <FieldThumb
+                    name={i.fieldName}
+                    outline={i.thumb ?? null}
+                    crop={i.seasons.at(-1)?.crop ?? null}
+                    size={56}
+                    className="size-12"
+                  />
+                }
                 title={i.text.title[locale]}
                 meta={`${i.fieldName}${i.more > 0 ? ` · ${t("more", { n: i.more })}` : ""}`}
                 due={due(i)}
@@ -297,6 +314,13 @@ export function Brief({
                     href={g.plan ? `/recommendations/${g.plan.id}` : `/fields/${g.fieldId}`}
                     className="focus-ring flex max-w-full flex-wrap items-center gap-2 rounded-chip border border-line bg-surface px-4 py-2 text-small font-semibold text-ink hover:bg-muted"
                   >
+                    <FieldThumb
+                      name={g.name}
+                      outline={g.thumb ?? null}
+                      crop={g.seasons.at(-1)?.crop ?? null}
+                      size={40}
+                      className="size-6"
+                    />
                     <span className="whitespace-nowrap">{g.name}</span>
                     <SeasonStrip
                       size="sm"

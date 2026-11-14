@@ -7,6 +7,7 @@ import { ForecastService } from "../analysis/forecast.service.js";
 import { localDate } from "../analysis/scheduler.js";
 import { PrismaService } from "../db/prisma.service.js";
 import { GeoService } from "../geo/geo.service.js";
+import { thumbPath } from "../geo/thumb.js";
 import { ProblemException } from "../http/problem.js";
 import { BriefService } from "../brief/brief.service.js";
 import { RecommendationsService } from "./recommendations.service.js";
@@ -52,9 +53,11 @@ export class FieldsOverviewController {
           irrigation: string;
           lon: number;
           lat: number;
+          thumb_geojson: string | null;
         }>
       >`
-        SELECT id, name, area_ha, county_name, admin_code, irrigation, ST_X(centroid) AS lon, ST_Y(centroid) AS lat
+        SELECT id, name, area_ha, county_name, admin_code, irrigation, ST_X(centroid) AS lon, ST_Y(centroid) AS lat,
+          ST_AsGeoJSON(ST_SimplifyPreserveTopology(geom, GREATEST(ST_XMax(geom) - ST_XMin(geom), ST_YMax(geom) - ST_YMin(geom)) / 40), 6) AS thumb_geojson
         FROM fields WHERE workspace_id = ${ws}::uuid AND archived_at IS NULL ORDER BY alias_no`,
     ]);
     const crops = await this.prisma.system.cropSeason.findMany({
@@ -71,6 +74,7 @@ export class FieldsOverviewController {
         name: f.name,
         areaHa: f.area_ha,
         irrigation: f.irrigation,
+        lastCropId: crops.find((c) => c.fieldId === f.id)?.mainCrop ?? null,
         lastCrop: this.cropName(crops.find((c) => c.fieldId === f.id)?.mainCrop ?? null),
         urgency: (item?.urgency ?? "all_good") as keyof typeof rank,
         next: item
@@ -82,6 +86,7 @@ export class FieldsOverviewController {
         state: f.admin_code,
         lon: f.lon,
         lat: f.lat,
+        thumb: thumbPath(f.thumb_geojson),
       };
     });
     const counties = new Map<string, typeof rows>();
