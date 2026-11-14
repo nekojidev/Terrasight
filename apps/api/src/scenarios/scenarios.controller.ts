@@ -60,6 +60,12 @@ export class ScenariosController {
     return this.scenarios.get(req.workspaceId!, uuid(id), uuid(runId));
   }
 
+  @Get("yield-range")
+  @Requires("scenarios.explore")
+  yieldRange(@Param("id") id: string, @Req() req: AuthedRequest) {
+    return this.scenarios.yieldRange(req.workspaceId!, uuid(id));
+  }
+
   @Get("plans/:season")
   @Requires("scenarios.explore")
   plan(@Param("id") id: string, @Param("season", ParseIntPipe) season: number, @Req() req: AuthedRequest) {

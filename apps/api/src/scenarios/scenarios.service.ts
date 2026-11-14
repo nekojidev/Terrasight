@@ -5,7 +5,10 @@ import type { Library } from "@terrasight/library";
 import { stableStringify } from "@terrasight/evaluators";
 import {
   ENGINE_VERSION,
+  planSeasons,
+  weatherRuns,
   withEt0,
+  yieldRange,
   type EngineInput,
   type EngineResult,
   type Rotation,
@@ -62,6 +65,7 @@ export function seasonWindows(power: PowerSeries, southern: boolean): Map<number
 @Injectable()
 export class ScenariosService {
   private readonly log = new Logger(ScenariosService.name);
+  private readonly yieldCache = new Map<string, ReturnType<typeof yieldRange>>();
 
   constructor(
     @Inject(ENV) private readonly env: Env,
@@ -228,6 +232,63 @@ export class ScenariosService {
     });
     this.log.log(`scenarios for ${fieldId}: ${result.candidates} candidates in ${durationMs} ms`);
     return this.view(row.id, result, row.createdAt, durationMs, missing, input);
+  }
+
+  /**
+   * Yield range P10 / P50 / P90 for the planned crop of the first season (FR-YF-1) from the same inputs and the same
+   * 150 block-bootstrap weather runs as the scenarios. Crop: saved plan, else the rotation recommendation's first
+   * crop, else the current rotation's next crop. Pest losses are not modelled.
+   */
+  async yieldRange(workspaceId: string, fieldId: string) {
+    const input = await this.inputs(workspaceId, fieldId, {});
+    if (!input.rotations.length) return { noLibrary: true as const };
+    const season = input.firstSeason;
+    const [plan, rec] = await Promise.all([
+      this.prisma.system.plan.findUnique({ where: { fieldId_season: { fieldId, season } } }),
+      this.prisma.system.recommendation.findFirst({
+        where: {
+          fieldId,
+          type: "rotation",
+          subject: "rotation",
+          season,
+          status: { in: ["open", "accepted", "snoozed", "in_report"] },
+        },
+      }),
+    ]);
+    const recCrop = ((rec?.drivers as Array<{ driver: string; value: unknown }> | null) ?? []).find(
+      (d) => d.driver === "first_crop",
+    )?.value;
+    const currentFirst = planSeasons(input.current.sequence, input.current.position, season)[0]?.crops[0];
+    const [crop, source] = plan?.crop
+      ? ([plan.crop, "plan"] as const)
+      : typeof recCrop === "string"
+        ? ([recCrop, "recommendation"] as const)
+        : ([currentFirst, "current-rotation"] as const);
+    const base = {
+      noLibrary: false as const,
+      season,
+      source,
+      cropNames: this.lib.rotations.crops[crop ?? ""] ?? null,
+    };
+    if (!crop) return { ...base, crop: null, range: null, yieldRef: null };
+    const key = createHash("sha256")
+      .update(
+        stableStringify({
+          ...input,
+          weatherByYear: [...input.weatherByYear.keys()],
+          weatherDate: input.weatherByYear.get(Math.max(...input.weatherByYear.keys()))?.at(-1)?.date,
+          crop,
+          engine: ENGINE_VERSION,
+        }),
+      )
+      .digest("hex");
+    let range = this.yieldCache.get(key);
+    if (range === undefined) {
+      range = yieldRange(input, [{ season, crops: [crop] }], weatherRuns(input));
+      this.yieldCache.set(key, range);
+      if (this.yieldCache.size > 200) this.yieldCache.delete(this.yieldCache.keys().next().value!);
+    }
+    return { ...base, crop, range, yieldRef: input.prices[crop]?.yieldRef ?? null };
   }
 
   async get(workspaceId: string, fieldId: string, runId: string) {

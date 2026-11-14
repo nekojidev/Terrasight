@@ -6,7 +6,10 @@ import {
   planSeasons,
   rank,
   runScenarios,
+  weatherRuns,
   withEt0,
+  yieldRange,
+  percentile,
   type EngineInput,
   type Rotation,
 } from "./engine.js";
@@ -231,5 +234,43 @@ describe("rotation yield effects (verified 2026-11-14)", () => {
     // 4 of 5 corn seasons follow corn: margin is lower than without the effect would give
     expect(cc.pestPressure[0]!.seasons).toBe(4);
     expect(cc.marginBySeason[1]!).toBeLessThan(cc.marginBySeason[0]!);
+  });
+});
+
+describe("yield range (FR-YF-1)", () => {
+  const inp = input({ runs: 40 });
+  const runs = weatherRuns(inp);
+  const plan = [{ season: 2026, crops: ["corn"] }];
+
+  it("percentiles interpolate a sorted sample", () => {
+    expect(percentile([1, 2, 3, 4, 5], 0.5)).toBe(3);
+    expect(percentile([0, 10], 0.1)).toBeCloseTo(1);
+  });
+
+  it("returns ordered P10 <= P50 <= P90 in t/ha, deterministic, without a pest term", () => {
+    const a = yieldRange(inp, plan, runs)!;
+    const b = yieldRange(inp, plan, weatherRuns(inp))!;
+    expect(a).toEqual(b);
+    expect(a.crop).toBe("corn");
+    expect(a.season).toBe(2026);
+    expect(a.unit).toBe("t/ha");
+    expect(a.runs).toBe(40);
+    expect(a.pestLossIncluded).toBe(false);
+    expect(a.p10).toBeGreaterThan(0);
+    expect(a.p10).toBeLessThanOrEqual(a.p50);
+    expect(a.p50).toBeLessThanOrEqual(a.p90);
+    // Never above the water-unstressed reference (rotation effect on corn after corn only lowers it).
+    expect(a.p90).toBeLessThanOrEqual(prices.corn.yieldRef * 1.0001);
+  });
+
+  it("dryland yields spread wider than irrigated", () => {
+    const dry = yieldRange(input({ runs: 40, irrigated: false }), plan, weatherRuns(input({ runs: 40, irrigated: false })))!;
+    const wet = yieldRange(inp, plan, runs)!;
+    expect(dry.p90 - dry.p10).toBeGreaterThan(wet.p90 - wet.p10);
+  });
+
+  it("is null for fallow or an unpriced crop", () => {
+    expect(yieldRange(inp, [{ season: 2026, crops: ["fallow"] }], runs)).toBeNull();
+    expect(yieldRange(inp, [{ season: 2026, crops: ["rye"] }], runs)).toBeNull();
   });
 });
