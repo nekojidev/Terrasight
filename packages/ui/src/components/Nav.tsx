@@ -73,9 +73,10 @@ export interface TopBarProps {
   onSearch: () => void;
   languages: Array<{ code: string; label: string; active: boolean; onSelect: () => void }>;
   languageGroupLabel: string;
-  notificationsLabel: string;
+  /** Bell is rendered only when notifications are backed by real data. */
+  notificationsLabel?: string;
   hasNotifications?: boolean;
-  onNotifications: () => void;
+  onNotifications?: () => void;
   /** Extra control before notifications (e.g. the theme toggle on phones). */
   extra?: ReactNode;
 }
@@ -117,15 +118,19 @@ export function TopBar(p: TopBarProps) {
         ))}
       </div>
       {p.extra}
-      <button
-        type="button"
-        aria-label={p.notificationsLabel}
-        onClick={p.onNotifications}
-        className="focus-ring relative inline-flex size-11 items-center justify-center rounded-btn border border-line bg-surface"
-      >
-        <Bell aria-hidden className="size-5" strokeWidth={1.7} />
-        {p.hasNotifications && <span className="absolute top-2.5 right-2.5 size-2 rounded-chip bg-urgent" />}
-      </button>
+      {p.notificationsLabel && p.onNotifications && (
+        <button
+          type="button"
+          aria-label={p.notificationsLabel}
+          onClick={p.onNotifications}
+          className="focus-ring relative inline-flex size-11 items-center justify-center rounded-btn border border-line bg-surface"
+        >
+          <Bell aria-hidden className="size-5" strokeWidth={1.7} />
+          {p.hasNotifications && (
+            <span className="absolute top-2.5 right-2.5 size-2 rounded-chip bg-urgent" />
+          )}
+        </button>
+      )}
     </header>
   );
 }

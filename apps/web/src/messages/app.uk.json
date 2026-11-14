@@ -86,6 +86,8 @@
     "till_conventional": "Традиційний",
     "till_reduced": "Мінімальний",
     "till_no_till": "Нульовий (no-till)",
+    "mapLabel": "Карта для обведення контуру поля",
+    "coFields": "{n, plural, one {# поле} few {# поля} many {# полів} other {# поля}}",
     "fieldsTitle": "Поля",
     "addField": "Додати поле",
     "anLast": "Останній аналіз: {when} · {n, plural, one {# поле} few {# поля} many {# полів} other {# поля}}",

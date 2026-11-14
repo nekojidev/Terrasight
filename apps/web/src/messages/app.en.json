@@ -86,6 +86,8 @@
     "till_conventional": "Conventional",
     "till_reduced": "Reduced",
     "till_no_till": "No-till",
+    "mapLabel": "Map for outlining the field",
+    "coFields": "{n, plural, one {# field} other {# fields}}",
     "fieldsTitle": "Fields",
     "addField": "Add a field",
     "anLast": "Last analysis: {when} · {n, plural, one {# field} other {# fields}}",

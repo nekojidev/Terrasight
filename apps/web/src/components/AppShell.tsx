@@ -29,7 +29,7 @@ function initials(name: string): string {
     .join("");
 }
 
-/** Desktop shell (design 03/04): sidebar with company card, top bar with search, UA/EN and notifications. */
+/** Desktop shell (design 03/04): sidebar with company card, top bar with search and UA/EN (no bell: there are no real notifications yet). */
 export function AppShell({
   workspace,
   user,
@@ -79,7 +79,7 @@ export function AppShell({
               <span className="min-w-0">
                 <span className="block truncate text-body font-semibold text-ink">{workspace.name}</span>
                 <span className="block text-small text-ink-2">
-                  {workspace.fieldCount === 0 ? t("co_m") : ""}
+                  {a("coFields", { n: workspace.fieldCount })}
                 </span>
               </span>
             </div>
@@ -118,8 +118,6 @@ export function AppShell({
             { code: "uk", label: "UA", active: locale === "uk", onSelect: () => setLocale("uk") },
             { code: "en", label: "EN", active: locale === "en", onSelect: () => setLocale("en") },
           ]}
-          notificationsLabel={t("notif")}
-          onNotifications={() => undefined}
           extra={<ThemeToggle className="lg:hidden" />}
         />
         <main className="mx-auto w-full max-w-[1180px] px-4 pt-6 pb-24 sm:px-8 sm:py-10 lg:pb-10">
