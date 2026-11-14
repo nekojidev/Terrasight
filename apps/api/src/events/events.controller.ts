@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Controller,
+  ForbiddenException,
   Get,
   Header,
   Param,
@@ -39,7 +40,7 @@ export class EventsController {
   async stream(
     @Param("ws") ws: string,
     @Query("topics") topicsParam: string | undefined,
-    @Req() _req: AuthedRequest,
+    @Req() req: AuthedRequest,
   ): Promise<Observable<SseMessage>> {
     const raw = (topicsParam ?? "brief")
       .split(",")
@@ -51,8 +52,20 @@ export class EventsController {
       if (!parsed.success) throw new BadRequestException(`Unknown topic ${t}`);
       topics.push(parsed.data);
     }
-    // field:<id> must belong to this workspace (conversation topics are checked by EP-05).
+    // field:<id> must belong to this workspace; conversation:<id> only to the user who owns the conversation
+    // (conversations are private to their author: `list` filters by user, Tech Design §12).
     for (const t of topics) {
+      if (t.startsWith("conversation:")) {
+        const id = t.slice("conversation:".length);
+        const userId = req.user?.id;
+        const conv = userId
+          ? await this.prisma.system.conversation.findFirst({
+              where: { id, workspaceId: ws, userId },
+              select: { id: true },
+            })
+          : null;
+        if (!conv) throw new ForbiddenException(`No access to topic ${t}`);
+      }
       if (t.startsWith("field:")) {
         const id = t.slice("field:".length);
         const field = await this.prisma.db.field.findFirst({
