@@ -17,3 +17,6 @@ apps/e2e/cypress/screenshots/
 
 # Copied from maplibre-gl by apps/web/scripts/maplibre-worker.mjs
 apps/web/public/maplibre-gl-worker.mjs
+
+# Agent worktrees
+.claude/
