@@ -80,6 +80,9 @@ export interface Citation {
   publisher: string | null;
   url: string | null;
   accessed: string | null;
+  /** extension / fallback / calibration (RFC §11.3). */
+  type: string;
+  quote: string | null;
 }
 
 /** One node's result inside the tree. */

@@ -42,10 +42,16 @@ describe("loadLibrary", () => {
   it("enables only models whose every threshold is verified, valued and cited", () => {
     for (const m of lib.enabledModels) {
       for (const t of Object.values(m.thresholds)) {
-        expect(t.verified && t.value !== null && t.verifiedBy && t.source?.title && t.source.url).toBeTruthy();
+        expect(
+          t.verified && t.value !== null && t.verifiedBy && t.source?.title && t.source.url,
+        ).toBeTruthy();
       }
     }
-    expect(lib.enabledModels.map((m) => m.pest).sort()).toEqual(["barley_yellow_dwarf", "western_corn_rootworm", "wheat_streak_mosaic"]);
+    expect(lib.enabledModels.map((m) => m.pest).sort()).toEqual([
+      "barley_yellow_dwarf",
+      "western_corn_rootworm",
+      "wheat_streak_mosaic",
+    ]);
   });
 
   it("lists crops without prices while prices.json is empty", () => {

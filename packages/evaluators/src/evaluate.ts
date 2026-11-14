@@ -92,6 +92,8 @@ export function evaluate(model: PestModel, inputs: EvalInputs, asOf: string): Ri
     publisher: t.source?.publisher ?? null,
     url: t.source?.url ?? null,
     accessed: t.source?.accessed ?? null,
+    type: t.source?.type ?? "extension",
+    quote: t.source?.quote ?? null,
   }));
 
   return {
