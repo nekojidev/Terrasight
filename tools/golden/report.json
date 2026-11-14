@@ -1,1 +1,33 @@
-[]
+[
+  {
+    "lang": "en",
+    "total": 33,
+    "shownWithoutFallback": 1,
+    "fallback": 0,
+    "errors": 0,
+    "refusalsOk": 5,
+    "refusalsExpected": 5,
+    "horizonOk": 2,
+    "horizonExpected": 2,
+    "problems": []
+  },
+  {
+    "lang": "uk",
+    "total": 33,
+    "shownWithoutFallback": 0.9090909090909091,
+    "fallback": 2,
+    "errors": 1,
+    "refusalsOk": 5,
+    "refusalsExpected": 5,
+    "horizonOk": 2,
+    "horizonExpected": 2,
+    "problems": [
+      {
+        "id": "uk-20",
+        "problems": [
+          "unavailable: Асистент недоступний. Бриф, картки та звіт працюють."
+        ]
+      }
+    ]
+  }
+]
