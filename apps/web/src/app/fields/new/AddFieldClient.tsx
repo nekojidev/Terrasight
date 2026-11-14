@@ -199,7 +199,7 @@ export function AddFieldClient({
             ring={ring}
             closed={closed}
             drawing={drawing}
-            label={t("map_label")}
+            label={a("mapLabel")}
             onAddPoint={(p) => {
               if (closed) return;
               setRing((r) => [...r, p]);

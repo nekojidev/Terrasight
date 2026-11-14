@@ -73,9 +73,10 @@ export interface TopBarProps {
   onSearch: () => void;
   languages: Array<{ code: string; label: string; active: boolean; onSelect: () => void }>;
   languageGroupLabel: string;
-  notificationsLabel: string;
+  /** Bell is rendered only when notifications are backed by real data. */
+  notificationsLabel?: string;
   hasNotifications?: boolean;
-  onNotifications: () => void;
+  onNotifications?: () => void;
 }
 
 /** Top bar: crumb, ⌘K search, UA/EN switch, notifications. */
@@ -114,6 +115,7 @@ export function TopBar(p: TopBarProps) {
           </button>
         ))}
       </div>
+      {p.notificationsLabel && p.onNotifications && (
       <button
         type="button"
         aria-label={p.notificationsLabel}
@@ -123,6 +125,7 @@ export function TopBar(p: TopBarProps) {
         <Bell aria-hidden className="size-5" strokeWidth={1.7} />
         {p.hasNotifications && <span className="absolute top-2.5 right-2.5 size-2 rounded-chip bg-urgent" />}
       </button>
+      )}
     </header>
   );
 }
