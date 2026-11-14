@@ -44,6 +44,22 @@ const SHOWING_DATA: Record<"en" | "uk", string> = {
   uk: "Показуємо дані напряму.",
 };
 
+/** Replaces the company's field names in free text with their aliases F<n>, longest names first, case-insensitive. */
+export function pseudonymise(text: string, aliases: Map<string, { name: string }>): string {
+  const pairs = [...aliases.entries()]
+    .filter(([, f]) => f.name.trim().length > 0)
+    .sort((a, b) => b[1].name.length - a[1].name.length);
+  let out = text;
+  for (const [alias, f] of pairs) {
+    const escaped = f.name
+      .trim()
+      .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+      .replace(/\s+/g, "\\s+");
+    out = out.replace(new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, "giu"), alias);
+  }
+  return out;
+}
+
 interface ToolRun {
   tool: string;
   args: unknown;
@@ -134,7 +150,7 @@ export class AssistantService implements OnModuleInit, OnModuleDestroy {
   }
 
   /** The conversation with its messages and the alias → field name map the UI uses to restore names. */
-  async get(workspaceId: string, id: string, userId: string | null = null) {
+  async get(workspaceId: string, id: string, userId: string | null = null, includeResults = false) {
     const c = await this.own(workspaceId, userId, id);
     const messages = await this.prisma.system.message.findMany({
       where: { conversationId: id },
@@ -162,7 +178,12 @@ export class AssistantService implements OnModuleInit, OnModuleDestroy {
         card: m.card,
         error: m.error,
         createdAt: m.createdAt,
-        tools: m.toolCalls.map((t) => ({ tool: t.tool, args: t.args, durationMs: t.durationMs })),
+        tools: m.toolCalls.map((t) => ({
+          tool: t.tool,
+          args: t.args,
+          durationMs: t.durationMs,
+          ...(includeResults ? { result: t.result } : {}),
+        })),
       })),
     };
   }
@@ -259,14 +280,18 @@ export class AssistantService implements OnModuleInit, OnModuleDestroy {
       orderBy: { createdAt: "asc" },
       take: 20,
     });
+    // Field names the user typed become aliases before anything goes to Gemini (RFC §12.6).
+    const aliases = await this.executor.aliases(scope.workspaceId);
     const contents: Content[] = earlier
       .slice(0, -1)
-      .map((m) => ({ role: m.role === "user" ? "user" : "model", parts: [{ text: m.text }] }));
+      .map((m) => ({
+        role: m.role === "user" ? "user" : "model",
+        parts: [{ text: pseudonymise(m.text, aliases) }],
+      }));
+    question = pseudonymise(question, aliases);
     const ctx: string[] = [];
     if (context.fieldId) {
-      const alias = [...(await this.executor.aliases(scope.workspaceId)).entries()].find(
-        ([, f]) => f.id === context.fieldId,
-      )?.[0];
+      const alias = [...aliases.entries()].find(([, f]) => f.id === context.fieldId)?.[0];
       if (alias) ctx.push(`The user is looking at field ${alias}.`);
     }
     if (context.recommendationId)

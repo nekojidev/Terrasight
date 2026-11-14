@@ -31,6 +31,10 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+      # Golden questions replayed from recordings: shown sentences must still pass the number check and filters,
+      # refusals and the 5-season horizon must hold (S-05.07). Live runs against Gemini happen outside CI.
+      - name: Golden questions (recorded)
+        run: pnpm golden
 
   integration:
     # Testcontainers suites kept in the hackathon (Tech Design §1.1).

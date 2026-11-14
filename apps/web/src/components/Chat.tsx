@@ -3,7 +3,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@terrasight/ui";
 import { Send, ShieldCheck, Sparkles, TriangleAlert } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api, ApiError } from "@/lib/api";
 import { connectStream } from "@/lib/events";
@@ -70,6 +70,7 @@ export function Chat({
   const t = useTranslations("App");
   const a = useTranslations("Assistant");
   const client = useQueryClient();
+  const locale = useLocale();
   const key = ["conversation", workspaceId, conversationId];
   const conv = useQuery({
     queryKey: key,
@@ -119,7 +120,7 @@ export function Chat({
     setText("");
     try {
       await api(`/api/w/${workspaceId}/conversations/${conversationId}/messages`, {
-        body: { text: q, context: context ?? {} },
+        body: { text: q, context: context ?? {}, lang: locale === "uk" ? "uk" : "en" },
       });
       void client.invalidateQueries({ queryKey: key });
     } catch (e) {

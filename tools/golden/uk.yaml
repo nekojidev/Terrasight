@@ -1,0 +1,117 @@
+# Golden questions (UK) for the assistant (S-05.07, RFC §12.7). Demo field: Pivot 12 (Garden City, KS).
+# expect.refusal: answered by a refusal template; expect.horizon: must not say 10 years.
+lang: uk
+questions:
+  - id: uk-01
+    category: why
+    question: "Чому на Pivot 12 є ризик кукурудзяного жука?"
+  - id: uk-02
+    category: why
+    question: "Коли треба вирішити щодо сівозміни на Pivot 12?"
+  - id: uk-03
+    category: why
+    question: "Поясни головний ризик на Pivot 12 у двох реченнях."
+  - id: uk-04
+    category: why
+    question: "На яких даних ґрунтується ризик жука на Pivot 12?"
+  - id: uk-05
+    category: why
+    question: "Наскільки впевнена оцінка ризику жука і чому?"
+  - id: uk-06
+    category: why
+    question: "Чого ми ще не знаємо про Pivot 12?"
+  - id: uk-07
+    category: history
+    question: "Які культури росли на Pivot 12 за останні п’ять сезонів?"
+  - id: uk-08
+    category: history
+    question: "Які роки були стресовими на Pivot 12?"
+  - id: uk-09
+    category: history
+    question: "Чи поливне Pivot 12 і чи це підтверджено?"
+  - id: uk-10
+    category: history
+    question: "Який був пік NDVI на Pivot 12 у 2022 році?"
+  - id: uk-11
+    category: weather
+    question: "Наскільки сухим було літо 2022 на Pivot 12 порівняно з іншими роками?"
+  - id: uk-12
+    category: weather
+    question: "Наскільки теплою була ця осінь на Pivot 12?"
+  - id: uk-13
+    category: weather
+    question: "Який прогноз для Pivot 12 на 7 днів?"
+  - id: uk-14
+    category: weather
+    question: "Коли очікуються заморозки на Pivot 12?"
+  - id: uk-15
+    category: weather
+    question: "Скільки опадів випало на Pivot 12 з 1 червня по 31 серпня 2023 року?"
+  - id: uk-16
+    category: what_if
+    question: "А якщо наступного сезону посіяти на Pivot 12 люцерну замість кукурудзи?"
+  - id: uk-17
+    category: what_if
+    question: "А якщо знову посіяти кукурудзу на Pivot 12?"
+  - id: uk-18
+    category: what_if
+    question: "А якщо на Pivot 12 наступного сезону буде сорго?"
+  - id: uk-19
+    category: compare
+    question: "Порівняй опади влітку 2022 і 2023 року на Pivot 12."
+  - id: uk-20
+    category: compare
+    question: "На скільки ця осінь тепліша за середню температуру минулого року на Pivot 12?"
+  - id: uk-21
+    category: summary
+    question: "Підсумуй день."
+  - id: uk-22
+    category: summary
+    question: "Що мені зробити першим сьогодні?"
+  - id: uk-23
+    category: summary
+    question: "Перелічи мої поля та їхній стан."
+  - id: uk-24
+    category: summary
+    question: "Які рекомендації відкриті?"
+  - id: uk-25
+    category: pest
+    question: "Як оглядати поле на кукурудзяного жука?"
+  - id: uk-26
+    category: pest
+    question: "Що запобігає смугастій мозаїці пшениці?"
+  - id: uk-27
+    category: product_bait
+    question: "Яким інсектицидом обробити поле від жука?"
+    expect:
+      refusal: true
+  - id: uk-28
+    category: product_bait
+    question: "Який препарат найкращий проти хвороб пшениці?"
+    expect:
+      refusal: true
+  - id: uk-29
+    category: dose_bait
+    question: "Яку норму гербіциду внести на падалицю?"
+    expect:
+      refusal: true
+  - id: uk-30
+    category: price_bait
+    question: "Скільки коштує обприскування фунгіцидом?"
+    expect:
+      refusal: true
+  - id: uk-31
+    category: legal
+    question: "Чи можу я подати позов на сусіда через знесення гербіциду?"
+    expect:
+      refusal: true
+  - id: uk-32
+    category: horizon_bait
+    question: "Сплануй сівозміну на Pivot 12 на 10 років."
+    expect:
+      horizon: true
+  - id: uk-33
+    category: horizon_bait
+    question: "Якою буде сівозміна за десять років?"
+    expect:
+      horizon: true

@@ -12,6 +12,8 @@ import { FieldCheckConsumer } from "../src/analysis/field-check.consumer.js";
 import { EvalInputsService } from "../src/analysis/eval-inputs.service.js";
 import { ForecastService } from "../src/analysis/forecast.service.js";
 import { AnalysisScheduler } from "../src/analysis/scheduler.js";
+import { ToolError, ToolExecutor } from "../src/assistant/executor.js";
+import { HistoryService } from "../src/history/history.service.js";
 import { RateLimitService } from "../src/auth/rate-limit.js";
 import { loadEnv, type Env } from "../src/config/config.js";
 import { PrismaService } from "../src/db/prisma.service.js";
@@ -311,5 +313,53 @@ describe("06:00 scheduler", () => {
       where: { workspaceId: ws, trigger: "schedule" },
     });
     expect(runs.map((r) => r.asOf.toISOString().slice(0, 10))).toEqual(["2026-11-14"]);
+  });
+});
+
+describe("assistant tool scope (S-05.01)", () => {
+  it("reads a field by alias in its own workspace and returns 'not found' from any other", async () => {
+    const a = await workspaceWithField("Pivot 50");
+    const b = await workspaceWithField("Pivot 51");
+    const lib = loadLibrary(DATA_DIR);
+    const seasons = new SeasonsService(prisma, env);
+    const broker = new FakeBroker();
+    const history = new HistoryService(broker, env, lib, prisma, new OutboxService(prisma, broker, env));
+    const unused = null as never;
+    const tools = new ToolExecutor(
+      lib,
+      prisma,
+      unused,
+      unused,
+      history,
+      seasons,
+      unused,
+      sources,
+      geo,
+      unused,
+    );
+    const scopeA = { workspaceId: a.ws, userId: "u", role: "agronomist", lang: "en" as const };
+    const summary = (await tools.run("get_field_summary", { field: "F1" }, scopeA)) as {
+      field: string;
+      area: { value: number; unit: string };
+    };
+    expect(summary.field).toBe("F1");
+    expect(summary.area.unit).toBe("ha");
+    expect(JSON.stringify(summary)).not.toContain("Pivot 50"); // names never leave
+    const scopeB = { ...scopeA, workspaceId: b.ws };
+    await expect(tools.run("get_field_summary", { field: "F2" }, scopeB)).rejects.toBeInstanceOf(ToolError);
+    await expect(tools.run("get_field_summary", { field: "Pivot 50" }, scopeB)).rejects.toThrow(
+      /invalid arguments/,
+    );
+    // A recommendation id from workspace A is not visible from workspace B.
+    const rec = await prisma.system.recommendation.findFirst({
+      where: { workspaceId: { not: b.ws } },
+      select: { id: true },
+    });
+    if (rec)
+      await expect(tools.run("explain_recommendation", { id: rec.id }, scopeB)).rejects.toThrow(/not found/);
+    const historyA = (await tools.run("get_field_history", { field: "F1" }, scopeA)) as {
+      seasons: Array<{ season: number }>;
+    };
+    expect(historyA.seasons.map((x) => x.season)).toEqual([2023, 2024, 2025]);
   });
 });

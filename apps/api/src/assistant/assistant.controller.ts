@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Post, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, Param, Post, Query, Req, UseGuards } from "@nestjs/common";
 import { z } from "zod";
 import { AuthGuard, Requires, UUID, WorkspaceGuard, type AuthedRequest } from "../auth/current-user.js";
 import { PrismaService } from "../db/prisma.service.js";
@@ -9,6 +9,8 @@ import { AssistantService } from "./assistant.service.js";
 const CreateBody = z.object({ title: z.string().trim().max(120).optional() });
 const AskBody = z.object({
   text: z.string().trim().min(1).max(2000),
+  /** The language the UI is showing; falls back to the user's profile language. */
+  lang: z.enum(["en", "uk"]).optional(),
   context: z
     .object({
       fieldId: z.string().regex(UUID).optional(),
@@ -45,8 +47,9 @@ export class AssistantController {
 
   @Get(":id")
   @Requires("assistant.use")
-  get(@Param("id") id: string, @Req() req: AuthedRequest) {
-    return this.assistant.get(req.workspaceId!, uuid(id), req.user!.id);
+  get(@Param("id") id: string, @Query("include") include: string | undefined, @Req() req: AuthedRequest) {
+    // ?include=tools adds tool results (golden-question recordings, audit); only for the chat's owner.
+    return this.assistant.get(req.workspaceId!, uuid(id), req.user!.id, include === "tools");
   }
 
   @Post(":id/messages")
@@ -62,7 +65,7 @@ export class AssistantController {
       where: { id: req.user!.id },
       select: { uiLanguage: true },
     });
-    const lang = u?.uiLanguage === "uk" ? "uk" : "en";
+    const lang = body.lang ?? (u?.uiLanguage === "uk" ? "uk" : "en");
     return this.assistant.ask(
       { workspaceId: req.workspaceId!, userId: req.user!.id, role: req.role ?? "agronomist", lang },
       uuid(id),
