@@ -1,0 +1,714 @@
+// Terrasight data model — Tech Design §5.
+// Storage rules: SI units, ISO dates, timestamps in UTC; the workspace time zone converts "today" and deadlines.
+// PostGIS columns are Unsupported(...) and handled with raw SQL. Extensions (postgis, citext) and partial unique
+// indexes are created in the migration SQL.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../apps/api/src/generated/prisma"
+  moduleFormat = "esm"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------- enums ----------
+
+enum Role {
+  owner
+  admin
+  agronomist
+  viewer
+}
+
+enum Units {
+  metric
+  imperial
+}
+
+enum Language {
+  uk
+  en
+}
+
+enum Irrigation {
+  irrigated
+  dryland
+  unknown
+}
+
+enum CropSource {
+  cdl
+  lpis
+  ndvi
+  user
+}
+
+enum ValueSource {
+  confirmed
+  plan
+  estimate
+  regional
+  unknown
+}
+
+enum JobStatus {
+  queued
+  running
+  done
+  partial
+  failed
+  cached
+}
+
+enum RunTrigger {
+  schedule
+  manual
+}
+
+enum RunStatus {
+  running
+  done
+}
+
+enum FieldCheckStatus {
+  waiting
+  running
+  ok
+  stale
+  failed
+}
+
+enum RecType {
+  rotation
+  pest
+  disease
+  irrigation
+  sowing
+  weather
+}
+
+enum RecStatus {
+  open
+  accepted
+  snoozed
+  in_report
+  dismissed
+  expired
+  superseded
+}
+
+enum RiskLevel {
+  none
+  low
+  moderate
+  high
+  unknown
+}
+
+enum Confidence {
+  high
+  medium
+  low
+}
+
+enum Tier {
+  A
+  B
+  C
+}
+
+enum ScoutingStatus {
+  open
+  sent
+}
+
+enum OwnerAnswerKind {
+  done
+  not_yet
+  question
+}
+
+enum AnswerVia {
+  user
+  link
+}
+
+enum OutcomeKind {
+  confirmed
+  not_found
+  not_checked
+}
+
+enum MessageRole {
+  user
+  assistant
+}
+
+// ---------- identity and workspace ----------
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique @db.Citext
+  passwordHash String   @map("password_hash")
+  name         String
+  uiLanguage   Language @default(en) @map("ui_language")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  memberships   Membership[]
+  refreshTokens RefreshToken[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  familyId   String    @map("family_id") @db.Uuid
+  tokenHash  String    @unique @map("token_hash")
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(3)
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(3)
+  replacedBy String?   @map("replaced_by") @db.Uuid
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([familyId])
+  @@map("refresh_tokens")
+}
+
+model Workspace {
+  id               String   @id @default(uuid()) @db.Uuid
+  name             String
+  slug             String   @unique
+  timeZone         String   @map("time_zone")
+  units            Units    @default(metric)
+  reportLanguage   Language @default(en) @map("report_language")
+  currency         String   @default("USD")
+  isDemo           Boolean  @default(false) @map("is_demo")
+  demoTemplateId   String?  @map("demo_template_id") @db.Uuid
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  memberships   Membership[]
+  invitations   Invitation[]
+  reportLinks   ReportLink[]
+  fields        Field[]
+  analysisRuns  AnalysisRun[]
+  recs          Recommendation[]
+  reportItems   ReportItem[]
+  conversations Conversation[]
+  auditLog      AuditLog[]
+
+  @@map("workspaces")
+}
+
+model Membership {
+  workspaceId String   @map("workspace_id") @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  role        Role
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([workspaceId, userId])
+  @@map("memberships")
+}
+
+model Invitation {
+  id          String    @id @default(uuid()) @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  email       String    @db.Citext
+  role        Role
+  tokenHash   String    @unique @map("token_hash")
+  expiresAt   DateTime  @map("expires_at") @db.Timestamptz(3)
+  acceptedAt  DateTime? @map("accepted_at") @db.Timestamptz(3)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("invitations")
+}
+
+model ReportLink {
+  id          String    @id @default(uuid()) @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  tokenHash   String    @unique @map("token_hash")
+  language    Language
+  expiresAt   DateTime? @map("expires_at") @db.Timestamptz(3)
+  revokedAt   DateTime? @map("revoked_at") @db.Timestamptz(3)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("report_links")
+}
+
+// ---------- fields and history ----------
+
+model Field {
+  id               String                                       @id @default(uuid()) @db.Uuid
+  workspaceId      String                                       @map("workspace_id") @db.Uuid
+  name             String
+  aliasNo          Int                                          @map("alias_no")
+  geom             Unsupported("geometry(MultiPolygon, 4326)")
+  centroid         Unsupported("geometry(Point, 4326)")
+  areaHa           Float                                        @map("area_ha")
+  adminCode        String?                                      @map("admin_code")
+  country          String?
+  countyName       String?                                      @map("county_name")
+  regionId         String?                                      @map("region_id")
+  tier             Tier
+  irrigation       Irrigation                                   @default(unknown)
+  irrigationSource ValueSource                                  @default(unknown) @map("irrigation_source")
+  slopePct         Float?                                       @map("slope_pct")
+  thumbnailKey     String?                                      @map("thumbnail_key")
+  createdBy        String?                                      @map("created_by") @db.Uuid
+  createdAt        DateTime                                     @default(now()) @map("created_at") @db.Timestamptz(3)
+  archivedAt       DateTime?                                    @map("archived_at") @db.Timestamptz(3)
+
+  workspace     Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  cropSeasons   CropSeason[]
+  seasonRecords SeasonRecord[]
+  history       FieldHistory?
+  gatherJobs    GatherJob[]
+  checks        AnalysisRunField[]
+  scenarioRuns  ScenarioRun[]
+  plans         Plan[]
+  recs          Recommendation[]
+  scoutingTasks ScoutingTask[]
+
+  @@unique([workspaceId, aliasNo])
+  @@index([workspaceId])
+  @@map("fields")
+}
+
+model CropSeason {
+  fieldId     String     @map("field_id") @db.Uuid
+  season      Int
+  mainCrop    String     @map("main_crop")
+  secondCrop  String?    @map("second_crop")
+  confidence  Float
+  source      CropSource
+  isOverride  Boolean    @default(false) @map("is_override")
+  updatedAt   DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  field Field @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  @@id([fieldId, season])
+  @@map("crop_seasons")
+}
+
+model SeasonRecord {
+  fieldId         String      @map("field_id") @db.Uuid
+  season          Int
+  crop            String?
+  cropSource      ValueSource @default(unknown) @map("crop_source")
+  sowingDate      DateTime?   @map("sowing_date") @db.Date
+  sowingSource    ValueSource @default(unknown) @map("sowing_source")
+  emergenceDate   DateTime?   @map("emergence_date") @db.Date
+  emergenceSource ValueSource @default(unknown) @map("emergence_source")
+  irrigated       Boolean?
+  tillage         String?
+  updatedBy       String?     @map("updated_by") @db.Uuid
+  updatedAt       DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  field Field @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  @@id([fieldId, season])
+  @@map("season_records")
+}
+
+model FieldHistory {
+  fieldId             String   @id @map("field_id") @db.Uuid
+  builtAt             DateTime @map("built_at") @db.Timestamptz(3)
+  inputsHash          String   @map("inputs_hash")
+  provisional         Boolean  @default(true)
+  bareMonths          Json     @map("bare_months")
+  stressYears         Json     @map("stress_years")
+  ndviPeaks           Json     @map("ndvi_peaks")
+  irrigationDetection Json     @map("irrigation_detection")
+  baselineMatch       Json     @map("baseline_match")
+
+  field Field @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  @@map("field_history")
+}
+
+model SourceCache {
+  key       String   @id
+  source    String
+  params    Json
+  payload   Json?
+  s3Key     String?  @map("s3_key")
+  dataDate  DateTime? @map("data_date") @db.Date
+  origin    String   @default("live")
+  fetchedAt DateTime @map("fetched_at") @db.Timestamptz(3)
+  expiresAt DateTime? @map("expires_at") @db.Timestamptz(3)
+
+  @@index([source])
+  @@map("source_cache")
+}
+
+model GatherJob {
+  id         String    @id @default(uuid()) @db.Uuid
+  fieldId    String    @map("field_id") @db.Uuid
+  status     JobStatus @default(queued)
+  startedAt  DateTime  @default(now()) @map("started_at") @db.Timestamptz(3)
+  finishedAt DateTime? @map("finished_at") @db.Timestamptz(3)
+
+  field Field        @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  tasks GatherTask[]
+
+  @@map("gather_jobs")
+}
+
+model GatherTask {
+  jobId      String    @map("job_id") @db.Uuid
+  source     String
+  status     JobStatus @default(queued)
+  attempts   Int       @default(0)
+  error      String?
+  finishedAt DateTime? @map("finished_at") @db.Timestamptz(3)
+
+  job GatherJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@id([jobId, source])
+  @@map("gather_tasks")
+}
+
+// ---------- analysis runs (RFC §10.2) ----------
+
+model AnalysisRun {
+  id          String     @id @default(uuid()) @db.Uuid
+  workspaceId String     @map("workspace_id") @db.Uuid
+  trigger     RunTrigger
+  requestedBy String?    @map("requested_by") @db.Uuid
+  asOf        DateTime   @map("as_of") @db.Date
+  status      RunStatus  @default(running)
+  startedAt   DateTime   @default(now()) @map("started_at") @db.Timestamptz(3)
+  finishedAt  DateTime?  @map("finished_at") @db.Timestamptz(3)
+  summary     Json?
+
+  workspace Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  fields    AnalysisRunField[]
+
+  @@index([workspaceId, startedAt])
+  @@map("analysis_runs")
+}
+
+model AnalysisRunField {
+  runId              String           @map("run_id") @db.Uuid
+  fieldId            String           @map("field_id") @db.Uuid
+  status             FieldCheckStatus @default(waiting)
+  dataDate           DateTime?        @map("data_date") @db.Date
+  error              String?
+  newRecommendations Int              @default(0) @map("new_recommendations")
+  updatedAt          DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  run   AnalysisRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  field Field       @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  @@id([runId, fieldId])
+  @@map("analysis_run_fields")
+}
+
+// ---------- scenarios and plans (RFC D4, D5) ----------
+
+model ScenarioRun {
+  id              String   @id @default(uuid()) @db.Uuid
+  fieldId         String   @map("field_id") @db.Uuid
+  inputsHash      String   @map("inputs_hash")
+  libraryVersions Json     @map("library_versions")
+  result          Json
+  durationMs      Int      @map("duration_ms")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  field Field  @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  plans Plan[]
+
+  @@unique([fieldId, inputsHash])
+  @@map("scenario_runs")
+}
+
+model Plan {
+  fieldId       String   @map("field_id") @db.Uuid
+  season        Int
+  crop          String
+  rotationId    String?  @map("rotation_id")
+  scenarioRunId String?  @map("scenario_run_id") @db.Uuid
+  savedBy       String   @map("saved_by") @db.Uuid
+  savedAt       DateTime @default(now()) @map("saved_at") @db.Timestamptz(3)
+
+  field       Field        @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  scenarioRun ScenarioRun? @relation(fields: [scenarioRunId], references: [id], onDelete: SetNull)
+
+  @@id([fieldId, season])
+  @@map("plans")
+}
+
+// ---------- recommendations (RFC §10.3–§10.5) ----------
+
+model Recommendation {
+  id              String      @id @default(uuid()) @db.Uuid
+  workspaceId     String      @map("workspace_id") @db.Uuid
+  fieldId         String      @map("field_id") @db.Uuid
+  type            RecType
+  subject         String
+  season          Int
+  status          RecStatus   @default(open)
+  level           RiskLevel
+  confidence      Confidence
+  tier            Tier
+  deadline        DateTime?   @db.Date
+  irreversible    Boolean     @default(false)
+  planning        Boolean     @default(false)
+  keyNumbers      Json        @default("[]") @map("key_numbers")
+  drivers         Json        @default("[]")
+  evidence        Json        @default("[]")
+  unknowns        Json        @default("[]")
+  modelRef        String?     @map("model_ref")
+  versions        Json        @default("{}")
+  inputSnapshotId String?     @map("input_snapshot_id") @db.Uuid
+  textOverride    Json?       @map("text_override")
+  editedBy        String?     @map("edited_by") @db.Uuid
+  snoozedAt       DateTime?   @map("snoozed_at") @db.Timestamptz(3)
+  snoozedUntil    DateTime?   @map("snoozed_until") @db.Timestamptz(3)
+  acceptedAt      DateTime?   @map("accepted_at") @db.Timestamptz(3)
+  acceptedBy      String?     @map("accepted_by") @db.Uuid
+  committedAt     DateTime?   @map("committed_at") @db.Timestamptz(3)
+  dismissedAt     DateTime?   @map("dismissed_at") @db.Timestamptz(3)
+  createdAt       DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  workspace     Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  field         Field                 @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  inputSnapshot InputSnapshot?        @relation(fields: [inputSnapshotId], references: [id])
+  levels        RecommendationLevel[]
+  scoutingTasks ScoutingTask[]
+  reportItems   ReportItem[]
+  outcomes      Outcome[]
+
+  @@index([workspaceId, status])
+  @@map("recommendations")
+}
+
+model RecommendationLevel {
+  id               String     @id @default(uuid()) @db.Uuid
+  recommendationId String     @map("recommendation_id") @db.Uuid
+  runId            String?    @map("run_id") @db.Uuid
+  level            RiskLevel
+  confidence       Confidence
+  at               DateTime   @default(now()) @db.Timestamptz(3)
+
+  recommendation Recommendation @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
+
+  @@index([recommendationId, at])
+  @@map("recommendation_levels")
+}
+
+model InputSnapshot {
+  id        String   @id @default(uuid()) @db.Uuid
+  hash      String   @unique
+  payload   Json
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  recommendations Recommendation[]
+  outcomes        Outcome[]
+
+  @@map("input_snapshots")
+}
+
+// ---------- scouting (RFC §10.7) ----------
+
+model ScoutingTask {
+  id               String                               @id @default(uuid()) @db.Uuid
+  recommendationId String                               @map("recommendation_id") @db.Uuid
+  fieldId          String                               @map("field_id") @db.Uuid
+  createdBy        String                               @map("created_by") @db.Uuid
+  route            Unsupported("geometry(MultiPoint, 4326)")?
+  status           ScoutingStatus                       @default(open)
+  resultPct        Float?                               @map("result_pct")
+  sentAt           DateTime?                            @map("sent_at") @db.Timestamptz(3)
+  clientId         String?                              @unique @map("client_id")
+  createdAt        DateTime                             @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  recommendation Recommendation  @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
+  field          Field           @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  points         ScoutingPoint[]
+  photos         ScoutingPhoto[]
+
+  @@map("scouting_tasks")
+}
+
+model ScoutingPoint {
+  taskId    String                           @map("task_id") @db.Uuid
+  idx       Int
+  geom      Unsupported("geometry(Point, 4326)")
+  affected  Int?
+  plants    Int                              @default(20)
+  checkedAt DateTime?                        @map("checked_at") @db.Timestamptz(3)
+
+  task ScoutingTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, idx])
+  @@map("scouting_points")
+}
+
+model ScoutingPhoto {
+  id          String   @id @default(uuid()) @db.Uuid
+  taskId      String   @map("task_id") @db.Uuid
+  pointIdx    Int      @map("point_idx")
+  s3Key       String   @map("s3_key")
+  contentType String   @map("content_type")
+  bytes       Int
+  takenAt     DateTime @default(now()) @map("taken_at") @db.Timestamptz(3)
+
+  task ScoutingTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@map("scouting_photos")
+}
+
+// ---------- Owner report (RFC D12) ----------
+
+model ReportItem {
+  id               String    @id @default(uuid()) @db.Uuid
+  workspaceId      String    @map("workspace_id") @db.Uuid
+  recommendationId String    @map("recommendation_id") @db.Uuid
+  text             Json
+  note             String?
+  committedAt      DateTime  @map("committed_at") @db.Timestamptz(3)
+  supersededBy     String?   @map("superseded_by") @db.Uuid
+
+  workspace      Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  recommendation Recommendation @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
+  answers        OwnerAnswer[]
+
+  @@index([workspaceId, committedAt])
+  @@map("report_items")
+}
+
+model OwnerAnswer {
+  id           String          @id @default(uuid()) @db.Uuid
+  reportItemId String          @map("report_item_id") @db.Uuid
+  answer       OwnerAnswerKind
+  text         String?
+  via          AnswerVia
+  userId       String?         @map("user_id") @db.Uuid
+  createdAt    DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  reportItem ReportItem @relation(fields: [reportItemId], references: [id], onDelete: Cascade)
+
+  @@index([reportItemId, createdAt])
+  @@map("owner_answers")
+}
+
+model Outcome {
+  id               String      @id @default(uuid()) @db.Uuid
+  recommendationId String      @map("recommendation_id") @db.Uuid
+  outcome          OutcomeKind
+  note             String?
+  count            Int?
+  recordedBy       String      @map("recorded_by") @db.Uuid
+  versions         Json        @default("{}")
+  inputSnapshotId  String?     @map("input_snapshot_id") @db.Uuid
+  createdAt        DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  recommendation Recommendation @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
+  inputSnapshot  InputSnapshot? @relation(fields: [inputSnapshotId], references: [id])
+
+  @@map("outcomes")
+}
+
+// ---------- assistant (RFC D9) ----------
+
+model Conversation {
+  id          String    @id @default(uuid()) @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  title       String?
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  expiresAt   DateTime  @map("expires_at") @db.Timestamptz(3)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  messages  Message[]
+
+  @@index([expiresAt])
+  @@map("conversations")
+}
+
+model Message {
+  id             String      @id @default(uuid()) @db.Uuid
+  conversationId String      @map("conversation_id") @db.Uuid
+  role           MessageRole
+  text           String
+  checked        Boolean     @default(false)
+  fallback       Boolean     @default(false)
+  createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  toolCalls    ToolCall[]
+
+  @@map("messages")
+}
+
+model ToolCall {
+  id         String @id @default(uuid()) @db.Uuid
+  messageId  String @map("message_id") @db.Uuid
+  tool       String
+  args       Json
+  result     Json
+  durationMs Int    @map("duration_ms")
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@map("tool_calls")
+}
+
+// ---------- infrastructure ----------
+
+model Outbox {
+  id          BigInt    @id @default(autoincrement())
+  exchange    String
+  routingKey  String    @map("routing_key")
+  payload     Json
+  headers     Json?
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  publishedAt DateTime? @map("published_at") @db.Timestamptz(3)
+  attempts    Int       @default(0)
+
+  @@map("outbox")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  userId      String?  @map("user_id") @db.Uuid
+  action      String
+  target      String?
+  at          DateTime @default(now()) @db.Timestamptz(3)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, at])
+  @@map("audit_log")
+}
+
+model AdminArea {
+  code    String                                       @id
+  name    String
+  country String
+  geom    Unsupported("geometry(MultiPolygon, 4326)")
+
+  @@map("admin_areas")
+}
+
+model UsCounty {
+  geoid     String                                       @id
+  name      String
+  stateCode String                                       @map("state_code")
+  geom      Unsupported("geometry(MultiPolygon, 4326)")
+
+  @@map("us_counties")
+}

@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "about": "Default prices and costs per region (RFC §16, Tech Design §6.2). Filled by the team before EP-06 (S-06.05): USDA NASS prices received (2025 average), K-State crop budgets for variable costs; source and asOf per crop. Other regions fall back to FAOSTAT producer prices, labelled Estimate.",
+  "currency": "USD",
+  "regions": {},
+  "fallback": { "source": "FAOSTAT producer prices", "label": "Estimate", "byCountry": {} }
+}

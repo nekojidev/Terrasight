@@ -1,0 +1,35 @@
+import { Module } from "@nestjs/common";
+import { LoggerModule } from "nestjs-pino";
+import { loadEnv } from "./config/config.js";
+import { ConfigModule } from "./config/config.module.js";
+import { DbModule } from "./db/db.module.js";
+import { EventsModule } from "./events/events.module.js";
+import { HealthController } from "./health/health.controller.js";
+import { LibraryModule } from "./library/library.module.js";
+import { MessagingModule } from "./messaging/messaging.module.js";
+import { RedisModule } from "./redis/redis.module.js";
+
+const env = loadEnv();
+
+@Module({
+  imports: [
+    LoggerModule.forRoot({
+      pinoHttp: {
+        level: env.LOG_LEVEL,
+        autoLogging: { ignore: (req) => req.url === "/healthz" || req.url === "/readyz" },
+        redact: ["req.headers.cookie", "req.headers.authorization", 'res.headers["set-cookie"]'],
+        ...(env.NODE_ENV === "development"
+          ? { transport: { target: "pino-pretty", options: { singleLine: true } } }
+          : {}),
+      },
+    }),
+    ConfigModule,
+    LibraryModule,
+    DbModule,
+    RedisModule,
+    MessagingModule,
+    EventsModule,
+  ],
+  controllers: [HealthController],
+})
+export class AppModule {}

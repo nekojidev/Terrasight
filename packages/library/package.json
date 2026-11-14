@@ -1,0 +1,30 @@
+{
+  "name": "@terrasight/library",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Loaders and validators for the library files; region matching",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "lint": "eslint src",
+    "validate": "node dist/cli.js"
+  },
+  "dependencies": {
+    "zod": "4.6.7"
+  },
+  "devDependencies": {},
+  "bin": {
+    "validate-library": "./dist/cli.js"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "name": "@terrasight/simulator",
+  "version": "0.0.0",
+  "private": true,
+  "description": "FAO-56 water balance, FAO-33 Ky, SCS-CN, RUSLE index, ICBM",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "lint": "eslint src"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}

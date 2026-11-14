@@ -1,0 +1,131 @@
+/*
+ * Tailwind theme for Terrasight. Every value comes from design/tokens.css; nothing is duplicated here.
+ * Apps import it after Tailwind:  @import "tailwindcss"; @import "@terrasight/ui/theme.css";
+ */
+@import "../../../design/tokens.css";
+
+@theme inline {
+  --color-bg: var(--ts-bg);
+  --color-surface: var(--ts-surface);
+  --color-surface-2: var(--ts-surface-2);
+  --color-muted: var(--ts-muted);
+  --color-line: var(--ts-line);
+  --color-line-strong: var(--ts-line-strong);
+  --color-ink: var(--ts-ink);
+  --color-ink-2: var(--ts-ink-2);
+  --color-ink-3: var(--ts-ink-3);
+  --color-signal: var(--ts-signal);
+  --color-on-signal: var(--ts-on-signal);
+  --color-urgent: var(--ts-urgent);
+  --color-urgent-soft: var(--ts-urgent-soft);
+  --color-week: var(--ts-week);
+  --color-week-mark: var(--ts-week-mark);
+  --color-week-soft: var(--ts-week-soft);
+  --color-ok: var(--ts-ok);
+  --color-ok-soft: var(--ts-ok-soft);
+  --color-info: var(--ts-info);
+  --color-info-soft: var(--ts-info-soft);
+  --color-crop-corn: var(--crop-corn);
+  --color-crop-wheat: var(--crop-wheat);
+  --color-crop-sorghum: var(--crop-sorghum);
+  --color-crop-soy: var(--crop-soy);
+  --color-crop-alfalfa: var(--crop-alfalfa);
+  --color-crop-fallow: var(--crop-fallow);
+
+  --font-sans: var(--ts-font);
+  --font-mono: var(--ts-mono);
+
+  --radius-btn: var(--ts-r-btn);
+  --radius-input: var(--ts-r-input);
+  --radius-card: var(--ts-r-card);
+  --radius-hero: var(--ts-r-hero);
+  --radius-sheet: var(--ts-r-sheet);
+  --radius-chip: var(--ts-r-chip);
+
+  --shadow-hero: var(--ts-shadow-hero);
+  --shadow-sheet: var(--ts-shadow-sheet);
+
+  --spacing-tap: var(--ts-tap);
+  --ease-ts: var(--ts-ease);
+}
+
+/* Type scale: the tokens are font shorthands (size/line-height), so they are applied through `font`. */
+@utility text-display {
+  font: 700 var(--ts-display) var(--ts-font);
+  letter-spacing: -0.035em;
+}
+@utility text-h1 {
+  font: 700 var(--ts-h1) var(--ts-font);
+  letter-spacing: -0.035em;
+}
+@utility text-h2 {
+  font: 650 var(--ts-h2) var(--ts-font);
+  letter-spacing: -0.02em;
+}
+@utility text-body {
+  font: 400 var(--ts-body) var(--ts-font);
+}
+@utility text-small {
+  font: 400 var(--ts-small) var(--ts-font);
+}
+@utility text-micro {
+  font: 600 var(--ts-micro) var(--ts-mono);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+@utility text-big-number {
+  font: 600 var(--ts-big-number) var(--ts-mono);
+  letter-spacing: -0.03em;
+}
+
+@utility duration-rise {
+  transition-duration: var(--ts-rise);
+}
+@utility duration-bar {
+  transition-duration: var(--ts-bar);
+}
+@utility duration-sheet {
+  transition-duration: var(--ts-sheet);
+}
+
+/* Visible focus everywhere (design/README §5): 2 px ink ring, 2 px offset. */
+@utility focus-ring {
+  &:focus-visible {
+    outline: 2px solid var(--ts-ink);
+    outline-offset: 2px;
+  }
+}
+
+@keyframes ts-countdown {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+@keyframes ts-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes ts-sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@utility animate-rise {
+  animation: ts-rise var(--ts-rise) var(--ts-ease) both;
+}
+@utility animate-sheet-in {
+  animation: ts-sheet-in var(--ts-sheet) var(--ts-ease) both;
+}

@@ -1,0 +1,12 @@
+@import "tailwindcss";
+@import "@terrasight/ui/theme.css";
+/* Tailwind must see the classes used inside packages/ui. */
+@source "../../../../packages/ui/src";
+
+html {
+  background: var(--ts-bg);
+}
+body {
+  color: var(--ts-ink);
+  font-family: var(--ts-font);
+}

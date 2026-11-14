@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "about": "Machine-readable risk models (RFC §11, Tech Design §6.1). A model runs only when enabled and every threshold is verified against a cited extension source (K-State, UNL, Colorado State for the demo set). Thresholds are left empty until verified (S-03.07).",
+  "models": [
+    {
+      "pest": "western_corn_rootworm",
+      "enabled": false,
+      "phase": "hackathon",
+      "irreversible": false,
+      "planning": true,
+      "stageWindow": null,
+      "tree": { "kind": "host_repeat", "host": ["corn", "silage_corn"], "seasons": { "ref": "repeatSeasons" } },
+      "thresholds": {
+        "repeatSeasons": { "value": 1, "unit": "seasons", "verified": false, "source": null, "verifiedBy": null, "verifiedAt": null, "reviewedBy": null }
+      },
+      "keyNumbers": ["hostSeasonsInRow", "hostSeasonsInPlan"],
+      "scoutAction": null
+    },
+    {
+      "pest": "barley_yellow_dwarf",
+      "enabled": false,
+      "phase": "hackathon",
+      "irreversible": true,
+      "planning": false,
+      "stageWindow": { "crop": "winter_wheat", "from": "emergence", "to": "dormancy" },
+      "tree": {
+        "all": [
+          { "kind": "climate_anomaly", "variable": "air_temp_mean", "window": "autumn", "percentile": { "ref": "warmPercentile" } },
+          { "kind": "degree_days", "temp": "air", "baseC": { "ref": "baseC" }, "biofix": "emergence", "stages": { "risk": { "ref": "riskDD" } } }
+        ]
+      },
+      "thresholds": {
+        "baseC": { "value": 3, "unit": "°C", "verified": false, "source": null, "verifiedBy": null, "verifiedAt": null, "reviewedBy": null },
+        "warmPercentile": { "value": null, "unit": "percentile", "verified": false, "source": null, "verifiedBy": null, "verifiedAt": null, "reviewedBy": null },
+        "riskDD": { "value": null, "unit": "°C·d", "verified": false, "source": null, "verifiedBy": null, "verifiedAt": null, "reviewedBy": null }
+      },
+      "keyNumbers": ["autumnPercentile", "daysSinceEmergence", "daysUntilFrost"],
+      "scoutAction": null
+    },
+    {
+      "pest": "wheat_streak_mosaic",
+      "enabled": false,
+      "phase": "hackathon",
+      "irreversible": false,
+      "planning": false,
+      "stageWindow": { "crop": "winter_wheat", "from": "previous_harvest", "to": "dormancy" },
+      "tree": {
+        "all": [
+          { "kind": "green_bridge", "window": "previous_wheat_harvest_to_sowing", "bufferM": { "ref": "bufferM" }, "greenNdvi": { "ref": "greenNdvi" } },
+          { "kind": "climate_anomaly", "variable": "air_temp_mean", "window": "autumn", "percentile": { "ref": "warmPercentile" } }
+        ]
+      },
+      "thresholds": {
+        "bufferM": { "value": null, "unit": "m", "verified": false, "source": null, "verifiedBy": null, "verifiedAt": null, "reviewedBy": null },
+        "greenNdvi": { "value": null, "unit": "NDVI", "verified": false, "source": null, "verifiedBy": null, "verifiedAt": null, "reviewedBy": null },
+        "warmPercentile": { "value": null, "unit": "percentile", "verified": false, "source": null, "verifiedBy": null, "verifiedAt": null, "reviewedBy": null }
+      },
+      "keyNumbers": ["greenDaysBeforeSowing", "autumnPercentile", "sowingDate"],
+      "scoutAction": null
+    }
+  ]
+}

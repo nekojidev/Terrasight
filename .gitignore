@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.next/
+.turbo/
+coverage/
+storybook-static/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+apps/api/src/generated/
+data/boundaries/
+.DS_Store
+apps/web/next-env.d.ts

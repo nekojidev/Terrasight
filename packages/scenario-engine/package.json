@@ -1,0 +1,24 @@
+{
+  "name": "@terrasight/scenario-engine",
+  "version": "0.0.0",
+  "private": true,
+  "description": "RFC D5 pipeline: filter \u2192 FAO-56 quick pass \u2192 Monte Carlo \u2192 price step \u2192 score \u2192 pick",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "lint": "eslint src"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}

@@ -1,0 +1,9 @@
+@import url("https://fonts.googleapis.com/css2?family=Onest:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap");
+@import "tailwindcss";
+@import "../src/theme.css";
+@source "../src";
+body {
+  background: var(--ts-bg);
+  color: var(--ts-ink);
+  font-family: var(--ts-font);
+}

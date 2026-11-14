@@ -1,0 +1,24 @@
+{
+  "name": "@terrasight/evaluators",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Evaluator kinds, pest-model trees, confidence rule, urgency",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "lint": "eslint src"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}

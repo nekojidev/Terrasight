@@ -1,0 +1,11 @@
+design/
+docs/
+data/
+fixtures/
+pnpm-lock.yaml
+**/generated/**
+tools/*.json
+prisma/migrations/
+apps/web/messages/
+apps/web/next-env.d.ts
+*.md
