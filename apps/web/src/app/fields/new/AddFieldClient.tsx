@@ -204,7 +204,15 @@ export function AddFieldClient({
               if (closed) return;
               setRing((r) => [...r, p]);
             }}
-            onFinish={() => ring.length >= 3 && (setClosed(true), setDrawing(false))}
+            onFinish={() =>
+              setRing((r) => {
+                if (r.length >= 3) {
+                  setClosed(true);
+                  setDrawing(false);
+                }
+                return r;
+              })
+            }
           />
           <div className="absolute inset-x-4 top-4 flex flex-col gap-2">
             <form

@@ -1,10 +1,25 @@
 "use client";
 
 import "maplibre-gl/dist/maplibre-gl.css";
-import { Map as MLMap, NavigationControl, type GeoJSONSource, type MapMouseEvent } from "maplibre-gl";
+import {
+  Map as MLMap,
+  NavigationControl,
+  getVersion,
+  setWorkerUrl,
+  type GeoJSONSource,
+  type MapMouseEvent,
+  type MapTouchEvent,
+  type Point,
+} from "maplibre-gl";
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 
 export type LngLat = [number, number];
+
+/** The worker copied to public/ by scripts/maplibre-worker.mjs (the bundled default path does not resolve). */
+if (typeof window !== "undefined") setWorkerUrl(`/maplibre-gl-worker.mjs?v=${getVersion()}`);
+
+/** Screen distance between traced vertices. */
+const TRACE_PX = 12;
 
 /**
  * Satellite basemap for outlining fields. Default: EOX Sentinel-2 cloudless 2016 (CC BY 4.0; later EOX years are
@@ -38,7 +53,7 @@ export interface FieldMapProps {
   initial?: { lon: number; lat: number; zoom: number };
 }
 
-/** MapLibre map with click-to-outline drawing (design 13: "Click along the field edge. Double-click to finish."). */
+/** MapLibre map with click-or-trace outline drawing (design 13). */
 export const FieldMap = forwardRef<FieldMapHandle, FieldMapProps>(function FieldMap(props, ref) {
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<MLMap | null>(null);
@@ -92,9 +107,50 @@ export const FieldMap = forwardRef<FieldMapHandle, FieldMapProps>(function Field
         },
       });
     });
-    m.on("click", (e: MapMouseEvent) => {
-      if (handlers.current.drawing) handlers.current.onAddPoint([e.lngLat.lng, e.lngLat.lat]);
-    });
+    // Drawing (design 13): a click adds a vertex; press-and-drag traces the edge (a vertex every TRACE_PX) and
+    // closes the outline on release. While drawing, one-finger/mouse panning is off so a press never drags the map;
+    // zoom (wheel, pinch, +/−) still works.
+    let stroke: { start: Point; last: Point; traced: number } | null = null;
+    const add = (pt: Point, lngLat: { lng: number; lat: number }) => {
+      const ring = handlers.current.ring;
+      const prev = ring[ring.length - 1];
+      if (prev && m.project(prev).dist(pt) < 3) return; // the second click of a double-click
+      handlers.current.onAddPoint([lngLat.lng, lngLat.lat]);
+    };
+    const down = (e: MapMouseEvent | MapTouchEvent) => {
+      if (!handlers.current.drawing || handlers.current.closed) return;
+      if ("points" in e && e.points.length > 1) return (stroke = null); // pinch zoom
+      stroke = { start: e.point, last: e.point, traced: 0 };
+    };
+    const move = (e: MapMouseEvent | MapTouchEvent) => {
+      if (!stroke) return;
+      if ("points" in e && e.points.length > 1) return (stroke = null);
+      if (stroke.traced === 0 && e.point.dist(stroke.start) < TRACE_PX) return;
+      if (stroke.traced === 0) {
+        add(stroke.start, m.unproject(stroke.start));
+        stroke.traced = 1;
+      }
+      if (e.point.dist(stroke.last) >= TRACE_PX) {
+        add(e.point, e.lngLat);
+        stroke.last = e.point;
+        stroke.traced++;
+      }
+      e.preventDefault();
+    };
+    const up = (e: MapMouseEvent | MapTouchEvent) => {
+      if (!stroke) return;
+      const s = stroke;
+      stroke = null;
+      if (s.traced === 0) add(s.start, m.unproject(s.start));
+      else if (s.traced >= 3) handlers.current.onFinish();
+      void e;
+    };
+    m.on("mousedown", down);
+    m.on("mousemove", move);
+    m.on("mouseup", up);
+    m.on("touchstart", down);
+    m.on("touchmove", move);
+    m.on("touchend", up);
     m.on("dblclick", (e: MapMouseEvent) => {
       if (!handlers.current.drawing) return;
       e.preventDefault();
@@ -104,6 +160,13 @@ export const FieldMap = forwardRef<FieldMapHandle, FieldMapProps>(function Field
     return () => m.remove();
     // The map is created once; props reach handlers through the ref.
   }, []);
+
+  useEffect(() => {
+    const m = map.current;
+    if (!m) return;
+    if (props.drawing && !props.closed) m.dragPan.disable();
+    else m.dragPan.enable();
+  }, [props.drawing, props.closed]);
 
   useEffect(() => {
     const m = map.current;

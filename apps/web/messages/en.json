@@ -980,7 +980,7 @@
     "search_label": "Find a place",
     "tool_draw": "Draw by hand",
     "tool_file": "Upload a file",
-    "hint": "Click along the field edge. Double-click to finish.",
+    "hint": "Click along the field edge, or press and drag to trace it. Double-click to finish.",
     "map_label": "Map: a round field outlined near Garden City",
     "your_field": "Your field",
     "name_label": "Field name",
