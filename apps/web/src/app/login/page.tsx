@@ -29,7 +29,7 @@ export default async function LoginPage() {
             ].map(([icon, label]) => (
               <li
                 key={String(label)}
-                className="inline-flex min-h-9 items-center gap-2 rounded-chip bg-surface/10 px-4 text-small font-semibold [&_svg]:size-4 [&_svg]:text-signal"
+                className="inline-flex min-h-9 items-center gap-2 rounded-chip bg-surface/10 px-4 text-small font-semibold [&_svg]:size-4 [&_svg]:text-signal dark:[&_svg]:text-on-signal"
               >
                 {icon}
                 {label}

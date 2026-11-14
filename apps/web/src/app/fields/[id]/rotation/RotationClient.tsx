@@ -208,7 +208,7 @@ export function RotationClient({
             style={{ backgroundColor: cropColour(firstCrop ?? "fallow") }}
           />
           <div>
-            <p className="font-mono text-small tracking-wide text-signal uppercase">
+            <p className="font-mono text-small tracking-wide text-signal uppercase dark:text-on-signal">
               {chosen && chosen !== best?.id
                 ? t("rotYourChoice", { season: first })
                 : t("rotRecommended", { season: first })}

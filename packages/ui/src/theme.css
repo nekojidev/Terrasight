@@ -4,6 +4,9 @@
  */
 @import "../../../design/tokens.css";
 
+/* `dark:` utilities follow the same attribute as design/tokens.css. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 @theme inline {
   --color-bg: var(--ts-bg);
   --color-surface: var(--ts-surface);

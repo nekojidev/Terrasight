@@ -50,7 +50,7 @@ export function DoneRow({ label, undoLabel, undoUntil, onUndo, now = Date.now, c
           <button
             type="button"
             onClick={onUndo}
-            className="focus-ring min-h-tap rounded-btn px-2 text-body font-semibold text-signal"
+            className="focus-ring min-h-tap rounded-btn px-2 text-body font-semibold text-signal dark:text-on-signal"
           >
             {undoLabel}
           </button>

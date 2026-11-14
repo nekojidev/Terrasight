@@ -7,6 +7,7 @@ import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import { api, setCookie } from "@/lib/api";
 import { Brand } from "./Brand";
+import { ThemeToggle } from "./ThemeToggle";
 
 export interface ShellWorkspace {
   name: string;
@@ -92,6 +93,7 @@ export function AppShell({
                 <span className="block truncate text-body font-semibold text-ink">{user.name}</span>
                 <span className="block text-small text-ink-2">{a(`role_${user.role}`)}</span>
               </span>
+              <ThemeToggle />
               <button
                 type="button"
                 onClick={() => void signOut()}
@@ -117,6 +119,7 @@ export function AppShell({
           ]}
           notificationsLabel={t("notif")}
           onNotifications={() => undefined}
+          extra={<ThemeToggle className="lg:hidden" />}
         />
         <main className="mx-auto w-full max-w-[1180px] px-4 pt-6 pb-24 sm:px-8 sm:py-10 lg:pb-10">
           {children}

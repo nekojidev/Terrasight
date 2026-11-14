@@ -239,7 +239,7 @@ function Dialog({
     <dialog
       ref={ref}
       aria-label={title}
-      className="m-auto w-[min(560px,calc(100vw-32px))] rounded-hero bg-bg p-0 text-ink shadow-sheet backdrop:bg-ink/40"
+      className="m-auto w-[min(560px,calc(100vw-32px))] rounded-hero bg-bg p-0 text-ink shadow-sheet backdrop:bg-ink/40 dark:backdrop:bg-bg/70"
       onClick={(e) => e.target === e.currentTarget && e.currentTarget.close()}
     >
       <div className="flex items-center justify-between border-b border-line bg-surface px-5 py-3">

@@ -259,7 +259,7 @@ export function AddFieldClient({
               role="status"
               className="absolute inset-x-0 bottom-6 mx-auto flex w-fit items-center gap-2 rounded-chip bg-ink px-5 py-3 text-body text-surface"
             >
-              <Info aria-hidden className="size-5 text-signal" strokeWidth={1.7} />
+              <Info aria-hidden className="size-5 text-signal dark:text-on-signal" strokeWidth={1.7} />
               {t("hint")}
             </p>
           )}
