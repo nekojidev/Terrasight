@@ -185,10 +185,22 @@ export class FieldCheckConsumer extends JobConsumer<FieldCheckJob> implements On
         (existing.status === "snoozed" &&
           fires &&
           (!existing.snoozedUntil || existing.snoozedUntil <= new Date()));
+      // Scouting results stay in the evidence across re-evaluations (RFC §10.7: observed beats modelled).
+      const scouted = ((existing.evidence as Array<{ kind?: string }>) ?? []).filter(
+        (e) => e.kind === "scouting",
+      );
       await tx.recommendation.update({
         where: { id: existing.id },
         data: {
           ...data,
+          ...(scouted.length
+            ? {
+                evidence: [
+                  ...(data.evidence as unknown as unknown[]),
+                  ...scouted,
+                ] as unknown as Prisma.InputJsonValue,
+              }
+            : {}),
           ...(reopen ? { status: "open", snoozedAt: null, snoozedUntil: null, dismissedAt: null } : {}),
         },
       });

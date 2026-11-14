@@ -1681,6 +1681,215 @@
           }
         },
         {
+          "name": "Plan for 2026 is empty at first (S-06.06)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"no plan\", () => pm.expect(pm.response.text()).to.be.oneOf([\"\", \"null\"]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/fields/{{fieldId}}/plans/2026"
+          }
+        },
+        {
+          "name": "Unknown crop can't be saved to the plan",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 422\", () => pm.response.to.have.status(422));",
+                  "pm.test(\"problem+json\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"));",
+                  "pm.test(\"type unknown-crop\", () => pm.expect(pm.response.json().type).to.include(\"unknown-crop\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/fields/{{fieldId}}/plans/2026",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"crop\": \"banana\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Save alfalfa to the 2026 plan",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"saved\", () => pm.expect(pm.response.json()).to.include({ season: 2026, crop: \"alfalfa\" }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/fields/{{fieldId}}/plans/2026",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"crop\": \"alfalfa\",\n  \"rotationId\": \"us-sp-alfalfa3-corn-wheat\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Scenario run with an out-of-range slider is invalid",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 422\", () => pm.response.to.have.status(422));",
+                  "pm.test(\"problem+json\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"));",
+                  "pm.test(\"type invalid-input\", () => pm.expect(pm.response.json().type).to.include(\"invalid-input\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/fields/{{fieldId}}/scenario-runs",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"overrides\": {\n    \"deltaT\": 9\n  }\n}"
+            }
+          }
+        },
+        {
+          "name": "A check needs an existing recommendation (S-07.01)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"problem+json\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/recommendations/00000000-0000-4000-8000-000000000000/scouting-tasks",
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          }
+        },
+        {
+          "name": "Unknown scouting task is not found",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"problem+json\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/scouting-tasks/00000000-0000-4000-8000-000000000000"
+          }
+        },
+        {
+          "name": "A photo link without a valid signature is refused",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"problem+json\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              }
+            ],
+            "url": "{{baseUrl}}/api/scouting-photos/00000000-0000-4000-8000-000000000000?exp=1&sig=x"
+          }
+        },
+        {
           "name": "Archive the field",
           "event": [
             {
