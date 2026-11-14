@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button } from "@terrasight/ui";
+import { Button, Skeleton } from "@terrasight/ui";
 import {
   Check,
   ChevronRight,
@@ -79,7 +79,8 @@ export function ReportsClient({
     return [...m.entries()].sort(([a], [b]) => b.localeCompare(a));
   }, [items]);
 
-  if (!report.data) return <p className="text-body text-ink-2">{report.isError ? t("errGeneric") : "…"}</p>;
+  if (report.isError && !report.data) return <p className="text-body text-ink-2">{t("errGeneric")}</p>;
+  if (!report.data) return <Skeleton label={t("loading")} />;
   if (role === "viewer") {
     return (
       <div className="mx-auto max-w-[520px]">
@@ -427,7 +428,7 @@ function Draft({
       live = false;
     };
   }, [workspaceId, item.id]);
-  if (text === null) return <p className="ml-12 text-small text-ink-2">…</p>;
+  if (text === null) return <Skeleton label={t("loading")} className="ml-12" />;
   return (
     <div className="ml-12 flex flex-col gap-3 rounded-card border border-line bg-surface-2 p-4">
       <p className="flex items-center gap-2 text-small font-semibold text-ink">

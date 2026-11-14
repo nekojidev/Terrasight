@@ -5,7 +5,9 @@ import { ArrowLeft, Camera, ChevronLeft, ChevronRight, Minus, Plus, Send } from 
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { OfflineCard } from "@/components/OfflineBanner";
 import { api, ApiError } from "@/lib/api";
+import { clearDraft, loadDraft, saveDraft, useOnline } from "@/lib/offline";
 
 type Localised = { en: string; uk: string };
 export interface ScoutTask {
@@ -21,8 +23,6 @@ export interface ScoutTask {
   photos: Array<{ id: string; pointIdx: number; url: string }>;
 }
 
-const KEY = (id: string) => `ts.scout.${id}`;
-
 /** The 5-point check (design 12, RFC §10.7): sketch on top, counter in a bottom sheet within thumb reach. */
 export function ScoutClient({ workspaceId, initial }: { workspaceId: string; initial: ScoutTask }) {
   const t = useTranslations("App");
@@ -34,31 +34,24 @@ export function ScoutClient({ workspaceId, initial }: { workspaceId: string; ini
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const file = useRef<HTMLInputElement>(null);
+  const [queued, setQueued] = useState(false);
+  const online = useOnline();
   const clientId = useRef<string>("");
 
-  // Draft in the browser, labelled "Saved automatically" (never "works offline").
+  // Draft in the browser, labelled "Saved automatically"; survives offline and reloads.
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(KEY(task.id));
-      if (raw && task.status === "open") {
-        const d = JSON.parse(raw) as { counts: Array<number | null>; clientId: string };
-        setCounts(d.counts);
-        clientId.current = d.clientId;
-      }
-    } catch {
-      /* storage unavailable */
+    const d = task.status === "open" ? loadDraft(task.id) : null;
+    if (d) {
+      setCounts(d.counts);
+      setQueued(d.queued === true);
+      clientId.current = d.clientId;
     }
     if (!clientId.current) clientId.current = crypto.randomUUID();
   }, [task.id, task.status]);
   useEffect(() => {
-    try {
-      if (task.status === "open")
-        localStorage.setItem(KEY(task.id), JSON.stringify({ counts, clientId: clientId.current }));
-      else localStorage.removeItem(KEY(task.id));
-    } catch {
-      /* storage unavailable */
-    }
-  }, [counts, task.id, task.status]);
+    if (task.status === "open") saveDraft(task.id, { counts, clientId: clientId.current, queued });
+    else clearDraft(task.id);
+  }, [counts, queued, task.id, task.status]);
 
   // Sketch: project the outline and points into a 320 × 320 box.
   const sketch = useMemo(() => {
@@ -88,21 +81,40 @@ export function ScoutClient({ workspaceId, initial }: { workspaceId: string; ini
   const pestName = task.pest.name[locale];
 
   async function send() {
-    setBusy(true);
     setMsg(null);
+    if (!navigator.onLine) {
+      setQueued(true); // sent automatically when the connection is back
+      return;
+    }
+    setBusy(true);
     try {
       const r = await api<ScoutTask>(`/api/w/${workspaceId}/scouting-tasks/${task.id}/send`, {
         body: { clientId: clientId.current, counts },
       });
+      setQueued(false);
       setTask(r);
     } catch (e) {
+      // Lost the connection mid-send: keep it queued; any other failure stops the auto-retry.
+      const lost = !(e instanceof ApiError) && !navigator.onLine;
+      setQueued(lost);
+      if (lost) return;
       setMsg(e instanceof ApiError ? (e.problem.detail ?? t("errGeneric")) : t("errGeneric"));
     } finally {
       setBusy(false);
     }
   }
+  const sendRef = useRef(send);
+  sendRef.current = send;
+  useEffect(() => {
+    if (online && queued && !busy && task.status === "open") void sendRef.current();
+  }, [online, queued, busy, task.status]);
+
   async function photo(f: File | undefined) {
     if (!f) return;
+    if (!navigator.onLine) {
+      setMsg(t("scPhotoOffline"));
+      return;
+    }
     try {
       const p = await api<{ url: string; method: string; headers: Record<string, string> }>(
         `/api/w/${workspaceId}/scouting-tasks/${task.id}/photos/presign`,
@@ -258,7 +270,14 @@ export function ScoutClient({ workspaceId, initial }: { workspaceId: string; ini
           <p className="mt-3 text-small text-ink-2">
             {s("visited_l")}: <span className="font-mono text-ink">{checked} / 5</span>
           </p>
-          {checked === 5 ? (
+          {queued ? (
+            <div className="mt-3">
+              <OfflineCard
+                title={t("offlineTitle")}
+                body={t("scQueued", { field: task.fieldName })}
+              />
+            </div>
+          ) : checked === 5 ? (
             <Button
               icon={<Send />}
               className="mt-3 w-full justify-center"

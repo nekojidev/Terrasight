@@ -7,6 +7,7 @@ import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import { api, setCookie } from "@/lib/api";
 import { Brand } from "./Brand";
+import { OfflineBanner } from "./OfflineBanner";
 import { ThemeToggle } from "./ThemeToggle";
 
 export interface ShellWorkspace {
@@ -122,6 +123,9 @@ export function AppShell({
           extra={<ThemeToggle className="lg:hidden" />}
         />
         <main className="mx-auto w-full max-w-[1180px] px-4 pt-6 pb-24 sm:px-8 sm:py-10 lg:pb-10">
+          <div className="mb-4 empty:hidden">
+            <OfflineBanner />
+          </div>
           {children}
         </main>
       </div>
