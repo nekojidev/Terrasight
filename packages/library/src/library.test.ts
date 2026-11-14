@@ -78,6 +78,7 @@ describe("verification gate (RFC §11.3)", () => {
             url: "https://example.org",
             accessed: "2026-11-14",
             appliesTo: [],
+            type: "extension" as const,
           },
           verifiedBy: "team member",
           verifiedAt: "2026-11-14",
