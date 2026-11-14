@@ -12,7 +12,7 @@ We build this project in three documented stages. Each one builds on the stage b
    - **Design** — `design/` (v4 "Morning brief", 17 screens) ✅ handed off; see "Design" below
 3. **Tech Design** — `docs/03-tech-design.md` — architecture, data model, API, modules, testing, deploy ✅ v1.1 agreed; backlog in `docs/epics/`
 
-Build: epic by epic in P0-path order (`docs/epics/README.md`). EP-00 Foundation ✅ done.
+Build: epic by epic in P0-path order (`docs/epics/README.md`). EP-00 Foundation ✅, EP-01 Onboarding & workspace ✅.
 
 Rules:
 

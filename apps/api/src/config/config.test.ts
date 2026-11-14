@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { loadEnv } from "./config.js";
 
-const base = { DATABASE_URL: "postgresql://u:p@localhost:5432/db", RABBITMQ_URL: "amqp://localhost" };
+const base = {
+  DATABASE_URL: "postgresql://u:p@localhost:5432/db",
+  RABBITMQ_URL: "amqp://localhost",
+  JWT_SECRET: "x".repeat(32),
+};
 
 describe("loadEnv", () => {
   it("applies defaults and treats Redis as optional", () => {
     const env = loadEnv(base);
-    expect(env).toMatchObject({ ROLE: "all", PORT: 4000, DEV_AUTH: false });
+    expect(env).toMatchObject({ ROLE: "all", PORT: 4000 });
     expect(env.REDIS_URL).toBeUndefined();
   });
 
@@ -18,7 +22,7 @@ describe("loadEnv", () => {
     expect(() => loadEnv({ ROLE: "boss" })).toThrow(/DATABASE_URL[\s\S]*RABBITMQ_URL|ROLE/);
   });
 
-  it("refuses the development auth stand-in in production", () => {
-    expect(() => loadEnv({ ...base, NODE_ENV: "production", DEV_AUTH: "true" })).toThrow(/DEV_AUTH/);
+  it("requires a JWT secret of at least 32 characters", () => {
+    expect(() => loadEnv({ ...base, JWT_SECRET: "short" })).toThrow(/JWT_SECRET/);
   });
 });

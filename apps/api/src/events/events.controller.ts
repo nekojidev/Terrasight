@@ -12,7 +12,7 @@ import {
 import { StreamTopic } from "@terrasight/shared";
 import type { Observable } from "rxjs";
 import { map } from "rxjs";
-import { AuthGuard, WorkspaceMemberGuard, type AuthedRequest } from "../auth/current-user.js";
+import { AuthGuard, Requires, WorkspaceGuard, type AuthedRequest } from "../auth/current-user.js";
 import { PrismaService } from "../db/prisma.service.js";
 import { EventsService } from "./events.service.js";
 
@@ -24,7 +24,8 @@ interface SseMessage {
 
 /** `GET /api/w/:ws/events?topics=brief,analysis,field:<id>,conversation:<id>` (Tech Design §14). */
 @Controller("w/:ws/events")
-@UseGuards(AuthGuard, WorkspaceMemberGuard)
+@UseGuards(AuthGuard, WorkspaceGuard)
+@Requires("workspace.read")
 export class EventsController {
   constructor(
     private readonly events: EventsService,

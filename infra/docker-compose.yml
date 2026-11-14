@@ -48,8 +48,6 @@ services:
       REDIS_URL: ${REDIS_URL-redis://redis:6379}
       NODE_ENV: ${NODE_ENV:-development}
       ROLE: ${ROLE:-all}
-      # Development-only auth stand-in until EP-01 (refused when NODE_ENV=production).
-      DEV_AUTH: ${DEV_AUTH:-false}
     ports: ["4000:4000"]
     depends_on:
       postgres: { condition: service_healthy }

@@ -45,3 +45,41 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm test:integration
+
+  contract:
+    # Postman contract tests for P0 endpoints (Tech Design §1.1, §16).
+    runs-on: ubuntu-latest
+    needs: checks
+    services:
+      postgres:
+        image: postgis/postgis:17-3.5 # amd64 runners; locally infra/postgis builds a multi-arch image
+        env: { POSTGRES_USER: terrasight, POSTGRES_PASSWORD: terrasight, POSTGRES_DB: terrasight }
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U terrasight" --health-interval 5s --health-retries 20
+      rabbitmq:
+        image: rabbitmq:4-management-alpine
+        ports: ["5672:5672"]
+    env:
+      DATABASE_URL: postgresql://terrasight:terrasight@localhost:5432/terrasight
+      RABBITMQ_URL: amqp://guest:guest@localhost:5672
+      JWT_SECRET: ci-only-secret-0123456789abcdefghijklmnop
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo run build --filter=@terrasight/api...
+      - run: pnpm --filter @terrasight/api db:migrate
+      - name: Start the API
+        run: |
+          (cd apps/api && node dist/main.js > /tmp/api.log 2>&1 &)
+          for i in $(seq 1 30); do curl -sf localhost:4000/readyz && break; sleep 1; done
+      - name: Install Postman CLI
+        run: curl -o- "https://dl-cli.pstmn.io/install/linux64.sh" | sh
+      - run: pnpm --filter @terrasight/api test:contract
+      - if: failure()
+        run: cat /tmp/api.log

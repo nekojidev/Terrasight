@@ -16,14 +16,8 @@ export const EnvSchema = z.object({
   REDIS_URL: z.string().url().optional(),
   DATA_DIR: z.string().default(DEFAULT_DATA_DIR),
   WEB_ORIGIN: z.string().url().default("http://localhost:3000"),
-  /**
-   * Development-only stand-in for auth until EP-01: trusts the `x-dev-user-id` header.
-   * Refused when NODE_ENV=production.
-   */
-  DEV_AUTH: z
-    .enum(["true", "false"])
-    .default("false")
-    .transform((v) => v === "true"),
+  /** HS256 key for the 15-minute access JWT (Tech Design §14.1). At least 32 characters. */
+  JWT_SECRET: z.string().min(32, "must be at least 32 characters"),
 });
 
 export type Env = z.infer<typeof EnvSchema>;
@@ -35,9 +29,6 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
   if (!parsed.success) {
     const lines = parsed.error.issues.map((i) => `  - ${i.path.join(".")}: ${i.message}`);
     throw new Error(`Invalid environment:\n${lines.join("\n")}`);
-  }
-  if (parsed.data.DEV_AUTH && parsed.data.NODE_ENV === "production") {
-    throw new Error("DEV_AUTH must not be enabled in production");
   }
   return parsed.data;
 }

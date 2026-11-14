@@ -1,35 +1,46 @@
-import { useTranslations } from "next-intl";
-import { ArrowRight, Map } from "lucide-react";
-import { Button, Chip } from "@terrasight/ui";
+import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
+import { AppShell } from "@/components/AppShell";
+import { EmptyHome } from "@/components/EmptyHome";
+import { SessionRefresher } from "@/components/SessionRefresher";
+import { activeWorkspace, serverGet, type Me } from "@/lib/server-api";
+
+interface WorkspaceDetail {
+  id: string;
+  name: string;
+  fieldCount: number;
+  isDemo: boolean;
+  role: Me["workspaces"][number]["role"];
+}
 
 /**
- * EP-00 placeholder for "/": the empty home (design 03) is built in S-01.05. It proves the wiring:
- * tokens, components and UA/EN copy from design/i18n.
+ * "/": signed out → login; no company → onboarding; no fields → empty home (design 03);
+ * otherwise the morning brief (design 04, EP-04).
  */
-export default function Home() {
-  const t = useTranslations("EmptyHome");
+export default async function Home() {
+  const me = await serverGet<Me>("/api/me");
+  if (!me.ok) {
+    if (me.status === 401) return <SessionRefresher next="/" />;
+    redirect("/login");
+  }
+  const active = await activeWorkspace(me.data);
+  if (!active) redirect("/onboarding");
+  const ws = await serverGet<WorkspaceDetail>(`/api/w/${active.id}`);
+  if (!ws.ok) redirect("/onboarding");
+  const t = await getTranslations("EmptyHome");
+
   return (
-    <main className="mx-auto flex max-w-3xl flex-col gap-6 px-6 py-16">
-      <Chip tone="source">EP-00 · foundation</Chip>
-      <h1 className="text-h1 text-ink">{t("hello")}</h1>
-      <p className="text-body text-ink-2">{t("sub")}</p>
-      <ol className="flex flex-col gap-3">
-        {(["st1", "st2", "st3"] as const).map((k, i) => (
-          <li key={k} className="rounded-card border border-line bg-surface p-5">
-            <span className="text-micro text-ink-3">0{i + 1}</span>
-            <p className="text-[18px] leading-6 font-semibold text-ink">{t(k)}</p>
-            <p className="text-small text-ink-2">{t(`${k}s`)}</p>
-          </li>
-        ))}
-      </ol>
-      <div className="flex flex-wrap gap-3">
-        <Button size={52} icon={<Map />}>
-          {t("add")}
-        </Button>
-        <Button size={52} variant="outline" icon={<ArrowRight />}>
-          {t("demo")}
-        </Button>
-      </div>
-    </main>
+    <AppShell
+      workspace={{ name: ws.data.name, fieldCount: ws.data.fieldCount, isDemo: ws.data.isDemo }}
+      user={{ name: me.data.name, role: ws.data.role }}
+      crumb={t("crumb")}
+    >
+      {ws.data.fieldCount === 0 ? (
+        <EmptyHome firstName={me.data.name.split(/\s+/)[0] ?? me.data.name} />
+      ) : (
+        // The morning brief replaces this in EP-04 (S-04.03).
+        <p className="text-body text-ink-2">{ws.data.fieldCount}</p>
+      )}
+    </AppShell>
   );
 }
