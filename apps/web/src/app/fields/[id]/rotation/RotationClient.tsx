@@ -3,7 +3,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { rank, type Metric, type ScenarioResult } from "@terrasight/scenario-engine";
 import { Button, Chip, SeasonStrip, cropColour } from "@terrasight/ui";
-import { Check, Droplet, Leaf, PiggyBank, ShieldCheck, Sparkles } from "lucide-react";
+import { Check, Droplet, Leaf, PiggyBank, ShieldCheck, Sparkles, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
@@ -19,6 +19,7 @@ interface RunView {
   missingPrices: string[];
   priceAsOf: string;
   names: Record<string, Localised>;
+  cropNames?: Record<string, Localised>;
   result: {
     current: ScenarioResult;
     alternatives: ScenarioResult[];
@@ -37,6 +38,26 @@ const PRIORITY: Array<{ key: Metric; icon: React.ReactNode; label: string }> = [
 ];
 
 /** Rotation screen (design 10, S-06.04): decision first, evidence below; priorities re-rank in the browser. */
+const METRICS: Array<{ key: Metric; label: string }> = [
+  { key: "margin", label: "rotDotMargin" },
+  { key: "water", label: "rotDotWater" },
+  { key: "soil", label: "rotDotSoil" },
+  { key: "drought", label: "rotDotDrought" },
+];
+
+function Dots({ n, label, strong }: { n: number; label: string; strong: boolean }) {
+  return (
+    <span role="img" aria-label={label} className="flex gap-1">
+      {[1, 2, 3, 4, 5].map((i) => (
+        <span
+          key={i}
+          className={`block size-3 rounded-full ${i <= n ? (strong ? "bg-ink" : "bg-ink-2") : "bg-line"}`}
+        />
+      ))}
+    </span>
+  );
+}
+
 export function RotationClient({
   workspaceId,
   fieldId,
@@ -87,6 +108,21 @@ export function RotationClient({
     null,
   );
   const pick = scenarios.find((s) => s.id === chosen) ?? best;
+  /** 1–5 dots, relative among the compared options (exact values are in "All numbers"). */
+  const dots = (s: ScenarioResult, m: Metric) => {
+    const v = (x: ScenarioResult) =>
+      m === "margin"
+        ? x.margin
+        : m === "water"
+          ? -x.water
+          : m === "soil"
+            ? x.carbonChange - x.erosion / 100
+            : x.drought;
+    const vals = scenarios.map(v);
+    const lo = Math.min(...vals);
+    const hi = Math.max(...vals);
+    return hi - lo < 1e-9 ? 3 : 1 + Math.round(((v(s) - lo) / (hi - lo)) * 4);
+  };
   const first = run.data?.firstSeason ?? 2026;
   const firstCrop = pick?.plan[0]?.crops.filter((c) => c !== "fallow")[0] ?? pick?.plan[0]?.crops[0];
 
@@ -111,14 +147,41 @@ export function RotationClient({
       </p>
     );
 
+  const pros = (s: ScenarioResult): string[] => {
+    if (s.kind === "current") return [t("rotProCurrent")];
+    const out: string[] = [];
+    if (s.delta.margin > 0) out.push(t("rotProMargin", { delta: signed(s.delta.margin), unit: area }));
+    if (s.water < current.water - 5) out.push(t("rotProWater", { amount: water(current.water - s.water) }));
+    if (s.carbonChange > current.carbonChange + 0.05) out.push(t("rotProCarbon"));
+    if (s.erosion < current.erosion * 0.9) out.push(t("rotProErosion"));
+    if (s.drought > current.drought)
+      out.push(t("rotProDrought", { delta: signed(s.drought - current.drought), unit: area }));
+    const pestsNow = current.pestPressure.filter((p) => p.seasons > 0).length;
+    if (s.pestPressure.filter((p) => p.seasons > 0).length < pestsNow) out.push(t("rotProPest"));
+    return out;
+  };
+  const cons = (s: ScenarioResult): string[] => {
+    const out: string[] = [];
+    if (s.kind !== "current") {
+      if (s.delta.margin < 0) out.push(t("rotConMargin", { delta: signed(s.delta.margin), unit: area }));
+      if (s.water > current.water + 5) out.push(t("rotConWater", { amount: water(s.water - current.water) }));
+      if (s.drought < current.drought) out.push(t("rotConDrought"));
+    }
+    if (s.capped) out.push(t("rotCapped", { loss: Math.abs(money(s.capLoss)), unit: area }));
+    for (const p of s.pestPressure.filter((x) => x.seasons > 0))
+      out.push(t("rotPestLine", { pest: p.pest.replace(/_/g, " "), n: p.seasons }));
+    if (s.priceWins < 5) out.push(t("rotConPrice", { n: s.priceWins }));
+    return out;
+  };
   const name = (s: ScenarioResult) =>
     s.kind === "current"
       ? s.label === "detected"
         ? t("rotDetected")
         : t("rotCurrent")
       : (run.data!.names[s.id]?.[locale] ?? s.id);
-  const cropName = (c: string) => c.replace(/_/g, " ");
+  const cropName = (c: string) => run.data!.cropNames?.[c]?.[locale] ?? c.replace(/_/g, " ");
   const letters = ["A", "B", "C"];
+  const current = run.data.result.current;
   const seasons = Array.from({ length: 5 }, (_, i) => first + i);
 
   // Cumulative margin chart (sum of simulated years, no extrapolation).
@@ -249,19 +312,14 @@ export function RotationClient({
                     {s.kind === "current" ? t("rotSame") : t("rotVsNow", { delta: signed(s.delta.margin) })}
                   </p>
                 </div>
-                <dl className="grid grid-cols-2 gap-2 text-small">
-                  <dt className="text-ink-2">{t("rotWater")}</dt>
-                  <dd className="text-right font-mono text-ink">{water(s.water)}</dd>
-                  <dt className="text-ink-2">{t("rotSoilC")}</dt>
-                  <dd className="text-right font-mono text-ink">
-                    {s.carbonChange >= 0 ? "+" : ""}
-                    {s.carbonChange.toFixed(1)} t C/ha
-                  </dd>
-                  <dt className="text-ink-2">{t("rotErosion")}</dt>
-                  <dd className="text-right font-mono text-ink">{Math.round(s.erosion)}</dd>
-                  <dt className="text-ink-2">{t("rotDrought")}</dt>
-                  <dd className="text-right font-mono text-ink">${money(s.drought).toLocaleString()}</dd>
-                </dl>
+                <ul className="flex flex-col gap-2 text-small">
+                  {METRICS.map((m) => (
+                    <li key={m.key} className="flex items-center justify-between gap-3">
+                      <span className="text-ink-2">{t(m.label)}</span>
+                      <Dots n={dots(s, m.key)} label={`${t(m.label)}: ${dots(s, m.key)}/5`} strong={isPick} />
+                    </li>
+                  ))}
+                </ul>
                 <p className="text-small text-ink-2">{t("rotPrice", { n: s.priceWins })}</p>
                 {s.capped && (
                   <p className="text-small text-week">
@@ -295,6 +353,64 @@ export function RotationClient({
           })}
         </div>
       </section>
+
+      {pick && (
+        <section className="rounded-hero border-2 border-ink bg-surface p-6">
+          <div className="mb-4 flex flex-wrap items-center gap-3">
+            <Chip tone="neutral">{t("rotYourPick")}</Chip>
+            <h2 className="text-h2 text-ink">
+              {t("rotAlt", { letter: letters[scenarios.indexOf(pick)] ?? "" })} · {name(pick)}
+            </h2>
+          </div>
+          <div className="grid gap-6 md:grid-cols-2">
+            <div>
+              <h3 className="mb-3 text-body font-semibold text-ink">{t("rotWhy")}</h3>
+              <ul className="flex flex-col gap-3">
+                {pros(pick).map((x) => (
+                  <li key={x} className="flex gap-3 text-body text-ink">
+                    <span
+                      aria-hidden
+                      className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-ok-soft text-ok"
+                    >
+                      <Check className="size-4" />
+                    </span>
+                    {x}
+                  </li>
+                ))}
+                {pros(pick).length === 0 && <li className="text-small text-ink-2">{t("rotNoPros")}</li>}
+              </ul>
+            </div>
+            <div>
+              <h3 className="mb-3 text-body font-semibold text-ink">{t("rotCheck")}</h3>
+              <ul className="flex flex-col gap-3">
+                {cons(pick).map((x) => (
+                  <li key={x} className="flex gap-3 text-body text-ink">
+                    <span
+                      aria-hidden
+                      className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-week-soft text-week"
+                    >
+                      <TriangleAlert className="size-4" />
+                    </span>
+                    {x}
+                  </li>
+                ))}
+                {cons(pick).length === 0 && <li className="text-small text-ink-2">{t("rotNoCons")}</li>}
+              </ul>
+            </div>
+          </div>
+          {canSave && (
+            <Button
+              className="mt-6"
+              icon={<Check />}
+              onClick={() => save.mutate()}
+              disabled={save.isPending || !firstCrop}
+              aria-busy={save.isPending}
+            >
+              {save.isSuccess ? t("rotSaved", { season: first }) : t("rotSave", { season: first })}
+            </Button>
+          )}
+        </section>
+      )}
 
       <section className="rounded-card border border-line bg-surface p-6">
         <h2 className="mb-4 text-h2 text-ink">{t("rotSliders")}</h2>
@@ -413,7 +529,22 @@ export function RotationClient({
                   ${money(s.if2022.margin).toLocaleString()}
                 </span>
               </p>
-              <p className="text-micro text-ink-3">{s.if2022.season}</p>
+              <span aria-hidden className="mt-2 block h-2 overflow-hidden rounded-chip bg-muted">
+                <span
+                  className="block h-full bg-ink"
+                  style={{
+                    width: `${Math.min(100, Math.max(4, s.margin ? (Math.max(0, s.margin - s.if2022.margin) / Math.abs(s.margin)) * 100 : 0))}%`,
+                  }}
+                />
+              </span>
+              <p className="mt-1 text-micro text-ink-3">
+                {t("rot2022Drop", {
+                  pct: s.margin
+                    ? Math.round((Math.max(0, s.margin - s.if2022.margin) / Math.abs(s.margin)) * 100)
+                    : 0,
+                  season: s.if2022.season,
+                })}
+              </p>
             </div>
           ))}
         </div>

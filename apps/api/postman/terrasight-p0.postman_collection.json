@@ -212,7 +212,9 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test(\"status 200\", () => pm.response.to.have.status(200));"]
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
               }
             }
           ],
@@ -267,7 +269,9 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test(\"status 204\", () => pm.response.to.have.status(204));"]
+                "exec": [
+                  "pm.test(\"status 204\", () => pm.response.to.have.status(204));"
+                ]
               }
             }
           ],
@@ -363,7 +367,9 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test(\"status 201\", () => pm.response.to.have.status(201));"]
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));"
+                ]
               }
             }
           ],
@@ -418,7 +424,9 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test(\"status 200\", () => pm.response.to.have.status(200));"]
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
               }
             }
           ],
@@ -464,32 +472,6 @@
               }
             ],
             "url": "{{baseUrl}}/api/w/00000000-0000-4000-8000-000000000000"
-          }
-        },
-        {
-          "name": "Demo company before the seed",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test(\"status 404\", () => pm.response.to.have.status(404));",
-                  "pm.test(\"problem+json\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"));",
-                  "pm.test(\"type demo-not-seeded\", () => pm.expect(pm.response.json().type).to.include(\"demo-not-seeded\"));"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "X-Requested-With",
-                "value": "XMLHttpRequest"
-              }
-            ],
-            "url": "{{baseUrl}}/api/workspaces/demo-copy"
           }
         }
       ]
@@ -595,7 +577,9 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test(\"status 204\", () => pm.response.to.have.status(204));"]
+                "exec": [
+                  "pm.test(\"status 204\", () => pm.response.to.have.status(204));"
+                ]
               }
             }
           ],
@@ -642,7 +626,9 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test(\"status 201\", () => pm.response.to.have.status(201));"]
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));"
+                ]
               }
             }
           ],
@@ -869,7 +855,9 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test(\"status 200\", () => pm.response.to.have.status(200));"]
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
               }
             }
           ],
@@ -960,7 +948,9 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test(\"status 200\", () => pm.response.to.have.status(200));"]
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
               }
             }
           ],
@@ -990,7 +980,9 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test(\"status 204\", () => pm.response.to.have.status(204));"]
+                "exec": [
+                  "pm.test(\"status 204\", () => pm.response.to.have.status(204));"
+                ]
               }
             }
           ],
@@ -1640,7 +1632,9 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test(\"status 204\", () => pm.response.to.have.status(204));"]
+                "exec": [
+                  "pm.test(\"status 204\", () => pm.response.to.have.status(204));"
+                ]
               }
             }
           ],
@@ -2004,7 +1998,9 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test(\"status 204\", () => pm.response.to.have.status(204));"]
+                "exec": [
+                  "pm.test(\"status 204\", () => pm.response.to.have.status(204));"
+                ]
               }
             }
           ],
@@ -2051,7 +2047,9 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test(\"status 204\", () => pm.response.to.have.status(204));"]
+                "exec": [
+                  "pm.test(\"status 204\", () => pm.response.to.have.status(204));"
+                ]
               }
             }
           ],

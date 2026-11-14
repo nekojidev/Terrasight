@@ -2,7 +2,18 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Chip, SelectField, TextField, cropColour } from "@terrasight/ui";
-import { AlertTriangle, Check, Droplet, Loader2, Minus, ShieldCheck, Sun } from "lucide-react";
+import {
+  AlertTriangle,
+  CalendarDays,
+  Check,
+  Droplet,
+  Leaf,
+  Loader2,
+  Minus,
+  ShieldCheck,
+  Sprout,
+  Sun,
+} from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { useState, type FormEvent } from "react";
 import { api } from "@/lib/api";
@@ -104,6 +115,30 @@ export function FieldClient({
     queryKey: ["field", workspaceId, id, "history"],
     queryFn: () => api<History>(`${base}/history`),
   });
+  const record = useQuery({
+    queryKey: ["field", workspaceId, id, "season"],
+    queryFn: () => api<SeasonRecord>(`${base}/season-records/current`),
+  });
+  const rotations = useQuery({
+    queryKey: ["rotations", workspaceId],
+    queryFn: () =>
+      api<{
+        season: number;
+        fields: Array<{
+          fieldId: string;
+          plan: { crop: string } | null;
+          recommendation: { firstCrop: string | null } | null;
+        }>;
+      }>(`/api/w/${workspaceId}/rotations`),
+  });
+  const mine = rotations.data?.fields.find((x) => x.fieldId === id);
+  const planInfo = rotations.data
+    ? {
+        season: rotations.data.season,
+        crop: mine?.plan?.crop ?? mine?.recommendation?.firstCrop ?? null,
+        agreed: Boolean(mine?.plan),
+      }
+    : null;
 
   const area = units === "imperial" ? initial.areaHa * HA_TO_AC : initial.areaHa;
   const irrigationWord = field.data.irrigation === "unknown" ? null : t(field.data.irrigation);
@@ -116,62 +151,143 @@ export function FieldClient({
     .join(" · ");
 
   return (
-    <div className="flex flex-col gap-6">
-      <header className="flex flex-col gap-2">
-        <h1 className="text-h1 text-ink">{field.data.name}</h1>
-        <p className="flex flex-wrap items-center gap-3 text-body text-ink-2">
-          {meta}
-          <Chip
-            tone={initial.tier === "A" ? "ok" : initial.tier === "B" ? "info" : "week"}
-            icon={<ShieldCheck />}
-          >
-            {f(`tier_${initial.tier}`)}
-          </Chip>
-        </p>
-      </header>
-      <FieldTabs fieldId={id} />
+    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="flex min-w-0 flex-col gap-6">
+        <header className="flex flex-col gap-2">
+          <h1 className="text-h1 text-ink">{field.data.name}</h1>
+          <p className="flex flex-wrap items-center gap-3 text-body text-ink-2">
+            {meta}
+            <Chip
+              tone={initial.tier === "A" ? "ok" : initial.tier === "B" ? "info" : "week"}
+              icon={<ShieldCheck />}
+            >
+              {f(`tier_${initial.tier}`)}
+            </Chip>
+          </p>
+        </header>
+        <FieldTabs fieldId={id} />
 
-      {history.data && (
-        <FieldBrief
-          fieldId={id}
-          risks={risks.data ?? []}
-          seasons={history.data.seasons}
-          cropName={(c) => cropLabel(history.data!.cropNames, locale, c)}
-        />
-      )}
-      <div className="grid gap-6 lg:grid-cols-2">
+        {history.data && (
+          <FieldBrief
+            fieldId={id}
+            risks={risks.data ?? []}
+            seasons={history.data.seasons}
+            cropName={(c) => cropLabel(history.data!.cropNames, locale, c)}
+          />
+        )}
+        {history.data && (
+          <StatCards
+            history={history.data}
+            record={record.data ?? null}
+            plan={planInfo}
+            cropName={(c) => cropLabel(history.data!.cropNames, locale, c)}
+          />
+        )}
         <RisksCard risks={risks.data ?? []} />
         <WeatherCard workspaceId={workspaceId} fieldId={id} units={units} />
-      </div>
-      {canEdit && <FieldAssistant workspaceId={workspaceId} fieldId={id} fieldName={field.data.name} />}
+        {history.data && <HistoryCard history={history.data} />}
 
-      {gather.data && (
-        <GatherPanel
-          status={gather.data}
-          base={base}
-          canEdit={canEdit}
-          onRetried={() => void gather.refetch()}
-        />
+        {gather.data && (
+          <GatherPanel
+            status={gather.data}
+            base={base}
+            canEdit={canEdit}
+            onRetried={() => void gather.refetch()}
+          />
+        )}
+        {history.data && (
+          <IrrigationCard
+            history={history.data}
+            field={field.data}
+            base={base}
+            canEdit={canEdit}
+            workspaceId={workspaceId}
+          />
+        )}
+        {history.data && (
+          <SeasonCard
+            base={base}
+            canEdit={canEdit}
+            cropNames={history.data.cropNames}
+            workspaceId={workspaceId}
+            fieldId={id}
+          />
+        )}
+      </div>
+      {canEdit && (
+        <aside className="min-w-0 xl:sticky xl:top-6 xl:self-start">
+          <FieldAssistant workspaceId={workspaceId} fieldId={id} fieldName={field.data.name} />
+        </aside>
       )}
-      {history.data && <HistoryCard history={history.data} />}
-      {history.data && (
-        <IrrigationCard
-          history={history.data}
-          field={field.data}
-          base={base}
-          canEdit={canEdit}
-          workspaceId={workspaceId}
-        />
-      )}
-      {history.data && (
-        <SeasonCard
-          base={base}
-          canEdit={canEdit}
-          cropNames={history.data.cropNames}
-          workspaceId={workspaceId}
-          fieldId={id}
-        />
-      )}
+    </div>
+  );
+}
+
+/** Crop · This season · Plan (design 08): the field's state at a glance, from its history, season record and plan. */
+function StatCards({
+  history,
+  record,
+  plan,
+  cropName,
+}: {
+  history: History;
+  record: SeasonRecord | null;
+  plan: { season: number; crop: string | null; agreed: boolean } | null;
+  cropName: (c: string) => string;
+}) {
+  const t = useTranslations("App");
+  const locale = useLocale();
+  const last = [...history.seasons].sort((a, b) => b.season - a.season)[0];
+  const day = (iso: string) =>
+    new Intl.DateTimeFormat(locale === "uk" ? "uk-UA" : "en-US", {
+      timeZone: "UTC",
+      day: "numeric",
+      month: "long",
+    }).format(new Date(`${iso}T12:00:00Z`));
+  const cards = [
+    {
+      icon: <Leaf />,
+      tone: "bg-week-soft text-week",
+      k: t("fcCrop"),
+      v: record?.crop.value ? cropName(record.crop.value) : last ? cropName(last.mainCrop) : "—",
+      s: record?.crop.value
+        ? t("fcSeason", { season: record.season })
+        : last
+          ? t("fcLastSeason", { season: last.season })
+          : "",
+    },
+    {
+      icon: <CalendarDays />,
+      tone: "bg-info-soft text-info",
+      k: t("fcSowing"),
+      v: record?.sowingDate.value ? day(record.sowingDate.value) : "—",
+      s: record?.sowingDate.value ? t(`fcSrc_${record.sowingDate.source}`) : t("fcNoSowing"),
+    },
+    {
+      icon: <Sprout />,
+      tone: "bg-ok-soft text-ok",
+      k: plan ? t("fcPlan", { season: plan.season }) : t("fcPlanNone"),
+      v: plan?.crop ? cropName(plan.crop) : "—",
+      s: plan ? (plan.agreed ? t("fcAgreed") : t("fcNotAgreed")) : "",
+    },
+  ];
+  return (
+    <div className="grid gap-4 md:grid-cols-3">
+      {cards.map((c) => (
+        <section key={c.k} className="flex gap-3 rounded-card border border-line bg-surface p-5">
+          <span
+            aria-hidden
+            className={`inline-flex size-10 shrink-0 items-center justify-center rounded-full ${c.tone} [&>svg]:size-5 [&>svg]:stroke-[1.7]`}
+          >
+            {c.icon}
+          </span>
+          <span className="min-w-0">
+            <span className="block text-small text-ink-2">{c.k}</span>
+            <span className="block text-[22px] leading-7 font-bold text-ink">{c.v}</span>
+            {c.s && <span className="block text-small text-ink-2">{c.s}</span>}
+          </span>
+        </section>
+      ))}
     </div>
   );
 }

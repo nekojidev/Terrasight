@@ -260,6 +260,9 @@ export class ScenariosService {
       regionVerify: regionId ? (this.lib.rotations.regions[regionId]?.verify ?? false) : false,
       missingPrices,
       priceAsOf: [...new Set(Object.values(regionPrices).map((p) => p.asOf))].join(", "),
+      cropNames: Object.fromEntries(
+        Object.entries(this.lib.rotations.crops).map(([id, c]) => [id, { en: c.en, uk: c.uk }]),
+      ),
       names: Object.fromEntries(
         input.rotations.map((r) => [
           r.id,

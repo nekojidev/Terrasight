@@ -32,7 +32,7 @@ function shoot(PIVOT12: string, REC: string) {
     ["08-field", `/fields/${PIVOT12}`],
     ["09-rec", `/recommendations/${REC}`],
     ["10-rotation", `/fields/${PIVOT12}/rotation`],
-    ["11-zones", `/fields/${PIVOT12}/zones`],
+    ["11-log", `/fields/${PIVOT12}/log`],
     ["13-addfield", "/fields/new"],
     ["14-assistant", "/assistant"],
     ["15-reports", "/reports"],

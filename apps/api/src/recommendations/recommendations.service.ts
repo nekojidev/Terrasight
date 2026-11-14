@@ -124,8 +124,37 @@ export class RecommendationsService {
     return rec;
   }
 
+  /**
+   * The detail page (design 09): the view plus the field's last crops (the "grows here in a row" step) and the pest's
+   * library facts (season, damage, what raises the risk) for the reasoning steps and the options.
+   */
   async get(workspaceId: string, id: string) {
-    return this.view(await this.load(workspaceId, id));
+    const rec = await this.load(workspaceId, id);
+    const crops = await this.prisma.system.cropSeason.findMany({
+      where: { fieldId: rec.fieldId, season: { lt: rec.season } },
+      orderBy: { season: "desc" },
+      take: 4,
+    });
+    const name = (crop: string) => {
+      const c = this.lib.rotations.crops[crop];
+      return c ? { en: c.en, uk: c.uk } : { en: crop.replace(/_/g, " "), uk: crop.replace(/_/g, " ") };
+    };
+    const pest = this.lib.pests.pests.find((p) => p.id === rec.subject);
+    return {
+      ...this.view(rec),
+      recentCrops: crops
+        .reverse()
+        .map((c) => ({ season: c.season, crop: c.mainCrop, name: name(c.mainCrop) })),
+      pest: pest
+        ? {
+            season: pest.season,
+            damage: pest.damage,
+            riskWhen: pest.riskWhen,
+            note: pest.note ?? null,
+            hostCrops: pest.crops,
+          }
+        : null,
+    };
   }
 
   /** Accept: the item goes to the Owner report when the 8 s Undo window closes (`commit.8s`). */

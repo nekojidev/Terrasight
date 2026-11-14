@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { Chip } from "@terrasight/ui";
-import { ChevronRight, CloudRain, RefreshCw, Snowflake, Sun } from "lucide-react";
+import { Bug, ChevronRight, CloudRain, Microscope, RefreshCw, Snowflake, Sun } from "lucide-react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/lib/api";
@@ -181,7 +181,13 @@ export function RisksCard({ risks }: { risks: Risk[] }) {
           {risks.map((x) => (
             <li key={x.id}>
               <Link href={`/recommendations/${x.id}`} className="flex items-center gap-3 py-3 hover:bg-muted">
-                <span className="flex-1">
+                <span
+                  aria-hidden
+                  className={`inline-flex size-10 shrink-0 items-center justify-center rounded-full ${x.level === "high" ? "bg-urgent-soft text-urgent" : x.level === "moderate" ? "bg-week-soft text-week" : "bg-muted text-ink-2"} [&>svg]:size-5 [&>svg]:stroke-[1.7]`}
+                >
+                  {x.type === "rotation" ? <RefreshCw /> : x.type === "disease" ? <Microscope /> : <Bug />}
+                </span>
+                <span className="min-w-0 flex-1">
                   <span className="block text-body font-semibold text-ink">{x.text.title[locale]}</span>
                   <span className="block text-small text-ink-2">{x.text.action[locale]}</span>
                 </span>

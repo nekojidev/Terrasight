@@ -1,13 +1,15 @@
 "use client";
 
-import { Button } from "@terrasight/ui";
-import { Sparkles } from "lucide-react";
-import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { Send, Sparkles } from "lucide-react";
+import { useLocale, useTranslations } from "next-intl";
+import { useState, type FormEvent } from "react";
 import { Chat } from "@/components/Chat";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 
-/** Assistant panel next to a field (design 08): opens a chat with the field as context (S-05.05). */
+/**
+ * Assistant panel beside a field (design 08, S-05.05): suggestion chips and a question box with the field as context.
+ * The conversation is created with the first question, so opening a field never writes anything.
+ */
 export function FieldAssistant({
   workspaceId,
   fieldId,
@@ -19,41 +21,98 @@ export function FieldAssistant({
 }) {
   const f = useTranslations("Field");
   const t = useTranslations("App");
+  const locale = useLocale();
   const [id, setId] = useState<string | null>(null);
+  const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
-  async function open() {
+  const [error, setError] = useState<string | null>(null);
+
+  async function start(question: string) {
+    if (!question.trim() || busy) return;
     setBusy(true);
+    setError(null);
     try {
       const c = await api<{ id: string }>(`/api/w/${workspaceId}/conversations`, {
         body: { title: fieldName },
       });
+      await api(`/api/w/${workspaceId}/conversations/${c.id}/messages`, {
+        body: { text: question, context: { fieldId }, lang: locale === "uk" ? "uk" : "en" },
+      });
       setId(c.id);
+    } catch (e) {
+      setError(e instanceof ApiError && e.problem.status === 429 ? t("aiRateLimited") : t("errGeneric"));
     } finally {
       setBusy(false);
     }
   }
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    void start(text);
+  };
+  const suggestions = [t("faSugg1"), t("faSugg2"), t("faSugg3")];
+
   return (
-    <section className="rounded-card border border-line bg-surface p-5">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="flex items-center gap-2 text-h2 text-ink">
+    <section className="flex min-h-[560px] flex-col rounded-hero border border-line bg-surface">
+      <header className="flex items-center gap-3 border-b border-line p-4">
+        <span className="inline-flex size-10 items-center justify-center rounded-btn bg-ink text-surface">
           <Sparkles aria-hidden className="size-5" strokeWidth={1.7} />
-          {f("ai_name")}
-        </h2>
-        <span className="text-small text-ink-2">{t("aiContextField", { name: fieldName })}</span>
+        </span>
+        <span className="flex-1">
+          <span className="block text-body font-semibold text-ink">{f("ai_name")}</span>
+          <span className="text-small text-ink-2">{t("aiContextField", { name: fieldName })}</span>
+        </span>
+        <span className="flex items-center gap-1.5 text-small font-semibold text-ok">
+          <span aria-hidden className="size-2 rounded-full bg-ok" />
+          Gemini
+        </span>
+      </header>
+      <div className="flex flex-1 flex-col p-4">
+        {id ? (
+          <Chat workspaceId={workspaceId} conversationId={id} context={{ fieldId }} compact />
+        ) : (
+          <>
+            <p className="text-body text-ink-2">{t("faIntro")}</p>
+            <div className="mt-4 flex flex-col items-start gap-2">
+              {suggestions.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void start(s)}
+                  className="focus-ring inline-flex items-center gap-2 rounded-chip border border-line bg-surface-2 px-3 py-2 text-small font-semibold text-ink hover:bg-muted disabled:opacity-60"
+                >
+                  <Sparkles aria-hidden className="size-4" strokeWidth={1.7} />
+                  {s}
+                </button>
+              ))}
+            </div>
+            {error && (
+              <p role="alert" className="mt-3 text-small text-urgent">
+                {error}
+              </p>
+            )}
+            <form onSubmit={submit} className="mt-auto flex items-center gap-2 pt-6">
+              <input
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                placeholder={t("faPlaceholder", { name: fieldName })}
+                aria-label={t("faPlaceholder", { name: fieldName })}
+                className="min-h-tap min-w-0 flex-1 rounded-input border border-line-strong bg-surface px-4 text-body"
+              />
+              <button
+                type="submit"
+                disabled={busy || !text.trim()}
+                aria-label={f("send")}
+                aria-busy={busy}
+                className="focus-ring inline-flex size-12 items-center justify-center rounded-btn bg-ink text-surface disabled:opacity-50"
+              >
+                <Send aria-hidden className="size-5" strokeWidth={1.7} />
+              </button>
+            </form>
+            <p className="mt-2 text-micro text-ink-3">{f("disclaimer")}</p>
+          </>
+        )}
       </div>
-      {id ? (
-        <Chat workspaceId={workspaceId} conversationId={id} context={{ fieldId }} compact />
-      ) : (
-        <Button
-          variant="outline"
-          icon={<Sparkles />}
-          onClick={() => void open()}
-          disabled={busy}
-          aria-busy={busy}
-        >
-          {f("bf_ask")}
-        </Button>
-      )}
     </section>
   );
 }

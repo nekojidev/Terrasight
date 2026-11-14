@@ -1,8 +1,20 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, Chip, DoneRow, FactorRows, TextField, type Factor } from "@terrasight/ui";
-import { ArrowLeft, Bug, Calendar, Check, Pencil, RefreshCw, ShieldCheck, Sparkles, X } from "lucide-react";
+import { Button, Chip, cropColour, DoneRow, FactorRows, TextField, type Factor } from "@terrasight/ui";
+import {
+  ArrowLeft,
+  Bug,
+  Calendar,
+  Check,
+  Eye,
+  Pencil,
+  RefreshCw,
+  ShieldCheck,
+  Sparkles,
+  TriangleAlert,
+  X,
+} from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
@@ -47,6 +59,79 @@ export interface RecView {
   edited: boolean;
   snoozedUntil: string | null;
   undoUntil: string | null;
+  /** Detail only: the field's last crops before this season and the pest's library facts. */
+  recentCrops?: Array<{ season: number; crop: string; name: Localised }>;
+  pest?: {
+    season: Localised;
+    damage: Localised;
+    riskWhen: Localised;
+    note: Localised | null;
+    hostCrops: string[];
+  } | null;
+}
+
+function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
+  return (
+    <li className="relative">
+      <span className="absolute top-0 -left-[38px] inline-flex size-7 items-center justify-center rounded-chip bg-ink text-small font-semibold text-surface">
+        {n}
+      </span>
+      <h4 className="text-[18px] leading-7 font-semibold text-ink">{title}</h4>
+      <div className="mt-1">{children}</div>
+    </li>
+  );
+}
+
+/** Semicircle risk gauge (design 09): green → amber → red, the needle on the level; grey when unknown. */
+function Gauge({ level, label }: { level: RecView["level"]; label: string }) {
+  const angle = { none: -80, low: -55, moderate: 0, high: 55, unknown: 0 }[level];
+  const arc = (from: number, to: number) => {
+    const p = (a: number) => {
+      const r = ((a - 90) * Math.PI) / 180;
+      return `${90 + 70 * Math.cos(r)} ${90 + 70 * Math.sin(r)}`;
+    };
+    return `M ${p(from)} A 70 70 0 0 1 ${p(to)}`;
+  };
+  const unknown = level === "unknown";
+  return (
+    <svg viewBox="0 0 180 100" role="img" aria-label={label} className="h-[100px] w-[180px]">
+      <path
+        d={arc(-88, -32)}
+        className={unknown ? "stroke-line-strong" : "stroke-ok"}
+        strokeWidth="14"
+        fill="none"
+        strokeLinecap="round"
+      />
+      <path
+        d={arc(-26, 26)}
+        className={unknown ? "stroke-line-strong" : "stroke-week"}
+        strokeWidth="14"
+        fill="none"
+        strokeLinecap="round"
+      />
+      <path
+        d={arc(32, 88)}
+        className={unknown ? "stroke-line-strong" : "stroke-urgent"}
+        strokeWidth="14"
+        fill="none"
+        strokeLinecap="round"
+      />
+      {!unknown && (
+        <g transform={`rotate(${angle} 90 90)`}>
+          <line
+            x1="90"
+            y1="90"
+            x2="90"
+            y2="38"
+            className="stroke-ink"
+            strokeWidth="5"
+            strokeLinecap="round"
+          />
+        </g>
+      )}
+      <circle cx="90" cy="90" r="7" className="fill-ink" />
+    </svg>
+  );
 }
 
 /** 910 + "MMDD" → "September 10"; days / seasons / m / NDVI read as plain values. */
@@ -132,7 +217,11 @@ export function RecommendationClient({
   const label = (id: string) => (t.has(`kn_${id}`) ? t(`kn_${id}`) : id);
   const inputs = r.evidence.filter((e) => e.kind !== "citation");
   const citations = r.evidence.filter((e) => e.kind === "citation");
-  const stamp = inputs[0]?.source;
+  const short = (src?: string) => (src ? src.split(" (")[0]!.split(";")[0]! : undefined);
+  const stamp = short(inputs[0]?.source);
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const crops = r.recentCrops ?? [];
+  const hostSeasons = crops.filter((c) => r.pest?.hostCrops.includes(c.crop)).length;
   const factors: Factor[] = r.keyNumbers.map((k) => ({
     label: label(k.id),
     value: `${k.value}${k.unit && k.unit !== "seasons" ? ` ${k.unit}` : ""}`,
@@ -142,7 +231,7 @@ export function RecommendationClient({
 
   async function act(action: "accept" | "snooze" | "dismiss" | "undo") {
     const next = await api<RecView>(`${base}/${action}`, { body: {} });
-    client.setQueryData(key, next);
+    client.setQueryData(key, { ...r, ...next });
     void client.invalidateQueries({ queryKey: ["brief", workspaceId] });
     if (next.undoUntil)
       setTimeout(() => void rec.refetch(), new Date(next.undoUntil).getTime() - Date.now() + 1_500);
@@ -158,7 +247,7 @@ export function RecommendationClient({
         action: { en: v("actionEn"), uk: v("actionUk") },
       },
     });
-    client.setQueryData(key, next);
+    client.setQueryData(key, { ...r, ...next });
     setEditing(false);
   }
 
@@ -206,6 +295,7 @@ export function RecommendationClient({
         </div>
 
         <section className="flex flex-col gap-5 rounded-card border border-line bg-surface p-6">
+          <Gauge level={r.level} label={`${r9("risk")}: ${t(`recLevel_${r.level}`)}`} />
           <dl className="flex flex-wrap gap-8">
             <div>
               <dt className="text-small text-ink-2">{r9("risk")}</dt>
@@ -271,21 +361,64 @@ export function RecommendationClient({
           )}
           <div>
             <h3 className="mb-2 text-body font-semibold text-ink">{t("recSteps")}</h3>
-            <p className="mb-3 text-body text-ink">{r.text.why[locale]}</p>
-            <ol className="flex flex-col gap-2">
+            <p className="mb-4 text-body text-ink">{r.text.why[locale]}</p>
+            <ol className="relative flex flex-col gap-6 border-l border-line pl-6">
+              {crops.length > 0 && (
+                <Step n={1} title={t("rcStepCrops")}>
+                  {r.pest && (
+                    <p className="text-body text-ink-2">
+                      {t("rcStepCropsSub", { n: hostSeasons, total: crops.length })}
+                    </p>
+                  )}
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {crops.map((c) => (
+                      <div key={c.season} className="flex w-[92px] flex-col items-center gap-1">
+                        <span
+                          className="h-12 w-full rounded-input"
+                          style={{ backgroundColor: cropColour(c.crop) }}
+                          title={c.name[locale]}
+                        />
+                        <span className="text-small font-semibold text-ink">{c.season}</span>
+                        <span className="text-center text-small leading-tight text-ink-2">
+                          {c.name[locale]}
+                        </span>
+                      </div>
+                    ))}
+                    {r.planning && (
+                      <div className="flex w-[92px] flex-col items-center gap-1">
+                        <span className="h-12 w-full rounded-input border-2 border-dashed border-week" />
+                        <span className="text-small font-semibold text-ink">{r.season}</span>
+                        <span className="text-micro font-semibold text-urgent">{t("rcPlan")}</span>
+                      </div>
+                    )}
+                  </div>
+                  <p className="mt-2 text-small text-ink-3">USDA Cropland Data Layer · {t("rcHistorySrc")}</p>
+                </Step>
+              )}
               {inputs.map((e, i) => (
-                <li key={i} className="flex gap-3 text-small text-ink-2">
-                  <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-chip bg-ink text-micro text-surface">
-                    {i + 1}
-                  </span>
-                  <span>
-                    <span className="font-semibold text-ink">{e.source}</span>
-                    {e.from && ` · ${e.from}${e.to ? ` → ${e.to}` : ""}`}
-                    {e.value !== undefined && ` · ${e.value}${e.unit ? ` ${e.unit}` : ""}`}
-                    {e.note && ` · ${e.note}`}
-                  </span>
-                </li>
+                <Step key={i} n={i + 1 + (crops.length > 0 ? 1 : 0)} title={short(e.source) ?? "—"}>
+                  <p className="text-body text-ink-2">
+                    {[
+                      e.from ? `${e.from}${e.to ? ` → ${e.to}` : ""}` : null,
+                      e.value !== undefined && !UUID_RE.test(String(e.value))
+                        ? `${e.value}${e.unit ? ` ${e.unit}` : ""}`
+                        : null,
+                      e.note,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
+                  {e.source && e.source !== short(e.source) && (
+                    <p className="mt-1 text-small text-ink-3">{e.source}</p>
+                  )}
+                </Step>
               ))}
+              {r.pest && (
+                <Step n={inputs.length + 1 + (crops.length > 0 ? 1 : 0)} title={t("rcStepWhen")}>
+                  <p className="text-body text-ink">{r.pest.season[locale]}</p>
+                  <p className="mt-1 text-body text-ink-2">{r.pest.damage[locale]}</p>
+                </Step>
+              )}
             </ol>
           </div>
           <div>
@@ -300,11 +433,61 @@ export function RecommendationClient({
               <p className="text-small text-ink-2">{t("recNothingUnknown")}</p>
             )}
           </div>
-          {r.text.scout && (
-            <p className="rounded-input bg-week-soft p-4 text-body text-ink">
-              <span className="font-semibold">{t("recScout")}.</span> {r.text.scout[locale]}
-            </p>
-          )}
+        </section>
+
+        <section className="flex flex-col gap-3">
+          <h2 className="text-h2 text-ink">{t("rcOptions")}</h2>
+          <div className="grid gap-4 md:grid-cols-3">
+            <article className="flex flex-col gap-3 rounded-card border-2 border-ink bg-surface p-5">
+              <Chip tone="neutral">{t("rcOptRec")}</Chip>
+              <h3 className="text-body font-semibold text-ink">{r.text.title[locale]}</h3>
+              <p className="text-small text-ink-2">{r.text.action[locale]}</p>
+              {r.planning && (
+                <Link
+                  href={`/fields/${r.fieldId}/rotation`}
+                  className="mt-auto text-small font-semibold text-ink underline"
+                >
+                  {r9("compare")}
+                </Link>
+              )}
+            </article>
+            {r.text.scout && (
+              <article className="flex flex-col gap-3 rounded-card border border-line bg-surface p-5">
+                <Eye aria-hidden className="size-5 text-ink-2" strokeWidth={1.7} />
+                <h3 className="text-body font-semibold text-ink">{t("rcOptScout")}</h3>
+                <p className="text-small text-ink-2">{r.text.scout[locale]}</p>
+              </article>
+            )}
+            {r.type === "rotation" && (
+              <>
+                <article className="flex flex-col gap-3 rounded-card border border-line bg-surface p-5">
+                  <RefreshCw aria-hidden className="size-5 text-ink-2" strokeWidth={1.7} />
+                  <h3 className="text-body font-semibold text-ink">{t("rcOptCompare")}</h3>
+                  <p className="text-small text-ink-2">{t("rcOptCompareSub")}</p>
+                  <Link
+                    href={`/fields/${r.fieldId}/rotation`}
+                    className="mt-auto text-small font-semibold text-ink underline"
+                  >
+                    {r9("compare")}
+                  </Link>
+                </article>
+                <article className="flex flex-col gap-3 rounded-card border border-line bg-surface p-5">
+                  <Eye aria-hidden className="size-5 text-ink-2" strokeWidth={1.7} />
+                  <h3 className="text-body font-semibold text-ink">{t("rcOptKeep")}</h3>
+                  <p className="text-small text-ink-2">{t("rcOptKeepSub")}</p>
+                </article>
+              </>
+            )}
+            {r.pest && (
+              <article className="flex flex-col gap-3 rounded-card border border-line bg-surface p-5">
+                <TriangleAlert aria-hidden className="size-5 text-ink-2" strokeWidth={1.7} />
+                <h3 className="text-body font-semibold text-ink">{t("rcOptRisk")}</h3>
+                <p className="text-small text-ink-2">{r.pest.riskWhen[locale]}</p>
+                {r.pest.note && <p className="text-micro text-ink-3">{r.pest.note[locale]}</p>}
+              </article>
+            )}
+          </div>
+          <p className="text-small text-ink-3">{t("rcNoProducts")}</p>
         </section>
       </div>
 
@@ -346,38 +529,45 @@ export function RecommendationClient({
             </form>
           )}
         </section>
-        <section className="rounded-card border border-line bg-surface p-5">
-          <h2 className="text-body font-semibold text-ink">{t("recModel")}</h2>
-          <ul className="mt-3 flex flex-col gap-3 text-small text-ink-2">
-            {citations.map((c) => (
-              <li key={c.threshold}>
-                <span className="block text-ink">
-                  {t.has(`thr_${c.threshold}`)
-                    ? t(`thr_${c.threshold}`)
-                    : c.threshold?.replace(/([A-Z])/g, " $1").toLowerCase()}
-                  : <span className="font-mono font-semibold">{thresholdValue(c.value, c.unit)}</span>
-                </span>
-                <span className="block">
-                  {c.url ? (
-                    <a href={c.url} target="_blank" rel="noreferrer" className="underline underline-offset-2">
-                      {c.title}
-                    </a>
-                  ) : (
-                    c.title
-                  )}
-                  {c.publisher && ` · ${c.publisher}`}
-                  {c.type === "calibration" && ` · ${t("recCalibration")}`}
-                </span>
-                {c.quote && <span className="block italic">“{c.quote}”</span>}
-                {c.accessed && (
-                  <span className="block text-micro text-ink-3">
-                    {t("recAccessed", { date: c.accessed })}
+        {citations.length > 0 && (
+          <section className="rounded-card border border-line bg-surface p-5">
+            <h2 className="text-body font-semibold text-ink">{t("recModel")}</h2>
+            <ul className="mt-3 flex flex-col gap-3 text-small text-ink-2">
+              {citations.map((c) => (
+                <li key={c.threshold}>
+                  <span className="block text-ink">
+                    {t.has(`thr_${c.threshold}`)
+                      ? t(`thr_${c.threshold}`)
+                      : c.threshold?.replace(/([A-Z])/g, " $1").toLowerCase()}
+                    : <span className="font-mono font-semibold">{thresholdValue(c.value, c.unit)}</span>
                   </span>
-                )}
-              </li>
-            ))}
-          </ul>
-        </section>
+                  <span className="block">
+                    {c.url ? (
+                      <a
+                        href={c.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="underline underline-offset-2"
+                      >
+                        {c.title}
+                      </a>
+                    ) : (
+                      c.title
+                    )}
+                    {c.publisher && ` · ${c.publisher}`}
+                    {c.type === "calibration" && ` · ${t("recCalibration")}`}
+                  </span>
+                  {c.quote && <span className="block italic">“{c.quote}”</span>}
+                  {c.accessed && (
+                    <span className="block text-micro text-ink-3">
+                      {t("recAccessed", { date: c.accessed })}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
         <section className="rounded-card border border-line bg-surface p-5">
           <h2 className="text-body font-semibold text-ink">{t("recSources")}</h2>
           <ul className="mt-3 list-disc pl-5 text-small text-ink-2">
