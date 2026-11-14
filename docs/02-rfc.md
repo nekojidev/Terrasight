@@ -639,7 +639,9 @@ Why separate: in `pests.json`, `model.type` is free text (41 different values ac
 | `climate_anomaly` | This season against the field's own 1981+ distribution, as a percentile | POWER climatology | Warm autumn for BYD and wheat streak mosaic |
 | `water_stress` | Days below a soil-water fraction in the FAO-56 balance | Water balance | P1 (e.g. charcoal rot, spider mites) |
 | **`green_bridge`** (new in v2.1) | Green vegetation on and around the field between the previous wheat harvest and the new sowing: volunteer wheat that carries the wheat curl mite and the virus | Sentinel-2 NDVI (10 m) after harvest, crop history, sowing date | Wheat streak mosaic |
+| **`sowing_before`** (new in v2.3) | Sown before a cited date, e.g. K-State's Best Pest Management Planting Date (formerly the Hessian fly-free date) | Season record (sowing date) | BYD with aphids |
 
+- **v2.3 (2026-11-14), after checking the extension sources:** K-State, UNL and CSU publish no warm-autumn percentile, no aphid degree-day threshold and no NDVI value. The demo models therefore use the rules the sources do state: BYD = `sowing_before(BPMP date)` with the first forecast freeze as the deadline; wheat streak mosaic = `green_bridge` meaning volunteer still green in the 14 days before sowing (K-State MF3383, UNL), ½-mile neighbourhood named as not checked. A warm autumn is part of the explanation, not a threshold. The NDVI cut-off is an internal calibration (`source.type: "calibration"`), not an agronomic threshold.
 - **Combinators:** `all`, `any`, `max` and `gate`. For example, `gate(host_repeat, degree_days)` means heat only matters when corn follows corn. A pest model is a small tree of these nodes.
 - Pests whose drivers don't fit any kind yet (regional reports, adjacency, migration) stay **library only** until a kind is added.
 

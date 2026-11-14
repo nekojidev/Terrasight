@@ -13,6 +13,7 @@ const threshold = (value: number | null, unit: string) => ({
     url: "https://example.org",
     accessed: "2026-11-14",
     appliesTo: [],
+    type: "extension" as const,
   },
   verifiedBy: "t",
   verifiedAt: "2026-11-14",
@@ -276,7 +277,7 @@ describe("BYD: warm autumn + degree days from emergence, frost deadline", () => 
   });
 });
 
-describe("green_bridge (wheat streak mosaic)", () => {
+describe("green_bridge (wheat streak mosaic: volunteer not dead 2 weeks before sowing)", () => {
   const wsm: PestModel = {
     pest: "wheat_streak_mosaic",
     enabled: true,
@@ -286,11 +287,15 @@ describe("green_bridge (wheat streak mosaic)", () => {
     stageWindow: { crop: "winter_wheat", from: "previous_harvest", to: "dormancy" },
     tree: {
       kind: "green_bridge",
-      window: "previous_wheat_harvest_to_sowing",
       bufferM: { ref: "bufferM" },
       greenNdvi: { ref: "greenNdvi" },
+      daysBeforeSowing: { ref: "daysBeforeSowing" },
     },
-    thresholds: { bufferM: threshold(800, "m"), greenNdvi: threshold(0.3, "NDVI") },
+    thresholds: {
+      bufferM: threshold(805, "m"),
+      greenNdvi: threshold(0.3, "NDVI"),
+      daysBeforeSowing: threshold(14, "days"),
+    },
     keyNumbers: ["greenDaysBeforeSowing", "sowingDate"],
     scoutAction: null,
   };
@@ -310,19 +315,27 @@ describe("green_bridge (wheat streak mosaic)", () => {
     emergenceDate: { value: null, source: "unknown" as const },
   };
 
-  it("is high when the field stayed green between harvest and sowing, and lists what 10 m NDVI can't see", () => {
+  it("is high when the field was still green in the 14 days before sowing", () => {
     const ndvi = [
-      { date: "2025-07-20", mean: 0.15 },
       { date: "2025-08-10", mean: 0.42 },
       { date: "2025-09-05", mean: 0.38 },
     ];
     const r = evaluate(wsm, inputs({ season: 2026, crops, record, ndvi }), "2025-11-14");
     expect(r.level).toBe("high");
-    expect(r.keyNumbers[0]).toMatchObject({ id: "greenDaysBeforeSowing", value: 36 });
+    expect(r.keyNumbers[0]).toMatchObject({ id: "greenDaysBeforeSowing", value: 10 });
     expect(r.unknowns).toContain("Volunteer patches smaller than 10 m may not show in Sentinel-2 NDVI");
+    expect(r.unknowns).toContain("Volunteer on neighbouring land within 805 m is not checked");
   });
 
-  it("is low after a non-wheat crop, unknown without images", () => {
+  it("is low when volunteer was green earlier but dead 2 weeks before sowing", () => {
+    const ndvi = [
+      { date: "2025-08-10", mean: 0.42 },
+      { date: "2025-09-05", mean: 0.15 },
+    ];
+    expect(evaluate(wsm, inputs({ season: 2026, crops, record, ndvi }), "2025-11-14").level).toBe("low");
+  });
+
+  it("is low after a non-wheat crop, unknown without images in the window", () => {
     expect(
       evaluate(
         wsm,
@@ -330,9 +343,77 @@ describe("green_bridge (wheat streak mosaic)", () => {
         "2025-11-14",
       ).level,
     ).toBe("low");
-    expect(evaluate(wsm, inputs({ season: 2026, crops, record, ndvi: [] }), "2025-11-14").level).toBe(
-      "unknown",
+    expect(
+      evaluate(
+        wsm,
+        inputs({ season: 2026, crops, record, ndvi: [{ date: "2025-08-01", mean: 0.5 }] }),
+        "2025-11-14",
+      ).level,
+    ).toBe("unknown");
+  });
+});
+
+describe("sowing_before (planting before the Best Pest Management Planting Date)", () => {
+  const byd: PestModel = {
+    pest: "barley_yellow_dwarf",
+    enabled: true,
+    phase: "hackathon",
+    irreversible: true,
+    planning: false,
+    stageWindow: { crop: "winter_wheat", from: "emergence", to: "dormancy" },
+    tree: { kind: "sowing_before", before: { ref: "bpmpDate" } },
+    thresholds: { bpmpDate: threshold(910, "MMDD") },
+    keyNumbers: ["daysBeforeBpmp", "sowingDate"],
+    scoutAction: null,
+  };
+  const rec = (date: string, source: "confirmed" | "regional" = "confirmed") => ({
+    crop: { value: "winter_wheat", source: "confirmed" as const },
+    sowingDate: { value: date, source },
+    emergenceDate: { value: null, source: "unknown" as const },
+  });
+  const frost: DailyWeather = {
+    date: "2025-11-18",
+    tminC: -3,
+    tmaxC: 8,
+    tmeanC: 2,
+    precipMm: 0,
+    origin: "forecast",
+    forecastDay: 4,
+  };
+
+  it("is high when sown before the date; the deadline is the first forecast freeze", () => {
+    const r = evaluate(byd, inputs({ record: rec("2025-09-01"), weather: [frost] }), "2025-11-14");
+    expect(r.level).toBe("high");
+    expect(r.deadline).toBe("2025-11-18");
+    expect(r.keyNumbers[0]).toMatchObject({ id: "daysBeforeBpmp", value: 9 });
+  });
+  it("is low when sown on or after the date", () => {
+    expect(evaluate(byd, inputs({ record: rec("2025-09-10") }), "2025-11-14").level).toBe("low");
+    expect(evaluate(byd, inputs({ record: rec("2025-10-01") }), "2025-11-14").level).toBe("low");
+  });
+  it("drops a confidence step for an estimated sowing date and is unknown without one", () => {
+    const r = evaluate(
+      byd,
+      inputs({ tier: "A", scouted: ["barley_yellow_dwarf"], record: rec("2025-09-01", "regional") }),
+      "2025-11-14",
     );
+    expect(r.confidence).toBe("medium");
+    const none = { ...rec("2025-09-01"), sowingDate: { value: null, source: "unknown" as const } };
+    expect(evaluate(byd, inputs({ record: none }), "2025-11-14").level).toBe("unknown");
+  });
+});
+
+describe("regional thresholds (RFC §11.3)", () => {
+  it("uses a value only in the regions its source covers", () => {
+    const ks = {
+      ...threshold(1, "seasons"),
+      source: { ...threshold(1, "seasons").source, appliesTo: ["us-southern-plains"] },
+    };
+    const m = { ...rootworm, thresholds: { repeatSeasons: ks } };
+    expect(evaluate(m, inputs({ regionId: "us-southern-plains" }), "2025-11-14").level).toBe("high");
+    const r = evaluate(m, inputs({ regionId: "eu-central" }), "2025-11-14");
+    expect(r.level).toBe("unknown");
+    expect(r.unknowns).toContain("threshold seasons is missing");
   });
 });
 

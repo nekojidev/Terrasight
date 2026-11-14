@@ -131,6 +131,7 @@
     "kn_degreeDaysIn7Days": "°C·d in 7 days",
     "kn_greenDaysBeforeSowing": "days green before sowing",
     "kn_sowingDate": "sowing date",
-    "kn_daysUntilFrost": "days until frost"
+    "kn_daysUntilFrost": "days until frost",
+    "kn_daysBeforeBpmp": "days sown before the recommended date"
   }
 }

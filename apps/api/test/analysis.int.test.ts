@@ -64,6 +64,7 @@ function verifiedRootworm(lib: Library): PestModel {
       url: "https://example.org",
       accessed: AS_OF,
       appliesTo: [],
+      type: "extension" as const,
     },
   };
   return m;

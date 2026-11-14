@@ -92,6 +92,15 @@ export const ThresholdSource = z.object({
   url: z.string().nullable(),
   accessed: z.string().nullable(),
   appliesTo: z.array(z.string()).default([]),
+  /**
+   * `extension` = university extension (K-State, UNL, CSU); `fallback` = other agency or peer-reviewed source;
+   * `calibration` = an internal remote-sensing calibration, not an agronomic threshold (RFC §11.3).
+   */
+  type: z.enum(["extension", "fallback", "calibration"]).default("extension"),
+  /** Short verbatim quote containing the value. */
+  quote: z.string().optional(),
+  /** How the value is applied, other regions' sources, limits. */
+  note: z.string().optional(),
 });
 
 export const Threshold = z.object({
@@ -113,6 +122,7 @@ export const EVALUATOR_KINDS = [
   "climate_anomaly",
   "water_stress",
   "green_bridge",
+  "sowing_before",
 ] as const;
 
 export type EvaluatorKind = (typeof EVALUATOR_KINDS)[number];

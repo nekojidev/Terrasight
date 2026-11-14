@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "about": "Machine-readable risk models (RFC §11, Tech Design §6.1). A model runs only when enabled and every threshold is verified against a cited extension source (K-State, UNL, Colorado State for the demo set). Thresholds are left empty until verified (S-03.07).",
+  "about": "Machine-readable risk models (RFC §11, Tech Design §6.1). A model runs only when enabled and every threshold is verified against a cited source: K-State, UNL or CSU extension for the demo set (source.type 'extension'); 'fallback' marks another agency or peer-reviewed source; 'calibration' marks an internal remote-sensing calibration that is not an agronomic threshold. 'MMDD' values are dates (910 = 10 September). Values were filled from the sources on 2026-11-14 and await team review.",
   "models": [
     {
       "pest": "western_corn_rootworm",
@@ -9,11 +9,43 @@
       "irreversible": false,
       "planning": true,
       "stageWindow": null,
-      "tree": { "kind": "host_repeat", "host": ["corn", "silage_corn"], "seasons": { "ref": "repeatSeasons" } },
-      "thresholds": {
-        "repeatSeasons": { "value": 1, "unit": "seasons", "verified": false, "source": null, "verifiedBy": null, "verifiedAt": null, "reviewedBy": null }
+      "tree": {
+        "kind": "host_repeat",
+        "host": [
+          "corn",
+          "silage_corn"
+        ],
+        "seasons": {
+          "ref": "repeatSeasons"
+        }
       },
-      "keyNumbers": ["hostSeasonsInRow", "hostSeasonsInPlan"],
+      "thresholds": {
+        "repeatSeasons": {
+          "value": 1,
+          "unit": "seasons",
+          "verified": false,
+          "source": {
+            "title": "Western Corn Rootworm Early Season Management in Kansas (MF3456)",
+            "publisher": "K-State Research and Extension",
+            "url": "https://bookstore.ksre.ksu.edu/download/western-corn-rootworm-early-season-management-in-kansas_MF3456",
+            "accessed": "2026-11-14",
+            "appliesTo": [
+              "us-southern-plains",
+              "us-central-high-plains"
+            ],
+            "type": "extension",
+            "quote": "Emphasize crop rotation… larvae only feed on corn roots the following season. They are only a problem in continuous corn.",
+            "note": "Nebraska: UNL CropWatch, Considerations for Managing Corn Rootworm (2025): rotation-resistant variants are not present in Nebraska; crop rotation interrupts the life cycle. https://cropwatch.unl.edu/considerations-managing-corn-rootworm-its-not-too-late/"
+          },
+          "verifiedBy": null,
+          "verifiedAt": null,
+          "reviewedBy": null
+        }
+      },
+      "keyNumbers": [
+        "hostSeasonsInRow",
+        "hostSeasonsInPlan"
+      ],
       "scoutAction": null
     },
     {
@@ -22,19 +54,43 @@
       "phase": "hackathon",
       "irreversible": true,
       "planning": false,
-      "stageWindow": { "crop": "winter_wheat", "from": "emergence", "to": "dormancy" },
+      "stageWindow": {
+        "crop": "winter_wheat",
+        "from": "sowing",
+        "to": "dormancy"
+      },
       "tree": {
-        "all": [
-          { "kind": "climate_anomaly", "variable": "air_temp_mean", "window": "autumn", "percentile": { "ref": "warmPercentile" } },
-          { "kind": "degree_days", "temp": "air", "baseC": { "ref": "baseC" }, "biofix": "emergence", "stages": { "risk": { "ref": "riskDD" } } }
-        ]
+        "kind": "sowing_before",
+        "before": {
+          "ref": "bpmpDate"
+        }
       },
       "thresholds": {
-        "baseC": { "value": 3, "unit": "°C", "verified": false, "source": null, "verifiedBy": null, "verifiedAt": null, "reviewedBy": null },
-        "warmPercentile": { "value": null, "unit": "percentile", "verified": false, "source": null, "verifiedBy": null, "verifiedAt": null, "reviewedBy": null },
-        "riskDD": { "value": null, "unit": "°C·d", "verified": false, "source": null, "verifiedBy": null, "verifiedAt": null, "reviewedBy": null }
+        "bpmpDate": {
+          "value": 910,
+          "unit": "MMDD",
+          "verified": false,
+          "source": {
+            "title": "Wheat Planting: Be Cautious of Planting Too Early (eUpdate 1118)",
+            "publisher": "K-State Research and Extension",
+            "url": "https://www.agronomy.k-state.edu/eupdates/2026/issue-1118-august-27/planting-wheat-too-early.html",
+            "accessed": "2026-11-14",
+            "appliesTo": [
+              "us-southern-plains"
+            ],
+            "type": "extension",
+            "quote": "Planting wheat after the BPMD reduces the risk of problems with aphids and barley yellow dwarf. … Zone 1: September 10-30",
+            "note": "Earliest Kansas zone (Zone 1, 10 Sep) as a statewide rule: never flags a field sown inside its own zone's window, may miss early sowing in Zones 2–4 (15 Sep, 25 Sep, 5 Oct) until the county zone is set. Deadline = first freeze in the forecast: K-State MF2823 'numbers usually start to decline with the onset of cold weather' (no temperature given)."
+          },
+          "verifiedBy": null,
+          "verifiedAt": null,
+          "reviewedBy": null
+        }
       },
-      "keyNumbers": ["autumnPercentile", "daysSinceEmergence", "daysUntilFrost"],
+      "keyNumbers": [
+        "sowingDate",
+        "daysBeforeBpmp"
+      ],
       "scoutAction": null
     },
     {
@@ -43,19 +99,87 @@
       "phase": "hackathon",
       "irreversible": false,
       "planning": false,
-      "stageWindow": { "crop": "winter_wheat", "from": "previous_harvest", "to": "dormancy" },
+      "stageWindow": {
+        "crop": "winter_wheat",
+        "from": "previous_harvest",
+        "to": "dormancy"
+      },
       "tree": {
-        "all": [
-          { "kind": "green_bridge", "window": "previous_wheat_harvest_to_sowing", "bufferM": { "ref": "bufferM" }, "greenNdvi": { "ref": "greenNdvi" } },
-          { "kind": "climate_anomaly", "variable": "air_temp_mean", "window": "autumn", "percentile": { "ref": "warmPercentile" } }
-        ]
+        "kind": "green_bridge",
+        "bufferM": {
+          "ref": "bufferM"
+        },
+        "greenNdvi": {
+          "ref": "greenNdvi"
+        },
+        "daysBeforeSowing": {
+          "ref": "daysBeforeSowing"
+        }
       },
       "thresholds": {
-        "bufferM": { "value": null, "unit": "m", "verified": false, "source": null, "verifiedBy": null, "verifiedAt": null, "reviewedBy": null },
-        "greenNdvi": { "value": null, "unit": "NDVI", "verified": false, "source": null, "verifiedBy": null, "verifiedAt": null, "reviewedBy": null },
-        "warmPercentile": { "value": null, "unit": "percentile", "verified": false, "source": null, "verifiedBy": null, "verifiedAt": null, "reviewedBy": null }
+        "daysBeforeSowing": {
+          "value": 14,
+          "unit": "days",
+          "verified": false,
+          "source": {
+            "title": "Wheat Streak Mosaic (MF3383)",
+            "publisher": "K-State Research and Extension",
+            "url": "https://bookstore.ksre.ksu.edu/download/wheat-streak-mosaic_MF3383",
+            "accessed": "2026-11-14",
+            "appliesTo": [
+              "us-southern-plains",
+              "us-central-high-plains"
+            ],
+            "type": "extension",
+            "quote": "should be dead and dry for 2 weeks before planting the new wheat crop",
+            "note": "Nebraska: UNL CropWatch (2022) 'Volunteer should be completely dead at least two weeks before planting.' https://cropwatch.unl.edu/2022/wheat-disease-update-barley-yellow-dwarf-and-wheat-streak-mosaic"
+          },
+          "verifiedBy": null,
+          "verifiedAt": null,
+          "reviewedBy": null
+        },
+        "bufferM": {
+          "value": 805,
+          "unit": "m",
+          "verified": false,
+          "source": {
+            "title": "Wheat Streak Mosaic Virus (R.L. Bowden)",
+            "publisher": "K-State Plant Pathology",
+            "url": "https://www.plantpath.k-state.edu/extension/wheat-and-forages/documents/wheat-streak-mosaic-virus.pdf",
+            "accessed": "2026-11-14",
+            "appliesTo": [
+              "us-southern-plains"
+            ],
+            "type": "extension",
+            "quote": "volunteer must be killed within 1/4 to 1/2 mile of the new field",
+            "note": "½ mile ≈ 805 m. Only used to name what the image can't show (neighbouring volunteer); no distance source for Colorado/Nebraska."
+          },
+          "verifiedBy": null,
+          "verifiedAt": null,
+          "reviewedBy": null
+        },
+        "greenNdvi": {
+          "value": 0.3,
+          "unit": "NDVI",
+          "verified": false,
+          "source": {
+            "title": "Terrasight calibration: green cover vs bare soil on Sentinel-2 NDVI",
+            "publisher": "Terrasight",
+            "url": "https://github.com/nekojidev/Terrasight/blob/main/docs/03-tech-design.md#61-pest-modelsjson",
+            "accessed": "2026-11-14",
+            "appliesTo": [],
+            "type": "calibration",
+            "note": "Not an agronomic threshold: bare or dead residue reads below ~0.3 on Sentinel-2 NDVI, actively growing cover above it. No extension source gives an NDVI value."
+          },
+          "verifiedBy": null,
+          "verifiedAt": null,
+          "reviewedBy": null
+        }
       },
-      "keyNumbers": ["greenDaysBeforeSowing", "autumnPercentile", "sowingDate"],
+      "keyNumbers": [
+        "greenDaysBeforeSowing",
+        "sowingDate"
+      ],
       "scoutAction": null
     }
   ]

@@ -131,6 +131,7 @@
     "kn_degreeDaysIn7Days": "°C·д за 7 днів",
     "kn_greenDaysBeforeSowing": "днів зелені до сівби",
     "kn_sowingDate": "дата сівби",
-    "kn_daysUntilFrost": "днів до заморозків"
+    "kn_daysUntilFrost": "днів до заморозків",
+    "kn_daysBeforeBpmp": "днів сівби раніше рекомендованої дати"
   }
 }

@@ -274,8 +274,8 @@ Each file's content hash is its **version**, stored with every recommendation an
 ```
 
 - The example is shown with `verified: false`; the CI gate keeps `enabled: false` until the team fills in the K-State / UNL / CSU source (RFC §11.3).
-- Kinds: `host_repeat`, `host_interval`, `degree_days`, `weather_window`, `climate_anomaly`, `water_stress`, `green_bridge`; combinators `all`, `any`, `max`, `gate` (RFC §11.2).
-- Hackathon set: rootworm (`host_repeat` as a 2026 planning item), BYD with aphids (`climate_anomaly` + `degree_days` from emergence), wheat streak mosaic (`green_bridge` + `climate_anomaly`) (RFC §11.4).
+- Kinds: `host_repeat`, `host_interval`, `degree_days`, `weather_window`, `climate_anomaly`, `water_stress`, `green_bridge`, `sowing_before` (v1.2); combinators `all`, `any`, `max`, `gate` (RFC §11.2).
+- Hackathon set: rootworm (`host_repeat` as a planning item), BYD with aphids (`sowing_before` the K-State BPMP date, deadline = first forecast freeze), wheat streak mosaic (`green_bridge`: volunteer green in the 14 days before sowing) (RFC §11.2 v2.3, §11.4).
 
 ### 6.2 `prices.json`
 
@@ -705,4 +705,5 @@ All resolved on 2026-11-14.
 | 2026-11-14 | Daily field check refreshes POWER, the forecast and (only when an enabled model needs it) Sentinel-2; MODIS is not refreshed daily | No P0 evaluator reads MODIS; a MODIS refresh takes ~2 min per field |
 | 2026-11-14 | Input snapshots keep the last 430 days of weather and reference the POWER data date for the rest | A full 1981+ series per field per day would be ~1.5 MB; the hash still covers the full inputs |
 | 2026-11-14 | Planning deadline when the next crop isn't chosen: the typical sowing date of the model's host crop in the region | The decision has to be made before the host would be sown; never a 7-day scouting window for a planning item |
+| 2026-11-14 | Demo models follow K-State rules: BYD = sown before the BPMP date (Zone 1, 10 Sep, as the statewide rule); WSM = volunteer green in the 14 days before sowing; new kind `sowing_before`; `source.type` = extension / fallback / calibration; a value applies only in its source's `appliesTo` regions | Extension sources give no percentile, degree-day or NDVI thresholds (research 2026-11-14); decided by the team |
 | 2026-11-14 | No PoC: adapters and simulator written from scratch; MODIS and DEM through Planetary Computer, CDL through CropScape | The PoC named in early docs doesn't exist; ORNL MODIS API was down (503); Planetary Computer CDL stops at 2021 |

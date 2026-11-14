@@ -213,7 +213,44 @@ export function climateAnomaly(
   return r;
 }
 
-/** Green vegetation between the previous wheat harvest and sowing: volunteer wheat (RFC §11.2, v2.1). */
+/** "MMDD" threshold (e.g. 910 = 10 September) → ISO date in a given year. */
+export function mmdd(value: number, year: number): string {
+  const m = Math.floor(value / 100);
+  const d = value % 100;
+  return `${year}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
+/**
+ * Sown before a date (K-State: planting before the Best Pest Management Planting Date raises aphid / barley yellow
+ * dwarf and wheat curl mite risk). The date is an `MMDD` threshold in the sowing year.
+ */
+export function sowingBefore(node: Record<string, unknown>, inp: EvalInputs, resolve: Resolve): NodeResult {
+  const limit = resolve(node.before);
+  if (limit === null) return unknown("threshold date is missing");
+  const sowing = inp.record.sowingDate;
+  if (!sowing.value) return unknown("sowing date is missing");
+  const r = empty("low");
+  if (sowing.source !== "confirmed") r.estimated.push("sowing date estimated");
+  const cutoff = mmdd(limit, Number(sowing.value.slice(0, 4)));
+  const early = sowing.value < cutoff;
+  const days = daysBetween(sowing.value, cutoff);
+  r.numbers.sowingDate = { value: sowing.value };
+  r.numbers.daysBeforeBpmp = { value: Math.max(0, days), unit: "days" };
+  r.drivers.push({ driver: "early_sowing", value: sowing.value, fired: early });
+  r.evidence.push({
+    source: `Season record (${sowing.source})`,
+    value: sowing.value,
+    note: `compared with ${cutoff}`,
+  });
+  if (early) r.level = "high";
+  return r;
+}
+
+/**
+ * Green vegetation on the field shortly before sowing: volunteer wheat that wasn't dead and dry 2 weeks before
+ * planting carries the wheat curl mite (K-State MF3383, UNL). The window is the `daysBeforeSowing` days before the
+ * sowing date (confirmed, planned or the region's typical date).
+ */
 export function greenBridge(
   node: Record<string, unknown>,
   inp: EvalInputs,
@@ -222,7 +259,10 @@ export function greenBridge(
 ): NodeResult {
   const green = resolve(node.greenNdvi);
   const buffer = resolve(node.bufferM);
-  if (green === null || buffer === null) return unknown("threshold greenNdvi or bufferM is missing");
+  const lead = resolve(node.daysBeforeSowing);
+  // bufferM only names what we can't see (neighbouring volunteer); without a source for this region it doesn't block.
+  if (green === null || lead === null)
+    return unknown("threshold greenNdvi or daysBeforeSowing is missing for this region");
   const prev = [...inp.crops].filter((c) => c.season < inp.season).sort((a, b) => b.season - a.season)[0];
   if (!prev) return unknown("no crop history");
   const r = empty("low");
@@ -231,25 +271,36 @@ export function greenBridge(
   if (!wasWheat) return r;
   if (!prev.isOverride && prev.confidence < CONFIRMED_CROP)
     r.estimated.push(`crop in ${prev.season} not confirmed`);
-  // Harvest date isn't observed: winter wheat in the plains is cut by early July (estimate, listed below).
-  const harvest = `${prev.season}-07-01`;
-  r.estimated.push("previous harvest date estimated (1 July)");
   const sowing = inp.record.sowingDate;
-  const end = sowing.value && sowing.value <= asOf ? sowing.value : asOf;
-  if (sowing.value && sowing.source !== "confirmed") r.estimated.push("sowing date estimated");
-  const obs = inp.ndvi.filter((o) => o.date >= harvest && o.date <= end);
+  if (!sowing.value) return unknown("sowing date is missing");
+  if (sowing.source !== "confirmed") r.estimated.push("sowing date estimated");
+  const from = addDays(sowing.value, -lead);
+  const to = sowing.value <= asOf ? sowing.value : asOf;
   r.unknowns.push("Volunteer patches smaller than 10 m may not show in Sentinel-2 NDVI");
-  r.unknowns.push(`Neighbouring land within ${buffer} m is not checked`);
+  r.unknowns.push(
+    buffer !== null
+      ? `Volunteer on neighbouring land within ${buffer} m is not checked`
+      : "Volunteer on neighbouring land is not checked",
+  );
+  if (from > asOf)
+    return {
+      ...r,
+      level: "unknown",
+      unknowns: [...r.unknowns, `the ${lead} days before sowing start on ${from}`],
+    };
+  const obs = inp.ndvi.filter((o) => o.date >= from && o.date <= to);
   if (!obs.length)
     return {
       ...r,
       level: "unknown",
-      unknowns: [...r.unknowns, "no Sentinel-2 images between harvest and sowing"],
+      unknowns: [...r.unknowns, `no clear Sentinel-2 image in the ${lead} days before sowing`],
     };
   const greenObs = obs.filter((o) => o.mean >= green);
-  const firstGreen = greenObs[0]?.date;
-  r.numbers.greenDaysBeforeSowing = { value: firstGreen ? daysBetween(firstGreen, end) : 0, unit: "days" };
-  r.numbers.sowingDate = { value: sowing.value ?? "—" };
+  r.numbers.greenDaysBeforeSowing = {
+    value: greenObs.length ? daysBetween(greenObs.at(-1)!.date, sowing.value) : 0,
+    unit: "days",
+  };
+  r.numbers.sowingDate = { value: sowing.value };
   r.drivers.push({
     driver: "green_bridge",
     value: greenObs.length,
@@ -258,8 +309,8 @@ export function greenBridge(
   });
   r.evidence.push({
     source: "Copernicus Sentinel-2 NDVI (10 m)",
-    from: harvest,
-    to: end,
+    from,
+    to,
     value: Math.max(...obs.map((o) => o.mean)),
     unit: "max NDVI",
   });
@@ -281,6 +332,8 @@ export function evalNode(node: ModelNode, inp: EvalInputs, resolve: Resolve, asO
         return climateAnomaly(node, inp, resolve, asOf);
       case "green_bridge":
         return greenBridge(node, inp, resolve, asOf);
+      case "sowing_before":
+        return sowingBefore(node, inp, resolve);
       default:
         // host_interval, weather_window, water_stress: after the hackathon.
         return unknown(`evaluator ${node.kind} is not implemented yet`);

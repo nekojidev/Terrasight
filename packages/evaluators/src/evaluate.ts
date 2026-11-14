@@ -20,7 +20,10 @@ export function confidence(tier: Tier, estimatedInputs: number, capped: boolean)
   return STEPS[Math.max(0, i)]!;
 }
 
-/** Threshold resolver: `{ ref }` → the field region's override when the source says it applies, else the default. */
+/**
+ * Threshold resolver: `{ ref }` → the field region's override, else the default — but only where the source says it
+ * applies (`appliesTo` empty = everywhere). Otherwise null, so the model reports the threshold as missing (RFC §11.3).
+ */
 export function resolver(model: PestModel, regionId: string | null): Resolve {
   return (param) => {
     if (typeof param === "number") return param;
@@ -28,6 +31,8 @@ export function resolver(model: PestModel, regionId: string | null): Resolve {
     const t = ref ? model.thresholds[ref] : undefined;
     if (!t) return null;
     if (regionId && t.regional && regionId in t.regional) return t.regional[regionId]!;
+    const applies = t.source?.appliesTo ?? [];
+    if (applies.length && (!regionId || !applies.includes(regionId))) return null;
     return t.value;
   };
 }

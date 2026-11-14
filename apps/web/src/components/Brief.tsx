@@ -133,13 +133,11 @@ export function Brief({
   const temp = (c: number | null) =>
     c === null ? "—" : units === "imperial" ? `${Math.round((c * 9) / 5 + 32)}°F` : `${Math.round(c)}°`;
   const numbers = (i: Item) =>
-    i.keyNumbers
-      .slice(0, 3)
-      .map((k) => ({
-        value: String(k.value),
-        label: t.has(`kn_${k.id}`) ? t(`kn_${k.id}`) : k.id,
-        weight: k.weight,
-      }));
+    i.keyNumbers.slice(0, 3).map((k) => ({
+      value: String(k.value),
+      label: t.has(`kn_${k.id}`) ? t(`kn_${k.id}`) : k.id,
+      weight: k.weight,
+    }));
   const factors = (i: Item): Factor[] => {
     const source = i.evidence.find((e) => e.kind !== "citation")?.source;
     return i.keyNumbers.map((k) => ({
