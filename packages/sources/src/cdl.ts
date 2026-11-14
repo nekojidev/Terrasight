@@ -31,6 +31,7 @@ export interface CdlHistory {
 export const CDL_FIRST_YEAR = 2008;
 const PC_LAST_YEAR = 2021;
 const SAMPLE_GRID = 4; // up to 4 × 4 = 16 points per season
+const CROPSCAPE_ATTEMPTS = 3;
 const CROPSCAPE = "https://nassgeodata.gmu.edu/axis2/services/CDLService/GetCDLValue";
 
 function histogram(codes: number[]): Array<{ code: number; share: number }> {
@@ -106,24 +107,58 @@ async function pcSeasons(
   return out.filter((s): s is CdlSeason => s !== null);
 }
 
-async function cropScapeSeason(
+/** One CropScape point value; a retryable failure (timeout, 5xx, network) is tried again after a short pause. */
+async function cropScapeValue(
+  year: number,
+  [x, y]: [number, number],
+  ctx: FetchContext,
+): Promise<number | null> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const res = await http(`${CROPSCAPE}?year=${year}&x=${x.toFixed(1)}&y=${y.toFixed(1)}`, {
+        signal: ctx.signal,
+        fetch: ctx.fetch,
+        timeoutMs: 30_000,
+      });
+      return parseCropScapeValue(await res.text());
+    } catch (e) {
+      const retryable = e instanceof SourceError && e.retryable;
+      if (!retryable || attempt >= CROPSCAPE_ATTEMPTS || ctx.signal.aborted) throw e;
+      await new Promise((r) => setTimeout(r, 1_000 * attempt));
+    }
+  }
+}
+
+/**
+ * A season from CropScape sample points. A point that still fails after its retries is left out: the season is
+ * kept while at least half of the points answered (the majority crop is still well sampled), else it is missing.
+ */
+export async function cropScapeSeason(
   year: number,
   points: Array<[number, number]>,
   ctx: FetchContext,
 ): Promise<CdlSeason | null> {
-  const codes = await mapLimit(points, 4, async ([x, y]) => {
-    const res = await http(`${CROPSCAPE}?year=${year}&x=${x.toFixed(1)}&y=${y.toFixed(1)}`, {
-      signal: ctx.signal,
-      fetch: ctx.fetch,
-      timeoutMs: 30_000,
-    });
-    return parseCropScapeValue(await res.text());
-  });
+  const codes = await mapLimit(points, 4, (p) => cropScapeValue(year, p, ctx).catch(() => undefined));
+  const answered = codes.filter((c) => c !== undefined);
+  if (answered.length < Math.ceil(points.length / 2)) return null;
   return season(
     year,
-    codes.filter((c): c is number => c !== null),
+    answered.filter((c): c is number => c !== null),
     "samples",
   );
+}
+
+/** "2023", "2022–2024", "2022, 2024" — the missing seasons for the source status line. */
+export function yearList(years: number[]): string {
+  const sorted = [...years].sort((a, b) => a - b);
+  const runs: string[] = [];
+  for (let i = 0; i < sorted.length;) {
+    let j = i;
+    while (j + 1 < sorted.length && sorted[j + 1] === sorted[j]! + 1) j++;
+    runs.push(j === i ? `${sorted[i]}` : `${sorted[i]}–${sorted[j]}`);
+    i = j + 1;
+  }
+  return runs.join(", ");
 }
 
 export const cdl: SourceAdapter<CdlHistory> = {
@@ -153,8 +188,8 @@ export const cdl: SourceAdapter<CdlHistory> = {
     const recentMissing = missingYears.filter((y) => y > PC_LAST_YEAR);
     const reason = missingYears.length
       ? recentMissing.length === missingYears.length
-        ? `CropScape did not respond for ${recentMissing[0]}–${recentMissing.at(-1)}; those seasons will be retried`
-        : `${missingYears.length} seasons are missing (${missingYears.join(", ")})`
+        ? `CropScape did not respond for ${yearList(recentMissing)}; we will try again tomorrow, or press Retry`
+        : `${missingYears.length === 1 ? "1 season is" : `${missingYears.length} seasons are`} missing (${yearList(missingYears)})`
       : undefined;
     return {
       status: missingYears.length ? "partial" : "done",

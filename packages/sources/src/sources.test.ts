@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { cdlCrop, cdlName } from "./cdl-classes.js";
-import { parseCropScapeValue, samplePoints } from "./cdl.js";
+import { cropScapeSeason, parseCropScapeValue, samplePoints, yearList } from "./cdl.js";
 import { slopes } from "./dem.js";
 import { CRS, cellKey, geometryHash, pointInPolygons, project, projectPolygons } from "./geo.js";
 import { mapLimit } from "./http.js";
@@ -89,6 +89,38 @@ describe("SSURGO", () => {
 });
 
 describe("CDL", () => {
+  it("names missing seasons as ranges", () => {
+    expect(yearList([2023])).toBe("2023");
+    expect(yearList([2024, 2022, 2023])).toBe("2022–2024");
+    expect(yearList([2022, 2024, 2025])).toBe("2022, 2024–2025");
+  });
+
+  it("retries CropScape points and keeps a season when most points answer", async () => {
+    let calls = 0;
+    const ok = (v: number) =>
+      new Response(`<Result>{x: 0, y: 0, value: ${v}, category: "x"}</Result>`, { status: 200 });
+    // Every point fails once (503), then answers; one point keeps failing.
+    const seen = new Map<string, number>();
+    const fetch = (async (url: string) => {
+      calls++;
+      const n = (seen.get(url) ?? 0) + 1;
+      seen.set(url, n);
+      if (url.includes("x=3.0") || n === 1) return new Response("busy", { status: 503 });
+      return ok(24);
+    }) as unknown as typeof globalThis.fetch;
+    const ctx = { signal: new AbortController().signal, fetch, today: "2026-11-15" };
+    const points: Array<[number, number]> = [
+      [0, 0],
+      [1, 0],
+      [2, 0],
+      [3, 0],
+    ];
+    const s = await cropScapeSeason(2023, points, ctx as never);
+    expect(s?.majorityCode).toBe(24);
+    expect(s?.n).toBe(3);
+    expect(calls).toBe(3 * 2 + 3);
+  }, 20_000);
+
   it("parses CropScape point values", () => {
     expect(parseCropScapeValue('<Result>{x: -1, y: 2, value: 24, category: "Winter Wheat"}</Result>')).toBe(
       24,
