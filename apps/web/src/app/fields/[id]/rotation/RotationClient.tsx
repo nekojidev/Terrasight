@@ -55,10 +55,17 @@ export function RotationClient({
   const locale = useLocale() as "en" | "uk";
   const [priority, setPriority] = useState<Metric | null>(null);
   const [chosen, setChosen] = useState<string | null>(null);
+  // Climate sliders and the water cap re-run the simulation (S-06.07); results are cached by inputs hash.
+  const [draft, setDraft] = useState({ deltaT: 0, rain: 0, cap: 0 });
+  const [overrides, setOverrides] = useState<{ deltaT?: number; precipFactor?: number; waterCapMm?: number }>(
+    {},
+  );
   const run = useQuery({
-    queryKey: ["scenarios", workspaceId, fieldId],
-    queryFn: () => api<RunView>(`/api/w/${workspaceId}/fields/${fieldId}/scenario-runs`, { body: {} }),
+    queryKey: ["scenarios", workspaceId, fieldId, overrides],
+    queryFn: () =>
+      api<RunView>(`/api/w/${workspaceId}/fields/${fieldId}/scenario-runs`, { body: { overrides } }),
     staleTime: Infinity,
+    placeholderData: (prev) => prev,
   });
 
   const area = units === "imperial" ? "ac" : "ha";
@@ -286,6 +293,72 @@ export function RotationClient({
               </article>
             );
           })}
+        </div>
+      </section>
+
+      <section className="rounded-card border border-line bg-surface p-6">
+        <h2 className="mb-4 text-h2 text-ink">{t("rotSliders")}</h2>
+        <div className="grid gap-5 sm:grid-cols-3">
+          <label className="flex flex-col gap-2 text-small text-ink-2">
+            {t("rotDeltaT")}:{" "}
+            <span className="font-mono text-ink">
+              {draft.deltaT > 0 ? "+" : ""}
+              {draft.deltaT} °C
+            </span>
+            <input
+              type="range"
+              min={0}
+              max={3}
+              step={0.5}
+              value={draft.deltaT}
+              onChange={(e) => setDraft({ ...draft, deltaT: Number(e.target.value) })}
+            />
+          </label>
+          <label className="flex flex-col gap-2 text-small text-ink-2">
+            {t("rotRain")}: <span className="font-mono text-ink">{draft.rain}%</span>
+            <input
+              type="range"
+              min={-30}
+              max={0}
+              step={5}
+              value={draft.rain}
+              onChange={(e) => setDraft({ ...draft, rain: Number(e.target.value) })}
+            />
+          </label>
+          <label className="flex flex-col gap-2 text-small text-ink-2">
+            {t("rotCap")}:{" "}
+            <span className="font-mono text-ink">{draft.cap ? water(draft.cap) : t("rotNoCap")}</span>
+            <input
+              type="range"
+              min={0}
+              max={600}
+              step={25}
+              value={draft.cap}
+              onChange={(e) => setDraft({ ...draft, cap: Number(e.target.value) })}
+            />
+          </label>
+        </div>
+        <div className="mt-4 flex gap-3">
+          <Button
+            variant="outline"
+            onClick={() =>
+              setOverrides({
+                ...(draft.deltaT ? { deltaT: draft.deltaT } : {}),
+                ...(draft.rain ? { precipFactor: 1 + draft.rain / 100 } : {}),
+                ...(draft.cap ? { waterCapMm: draft.cap } : {}),
+              })
+            }
+            disabled={run.isFetching}
+            aria-busy={run.isFetching}
+          >
+            {run.isFetching ? t("rotLoading") : t("rotRerun")}
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={() => (setDraft({ deltaT: 0, rain: 0, cap: 0 }), setOverrides({}))}
+          >
+            {t("rotReset")}
+          </Button>
         </div>
       </section>
 

@@ -226,6 +226,13 @@
     "rotTrendUp": "up",
     "rotTrendDown": "down",
     "kn_lastCropInRow": "seasons of the last crop in a row (USDA CDL)",
-    "kn_marginVsCurrent": "$/ha a year vs today with the best other option"
+    "kn_marginVsCurrent": "$/ha a year vs today with the best other option",
+    "rotSliders": "Test robustness",
+    "rotDeltaT": "Temperature change",
+    "rotRain": "Rain change",
+    "rotCap": "Water cap",
+    "rotNoCap": "no cap",
+    "rotRerun": "Re-run (2–5 s)",
+    "rotReset": "Reset"
   }
 }
