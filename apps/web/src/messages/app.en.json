@@ -173,6 +173,18 @@
     "fieldInRow": "seasons of {crop} in a row ({from}–{to}, USDA CDL)",
     "fieldCompareSoon": "Rotation comparison arrives with the scenario engine",
     "fieldNoRisks": "No open risks on this field.",
-    "forecastAge": "forecast from {h} h ago"
+    "forecastAge": "forecast from {h} h ago",
+    "aiNumbers": "{n, plural, =0 {No numbers in this answer} one {# number checked against the models} other {# numbers checked against the models}}",
+    "aiFallback": "Showing the data directly: part of the answer didn't match the models.",
+    "aiUnavailable": "Assistant unavailable. The brief, cards and report keep working.",
+    "aiThinking": "The assistant is checking the data…",
+    "aiEmpty": "Ask about a field, a risk or the whole company.",
+    "aiDelete": "Delete chat",
+    "aiContextField": "Context: {name}",
+    "aiSugg1": "Summarise the day",
+    "aiSugg2": "Why is this risk here?",
+    "aiSugg3": "What if I change the crop next season?",
+    "aiTool": "Data from {tool}",
+    "aiRateLimited": "Too many questions; try again in a minute."
   }
 }

@@ -2,7 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Chip, DoneRow, FactorRows, TextField, type Factor } from "@terrasight/ui";
-import { ArrowLeft, Bug, Calendar, Check, Pencil, RefreshCw, ShieldCheck, X } from "lucide-react";
+import { ArrowLeft, Bug, Calendar, Check, Pencil, RefreshCw, ShieldCheck, Sparkles, X } from "lucide-react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { useState, type FormEvent } from "react";
@@ -278,6 +278,15 @@ export function RecommendationClient({
       </div>
 
       <aside className="flex flex-col gap-4">
+        {canAct && (
+          <Link
+            href={`/assistant?rec=${r.id}&field=${r.fieldId}`}
+            className="focus-ring flex items-center justify-center gap-2 rounded-btn border border-line-strong bg-surface px-4 py-3 text-body font-semibold text-ink hover:bg-muted"
+          >
+            <Sparkles aria-hidden className="size-4" strokeWidth={1.7} />
+            {f("bf_ask")}
+          </Link>
+        )}
         <section className="rounded-card border border-line bg-surface p-5">
           <h2 className="text-body font-semibold text-ink">{t("recMsgTitle")}</h2>
           <p className="mt-3 rounded-input bg-surface-2 p-4 text-body text-ink">{message}</p>

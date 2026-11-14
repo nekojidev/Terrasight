@@ -7,6 +7,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useState, type FormEvent } from "react";
 import { api } from "@/lib/api";
 import { useWorkspaceEvents } from "@/lib/events";
+import { FieldAssistant } from "@/components/FieldAssistant";
 import { FieldBrief, FieldTabs, RisksCard, WeatherCard, type Risk } from "./Overview";
 
 export interface FieldView {
@@ -141,6 +142,7 @@ export function FieldClient({
         <RisksCard risks={risks.data ?? []} />
         <WeatherCard workspaceId={workspaceId} fieldId={id} units={units} />
       </div>
+      {canEdit && <FieldAssistant workspaceId={workspaceId} fieldId={id} fieldName={field.data.name} />}
 
       {gather.data && (
         <GatherPanel

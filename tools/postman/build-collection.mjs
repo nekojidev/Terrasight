@@ -435,6 +435,44 @@ const collection = {
             ],
           },
         ),
+        req("Start a chat with the assistant (S-05.02)", "POST", "/api/w/{{ws}}/conversations", {
+          body: {},
+          tests: [
+            status(201),
+            `const c = pm.response.json(); pm.collectionVariables.set("convId", c.id); pm.test("expires in 90 days", () => pm.expect(new Date(c.expiresAt) - new Date(c.createdAt)).to.be.within(89.9 * 864e5, 90.1 * 864e5));`,
+          ],
+        }),
+        req(
+          "Ask a product question: answered by the refusal template",
+          "POST",
+          "/api/w/{{ws}}/conversations/{{convId}}/messages",
+          {
+            body: {
+              text: "Which insecticide should I spray for rootworm?",
+              context: { fieldId: "{{fieldId}}" },
+            },
+            tests: [
+              status(202),
+              `pm.test("message ids", () => pm.expect(pm.response.json().messageId).to.be.a("string"));`,
+            ],
+          },
+        ),
+        req("Read the chat: aliases map and messages", "GET", "/api/w/{{ws}}/conversations/{{convId}}", {
+          tests: [
+            status(200),
+            `const c = pm.response.json(); pm.test("aliases", () => pm.expect(Object.keys(c.aliases)[0]).to.match(/^F\\d+$/)); pm.test("user message stored", () => pm.expect(c.messages[0].role).to.eql("user"));`,
+          ],
+        }),
+        req(
+          "Unknown chat is not found",
+          "GET",
+          "/api/w/{{ws}}/conversations/00000000-0000-4000-8000-000000000000",
+          { tests: problem(404) },
+        ),
+        req("Delete the chat", "DELETE", "/api/w/{{ws}}/conversations/{{convId}}", { tests: [status(204)] }),
+        req("A deleted chat is gone", "GET", "/api/w/{{ws}}/conversations/{{convId}}", {
+          tests: problem(404),
+        }),
         req("Archive the field", "DELETE", "/api/w/{{ws}}/fields/{{fieldId}}", { tests: [status(204)] }),
         req("An archived field is gone", "GET", "/api/w/{{ws}}/fields/{{fieldId}}", { tests: problem(404) }),
       ],
