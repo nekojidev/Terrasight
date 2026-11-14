@@ -10,7 +10,14 @@ interface YieldRangeView {
   source?: "plan" | "recommendation" | "current-rotation";
   crop?: string | null;
   cropNames?: { en: string; uk: string } | null;
-  range?: { p10: number; p50: number; p90: number; unit: "t/ha"; runs: number; pestLossIncluded: false } | null;
+  range?: {
+    p10: number;
+    p50: number;
+    p90: number;
+    unit: "t/ha";
+    runs: number;
+    pestLossIncluded: false;
+  } | null;
   yieldRef?: number | null;
 }
 
@@ -33,7 +40,8 @@ export function toDisplay(
   units: "metric" | "imperial",
 ): { value: number; unit: "t/ha" | "bu/ac" } {
   const lb = LB_PER_BU[crop];
-  if (units === "imperial" && lb) return { value: (tPerHa * 1000 * LB_PER_KG) / lb / HA_TO_AC, unit: "bu/ac" };
+  if (units === "imperial" && lb)
+    return { value: (tPerHa * 1000 * LB_PER_KG) / lb / HA_TO_AC, unit: "bu/ac" };
   return { value: tPerHa, unit: "t/ha" };
 }
 
@@ -76,25 +84,35 @@ export function YieldCard({
         </span>
       </div>
       <p className="mt-3 text-ink">
-        <span className="text-big-number">{fmt(p50)}</span> <span className="text-small text-ink-2">{unit}</span>
+        <span className="text-big-number">{fmt(p50)}</span>{" "}
+        <span className="text-small text-ink-2">{unit}</span>
         <span className="ml-2 text-small text-ink-2">{t("ycP50")}</span>
       </p>
-      <div
-        className="relative mt-4 h-2 rounded-full bg-muted"
-        role="img"
-        aria-label={t("ycRangeAria", { lo: fmt(p10), hi: fmt(p90), unit })}
-      >
-        <div className="absolute inset-y-0 left-0 right-0 rounded-full bg-ok-soft" />
-        <div className="absolute -top-1 h-4 w-1 rounded-full bg-ink" style={{ left: `calc(${mid}% - 2px)` }} />
-      </div>
-      <div className="mt-2 flex justify-between text-small text-ink-2">
-        <span>
-          {t("ycP10")} {fmt(p10)}
-        </span>
-        <span>
-          {t("ycP90")} {fmt(p90)}
-        </span>
-      </div>
+      {p90 - p10 < 0.05 ? (
+        <p className="mt-3 text-small text-ink-2">{t("ycStable")}</p>
+      ) : (
+        <>
+          <div
+            className="relative mt-4 h-2 rounded-full bg-muted"
+            role="img"
+            aria-label={t("ycRangeAria", { lo: fmt(p10), hi: fmt(p90), unit })}
+          >
+            <div className="absolute inset-y-0 left-0 right-0 rounded-full bg-ok-soft" />
+            <div
+              className="absolute -top-1 h-4 w-1 rounded-full bg-ink"
+              style={{ left: `calc(${mid}% - 2px)` }}
+            />
+          </div>
+          <div className="mt-2 flex justify-between text-small text-ink-2">
+            <span>
+              {t("ycP10")} {fmt(p10)}
+            </span>
+            <span>
+              {t("ycP90")} {fmt(p90)}
+            </span>
+          </div>
+        </>
+      )}
       <p className="mt-3 text-small text-ink-2">
         {t("ycBasis", { runs: d.range.runs })}
         {d.yieldRef != null ? ` · ${t("ycRef", { v: fmt(d.yieldRef), unit })}` : ""}

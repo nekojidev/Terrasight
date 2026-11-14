@@ -356,6 +356,7 @@
     "aiAnalyzeStarted": "Analysis started: results appear on Home in under a minute.",
     "aiScopeAll": "All {n} fields",
     "aiScopeContext": "This field or recommendation",
+    "ycStable": "The same in every weather run: irrigation covers the water deficit. Set a water limit on the Rotation page to see the spread.",
     "rpTitle": "Owner report",
     "rpSub": "What the owner sees, and how they answered.",
     "rpEmpty": "Nothing in the report yet. Accepted items appear here after 8 seconds.",
