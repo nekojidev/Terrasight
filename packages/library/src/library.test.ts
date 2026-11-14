@@ -39,8 +39,13 @@ describe("loadLibrary", () => {
     for (const v of Object.values(lib.versions)) expect(v).toMatch(/^[0-9a-f]{12}$/);
   });
 
-  it("enables no model until its thresholds are verified", () => {
-    expect(lib.enabledModels).toEqual([]);
+  it("enables only models whose every threshold is verified, valued and cited", () => {
+    for (const m of lib.enabledModels) {
+      for (const t of Object.values(m.thresholds)) {
+        expect(t.verified && t.value !== null && t.verifiedBy && t.source?.title && t.source.url).toBeTruthy();
+      }
+    }
+    expect(lib.enabledModels.map((m) => m.pest).sort()).toEqual(["barley_yellow_dwarf", "western_corn_rootworm", "wheat_streak_mosaic"]);
   });
 
   it("lists crops without prices while prices.json is empty", () => {
@@ -57,7 +62,8 @@ describe("verification gate (RFC §11.3)", () => {
   const rootworm = lib.pestModels.models[0] as PestModel;
 
   it("blocks an enabled model with an unverified threshold", () => {
-    const models = [{ ...rootworm, enabled: true }];
+    const unverified = { ...rootworm.thresholds.repeatSeasons!, verified: false, verifiedBy: null };
+    const models = [{ ...rootworm, enabled: true, thresholds: { repeatSeasons: unverified } }];
     const { problems, enabledModels } = checkLibrary({ ...lib, pestModels: { version: 1, models } });
     expect(enabledModels).toEqual([]);
     expect(problems.join("\n")).toMatch(/repeatSeasons is not verified, valued and cited/);
