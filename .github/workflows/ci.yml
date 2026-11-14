@@ -59,9 +59,15 @@ jobs:
       rabbitmq:
         image: rabbitmq:4-management-alpine
         ports: ["5672:5672"]
+      # Same as the local stack: rate limits run at full rate in Redis. Without it the in-process
+      # fallback halves them (RFC §5.2) and the auth requests in the collection hit 429.
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
     env:
       DATABASE_URL: postgresql://terrasight:terrasight@localhost:5432/terrasight
       RABBITMQ_URL: amqp://guest:guest@localhost:5672
+      REDIS_URL: redis://localhost:6379
       JWT_SECRET: ci-only-secret-0123456789abcdefghijklmnop
       NODE_ENV: test
     steps:
