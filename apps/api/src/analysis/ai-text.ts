@@ -8,6 +8,7 @@ import {
   type SafetyFilter,
 } from "@terrasight/assistant-core";
 import { stableStringify } from "@terrasight/evaluators";
+import { promptVersionOf } from "../ai/trace.js";
 
 /**
  * AI-written recommendation texts (Product Definition v2.11). The evaluators stay the source of risk levels, key
@@ -29,7 +30,8 @@ export interface Rejected {
 export const MAX_WATCH = 2;
 const LIMITS = { title: 110, action: 320, why: 420 } as const;
 
-export const hashOf = (v: unknown): string => createHash("sha256").update(stableStringify(v)).digest("hex").slice(0, 24);
+export const hashOf = (v: unknown): string =>
+  createHash("sha256").update(stableStringify(v)).digest("hex").slice(0, 24);
 
 export const SYSTEM = `You write short, specific recommendation texts for an agronomist's morning brief. The app's models already decided the risk level, the key numbers and the deadlines; you only put them into clear words for this field.
 Rules:
@@ -77,11 +79,7 @@ const t2 = (v: unknown): Text2 => {
 };
 
 /** Why a text is rejected, or null. */
-export function textProblem(
-  w: WrittenText,
-  allowed: AllowedSet,
-  safety: SafetyFilter,
-): string | null {
+export function textProblem(w: WrittenText, allowed: AllowedSet, safety: SafetyFilter): string | null {
   for (const field of ["title", "action", "why"] as const) {
     for (const lang of ["en", "uk"] as Lang[]) {
       const s = w[field][lang];
@@ -206,3 +204,8 @@ export function validateSummary(
   const named = (s: string) => s.replace(/\bF\d+\b/g, (r) => names.get(r) ?? r);
   return { text: { en: named(text.en), uk: named(text.uk) } };
 }
+
+/** Version of the recommendation prompt and schemas (changes when either is edited). */
+export const RECS_PROMPT_VERSION = promptVersionOf(SYSTEM, batchSchema(true), batchSchema(false));
+/** Version of the day-summary prompt and schema. */
+export const SUMMARY_PROMPT_VERSION = promptVersionOf(SUMMARY_SYSTEM, summarySchema);

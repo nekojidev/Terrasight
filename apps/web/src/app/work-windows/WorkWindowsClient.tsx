@@ -2,10 +2,10 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { Skeleton, ErrorCard } from "@terrasight/ui";
-import { AlertTriangle, Check, ShieldCheck, X } from "lucide-react";
+import { AlertTriangle, Check, HelpCircle, ShieldCheck, X } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
-import { StatusMark, STATUS_STYLE, useLimitText } from "@/components/TodayWindows";
+import { StatusMark, STATUS_STYLE, useConditionText, useLimitText } from "@/components/TodayWindows";
 import { api } from "@/lib/api";
 import {
   OPERATIONS,
@@ -22,7 +22,7 @@ interface Sel {
   date: string;
 }
 
-const ICON = { good: Check, marginal: AlertTriangle, no: X } as const;
+const ICON = { good: Check, marginal: AlertTriangle, no: X, unknown: HelpCircle } as const;
 
 /** "Work windows": a week grid per field (days × operations), a filter by operation, tap a day for the limiting factor. */
 export function WorkWindowsClient({
@@ -35,6 +35,7 @@ export function WorkWindowsClient({
   const t = useTranslations("App");
   const locale = useLocale() as "en" | "uk";
   const limitText = useLimitText(units);
+  const condText = useConditionText(units);
   const [filter, setFilter] = useState<Operation | "all">("all");
   const [sel, setSel] = useState<Sel | null>(null);
   const q = useQuery({
@@ -152,7 +153,22 @@ export function WorkWindowsClient({
                           {t(`wwOp_${open.op}`)} · {intl({ weekday: "long", day: "numeric", month: "long" }, detail.date)}
                           <StatusMark status={detail.status} label={t(`wwSt_${detail.status}`)} />
                         </p>
-                        <p className="mt-1 text-small text-ink-2">{limitText(detail.limiting)}</p>
+                        <p className="mt-1 text-small text-ink-2">
+                          {detail.status === "unknown" ? t("wwUnknownThreshold") : limitText(detail.limiting)}
+                        </p>
+                        {(detail.conditions?.length ?? 0) > 0 && (
+                          <>
+                            <p className="mt-3 text-micro text-ink-2">{t("wwCondTitle")}</p>
+                            <ul className="mt-1 flex flex-col gap-1 text-small text-ink">
+                              {detail.conditions!.map((c) => (
+                                <li key={c.factor}>
+                                  {condText(c)}
+                                  {!c.verified && <span className="text-ink-3"> · {t("wwUnknownThreshold")}</span>}
+                                </li>
+                              ))}
+                            </ul>
+                          </>
+                        )}
                         {detail.windows.length > 0 && (
                           <>
                             <p className="mt-3 text-micro text-ink-2">{t("wwWindows")}</p>

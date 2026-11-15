@@ -1,7 +1,7 @@
 /**
  * Number check (RFC §12.4, Tech Design §12.2): every number in an answer sentence must come from the turn's tool
- * results (exactly, at display precision or in a supported unit conversion), from the user's question, or be list
- * numbering. The model never does arithmetic: differences come from the `compare` tool.
+ * results (exactly, at display precision or in a supported unit conversion), or be list numbering. Numbers that
+ * appear only in the user's question are NOT allowed back: the answer must take them from a tool result. The model never does arithmetic: differences come from the `compare` tool.
  */
 
 export type Lang = "en" | "uk";
@@ -50,6 +50,15 @@ const WORDS: Record<Lang, Record<string, number>> = {
     eighteen: 18,
     nineteen: 19,
     twenty: 20,
+    thirty: 30,
+    forty: 40,
+    fifty: 50,
+    sixty: 60,
+    seventy: 70,
+    eighty: 80,
+    ninety: 90,
+    hundred: 100,
+    thousand: 1000,
     once: 1,
     twice: 2,
   },
@@ -89,6 +98,29 @@ const WORDS: Record<Lang, Record<string, number>> = {
     "дев'ятнадцять": 19,
     "дев’ятнадцять": 19,
     двадцять: 20,
+    тридцять: 30,
+    сорок: 40,
+    "п'ятдесят": 50,
+    "п’ятдесят": 50,
+    шістдесят: 60,
+    сімдесят: 70,
+    вісімдесят: 80,
+    "дев'яносто": 90,
+    "дев’яносто": 90,
+    сто: 100,
+    двісті: 200,
+    триста: 300,
+    чотириста: 400,
+    "п'ятсот": 500,
+    "п’ятсот": 500,
+    шістсот: 600,
+    сімсот: 700,
+    вісімсот: 800,
+    "дев'ятсот": 900,
+    "дев’ятсот": 900,
+    тисяча: 1000,
+    тисячі: 1000,
+    тисяч: 1000,
     двічі: 2,
     тричі: 3,
   },
@@ -118,8 +150,11 @@ function scrub(sentence: string): string {
   return sentence
     .replace(/\bF\d+\b/g, " ")
     .replace(/^\s*(\d{1,2}[.)]|[-•*])\s+/, " ")
-    .replace(/\b(USDA|NASA|FAO|SCS|ICBM|RUSLE)[-\s]?\w*\b/g, " ")
-    .replace(/\bFAO-\d+\b/g, " ")
+    // Only known identifiers hide their digits; "NASA 2025" or "USDA 300 mm" still count as numbers.
+    .replace(/\bFAO[-\s]?(?:56|33)\b/g, " ")
+    .replace(/\bSCS-CN\b/g, " ")
+    .replace(/\b(?:USDA|NASA)\s+(?:CDL|SSURGO|NASS|AMS|POWER|SMAP|GPM|MODIS)\b/g, " ")
+    .replace(/\b(?:USDA|NASA|FAO|SCS|ICBM|RUSLE)\b/g, " ")
     .replace(/\bMF\d+\b/g, " ")
     .replace(/\bSentinel-2\b/gi, " ")
     .replace(/\bGLO-30\b/g, " ")
@@ -199,10 +234,46 @@ export function extractNumbers(sentence: string, lang: Lang): Extracted[] {
     const decimals = norm.includes(".") ? norm.split(".")[1]!.length : 0;
     return { raw: m[0], kind: percent ? "percent" : "number", value, decimals };
   });
-  // Number words 0–20.
+  // Number words: 0–20, tens and hundreds; adjacent words combine ("twenty-five", "two hundred and ten",
+  // "двадцять п'ять", "двісті десять").
   const words = WORDS[lang];
-  for (const w of s.toLowerCase().split(/[^\p{L}'’ʼ]+/u)) {
-    if (w in words) out.push({ raw: w, kind: "word", value: words[w]!, decimals: 0 });
+  const all = [...s.toLowerCase().matchAll(/[\p{L}'’ʼ]+/gu)].map((m) => ({
+    w: m[0],
+    start: m.index!,
+    end: m.index! + m[0].length,
+  }));
+  // "two hundred AND ten": the "and" joins number words (English only), so it is dropped between them.
+  const tokens = all.filter(
+    (t, k) => !(lang === "en" && t.w === "and" && (all[k - 1]?.w ?? "") in words && (all[k + 1]?.w ?? "") in words),
+  );
+  let i = 0;
+  while (i < tokens.length) {
+    const t0 = tokens[i]!;
+    if (!(t0.w in words)) {
+      i++;
+      continue;
+    }
+    let value = words[t0.w]!;
+    let raw = t0.w;
+    let j = i + 1;
+    while (j < tokens.length) {
+      const prev = tokens[j - 1]!;
+      const next = tokens[j]!;
+      const gap = s.slice(prev.end, next.start).toLowerCase();
+      const joined = /^[\s-]+$/.test(gap) || (lang === "en" && /^\s+and\s+$/.test(gap));
+      if (!joined || !(next.w in words)) break;
+      const nv = words[next.w]!;
+      if (nv === 100 && value >= 1 && value <= 9) value *= 100;
+      else if (nv === 1000 && value >= 1 && value < 1000) value *= 1000;
+      else if (value % 100 === 0 && value >= 100 && nv < 100 && nv > 0) value += nv;
+      else if (value >= 20 && value < 100 && value % 10 === 0 && nv >= 1 && nv <= 9) value += nv;
+      else if (value >= 1000 && value % 1000 === 0 && nv < 1000 && nv > 0) value += nv;
+      else break;
+      raw += ` ${next.w}`;
+      j++;
+    }
+    out.push({ raw, kind: "word", value, decimals: 0 });
+    i = j;
   }
   return out;
 }

@@ -8,9 +8,27 @@ import {
   type WorkWindowsConfig,
 } from "./index.js";
 
-const cfg = JSON.parse(
+const rawCfg = JSON.parse(
   readFileSync(new URL("../../../data/work-windows.json", import.meta.url), "utf8"),
 ) as WorkWindowsConfig;
+
+/** Test fixture: every threshold treated as verified, so the logic itself is exercised. */
+function allVerified(c: WorkWindowsConfig): WorkWindowsConfig {
+  const walk = (n: unknown): unknown => {
+    if (Array.isArray(n)) return n.map(walk);
+    if (!n || typeof n !== "object") return n;
+    const o = { ...(n as Record<string, unknown>) };
+    if (typeof o.verified === "boolean") {
+      o.verified = true;
+      delete o.quantified;
+      return o;
+    }
+    for (const k of Object.keys(o)) o[k] = walk(o[k]);
+    return o;
+  };
+  return walk(c) as WorkWindowsConfig;
+}
+const cfg = allVerified(rawCfg);
 
 /** `days` days from 2026-04-20 00:00 with one function per hour. */
 function series(days: number, f: (day: number, hour: number) => Partial<HourlyPoint>): HourlyPoint[] {
@@ -139,7 +157,7 @@ describe("traffic and fertiliser", () => {
 
 describe("thresholds file", () => {
   it("is entirely unverified and every number is sourced", () => {
-    expect(unverifiedThresholds(cfg)).toBe(true);
+    expect(unverifiedThresholds(rawCfg)).toBe(true);
     const walk = (n: unknown, path: string): void => {
       if (!n || typeof n !== "object") return;
       const o = n as Record<string, unknown>;
@@ -151,6 +169,37 @@ describe("thresholds file", () => {
       }
       for (const [k, x] of Object.entries(o)) walk(x, `${path}.${k}`);
     };
-    for (const k of ["spraying", "sowing", "traffic", "fertiliser"]) walk((cfg as unknown as Record<string, unknown>)[k], k);
+    for (const k of ["spraying", "sowing", "traffic", "fertiliser"]) walk((rawCfg as unknown as Record<string, unknown>)[k], k);
+  });
+});
+
+describe("unverified thresholds do not decide", () => {
+  it("shows unknown status and the measured values while every threshold is unverified", () => {
+    expect(unverifiedThresholds(rawCfg)).toBe(true);
+    const r = computeWorkWindows(series(1, () => ({ windMs: 9 })), rawCfg, NOW, { days: 1, sowingCrop: "corn" });
+    for (const o of r.operations) {
+      expect(o.days[0]!.status).toBe("unknown");
+      expect(o.days[0]!.limiting).toBeNull();
+    }
+    const sp = op(r, "spraying").days[0]!;
+    const wind = sp.conditions.find((c) => c.factor === "wind")!;
+    expect(wind).toEqual({ factor: "wind", value: 9, verified: false });
+    expect(sp.conditions.some((c) => c.factor === "delta_t")).toBe(true);
+    expect(op(r, "sowing").days[0]!.conditions.find((c) => c.factor === "soil_temp")?.value).toBe(14);
+  });
+  it("ignores quantified:false placeholders even when verified", () => {
+    const c = allVerified(rawCfg);
+    c.spraying.rainHourMm = { ...c.spraying.rainHourMm!, quantified: false };
+    const r = computeWorkWindows(series(1, (_d, h) => (h >= 14 ? { precipMm: 5 } : {})), c, NOW, { days: 1 });
+    // rain is ignored: nothing blocks the afternoon
+    expect(op(r, "spraying").days[0]!.windows.every((w) => w.status === "good")).toBe(true);
+  });
+  it("lets a verified threshold decide again when flipped", () => {
+    const c: WorkWindowsConfig = JSON.parse(JSON.stringify(rawCfg));
+    c.spraying.windMaxMs = { ...c.spraying.windMaxMs!, verified: true };
+    c.spraying.windMinMs = { ...c.spraying.windMinMs!, verified: true };
+    const r = computeWorkWindows(series(1, () => ({ windMs: 9 })), c, NOW, { days: 1 });
+    expect(op(r, "spraying").days[0]!.status).toBe("no");
+    expect(op(r, "traffic").days[0]!.status).toBe("unknown");
   });
 });

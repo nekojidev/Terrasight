@@ -5,6 +5,7 @@ import type { SafetyFilter } from "@terrasight/assistant-core";
 import { AiBudgetService } from "../ai/ai-budget.service.js";
 import { TtlLru } from "../ai/ttl-lru.js";
 import { aiEnabled, GeminiJson, loadSafety } from "../ai/gemini-json.js";
+import { aiMeta, type AiMeta } from "../ai/trace.js";
 import { ENV, type Env } from "../config/config.js";
 import { PrismaService } from "../db/prisma.service.js";
 import { Prisma } from "../generated/prisma/client.js";
@@ -19,6 +20,7 @@ import {
   validateBatch,
   type Rejected,
   type WrittenText,
+  RECS_PROMPT_VERSION,
 } from "./ai-text.js";
 
 const LIVE: RecStatus[] = ["open", "accepted", "snoozed", "in_report", "dismissed"];
@@ -31,7 +33,7 @@ const WATCH_CANDIDATES = 10;
 const BREAKER_FAILURES = 3;
 const BREAKER_MS = 5 * 60_000;
 
-export interface AiTextRecord {
+export interface AiTextRecord extends Partial<AiMeta> {
   source: "ai" | "template";
   hash: string;
   at: string;
@@ -231,6 +233,8 @@ export class AiRecommendationsService {
       where: { fieldId, season, status: { in: LIVE } },
     });
     const model = this.env.GEMINI_MODEL;
+    // Stored with every text; the prompt and safety-list versions are part of the facts hash, so a change regenerates.
+    const meta = aiMeta(this.env, RECS_PROMPT_VERSION);
     const shared = {
       season,
       today: asOf,
@@ -244,18 +248,33 @@ export class AiRecommendationsService {
       history: [...inputs.crops]
         .sort((a, b) => a.season - b.season)
         .slice(-5)
-        .map((c) => ({ season: c.season, crop: c.mainCrop, ...(c.secondCrop ? { second: c.secondCrop } : {}) })),
+        .map((c) => ({
+          season: c.season,
+          crop: c.mainCrop,
+          ...(c.secondCrop ? { second: c.secondCrop } : {}),
+        })),
       weather: weatherSummary(inputs.weather, asOf),
     };
     // What the hash of an item depends on: its facts, the crop / stage / season context and the model.
-    const context = { season, crop, stage: built.stage, region: inputs.regionId, model };
+    const context = {
+      season,
+      crop,
+      stage: built.stage,
+      region: inputs.regionId,
+      model,
+      promptVersion: meta.promptVersion,
+      safetyListVersion: meta.safetyListVersion,
+    };
 
     // 1. Evaluator results whose facts changed since their text was written.
     const itemFacts = new Map<string, ReturnType<AiRecommendationsService["recFacts"]>>();
     const hashes = new Map<string, string>();
     for (const r of live) {
       if (r.aiSuggested || !["pest", "disease", "weather", "irrigation"].includes(r.type)) continue;
-      if (!(TEXT_LEVELS as readonly string[]).includes(r.level) || !["open", "snoozed", "accepted"].includes(r.status))
+      if (
+        !(TEXT_LEVELS as readonly string[]).includes(r.level) ||
+        !["open", "snoozed", "accepted"].includes(r.status)
+      )
         continue;
       const f = this.recFacts(r, asOf);
       const { ref: _ref, ...hashed } = f;
@@ -270,20 +289,39 @@ export class AiRecommendationsService {
       const hit = this.cache.get(hashes.get(id)!);
       if (hit) {
         this.stats.cacheHits += 1;
-        await this.saveText(id, { source: "ai", hash: hashes.get(id)!, at: new Date().toISOString(), ...hit });
+        await this.saveText(id, {
+          source: "ai",
+          hash: hashes.get(id)!,
+          at: new Date().toISOString(),
+          ...meta,
+          ...hit,
+        });
       } else pending.set(id, f);
     }
 
     // 2. Watch-items: pests without a verified model that suit this crop and region.
     const taken = new Set(live.filter((r) => !r.aiSuggested).map((r) => r.subject));
     const candidates = this.watchCandidates(crop, inputs.regionId, taken);
-    const watchHash = hashOf({ ids: candidates.map((c) => c.id), crop, region: inputs.regionId, season, month: asOf.slice(0, 7), model });
+    const watchHash = hashOf({
+      ids: candidates.map((c) => c.id),
+      crop,
+      region: inputs.regionId,
+      season,
+      month: asOf.slice(0, 7),
+      model,
+      promptVersion: meta.promptVersion,
+      safetyListVersion: meta.safetyListVersion,
+    });
     const cacheKey = `ai-watch:${fieldId}`;
     const stored = await this.prisma.system.sourceCache.findUnique({ where: { key: cacheKey } });
-    const needWatch = candidates.length > 0 && (stored?.payload as { hash?: string } | null)?.hash !== watchHash;
+    const needWatch =
+      candidates.length > 0 && (stored?.payload as { hash?: string } | null)?.hash !== watchHash;
     // A watch-item whose pest no longer qualifies (a verified model now covers it, or the crop changed) leaves the brief.
     const stale = live.filter(
-      (r) => r.aiSuggested && ["open", "snoozed"].includes(r.status) && !candidates.some((c) => c.id === r.subject),
+      (r) =>
+        r.aiSuggested &&
+        ["open", "snoozed"].includes(r.status) &&
+        !candidates.some((c) => c.id === r.subject),
     );
     if (stale.length)
       await this.prisma.system.recommendation.updateMany({
@@ -348,7 +386,7 @@ export class AiRecommendationsService {
       if (w) {
         this.stats.aiTexts += 1;
         this.cache.set(hash, w);
-        await this.saveText(id, { source: "ai", hash, at, ...w });
+        await this.saveText(id, { source: "ai", hash, at, ...meta, ...w });
       } else {
         this.stats.templateFallbacks += 1;
         // Facts unchanged next time: do not ask again for the same facts, show the template text.
@@ -356,23 +394,36 @@ export class AiRecommendationsService {
           source: "template",
           hash,
           at,
+          ...meta,
           reason: rejected.find((x) => x.id === id)?.reason ?? "missing from the response",
         });
       }
     }
     if (needWatch) {
-      await this.saveWatch(fieldId, built, v.watch, live, at);
+      await this.saveWatch(fieldId, built, v.watch, live, at, meta);
       this.stats.watchKept += v.watch.length;
       this.stats.watchDropped += v.rejected.filter((x) => x.id.startsWith("watch:")).length;
       await this.prisma.system.sourceCache.upsert({
         where: { key: cacheKey },
-        create: { key: cacheKey, source: "ai-watch", params: {}, payload: { hash: watchHash }, fetchedAt: new Date() },
+        create: {
+          key: cacheKey,
+          source: "ai-watch",
+          params: {},
+          payload: { hash: watchHash },
+          fetchedAt: new Date(),
+        },
         update: { payload: { hash: watchHash }, fetchedAt: new Date() },
       });
       // A watch-item the assistant no longer proposes leaves the brief.
       const keep = new Set(v.watch.map((w) => w.pestId));
       await this.prisma.system.recommendation.updateMany({
-        where: { fieldId, season, aiSuggested: true, status: { in: ["open", "snoozed"] }, subject: { notIn: [...keep] } },
+        where: {
+          fieldId,
+          season,
+          aiSuggested: true,
+          status: { in: ["open", "snoozed"] },
+          subject: { notIn: [...keep] },
+        },
         data: { status: "superseded" },
       });
     }
@@ -395,19 +446,28 @@ export class AiRecommendationsService {
     watch: Array<WrittenText & { pestId: string }>,
     live: Array<{ id: string; type: string; subject: string; aiSuggested: boolean }>,
     at: string,
+    meta: AiMeta,
   ): Promise<void> {
     const { inputs } = built;
-    const workspaceId = (await this.prisma.system.field.findUniqueOrThrow({
-      where: { id: fieldId },
-      select: { workspaceId: true },
-    })).workspaceId;
+    const workspaceId = (
+      await this.prisma.system.field.findUniqueOrThrow({
+        where: { id: fieldId },
+        select: { workspaceId: true },
+      })
+    ).workspaceId;
     for (const w of watch) {
       const pest = this.lib.pests.pests.find((p) => p.id === w.pestId)!;
       const type: RecType = DISEASE_KINDS.has(pest.kind) ? "disease" : "pest";
       const text: AiTextRecord = {
         source: "ai",
-        hash: hashOf({ pest: w.pestId, season: inputs.season }),
+        hash: hashOf({
+          pest: w.pestId,
+          season: inputs.season,
+          promptVersion: meta.promptVersion,
+          safetyListVersion: meta.safetyListVersion,
+        }),
         at,
+        ...meta,
         title: w.title,
         action: w.action,
         why: w.why,

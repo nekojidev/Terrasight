@@ -3,13 +3,25 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import { GoogleGenAI, ThinkingLevel, Type } from "@google/genai";
-import { createSafetyFilter, parseActives, splitSentences, type SafetyFilter } from "@terrasight/assistant-core";
+import {
+  createSafetyFilter,
+  parseActives,
+  splitSentences,
+  type SafetyFilter,
+} from "@terrasight/assistant-core";
 import { stableStringify } from "@terrasight/evaluators";
 import type { Library } from "@terrasight/library";
-import { ENGINE_VERSION, pestPressure, planSeasons, type EngineInput, type Rotation } from "@terrasight/scenario-engine";
+import {
+  ENGINE_VERSION,
+  pestPressure,
+  planSeasons,
+  type EngineInput,
+  type Rotation,
+} from "@terrasight/scenario-engine";
 import { CROPS } from "@terrasight/simulator";
 import { AiBudgetExceeded, AiBudgetService } from "../ai/ai-budget.service.js";
 import { TtlLru } from "../ai/ttl-lru.js";
+import { aiMeta, promptVersionOf, type AiMeta } from "../ai/trace.js";
 import { ENV, type Env } from "../config/config.js";
 import { PrismaService } from "../db/prisma.service.js";
 import type { Prisma } from "../generated/prisma/client.js";
@@ -70,6 +82,8 @@ export interface Proposal {
   name: Text;
   sequence: Rotation["sequence"];
   rationale: Text;
+  /** Model, prompt version and safety-list version that wrote it (set when generated). */
+  meta?: AiMeta;
 }
 
 export interface Dropped {
@@ -94,7 +108,10 @@ export function irrigationOnlyCrops(rotations: Library["rotations"]["rotations"]
   for (const r of rotations)
     for (const c of r.sequence.flatMap(cropsOfItem))
       needs.set(c, (needs.get(c) ?? true) && r.irrigation === "required");
-  return [...needs].filter(([, n]) => n).map(([c]) => c).sort();
+  return [...needs]
+    .filter(([, n]) => n)
+    .map(([c]) => c)
+    .sort();
 }
 
 /** "main+second" pairs used for double cropping in the region's library rotations. */
@@ -136,7 +153,11 @@ export function validateProposals(
       drop("missing text");
       continue;
     }
-    if (!Array.isArray(p.sequence) || p.sequence.length !== SEASONS || p.sequence.some((c) => typeof c !== "string")) {
+    if (
+      !Array.isArray(p.sequence) ||
+      p.sequence.length !== SEASONS ||
+      p.sequence.some((c) => typeof c !== "string")
+    ) {
       drop(`sequence is not ${SEASONS} crop ids`);
       continue;
     }
@@ -169,7 +190,9 @@ export function validateProposals(
       continue;
     }
     // The same crop in 3+ consecutive seasons (history counts) is a host repeat; so is a verified pest model's threshold.
-    const prior = ctx.history.slice(-4).map((h) => cropsOfItem(h.second ? { main: h.crop, second: h.second } : h.crop));
+    const prior = ctx.history
+      .slice(-4)
+      .map((h) => cropsOfItem(h.second ? { main: h.crop, second: h.second } : h.crop));
     const seqSets = [...prior, ...sequence.map(cropsOfItem)];
     let repeat = false;
     for (let k = prior.length; k < seqSets.length; k++) {
@@ -273,7 +296,10 @@ export function buildPrompt(ctx: ProposalContext): string {
     soil: ctx.soil,
     climate: ctx.climate,
     history: ctx.history,
-    currentRotation: { basis: ctx.currentRotation.basis, sequence: ctx.currentRotation.sequence.map(cropLabel) },
+    currentRotation: {
+      basis: ctx.currentRotation.basis,
+      sequence: ctx.currentRotation.sequence.map(cropLabel),
+    },
     allowedCrops: ctx.allowed,
     doubleCrops: ctx.doubleCrops,
     hostRepeatLimits: ctx.pestModels.map((m) => ({ hosts: m.hosts, seasonsInARow: m.repeatSeasons })),
@@ -308,6 +334,10 @@ export class AiRotationsService {
     this.safety = createSafetyFilter(actives);
   }
 
+  private meta(): AiMeta {
+    return aiMeta(this.env, ROTATIONS_PROMPT_VERSION());
+  }
+
   /** On when AI_ROTATIONS=1, or by default when a Gemini key is set (AI_ROTATIONS=0 turns it off). */
   enabled(): boolean {
     return this.env.AI_ROTATIONS ? this.env.AI_ROTATIONS === "1" && !!this.client : !!this.client;
@@ -315,7 +345,7 @@ export class AiRotationsService {
 
   private key(ctx: ProposalContext): string {
     return createHash("sha256")
-      .update(stableStringify({ ctx, engine: ENGINE_VERSION, model: this.env.GEMINI_MODEL }))
+      .update(stableStringify({ ctx, engine: ENGINE_VERSION, ...this.meta() }))
       .digest("hex");
   }
 
@@ -348,7 +378,8 @@ export class AiRotationsService {
       if (proposals.length) await this.store(ctx, proposals);
       return { status: "ok", proposals };
     } catch (e) {
-      if (!(e instanceof AiBudgetExceeded)) this.log.warn(`AI rotation proposals unavailable: ${(e as Error).message}`);
+      if (!(e instanceof AiBudgetExceeded))
+        this.log.warn(`AI rotation proposals unavailable: ${(e as Error).message}`);
       return { status: "unavailable", proposals: [] };
     }
   }
@@ -393,7 +424,12 @@ export class AiRotationsService {
             model: this.env.GEMINI_MODEL,
           },
         },
-        create: { contextHash: this.contextHash(ctx), engineVersion: ENGINE_VERSION, model: this.env.GEMINI_MODEL, ...data },
+        create: {
+          contextHash: this.contextHash(ctx),
+          engineVersion: ENGINE_VERSION,
+          model: this.env.GEMINI_MODEL,
+          ...data,
+        },
         update: data,
       });
     } catch (e) {
@@ -431,7 +467,11 @@ export class AiRotationsService {
       }
       const usage = resp.usageMetadata;
       await this.budget
-        ?.record((usage?.promptTokenCount ?? 0) + (usage?.candidatesTokenCount ?? 0) + (usage?.thoughtsTokenCount ?? 0))
+        ?.record(
+          (usage?.promptTokenCount ?? 0) +
+            (usage?.candidatesTokenCount ?? 0) +
+            (usage?.thoughtsTokenCount ?? 0),
+        )
         .catch(() => undefined);
       let raw: unknown;
       try {
@@ -444,9 +484,13 @@ export class AiRotationsService {
       this.log.log(
         `AI rotations ${ctx.regionId}: ${valid.length} kept, ${dropped.length} dropped; tokens in ${usage?.promptTokenCount ?? "?"} out ${usage?.candidatesTokenCount ?? "?"} thoughts ${usage?.thoughtsTokenCount ?? 0}`,
       );
-      return valid;
+      const meta = this.meta();
+      return valid.map((p) => ({ ...p, meta }));
     } finally {
       clearTimeout(timer);
     }
   }
 }
+
+/** Version of the rotation prompt and response schema (computed lazily: the schema is a function). */
+const ROTATIONS_PROMPT_VERSION = (): string => promptVersionOf(SYSTEM, schema());

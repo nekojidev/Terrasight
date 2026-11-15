@@ -5,15 +5,14 @@ import type { InputMeta } from "./scenario-inputs.service.js";
 
 /** Nothing is simulated: the agronomist sees what is missing (prices awaiting verification, or the last crops). */
 export function pendingView(
-lib: Library,
+  lib: Library,
   reason: "prices" | "crop-history" | "crops",
   input: EngineInput,
   meta: InputMeta,
   missingPrices: string[],
   unmodelled: string[] = [],
 ) {
-  const regionId =
-    lib.rotations.rotations.find((x) => x.id === input.rotations[0]?.id)?.region ?? null;
+  const regionId = lib.rotations.rotations.find((x) => x.id === input.rotations[0]?.id)?.region ?? null;
   const regionPrices = regionId ? (lib.prices.regions[regionId]?.crops ?? {}) : {};
   const unverified = Object.entries(regionPrices)
     .filter(([, e]) => !e.verified)

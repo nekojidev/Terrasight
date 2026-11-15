@@ -97,3 +97,204 @@ Prosaro
 Miravis
 Trivapro
 Folicur
+
+# --- more active ingredients (added 2026-11-15; EN + UA; inflections are matched automatically) ---
+MCPA
+МЦПА
+bentazone
+бентазон
+dimethenamid
+flumioxazin
+sulfentrazone
+сульфентразон
+fomesafen
+фомезафен
+clethodim
+клетодим
+quizalofop
+хізалофоп
+haloxyfop
+галоксифоп
+metribuzin
+метрибузин
+rimsulfuron
+римсульфурон
+thifensulfuron
+тифенсульфурон
+florasulam
+флорасулам
+bromoxynil
+бромоксиніл
+tembotrione
+темботріон
+topramezone
+топрамезон
+pyroxasulfone
+isoxaflutole
+ізоксафлютол
+aminopyralid
+picloram
+terbuthylazine
+тербутилазин
+trifluralin
+трифлуралін
+diquat
+дикват
+2,4-DB
+glyphosate-isopropylammonium
+epoxiconazole
+епоксиконазол
+cyproconazole
+ципроконазол
+metconazole
+метконазол
+fluopyram
+флуопірам
+bixafen
+біксафен
+boscalid
+боскалід
+fludioxonil
+флудіоксоніл
+metalaxyl
+металаксил
+mefenoxam
+picoxystrobin
+пікоксистробін
+kresoxim-methyl
+крезоксим-метил
+thiophanate-methyl
+тіофанат-метил
+carbendazim
+карбендазим
+cymoxanil
+цимоксаніл
+dimethomorph
+диметоморф
+fluazinam
+флуазинам
+iprodione
+іпродіон
+copper hydroxide
+copper oxychloride
+mefentrifluconazole
+acetamiprid
+ацетаміприд
+thiacloprid
+тіаклоприд
+spinosad
+спіносад
+spinetoram
+emamectin
+емамектин
+abamectin
+абамектин
+indoxacarb
+індоксакарб
+methomyl
+malathion
+малатіон
+permethrin
+перметрин
+esfenvalerate
+есфенвалерат
+zeta-cypermethrin
+alpha-cypermethrin
+fipronil
+фіпроніл
+cyantraniliprole
+flubendiamide
+pirimicarb
+pymetrozine
+spirotetramat
+спіротетрамат
+# --- more brand names, US (public product registries; ordinary English words left out) ---
+Enlist
+Engenia
+XtendiMax
+Halex GT
+Resicore
+Zidua
+Treflan
+Select Max
+Assure II
+Fusilade
+Gramoxone
+Sencor
+Quadris
+Stratego
+Aproach
+Delaro
+Priaxor
+Veltyma
+Fortix
+Xemium
+Revus
+Ridomil
+Cabrio
+Amistar
+Topguard
+Warrior II
+Karate Zeon
+Capture LFR
+Sivanto
+Transform WG
+Coragen
+Prevathon
+Endigo
+Lannate
+Admire Pro
+Actara
+Movento
+Asana XL
+Sevin
+Durango
+Zemax
+# --- more brand names, UA (Ukrainian state register of pesticides) ---
+Ураган Форте
+Раундап Макс
+Гліфор
+Бровар
+Карібу
+Хармоні
+Гранстар
+Базагран
+Пульсар
+Примекстра Голд
+Дуал Голд
+Гезагард
+Ачіба
+Амістар Екстра
+Фалькон
+Колосаль
+Фолікур
+Рекс Дуо
+Аканто Плюс
+Альто Супер
+Квадріс
+Ридоміл Голд
+Піктор
+Прозаро
+Ретенго
+Каліпсо
+Децис
+Фастак
+Борей Нео
+Моспілан
+Енжіо
+Карате Зеон
+Конфідор
+Данадим
+Круїзер
+Сценік
+Дівіденд
+Вітавакс
+Тілт
+Лорсбан
+Банвел
+Лонтрел
+Старане
+Евро-Лайтнінг
+амінопіралід
+піклорам
+піриміфос-метил

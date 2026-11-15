@@ -68,9 +68,12 @@ describe("WorkWindowsService", () => {
     expect(f).toMatchObject({ available: true, sowingCrop: "corn", now: "2026-04-20T06:00" });
     expect(f.operations.map((o) => o.operation)).toEqual(["spraying", "sowing", "traffic", "fertiliser"]);
     const spraying = f.operations[0]!;
-    expect(spraying.days.map((d) => d.status)).toEqual(["good", "no", "good"]);
-    expect(spraying.days[1]!.limiting).toEqual({ factor: "wind", value: 8 });
-    expect(f.operations[1]!.days[0]!.status).toBe("good");
+    // Every threshold is unverified today: no verdicts, only the measured conditions.
+    expect(spraying.days.map((d) => d.status)).toEqual(["unknown", "unknown", "unknown"]);
+    expect(spraying.days[1]!.limiting).toBeNull();
+    expect(spraying.days[1]!.conditions).toContainEqual({ factor: "wind", value: 8, verified: false });
+    expect(f.operations[1]!.days[0]!.status).toBe("unknown");
+    expect(f.operations[1]!.days[0]!.conditions).toContainEqual({ factor: "soil_temp", value: 14, verified: false });
   });
 
   it("returns one field and 404s for an unknown one", async () => {

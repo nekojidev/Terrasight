@@ -69,6 +69,29 @@ function currentCrop(inp: EvalInputs): { crop: string; estimated: boolean } | nu
   return null;
 }
 
+/** Winter cereals: dormant and frost-hardened in midwinter, so frost there is expected rather than a damage risk. */
+const WINTER_CEREALS = new Set(["winter_wheat", "winter_barley", "winter_rye"]);
+/** Dormancy window of winter cereals in the northern hemisphere: 15 Nov to the end of February (shifted 6 months south). */
+const DORMANCY_START_MD = "11-15";
+
+/** Start date (ISO) of the dormancy window that contains `asOf`, or null when `asOf` is outside it. */
+function dormancyStart(asOf: string, southern: boolean): string | null {
+  const shift = (iso: string) => (southern ? addMonths(iso, 6) : iso);
+  const y = Number(asOf.slice(0, 4));
+  for (const year of [y - 1, y]) {
+    const start = shift(`${year}-${DORMANCY_START_MD}`);
+    const end = addDaysIso(start, 105); // to the end of February (15 Nov + 105 d = 28 Feb)
+    if (asOf >= start && asOf <= end) return start;
+  }
+  return null;
+}
+const addDaysIso = (iso: string, n: number) => new Date(day(iso) + n * 86_400_000).toISOString().slice(0, 10);
+const addMonths = (iso: string, n: number) => {
+  const d = new Date(day(iso));
+  d.setUTCMonth(d.getUTCMonth() + n);
+  return d.toISOString().slice(0, 10);
+};
+
 /**
  * `frost_alert`: forecast daily minimum air temperature ≤ 0 °C within the next 7 days on a field with a growing crop.
  * 0 °C is the freezing point of water (the definition of air frost); no crop-specific damage threshold is claimed.
@@ -86,6 +109,21 @@ export function frostAlert(inp: EvalInputs, asOf: string): AlertResult | null {
   if (!upcoming.length) return null;
   const frosts = upcoming.filter((w) => w.tminC !== null && w.tminC <= 0);
   const first = frosts[0];
+  // Winter cereals in dormancy: frost is normal. No daily item; it is reported once, as information (level "low", which
+  // the brief counts as fine), ahead of the first frost of the autumn. After a frost has been observed, nothing more.
+  // No sensitive stage is known for a dormant crop, so none is claimed.
+  const dormant =
+    WINTER_CEREALS.has(crop.crop) && dormancyStart(asOf, inp.southernHemisphere === true) !== null;
+  let informational = false;
+  if (dormant && first) {
+    const start = dormancyStart(asOf, inp.southernHemisphere === true)!;
+    const lookback = addDaysIso(start, -45);
+    const seenFrost = inp.weather.some(
+      (w) => w.origin !== "forecast" && w.date >= lookback && w.date < asOf && w.tminC !== null && w.tminC <= 0,
+    );
+    if (seenFrost) return { ...noFrost(inp, crop.crop), unknowns: [] };
+    informational = true;
+  }
   const estimated: string[] = [];
   if (crop.estimated) estimated.push("crop not confirmed");
   if (first && (first.forecastDay ?? 0) > RELIABLE_FORECAST_DAYS)
@@ -93,12 +131,16 @@ export function frostAlert(inp: EvalInputs, asOf: string): AlertResult | null {
   const unknowns = [
     "Frost forecast only: crop-specific damage thresholds are not modelled. Check sensitive crops and growth stages in the field.",
   ];
+  if (informational)
+    unknowns.push(
+      "Information only: winter cereals are dormant now, so frost is expected and not a damage risk by itself. It is shown once, ahead of the first frost.",
+    );
   if (!sowingDate.value && !emergenceDate.value) unknowns.push("sowing and emergence dates are not recorded");
   const minT = frosts.length ? Math.min(...frosts.map((f) => f.tminC!)) : 0;
   return {
     subject: "frost_alert",
     type: "weather",
-    level: first ? "moderate" : "none",
+    level: first ? (informational ? "low" : "moderate") : "none",
     deadline: first?.date ?? null,
     irreversible: false,
     keyNumbers: first
@@ -127,6 +169,23 @@ export function frostAlert(inp: EvalInputs, asOf: string): AlertResult | null {
     citations: [FROST_CITATION],
     unknowns: [...unknowns, ...estimated.map((e) => `Estimated: ${e}`)],
     confidence: confidence(inp.tier, estimated.length, false),
+  };
+}
+
+/** "No frost item" result with the usual shape (used when a dormant crop has already had its frost). */
+function noFrost(inp: EvalInputs, crop: string): AlertResult {
+  return {
+    subject: "frost_alert",
+    type: "weather",
+    level: "none",
+    deadline: null,
+    irreversible: false,
+    keyNumbers: [],
+    drivers: [{ driver: "forecast_frost", value: "none", fired: false }, { driver: "crop", value: crop, fired: false }],
+    evidence: [],
+    citations: [FROST_CITATION],
+    unknowns: [],
+    confidence: confidence(inp.tier, 0, false),
   };
 }
 

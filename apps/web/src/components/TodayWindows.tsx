@@ -2,14 +2,16 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { RailCard } from "@terrasight/ui";
-import { AlertTriangle, Check, X } from "lucide-react";
+import { AlertTriangle, Check, HelpCircle, X } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { QueryState } from "@/components/QueryState";
 import { api } from "@/lib/api";
 import {
   OPERATIONS,
+  formatCondition,
   formatLimit,
+  type Condition,
   workWindowsKey,
   type Limiting,
   type WindowStatus,
@@ -20,11 +22,13 @@ export const STATUS_STYLE: Record<WindowStatus, string> = {
   good: "bg-ok-soft text-ok",
   marginal: "bg-week-soft text-week",
   no: "bg-urgent-soft text-urgent",
+  unknown: "bg-muted text-ink-2",
 };
 
 /** Status by icon and word, never by colour alone. */
 export function StatusMark({ status, label }: { status: WindowStatus; label: string }) {
-  const Icon = status === "good" ? Check : status === "marginal" ? AlertTriangle : X;
+  const Icon =
+    status === "good" ? Check : status === "marginal" ? AlertTriangle : status === "unknown" ? HelpCircle : X;
   return (
     <span
       className={`inline-flex items-center gap-1 rounded-chip px-2 py-0.5 text-small font-semibold ${STATUS_STYLE[status]}`}
@@ -42,6 +46,15 @@ export function useLimitText(units: "metric" | "imperial") {
     if (!l) return t("wwNoLimit");
     const f = formatLimit(l, units);
     return t(f.key, { v: f.v, h: f.h });
+  };
+}
+
+/** Text for one measured condition, e.g. "Wind (max) 7 m/s". */
+export function useConditionText(units: "metric" | "imperial") {
+  const t = useTranslations("App");
+  return (c: Condition) => {
+    const f = formatCondition(c, units, "wwCond");
+    return (t as unknown as (k: string, v?: Record<string, string>) => string)(f.key, { v: f.v });
   };
 }
 
@@ -63,6 +76,7 @@ export function TodayWindows({
 }) {
   const t = useTranslations("App");
   const limitText = useLimitText(units);
+  const condText = useConditionText(units);
   const q = useQuery({
     queryKey: workWindowsKey(workspaceId, fieldId),
     queryFn: () =>
@@ -82,10 +96,12 @@ export function TodayWindows({
     });
     if (!per.length) return null;
     const good = per.filter((d) => d.status === "good").length;
+    const known = per.filter((d) => d.status !== "unknown");
     const status: WindowStatus =
-      good === per.length ? "good" : good > 0 || per.some((d) => d.status === "marginal") ? "marginal" : "no";
+      known.length === 0 ? "unknown" : good === known.length ? "good" : good > 0 || per.some((d) => d.status === "marginal") ? "marginal" : "no";
     const first = per.find((d) => d.status !== "good")?.limiting ?? null;
-    return { op, status, good, total: per.length, limiting: first };
+    const conditions = per[0]?.conditions ?? [];
+    return { op, status, good, total: per.length, limiting: first, conditions };
   }).filter((r): r is NonNullable<typeof r> => r !== null);
 
   const body = (
@@ -104,7 +120,12 @@ export function TodayWindows({
               <span className="flex flex-wrap items-center gap-2">
                 <StatusMark status={r.status} label={t(`wwSt_${r.status}`)} />
                 <span className="text-small text-ink-2">
-                  {fieldId
+                  {r.status === "unknown"
+                    ? [
+                        t("wwUnknownThreshold"),
+                        ...(fieldId ? r.conditions.map((c) => condText(c)) : []),
+                      ].join(" · ")
+                    : fieldId
                     ? r.status === "good"
                       ? ""
                       : limitText(r.limiting)

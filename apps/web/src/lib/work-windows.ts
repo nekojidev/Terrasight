@@ -1,5 +1,5 @@
 export type Operation = "spraying" | "sowing" | "traffic" | "fertiliser";
-export type WindowStatus = "good" | "marginal" | "no";
+export type WindowStatus = "good" | "marginal" | "no" | "unknown";
 export type Factor =
   | "wind"
   | "wind_low"
@@ -11,11 +11,15 @@ export type Factor =
   | "soil_temp"
   | "rain_past"
   | "rain_next"
+  | "rain_day"
   | "daylight";
 
 export interface Limiting {
   factor: Factor;
   value: number | null;
+}
+export interface Condition extends Limiting {
+  verified: boolean;
 }
 export interface WindowSpan {
   from: string;
@@ -28,6 +32,7 @@ export interface DayWindows {
   status: WindowStatus;
   limiting: Limiting | null;
   windows: WindowSpan[];
+  conditions?: Condition[];
 }
 export interface OperationWindows {
   operation: Operation;
@@ -62,6 +67,14 @@ export function formatLimit(
   l: Limiting,
   units: "metric" | "imperial",
 ): { key: `wwLim_${Factor}`; v: string; h: string } {
+  return formatCondition(l, units, "wwLim");
+}
+
+export function formatCondition<P extends string>(
+  l: Limiting,
+  units: "metric" | "imperial",
+  prefix: P,
+): { key: `${P}_${Factor}`; v: string; h: string } {
   const imp = units === "imperial";
   const n = (x: number, d = 1) => String(Math.round(x * 10 ** d) / 10 ** d);
   const val = l.value;
@@ -83,11 +96,12 @@ export function formatLimit(
       case "rain_now":
       case "rain_past":
       case "rain_next":
+      case "rain_day":
         v = imp ? `${n(val / 25.4, 2)} in` : `${n(val)} mm`;
         break;
       default:
         v = n(val);
     }
   }
-  return { key: `wwLim_${l.factor}`, v, h: l.factor === "rain_soon" && val !== null ? n(val, 0) : "" };
+  return { key: `${prefix}_${l.factor}` as `${P}_${Factor}`, v, h: l.factor === "rain_soon" && val !== null ? n(val, 0) : "" };
 }

@@ -8,7 +8,15 @@ import { ENV, type Env } from "../config/config.js";
 import { PrismaService } from "../db/prisma.service.js";
 import { eventRow } from "../messaging/outbox.js";
 import { OutboxService } from "../messaging/outbox.service.js";
-import { hashOf, SUMMARY_SYSTEM, summarySchema, validateSummary, type Text2 } from "./ai-text.js";
+import { aiMeta, type AiMeta } from "../ai/trace.js";
+import {
+  hashOf,
+  SUMMARY_PROMPT_VERSION,
+  SUMMARY_SYSTEM,
+  summarySchema,
+  validateSummary,
+  type Text2,
+} from "./ai-text.js";
 
 const CACHE_TTL_MS = 24 * 3600_000;
 const RETRY_AFTER_FAILURE_MS = 10 * 60_000;
@@ -16,6 +24,8 @@ const CACHE_MAX = 200;
 
 interface Entry {
   text: Text2 | null;
+  /** Model, prompt version and safety-list version that produced (or failed to produce) the text. */
+  meta: AiMeta;
 }
 
 /**
@@ -53,7 +63,9 @@ export class AiDaySummaryService {
    */
   lookup(workspaceId: string, facts: unknown, names: Map<string, string>): Text2 | null {
     if (!this.enabled()) return null;
-    const key = `${workspaceId}:${hashOf({ facts, model: this.env.GEMINI_MODEL })}`;
+    const meta = aiMeta(this.env, SUMMARY_PROMPT_VERSION);
+    // The prompt and safety-list versions are part of the key: editing either regenerates the sentence.
+    const key = `${workspaceId}:${hashOf({ facts, ...meta })}`;
     const hit = this.cache.get(key);
     if (hit?.text) return hit.text;
     if (hit && !hit.text && this.cache.age(key) < RETRY_AFTER_FAILURE_MS) return null;
@@ -64,8 +76,19 @@ export class AiDaySummaryService {
     return null;
   }
 
+  /** Metadata of the cached sentence for these facts (traceability), or null. */
+  metaFor(workspaceId: string, facts: unknown): AiMeta | null {
+    const meta = aiMeta(this.env, SUMMARY_PROMPT_VERSION);
+    return this.cache.get(`${workspaceId}:${hashOf({ facts, ...meta })}`)?.meta ?? null;
+  }
+
   /** Exposed for tests: runs the generation and resolves when it is cached. */
-  async generate(workspaceId: string, key: string, facts: unknown, names: Map<string, string>): Promise<void> {
+  async generate(
+    workspaceId: string,
+    key: string,
+    facts: unknown,
+    names: Map<string, string>,
+  ): Promise<void> {
     let text: Text2 | null = null;
     // A sentence stored for these facts (it survives restarts and other instances) means no Gemini call.
     const stored = await this.prisma.system.sourceCache
@@ -73,7 +96,7 @@ export class AiDaySummaryService {
       .catch(() => null);
     const storedText = stored?.payload as unknown as Text2 | null | undefined;
     if (storedText && stored?.expiresAt && stored.expiresAt > new Date()) {
-      this.cache.set(key, { text: storedText });
+      this.cache.set(key, { text: storedText, meta: aiMeta(this.env, SUMMARY_PROMPT_VERSION) });
       await this.outbox
         .add(this.prisma.system, [eventRow(EventKeys.brief(workspaceId), "brief.changed", workspaceId, {})])
         .catch((e: Error) => this.log.warn(`brief refresh event failed: ${e.message}`));
@@ -96,7 +119,7 @@ export class AiDaySummaryService {
       this.stats.failed += 1;
       this.log.warn(`AI day summary unavailable: ${(e as Error).message}`);
     }
-    this.cache.set(key, { text });
+    this.cache.set(key, { text, meta: aiMeta(this.env, SUMMARY_PROMPT_VERSION) });
     if (text) {
       const data = {
         source: "ai-day",

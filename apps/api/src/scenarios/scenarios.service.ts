@@ -242,7 +242,14 @@ export class ScenariosService implements OnModuleDestroy {
     const proposed = new Map(ai.proposals.map((p) => [p.id, p]));
     // Names and reasons of the assistant's options; all their numbers are already in the engine result.
     const decorate = <T extends { id: string }>(s: T) =>
-      proposed.has(s.id) ? { ...s, source: "ai" as const, rationale: proposed.get(s.id)!.rationale } : s;
+      proposed.has(s.id)
+        ? {
+            ...s,
+            source: "ai" as const,
+            rationale: proposed.get(s.id)!.rationale,
+            aiMeta: proposed.get(s.id)!.meta ?? null,
+          }
+        : s;
     return {
       id,
       noLibrary: false as const,

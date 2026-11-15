@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "about": "Work-window thresholds (spraying, sowing, field traffic, fertiliser timing). Every value carries a source and 'verified'. verified:false = the owner has not yet checked it against the source; the UI labels the windows 'thresholds awaiting verification'. quantified:false = the source gives only qualitative guidance (or none for the number) and the value is a placeholder to replace. Conditions only: no product advice, no doses; the product label's rain-fast interval always overrides. SI units (m/s, C, mm, h).",
+  "about": "Work-window thresholds (spraying, sowing, field traffic, fertiliser timing). Every value carries a source and 'verified'. verified:false = the owner has not yet checked it against the source; the factor does NOT decide good/no: the UI shows the measured value and 'unknown - threshold awaiting verification'. To verify a value: set verified:true and add verifiedBy and verifiedOn (YYYY-MM-DD). quantified:false = the source gives only qualitative guidance (or none for the number) and the value is a placeholder that never contributes, even when verified:true, until replaced and quantified. Conditions only: no product advice, no doses; the product label's rain-fast interval always overrides. SI units (m/s, C, mm, h).",
   "minWindowHours": {
     "spraying": 3,
     "sowing": 4,

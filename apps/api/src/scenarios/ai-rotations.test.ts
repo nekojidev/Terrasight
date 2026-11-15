@@ -58,16 +58,25 @@ describe("validateProposals", () => {
     expect(r.valid[0]!.sequence).toEqual(okSeq);
   });
   it("converts an allowed double crop to {main, second}", () => {
-    const r = validateProposals([good(["winter_wheat+soybean", "corn", "sorghum", "sunflower", "fallow"])], ctx());
+    const r = validateProposals(
+      [good(["winter_wheat+soybean", "corn", "sorghum", "sunflower", "fallow"])],
+      ctx(),
+    );
     expect(r.valid[0]!.sequence[0]).toEqual({ main: "winter_wheat", second: "soybean" });
   });
   it("drops double cropping the region does not use", () => {
-    const r = validateProposals([good(["winter_wheat+soybean", "corn", "sorghum", "sunflower", "fallow"])], ctx({ doubleCrops: [] }));
+    const r = validateProposals(
+      [good(["winter_wheat+soybean", "corn", "sorghum", "sunflower", "fallow"])],
+      ctx({ doubleCrops: [] }),
+    );
     expect(r.valid).toEqual([]);
   });
   it("drops unknown or not-allowed crops", () => {
     const r = validateProposals(
-      [good(["quinoa", "corn", "sorghum", "sunflower", "fallow"]), good(["cotton", "corn", "sorghum", "sunflower", "fallow"])],
+      [
+        good(["quinoa", "corn", "sorghum", "sunflower", "fallow"]),
+        good(["cotton", "corn", "sorghum", "sunflower", "fallow"]),
+      ],
       ctx(),
     );
     expect(r.valid).toEqual([]);
@@ -80,15 +89,21 @@ describe("validateProposals", () => {
     expect(validateProposals([good(okSeq.slice(0, 4)), good([...okSeq, "corn"])], ctx()).valid).toEqual([]);
   });
   it("drops the same crop 3 seasons in a row, also across the history boundary", () => {
-    expect(validateProposals([good(["corn", "corn", "corn", "sorghum", "soybean"])], ctx()).valid).toEqual([]);
+    expect(validateProposals([good(["corn", "corn", "corn", "sorghum", "soybean"])], ctx()).valid).toEqual(
+      [],
+    );
     const h = ctx({
       history: [
         { season: 2024, crop: "corn", source: "cdl" },
         { season: 2025, crop: "corn", source: "cdl" },
       ],
     });
-    expect(validateProposals([good(["corn", "sorghum", "soybean", "sunflower", "winter_wheat"])], h).valid).toEqual([]);
-    expect(validateProposals([good(["sorghum", "corn", "soybean", "sunflower", "winter_wheat"])], h).valid).toHaveLength(1);
+    expect(
+      validateProposals([good(["corn", "sorghum", "soybean", "sunflower", "winter_wheat"])], h).valid,
+    ).toEqual([]);
+    expect(
+      validateProposals([good(["sorghum", "corn", "soybean", "sunflower", "winter_wheat"])], h).valid,
+    ).toHaveLength(1);
   });
   it("drops a host repeat that exceeds a verified pest model", () => {
     const pest = ctx({ pestModels: [{ pest: "rootworm", hosts: ["corn"], repeatSeasons: 1 }] });
@@ -97,8 +112,12 @@ describe("validateProposals", () => {
   });
   it("drops irrigation-only crops on dryland but keeps them when irrigated", () => {
     const seq = ["soybean", "corn", "sorghum", "sunflower", "winter_wheat"];
-    expect(validateProposals([good(seq)], ctx({ irrigated: false, irrigationOnly: ["corn"] })).dropped[0]!.reason).toMatch(/irrigation/);
-    expect(validateProposals([good(seq)], ctx({ irrigated: true, irrigationOnly: ["corn"] })).valid).toHaveLength(1);
+    expect(
+      validateProposals([good(seq)], ctx({ irrigated: false, irrigationOnly: ["corn"] })).dropped[0]!.reason,
+    ).toMatch(/irrigation/);
+    expect(
+      validateProposals([good(seq)], ctx({ irrigated: true, irrigationOnly: ["corn"] })).valid,
+    ).toHaveLength(1);
   });
   it("drops duplicates of library or current plans, and of earlier proposals", () => {
     const lib = ["corn", "corn", "winter_wheat", "sorghum", "corn"];
@@ -107,7 +126,9 @@ describe("validateProposals", () => {
     expect(r.dropped).toHaveLength(2);
   });
   it("drops too much fallow", () => {
-    expect(validateProposals([good(["fallow", "fallow", "fallow", "corn", "sorghum"])], ctx()).valid).toEqual([]);
+    expect(validateProposals([good(["fallow", "fallow", "fallow", "corn", "sorghum"])], ctx()).valid).toEqual(
+      [],
+    );
   });
   it("drops rationales with numbers (never edits them)", () => {
     const en = good(okSeq, { rationale: { en: "Adds 20 bushels.", uk: "Додає врожай." } });
@@ -150,7 +171,15 @@ describe("buildPrompt", () => {
 
 describe("AiRotationsService", () => {
   const svc = (answer: () => Promise<{ text: string }>, extra: Record<string, string> = {}) => {
-    const s = new AiRotationsService(loadEnv({ JWT_SECRET: "x".repeat(32), DATABASE_URL: "postgresql://u:p@localhost:5432/db", RABBITMQ_URL: "amqp://localhost", ...extra, GEMINI_API_KEY: "k" } as never));
+    const s = new AiRotationsService(
+      loadEnv({
+        JWT_SECRET: "x".repeat(32),
+        DATABASE_URL: "postgresql://u:p@localhost:5432/db",
+        RABBITMQ_URL: "amqp://localhost",
+        ...extra,
+        GEMINI_API_KEY: "k",
+      } as never),
+    );
     const generateContent = vi.fn(answer);
     s.client = { models: { generateContent } } as never;
     return { s, generateContent };
@@ -158,7 +187,9 @@ describe("AiRotationsService", () => {
   const reply = (items: unknown[]) => async () => ({ text: JSON.stringify(items) });
 
   it("validates, caches per inputs, and calls Gemini once", async () => {
-    const { s, generateContent } = svc(reply([good(okSeq), good(["quinoa", "corn", "sorghum", "sunflower", "fallow"])]));
+    const { s, generateContent } = svc(
+      reply([good(okSeq), good(["quinoa", "corn", "sorghum", "sunflower", "fallow"])]),
+    );
     const a = await s.propose(ctx());
     const b = await s.propose(ctx());
     expect(a.status).toBe("ok");
@@ -191,10 +222,17 @@ describe("AiRotationsService", () => {
       return { text: JSON.stringify([good(okSeq)]) };
     });
     expect((await s.propose(ctx())).proposals).toHaveLength(1);
-    expect((generateContent.mock.calls[1] as unknown as [{ config: { thinkingConfig?: unknown } }])[0].config.thinkingConfig).toBeUndefined();
+    expect(
+      (generateContent.mock.calls[1] as unknown as [{ config: { thinkingConfig?: unknown } }])[0].config
+        .thinkingConfig,
+    ).toBeUndefined();
   });
   it("is skipped without a key or when AI_ROTATIONS=0", async () => {
-    const env = { JWT_SECRET: "x".repeat(32), DATABASE_URL: "postgresql://u:p@localhost:5432/db", RABBITMQ_URL: "amqp://localhost" } as never;
+    const env = {
+      JWT_SECRET: "x".repeat(32),
+      DATABASE_URL: "postgresql://u:p@localhost:5432/db",
+      RABBITMQ_URL: "amqp://localhost",
+    } as never;
     expect((await new AiRotationsService(loadEnv(env)).propose(ctx())).status).toBe("skipped");
     const { s } = svc(reply([good(okSeq)]), { AI_ROTATIONS: "0" });
     expect((await s.propose(ctx())).status).toBe("skipped");
@@ -207,7 +245,16 @@ describe("AI candidates in the engine run", () => {
       const date = new Date(Date.UTC(year - 1, 8, 1) + i * 86_400_000).toISOString().slice(0, 10);
       const m = Number(date.slice(5, 7));
       const tmax = 8 + 18 * Math.sin(((m - 3) / 12) * Math.PI * 2 * 0.5 + 0.2) ** 2;
-      return { date, tmin: tmax - 10, tmax, precip: i % 4 === 0 ? 6 : 0, rh: 60, rs: 15, u2: 2, et0: 3 } as WeatherDay;
+      return {
+        date,
+        tmin: tmax - 10,
+        tmax,
+        precip: i % 4 === 0 ? 6 : 0,
+        rh: 60,
+        rs: 15,
+        u2: 2,
+        et0: 3,
+      } as WeatherDay;
     });
   const input = (rotations: EngineInput["rotations"]): EngineInput => ({
     fieldKey: "f",
@@ -235,7 +282,11 @@ describe("AI candidates in the engine run", () => {
       [good(["sunflower", "winter_wheat", "sorghum", "soybean", "winter_wheat"])],
       ctx({ existingPlans: [] }),
     ).valid;
-    const rotations = [lib("l1", ["winter_wheat", "sorghum", "soybean"]), lib("l2", ["soybean", "winter_wheat"]), ...toRotations(proposals, false)];
+    const rotations = [
+      lib("l1", ["winter_wheat", "sorghum", "soybean"]),
+      lib("l2", ["soybean", "winter_wheat"]),
+      ...toRotations(proposals, false),
+    ];
     const res = runScenarios(input(rotations));
     const ai = res.alternatives.find((a) => a.id === proposals[0]!.id);
     expect(ai).toBeDefined();
@@ -256,13 +307,19 @@ describe("AI candidates in the engine run", () => {
       ctx({ existingPlans: [] }),
     ).valid;
     expect(proposals).toHaveLength(3);
-    const rotations = [lib("l1", ["winter_wheat", "sorghum", "soybean"]), lib("l2", ["soybean", "winter_wheat"]), ...toRotations(proposals, false)];
+    const rotations = [
+      lib("l1", ["winter_wheat", "sorghum", "soybean"]),
+      lib("l2", ["soybean", "winter_wheat"]),
+      ...toRotations(proposals, false),
+    ];
     const res = runScenarios(input(rotations));
     expect(res.alternatives.filter((a) => a.source === "ai").length).toBeLessThanOrEqual(2);
     expect(res.alternatives.some((a) => a.source === "ai")).toBe(true);
   });
   it("without proposals the result is library-only", () => {
-    const res = runScenarios(input([lib("l1", ["winter_wheat", "sorghum", "soybean"]), lib("l2", ["soybean", "winter_wheat"])]));
+    const res = runScenarios(
+      input([lib("l1", ["winter_wheat", "sorghum", "soybean"]), lib("l2", ["soybean", "winter_wheat"])]),
+    );
     expect(res.alternatives.every((a) => a.source === "library")).toBe(true);
   });
 });

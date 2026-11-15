@@ -31,6 +31,8 @@ export {
   operationWindows,
   unverifiedThresholds,
   wetBulbC,
+  usable,
+  type Condition,
   type DayWindows,
   type Factor,
   type HourlyPoint,

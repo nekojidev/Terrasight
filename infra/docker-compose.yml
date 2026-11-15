@@ -71,6 +71,7 @@ services:
       NODE_ENV: ${NODE_ENV:-development}
       ROLE: ${ROLE:-all}
       AUTH_RATE_BURST: ${AUTH_RATE_BURST:-} # raised by the E2E workflow; empty = the default burst of 10
+      AUTH_TEST_HOOKS: ${AUTH_TEST_HOOKS:-0} # E2E only: GET /api/test/outbox (refused in production)
     ports: ["4000:4000"]
     depends_on:
       postgres: { condition: service_healthy }

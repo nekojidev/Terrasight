@@ -1,8 +1,19 @@
 import { Inject, Injectable } from "@nestjs/common";
 import type { Library } from "@terrasight/library";
-import { planSeasons, splitRotations, withEt0, type EngineInput, type Rotation } from "@terrasight/scenario-engine";
+import {
+  planSeasons,
+  splitRotations,
+  withEt0,
+  type EngineInput,
+  type Rotation,
+} from "@terrasight/scenario-engine";
 import type { HydGroup, WeatherDay } from "@terrasight/simulator";
-import { soilFromTexture, type DailyWeather as PowerSeries, type SoilGridsSummary, type SoilSummary } from "@terrasight/sources";
+import {
+  soilFromTexture,
+  type DailyWeather as PowerSeries,
+  type SoilGridsSummary,
+  type SoilSummary,
+} from "@terrasight/sources";
 import { CROPS } from "@terrasight/simulator";
 import { ENV, type Env } from "../config/config.js";
 import { PrismaService } from "../db/prisma.service.js";
@@ -12,7 +23,12 @@ import { ProblemException } from "../http/problem.js";
 import { LIBRARY } from "../library/library.module.js";
 import { SeasonsService } from "../seasons/seasons.service.js";
 import { SourcesService } from "../sources/sources.service.js";
-import { doubleCropPairs, irrigationOnlyCrops, type HistoryEntry, type ProposalContext } from "./ai-rotations.service.js";
+import {
+  doubleCropPairs,
+  irrigationOnlyCrops,
+  type HistoryEntry,
+  type ProposalContext,
+} from "./ai-rotations.service.js";
 
 /** How the inputs were obtained: shown in the UI so estimates are never presented as measurements. */
 export interface InputMeta {
@@ -173,6 +189,9 @@ export class ScenarioInputsService {
       if (e.price.value == null || pick.variableCost == null || pick.yieldRef == null) continue;
       prices[crop] = { price: e.price.value, variableCost: pick.variableCost, yieldRef: pick.yieldRef };
     }
+    // Pumping cost only once verified (CLAUDE.md: thresholds and inputs are used after verification).
+    const ic = this.lib.prices.irrigationCostPerMm;
+    const irrCost = ic?.verified && ic.value != null && ic.value > 0 ? ic.value : undefined;
     const pestModels = this.lib.enabledModels.flatMap((m) => {
       const tree = m.tree as { kind?: string; host?: string[]; seasons?: { ref?: string } };
       if (tree.kind !== "host_repeat" || !tree.host) return [];
@@ -192,6 +211,7 @@ export class ScenarioInputsService {
       ),
       sowing: this.seasons.sowingCalendar(field.regionId),
       prices,
+      ...(irrCost ? { irrigationCostPerMm: irrCost } : {}),
       soilCarbon: DEFAULT_SOIL_C,
       ...(o.waterCapMm !== undefined ? { waterCapMm: o.waterCapMm } : {}),
       ...(o.deltaT ? { deltaT: o.deltaT } : {}),
@@ -218,7 +238,13 @@ export class ScenarioInputsService {
     tier: "A" | "B" | "C",
     soilBasis: string,
     currentBasis: string,
-    crops: Array<{ season: number; mainCrop: string; secondCrop: string | null; source: string; isOverride: boolean }>,
+    crops: Array<{
+      season: number;
+      mainCrop: string;
+      secondCrop: string | null;
+      source: string;
+      isOverride: boolean;
+    }>,
   ): ProposalContext {
     const irrOnly = irrigationOnlyCrops(this.lib.rotations.rotations);
     const allowed = Object.keys(input.prices)

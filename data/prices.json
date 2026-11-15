@@ -2,6 +2,16 @@
   "version": 1,
   "about": "Default prices and costs per region (RFC §16, Tech Design §6.2). Prices: USDA NASS Crop Values 2025 Summary (preliminary). Variable costs and reference yields: K-State KSU Farm Management Guides (direct expenses, include labour, exclude rent and capital recovery) and UNL Nebraska Crop Budgets (total operating costs). variableCost / yieldRef = irrigated budget; dryland = dryland budget. Unit conversions: 56 lb/bu corn and sorghum, 60 lb wheat and soybean, 50 lb millet and canola; $/acre × 2.471 = $/ha. Researched and verified by the team on 2026-11-14; scenarios use a crop only once verified. Ukraine regions (ua-*) were added on 2026-11-15 as UNVERIFIED placeholders: only national 2025 yields with citations; prices and costs are empty until the team finds and verifies sources, so scenarios do not use them.",
   "currency": "USD",
+  "irrigationCostPerMm": {
+    "value": null,
+    "unit": "$/ha/mm",
+    "source": "None yet. Needed: pumping energy and labour per mm applied (pivot, Kansas / Nebraska), e.g. from the K-State KSU Farm Management Guides irrigation cost line or UNL pumping-cost tables. Until it is found and verified the engine does not price irrigation water separately: it is only inside the per-hectare budget.",
+    "asOf": null,
+    "urls": [],
+    "verified": false,
+    "verifiedBy": null,
+    "note": "Used only when verified:true and value is a number; then each season's variable cost rises by mm applied x this value, so drought years show extra pumping cost."
+  },
   "regions": {
     "us-southern-plains": {
       "crops": {
