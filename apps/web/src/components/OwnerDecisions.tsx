@@ -5,7 +5,7 @@ import { Button, Disclosure, Kicker, Surface } from "@terrasight/ui";
 import { Check, Clock, MessageCircleQuestion, Pause } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
-import { keyNumberViews } from "@/app/decisions/key-numbers";
+import { keyNumberViews, splitOwnerNumbers } from "@/app/decisions/key-numbers";
 import { useFormat } from "@/lib/useFormat";
 import { useActionToast } from "@/lib/useActionToast";
 
@@ -28,11 +28,15 @@ export function OwnerDecisions({
   language: L,
   workspaceName,
   onAnswer,
+  standalone = false,
 }: {
   items: Decision[];
+  /** Language of the card text: the interface language when signed in, the link's language on the no-account page. */
   language: "en" | "uk";
   workspaceName: string;
   onAnswer: AnswerFn | null;
+  /** No app tab bar below (the no-account link page): the sticky action bar sits at the very bottom. */
+  standalone?: boolean;
 }) {
   const t = useTranslations("App");
   const r = useTranslations("Report");
@@ -105,6 +109,8 @@ export function OwnerDecisions({
     }
   };
 
+  // The first waiting decision gets the sticky action bar on a phone.
+  const stickyId = needs.find((d) => OPEN.includes(d.state))?.id ?? null;
   const card = (d: Decision) => (
     <OwnerCard
       key={d.id}
@@ -114,6 +120,8 @@ export function OwnerDecisions({
       answered={kept.has(d.id)}
       readOnly={!onAnswer}
       busy={!!busy[d.id]}
+      sticky={d.id === stickyId}
+      standalone={standalone}
       onSend={(a, text) => void send(d, a, text)}
     />
   );
@@ -123,29 +131,55 @@ export function OwnerDecisions({
       <header>
         <Kicker>{r("fromLine", { name: workspaceName })}</Kicker>
         <h1 className="mt-1 text-h1 text-ink">
-          {openCount > 0 ? t("odNeedYou", { n: openCount }) : t("odNothing")}
+          {openCount > 0 ? r("needYou", { n: openCount }) : r("nothingNow")}
         </h1>
-        {needs.length === 0 && decided.length === 0 && (
-          <p className="mt-1 text-body text-ink-2">{t("odEmpty")}</p>
-        )}
       </header>
       <p role="status" aria-live="polite" className="sr-only">
         {live}
       </p>
+      {needs.length === 0 && decided.length === 0 && (
+        <Surface as="section" pad="sm" className="flex flex-col gap-1">
+          <h2 className="text-h3 text-ink">{r("emptyTitle")}</h2>
+          <p className="text-body text-ink-2">{r("emptyBody")}</p>
+        </Surface>
+      )}
       {needs.length > 0 && (
-        <section aria-labelledby="od-needs" className="flex flex-col gap-3">
-          <h2 id="od-needs" className="text-h3 text-ink">
-            {t("odSecNeeds")}
-          </h2>
+        <section aria-label={r("needYou", { n: openCount })} className="flex flex-col gap-3">
           {needs.map(card)}
         </section>
       )}
       {decided.length > 0 && (
-        <Disclosure summary={<span className="text-h3">{t("odSecDecided", { n: decided.length })}</span>}>
-          <div className="flex flex-col gap-3 pt-3">{decided.map(card)}</div>
+        <Disclosure summary={<span className="text-h3">{r("decidedTitle", { n: decided.length })}</span>}>
+          <ul className="flex flex-col gap-2 pt-3">
+            {decided.map((d) => {
+              const last = [...d.thread].reverse().find((e) => e.kind === "answer");
+              const line =
+                d.state === "approved" || d.state === "not_now" || d.state === "question"
+                  ? r(`ownerAnswered_${d.state === "approved" ? "approve" : d.state}`, {
+                      date: last ? day(last.at) : "",
+                    })
+                  : "";
+              return (
+                <li key={d.id}>
+                  <Disclosure
+                    className="rounded-card border border-line bg-surface px-3"
+                    summary={
+                      <span className="flex min-w-0 flex-col">
+                        <span className="truncate text-body font-semibold text-ink">
+                          {d.fieldName} · {(d.question ?? d.title)[L]}
+                        </span>
+                        <span className="text-small font-normal text-ink-2">{line}</span>
+                      </span>
+                    }
+                  >
+                    <div className="pb-3">{card(d)}</div>
+                  </Disclosure>
+                </li>
+              );
+            })}
+          </ul>
         </Disclosure>
       )}
-      <p className="text-caption text-ink-3">{r("foot")}</p>
     </div>
   );
 }
@@ -157,6 +191,8 @@ function OwnerCard({
   answered,
   readOnly,
   busy,
+  sticky,
+  standalone,
   onSend,
 }: {
   d: Decision;
@@ -165,6 +201,8 @@ function OwnerCard({
   answered: boolean;
   readOnly: boolean;
   busy: boolean;
+  sticky: boolean;
+  standalone: boolean;
   onSend: (a: DecisionAnswer, text?: string) => void;
 }) {
   const t = useTranslations("App");
@@ -177,11 +215,16 @@ function OwnerCard({
   const note = d.thread.find((e) => e.kind === "note" && e.text);
   const overdue = d.deadline !== null && d.deadline < new Date().toISOString().slice(0, 10);
   const lastAnswer = [...d.thread].reverse().find((e) => e.kind === "answer");
-  const numbers = keyNumberViews(
-    d,
-    { number: f.number, date: day },
-    (id) => (t.has(`kn_${id}`) ? t(`kn_${id}`) : null),
-  );
+  const who = d.askedBy.name || r("agronomistFallback");
+  // The question in plain words; older data has none, so the title stands in.
+  const ask = (d.question ?? d.title)[L];
+  const split = splitOwnerNumbers(d);
+  const fmt = { number: f.number, date: day };
+  // An owner-friendly label of our own wins over the agronomist's `kn_*` label.
+  const label = (id: string) =>
+    r.has(`own_${id}`) ? r(`own_${id}` as "agroNote") : t.has(`kn_${id}`) ? t(`kn_${id}`) : null;
+  const numbers = keyNumberViews({ keyNumbers: split.headline }, fmt, label);
+  const evidenceNumbers = keyNumberViews({ keyNumbers: split.evidence }, fmt, label, 8);
   const showButtons = !readOnly && (open || changing);
   const date = lastAnswer ? day(lastAnswer.at) : "";
   const stateLine =
@@ -203,11 +246,7 @@ function OwnerCard({
   const thread = d.thread.filter((e) => e.kind !== "note");
 
   return (
-    <Surface
-      as="article"
-      pad="sm"
-      className={`flex flex-col gap-3 ${answered ? "animate-flash" : ""}`}
-    >
+    <Surface as="article" pad="sm" className={`flex flex-col gap-3 ${answered ? "animate-flash" : ""}`}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-small font-semibold text-ink">{d.fieldName}</p>
         {d.deadline && open && (
@@ -219,41 +258,40 @@ function OwnerCard({
           </span>
         )}
       </div>
-      <h3 className="text-h3 text-ink">{d.title[L]}</h3>
-      <p className="text-body text-ink">{d.action[L]}</p>
+      <h3 className="text-h3 text-ink">{ask}</h3>
+      {/* Without a plain question the action sentence says what it is about; with one it moves to Evidence. */}
+      {!d.question && <p className="text-body text-ink">{d.action[L]}</p>}
       {numbers.length > 0 && (
-        <dl className="grid grid-cols-[repeat(auto-fit,minmax(110px,1fr))] gap-2">
+        <dl className="grid grid-cols-[repeat(auto-fit,minmax(130px,1fr))] gap-2">
           {numbers.map((n) => (
             <div key={n.id} className="flex min-w-0 flex-col rounded-input bg-surface-2 p-2">
-              <dd className="text-body font-semibold text-ink">{n.value}</dd>
-              <dt className="text-caption text-ink-2">{n.label}</dt>
+              <dd className="text-h3 font-semibold text-ink">{n.value}</dd>
+              <dt className="text-small text-ink-2">{n.label}</dt>
             </div>
           ))}
         </dl>
       )}
       {note && (
         <blockquote className="border-l-2 border-line-control pl-3 text-body text-ink">
-          <span className="block text-caption font-semibold text-ink-2">{r("agroNote")}</span>
+          <span className="block text-caption font-semibold text-ink-2">{r("agroNote", { name: who })}</span>
           {note.text}
         </blockquote>
       )}
-      <p className="text-small text-ink-2">
-        <span className="font-semibold text-ink">{r("why")}: </span>
-        {d.why[L]}
-      </p>
-      <p className="text-caption text-ink-3">{r("askedLine", { name: d.askedBy.name, date: day(d.askedAt) })}</p>
       {thread.length > 0 && (
         <ul className="flex flex-col gap-2" aria-label={t("odThread")}>
           {thread.map((e) => {
             const mine = e.author.role === "owner";
+            const name = e.kind === "answer" && e.answer ? t(`odAns_${e.answer}`) : "";
+            // "Approved: Approved. Go ahead." — the label is skipped when the text already starts with it.
+            const showLabel = name !== "" && !(e.text ?? "").toLowerCase().startsWith(name.toLowerCase());
             return (
               <li key={e.id} className={`flex flex-col ${mine ? "items-end" : "items-start"}`}>
                 <div
                   className={`max-w-[85%] rounded-card px-3 py-2 text-small ${mine ? "bg-ink text-surface" : "bg-surface-2 text-ink"}`}
                 >
-                  {e.kind === "answer" && e.answer && (
+                  {showLabel && (
                     <span className="font-semibold">
-                      {t(`odAns_${e.answer}`)}
+                      {name}
                       {e.text ? ": " : ""}
                     </span>
                   )}
@@ -290,7 +328,27 @@ function OwnerCard({
         </Button>
       )}
       {showButtons && (
-        <div role="group" aria-label={r("answerLabel")} className="flex flex-col gap-2 sm:flex-row">
+        <ul className="flex flex-col gap-1 text-small text-ink-2">
+          {(["approve", "not_now", "question"] as const).map((a) => (
+            <li key={a}>
+              <span className="font-semibold text-ink">{a === "question" ? r("btnAsk") : t(`odBtn_${a}`)}:</span>{" "}
+              {r(`hint_${a}`, { name: who })}
+            </li>
+          ))}
+        </ul>
+      )}
+      {showButtons && (
+        <div
+          role="group"
+          aria-label={r("answerLabel")}
+          className={`grid grid-cols-2 gap-2 sm:grid-cols-3 ${
+            sticky
+              ? `z-10 -mx-1 border-t border-line bg-surface px-1 py-2 max-lg:sticky ${
+                  standalone ? "bottom-0" : "bottom-[calc(var(--ts-tabbar)+env(safe-area-inset-bottom))]"
+                }`
+              : ""
+          }`}
+        >
           {(["approve", "not_now", "question"] as const).map((a) => (
             <Button
               key={a}
@@ -299,9 +357,9 @@ function OwnerCard({
               icon={ANSWER_ICON[a]}
               disabled={busy}
               onClick={() => pick(a)}
-              className="w-full justify-center sm:flex-1"
+              className={`w-full justify-center ${a === "approve" ? "col-span-2 sm:col-span-1" : ""}`}
             >
-              {t(`odBtn_${a}`)}
+              {a === "question" ? r("btnAsk") : t(`odBtn_${a}`)}
             </Button>
           ))}
         </div>
@@ -338,6 +396,27 @@ function OwnerCard({
           </div>
         </form>
       )}
+      <Disclosure summary={<span className="text-small">{r("evidence")}</span>}>
+        <div className="flex flex-col gap-2 pb-1 text-small text-ink-2">
+          {d.question && <p className="text-ink">{d.title[L]}</p>}
+          {d.question && <p>{d.action[L]}</p>}
+          <p>
+            <span className="font-semibold text-ink">{r("why")}: </span>
+            {d.why[L]}
+          </p>
+          {evidenceNumbers.length > 0 && (
+            <ul>
+              {evidenceNumbers.map((n) => (
+                <li key={n.id}>
+                  {n.value} · {n.label}
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="text-caption text-ink-3">{r("askedLine", { name: d.askedBy.name, date: day(d.askedAt) })}</p>
+          <p className="text-caption text-ink-3">{r("foot")}</p>
+        </div>
+      </Disclosure>
     </Surface>
   );
 }

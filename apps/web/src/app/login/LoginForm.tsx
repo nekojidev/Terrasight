@@ -16,6 +16,7 @@ type Mode = "signin" | "signup";
 export function LoginForm() {
   const t = useTranslations("Login");
   const a = useTranslations("App");
+  const tExplore = useTranslations("Explore");
   const locale = useLocale();
   const router = useRouter();
   const params = useSearchParams();
@@ -164,6 +165,12 @@ export function LoginForm() {
       <Button type="submit" size={56} className="mt-2 w-full justify-center" disabled={busy} aria-busy={busy}>
         {mode === "signin" ? t("go") : t("createGo")}
       </Button>
+      <Link
+        href="/explore"
+        className="focus-ring inline-flex min-h-11 items-center justify-center text-body font-semibold text-ink underline underline-offset-4"
+      >
+        {tExplore("tryLink")}
+      </Link>
       <div className="flex flex-col items-center gap-2 border-t border-line pt-5">
         <p className="text-body text-ink-2">{mode === "signin" ? t("noacc") : t("haveAcc")}</p>
         <Button

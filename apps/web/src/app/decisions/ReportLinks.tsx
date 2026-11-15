@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, Segmented, Surface, useToast } from "@terrasight/ui";
+import { Button, Disclosure, Segmented, Surface, useToast } from "@terrasight/ui";
 import { Copy, Link2 } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { useId, useState } from "react";
@@ -90,13 +90,10 @@ export function ReportLinks({ workspaceId }: { workspaceId: string }) {
           : "";
 
   return (
-    <Surface as="section" aria-labelledby={headId} className="flex flex-col gap-4">
-      <div>
-        <h2 id={headId} className="text-h3 text-ink">
-          {rp("linkTitle")}
-        </h2>
-        <p className="text-small text-ink-2">{rp("linkSub")}</p>
-      </div>
+    <Surface as="section" aria-labelledby={headId} pad="sm">
+      <Disclosure summary={<h2 id={headId} className="text-body font-semibold">{rp("linkTitle")}</h2>}>
+        <div className="flex flex-col gap-4 pt-2 pb-1">
+      <p className="text-small text-ink-2">{rp("linkSub")}</p>
       <Segmented<Lang>
         label={rp("linkLang")}
         value={lang}
@@ -150,6 +147,8 @@ export function ReportLinks({ workspaceId }: { workspaceId: string }) {
           )
         }
       </QueryState>
+        </div>
+      </Disclosure>
     </Surface>
   );
 }

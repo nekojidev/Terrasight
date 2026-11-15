@@ -151,6 +151,47 @@ function alertText(rec: RecLike): RecText {
   };
 }
 
+/**
+ * The question put to the Owner in plain words (design v6, Unit 9; open question 25: a template, no new AI text and no
+ * new numbers). Built only from the item's own fields: the field name, what changes and the agronomist's name.
+ */
+export function ownerQuestionText(
+  rec: Pick<RecLike, "type" | "subject" | "season" | "drivers">,
+  lib: Library | null,
+  fieldName: string,
+  askerName: string,
+  title: Localised,
+): Localised {
+  const who: Localised = {
+    en: askerName || "Your agronomist",
+    uk: askerName || "Ваш агроном",
+  };
+  if (rec.type === "rotation") {
+    const d = ((rec.drivers as Array<{ driver: string; value: unknown }>) ?? []).reduce<Record<string, unknown>>(
+      (acc, x) => ({ ...acc, [x.driver]: x.value }),
+      {},
+    );
+    const years = `${rec.season}–${rec.season + 4}`;
+    if (d.best_option === "current")
+      return {
+        en: `${who.en} asks: may we keep the current rotation on ${fieldName} for ${years}?`,
+        uk: `${who.uk} питає: чи залишаємо поточну сівозміну на полі ${fieldName} на ${years}?`,
+      };
+    const found = lib?.rotations.rotations.find((r) => r.id === d.best_option) as unknown as
+      | { name: Localised }
+      | undefined;
+    const name: Localised = found?.name ?? { en: String(d.best_option ?? ""), uk: String(d.best_option ?? "") };
+    return {
+      en: `${who.en} asks: may we change the rotation on ${fieldName} to “${name.en}” for ${years}?`,
+      uk: `${who.uk} питає: чи змінюємо сівозміну на полі ${fieldName} на «${name.uk}» на ${years}?`,
+    };
+  }
+  return {
+    en: `${who.en} asks for your decision on ${fieldName}: ${title.en}`,
+    uk: `${who.uk} просить вашого рішення щодо поля ${fieldName}: ${title.uk}`,
+  };
+}
+
 export function recommendationText(rec: RecLike, lib: Library): RecText {
   if (rec.type === "rotation") return rotationText(rec, lib);
   if (rec.type === "weather" || rec.type === "irrigation") return alertText(rec);

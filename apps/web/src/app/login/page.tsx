@@ -1,6 +1,5 @@
 import { CheckCircle2, ScanLine, ShieldCheck } from "lucide-react";
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
 import { Brand } from "@/components/Brand";
@@ -13,7 +12,6 @@ export default async function LoginPage() {
   const me = await serverGet<Me>("/api/me");
   if (me.ok) redirect("/");
   const t = await getTranslations("Login");
-  const tExplore = await getTranslations("Explore");
 
   return (
     <main className="grid min-h-dvh lg:grid-cols-[52%_48%]">
@@ -51,14 +49,6 @@ export default async function LoginPage() {
             <LoginForm />
           </Suspense>
         </div>
-        <p className="text-center">
-          <Link
-            href="/explore"
-            className="focus-ring inline-flex min-h-11 items-center text-small text-ink-2 underline underline-offset-4"
-          >
-            {tExplore("tryLink")}
-          </Link>
-        </p>
         <p className="text-center text-small text-ink-3">{t("data")}</p>
       </section>
     </main>
@@ -70,7 +60,7 @@ function PivotArt({ label }: { label: string }) {
     { cx: 190, cy: 120, r: 90, c: "var(--crop-corn)" },
     { cx: 380, cy: 110, r: 74, c: "var(--crop-wheat)" },
     { cx: 270, cy: 310, r: 96, c: "var(--crop-alfalfa)" },
-    { cx: 470, cy: 280, r: 70, c: "var(--crop-soy)" },
+    { cx: 470, cy: 280, r: 70, c: "var(--crop-wheat)" },
   ];
   return (
     <svg role="img" aria-label={label} viewBox="0 0 600 420" className="w-full max-w-[560px]">

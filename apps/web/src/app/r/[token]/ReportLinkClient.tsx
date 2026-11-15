@@ -2,6 +2,7 @@
 
 import type { Decision, PublicDecisions } from "@terrasight/shared";
 import { useState } from "react";
+import { Brand } from "@/components/Brand";
 import { OwnerDecisions } from "@/components/OwnerDecisions";
 import { api } from "@/lib/api";
 
@@ -11,7 +12,11 @@ export function ReportLinkClient({ token, initial }: { token: string; initial: P
   const base = `/api/r/${encodeURIComponent(token)}`;
   return (
     <main className="mx-auto min-h-dvh w-full max-w-[560px] bg-bg px-4 py-6 md:py-10">
+      <div className="mb-5">
+        <Brand />
+      </div>
       <OwnerDecisions
+        standalone
         items={data.items}
         language={data.language}
         workspaceName={data.workspaceName}
