@@ -13,12 +13,25 @@ import {
   Surface,
   Tabs,
 } from "@terrasight/ui";
-import { Archive, CalendarRange, Check, ChevronRight, Droplet, Info, NotebookPen, ShieldCheck, Sun } from "lucide-react";
+import type { ClimateShift } from "@terrasight/shared";
+import {
+  Archive,
+  CalendarRange,
+  Check,
+  ChevronRight,
+  Droplet,
+  Gauge,
+  Info,
+  NotebookPen,
+  ShieldCheck,
+  Sun,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
+import { ClimateShiftCard } from "@/components/ClimateShiftCard";
 import { useWorkspaceEvents } from "@/lib/events";
 import { useActionToast } from "@/lib/useActionToast";
 import { useFormat } from "@/lib/useFormat";
@@ -116,6 +129,14 @@ export function FieldClient({
     queryKey: ["field", workspaceId, id, "history"],
     queryFn: () => api<History>(`${base}/history`),
   });
+  // Climate shift reads the cached NASA POWER series, not the history: it must not wait for the history query.
+  // The endpoint answers `pending` until the POWER task is done; a 404 (API not deployed) is shown as unavailable.
+  const climate = useQuery({
+    queryKey: ["field", workspaceId, id, "climate-shift"],
+    queryFn: () => api<ClimateShift>(`${base}/climate-shift`),
+    refetchInterval: (q) => (q.state.data?.status === "pending" ? 5_000 : false),
+    retry: (count, e) => !(e instanceof ApiError && e.problem.status === 404) && count < 2,
+  });
   const building = isFirstBuild(gather.data, history.isLoading || Boolean(history.data?.built));
   const record = useQuery({
     queryKey: ["field", workspaceId, id, "season"],
@@ -181,6 +202,19 @@ export function FieldClient({
       .then(() => gather.refetch())
       .catch((e) => fail(e, f("gf_retryWhat"), () => retrySource(source)));
 
+  const climateCard = (compact: boolean) => (
+    <ClimateShiftCard
+      data={climate.data}
+      isLoading={climate.isLoading}
+      isError={climate.isError}
+      onRetry={() => void climate.refetch()}
+      {...(country ? { country } : {})}
+      units={units}
+      trustHref={`/fields/${id}/trust`}
+      compact={compact}
+    />
+  );
+
   const loadingHistory = (
     <QueryState query={history} skeletonVariant="card" what={t("historyTitle")}>
       {() => null}
@@ -244,6 +278,8 @@ export function FieldClient({
         onRetry={retrySource}
       />
 
+      {building && climateCard(false)}
+
       <div role="tabpanel" aria-label={tabs.find((x) => x.id === tab)?.label} className="flex min-w-0 flex-col gap-6">
         {building ? (
           <>
@@ -253,6 +289,7 @@ export function FieldClient({
           </>
         ) : tab === "overview" ? (
           <>
+            {climateCard(true)}
             {history.data ? (
               <FieldBrief
                 fieldId={id}
@@ -351,6 +388,7 @@ export function FieldClient({
                 {[
                   { href: `/fields/${id}/zones`, label: t("tabZones"), desc: f("zonesDesc"), icon: <CalendarRange /> },
                   { href: `/fields/${id}/log`, label: t("tabLog"), desc: f("logDesc"), icon: <NotebookPen /> },
+                  { href: `/fields/${id}/trust`, label: f("trustTitle"), desc: f("trustDesc"), icon: <Gauge /> },
                 ].map((l) => (
                   <li key={l.href}>
                     <Link href={l.href} className="focus-ring flex min-h-tap items-center gap-3 py-3 hover:bg-muted">

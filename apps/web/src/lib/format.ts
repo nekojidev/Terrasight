@@ -103,10 +103,74 @@ export function formatYield(tPerHa: number, units: Units, locale: FormatLocale):
 }
 
 /** Degrees Celsius in. */
-export function formatTemp(celsius: number, units: Units, locale: FormatLocale): string {
+export function formatTemp(celsius: number, units: Units, locale: FormatLocale, digits = 0): string {
   return units === "imperial"
-    ? unitNumber((celsius * 9) / 5 + 32, locale, "fahrenheit", 0)
-    : unitNumber(celsius, locale, "celsius", 0);
+    ? unitNumber((celsius * 9) / 5 + 32, locale, "fahrenheit", digits)
+    : unitNumber(celsius, locale, "celsius", digits);
+}
+
+/** First sign becomes a true minus (U+2212); the plus is explicit; a value that rounds to zero carries no sign. */
+function trueMinus(text: string): string {
+  return text.replace(/[-\u2010\u2011]/, "\u2212");
+}
+
+/** `+1.4`, `−0.6`, `0`: explicit sign, true minus sign, never "-0". */
+export function formatSigned(
+  n: number,
+  locale: FormatLocale,
+  opts: { maximumFractionDigits?: number; minimumFractionDigits?: number } = {},
+): string {
+  return trueMinus(
+    new Intl.NumberFormat(tag(locale), {
+      maximumFractionDigits: opts.maximumFractionDigits ?? 1,
+      ...(opts.minimumFractionDigits !== undefined ? { minimumFractionDigits: opts.minimumFractionDigits } : {}),
+      signDisplay: "exceptZero",
+    }).format(n),
+  );
+}
+
+function signedUnit(n: number, locale: FormatLocale, unit: string, digits: number): string {
+  return trueMinus(
+    new Intl.NumberFormat(tag(locale), {
+      style: "unit",
+      unit,
+      unitDisplay: "short",
+      maximumFractionDigits: digits,
+      signDisplay: "exceptZero",
+    }).format(n),
+  );
+}
+
+/**
+ * A temperature DIFFERENCE in °C in; "+1.4 °C", or imperial "+2.5 °F". A difference is scaled by 9/5 only, without
+ * the +32 offset of an absolute temperature (1 °C of difference is 1.8 °F, not 33.8).
+ */
+export function formatTempDelta(deltaCelsius: number, units: Units, locale: FormatLocale, digits = 1): string {
+  return units === "imperial"
+    ? signedUnit((deltaCelsius * 9) / 5, locale, "fahrenheit", digits)
+    : signedUnit(deltaCelsius, locale, "celsius", digits);
+}
+
+/** A rainfall difference in mm in; signed mm or in. */
+export function formatRainDelta(deltaMm: number, units: Units, locale: FormatLocale): string {
+  return units === "imperial"
+    ? signedUnit(deltaMm / MM_PER_IN, locale, "inch", 2)
+    : signedUnit(deltaMm, locale, "millimeter", Math.abs(deltaMm) < 10 ? 1 : 0);
+}
+
+/** Day of year (1 = 1 January, non-leap calendar) as a date without a weekday: "12 May" / "May 12" per locale. */
+export function formatDayOfYear(doy: number, locale: FormatLocale): string {
+  const d = new Date(Date.UTC(2023, 0, Math.round(doy)));
+  return new Intl.DateTimeFormat(tag(locale), { day: "numeric", month: "short", timeZone: "UTC" }).format(d);
+}
+
+export type DayShift = { days: number; direction: "earlier" | "later" | "same" };
+
+/** A change of a day-of-year in days, as a size and a direction; the caller words it ("8 days earlier"). */
+export function dayShift(deltaDays: number, digits = 0): DayShift {
+  const f = 10 ** digits;
+  const days = Math.round(Math.abs(deltaDays) * f) / f;
+  return { days, direction: days === 0 ? "same" : deltaDays < 0 ? "earlier" : "later" };
 }
 
 /** Metres per second in; km/h or mph out. */

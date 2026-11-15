@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  dayShift,
   formatArea,
+  formatDayOfYear,
+  formatRainDelta,
+  formatSigned,
+  formatTempDelta,
   formatDate,
   formatDistance,
   formatMoney,
@@ -75,5 +80,33 @@ describe("plural", () => {
     expect(plural(5, "uk", uk)).toBe("5 полів");
     expect(plural(21, "uk", uk)).toBe("21 поле");
     expect(plural(11, "uk", uk)).toBe("11 полів");
+  });
+});
+
+describe("signed values and climate differences", () => {
+  it("uses a true minus and an explicit plus, never -0", () => {
+    expect(formatSigned(1.44, "en")).toBe("+1.4");
+    expect(formatSigned(-0.6, "en")).toBe("\u22120.6");
+    expect(formatSigned(-0.04, "en")).toBe("0");
+    expect(formatSigned(0, "en")).toBe("0");
+    expect(formatSigned(-3, "uk", { maximumFractionDigits: 0 })).toBe("\u22123");
+    expect(formatSigned(2.5, "uk")).toBe("+2,5");
+  });
+  it("scales a temperature difference without the +32 offset", () => {
+    expect(formatTempDelta(1, "imperial", "en")).toBe("+1.8°F");
+    expect(formatTempDelta(1, "imperial", "en")).not.toContain("33");
+    expect(formatTempDelta(-1, "metric", "en")).toMatch(/^\u22121 ?°C$/);
+  });
+  it("converts a rain difference to inches", () => {
+    expect(formatRainDelta(25.4, "imperial", "en")).toMatch(/^\+1(\.00)? ?in$/);
+    expect(formatRainDelta(-30, "metric", "en")).toMatch(/^\u221230 ?mm$/);
+  });
+  it("turns a day of year into a date and a shift", () => {
+    expect(formatDayOfYear(132, "en")).toBe("May 12");
+    expect(formatDayOfYear(1, "en")).toBe("Jan 1");
+    expect(dayShift(-8.2)).toEqual({ days: 8, direction: "earlier" });
+    expect(dayShift(3)).toEqual({ days: 3, direction: "later" });
+    expect(dayShift(0.2)).toEqual({ days: 0, direction: "same" });
+    expect(dayShift(-1.46, 1)).toEqual({ days: 1.5, direction: "earlier" });
   });
 });
