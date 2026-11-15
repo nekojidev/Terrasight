@@ -57,7 +57,6 @@ export function CommandPalette({
   onClose: () => void;
 }) {
   const t = useTranslations("App");
-  const home = useTranslations("EmptyHome");
   const assistantT = useTranslations("Assistant");
   const locale = useLocale();
   const lang = locale === "uk" ? "uk" : "en";
@@ -103,18 +102,19 @@ export function CommandPalette({
       { id: "analyze", label: assistantT("k1"), action: "analyze", keywords: "run check refresh" },
       { id: "decisions", label: t("navDecisions"), href: "/decisions", keywords: "owner questions" },
       { id: "windows", label: t("navWorkWindows"), href: "/work-windows", keywords: "spray sow harvest" },
-      { id: "rotation", label: home("n_rot"), href: "/rotation", keywords: "rotation plan crops" },
+      { id: "worklog", label: t("navWorkLog"), href: "/fields", keywords: "log history events field" },
+      { id: "rotation", label: t("navPlan"), href: "/rotation", keywords: "rotation plan crops" },
       {
         id: "settings",
         label: t("navSettings"),
         href: role === "owner" ? "/settings/workspace" : "/settings/account",
-        keywords: "account company team",
+        keywords: "account company team prices",
       },
-      { id: "today", label: home("n_today"), href: "/" },
-      { id: "fields", label: home("n_fields"), href: "/fields" },
-      { id: "assistant", label: home("n_ai"), href: "/assistant" },
+      { id: "today", label: t("navToday"), href: "/" },
+      { id: "fields", label: t("navFields"), href: "/fields" },
+      { id: "assistant", label: t("navAssistant"), href: "/assistant" },
     ],
-    [t, home, assistantT, role],
+    [t, assistantT, role],
   );
 
   const recent = useMemo(

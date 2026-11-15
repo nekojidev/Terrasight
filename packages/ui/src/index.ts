@@ -10,7 +10,7 @@ export { HeroItem, type HeroItemProps } from "./components/HeroItem";
 export { QueueRow, type QueueRowProps } from "./components/QueueRow";
 export { AnalysisPanel, type AnalysisPanelProps, type FieldRunStatus } from "./components/AnalysisPanel";
 export { BottomSheet, type BottomSheetProps } from "./components/BottomSheet";
-export { Sidebar, TopBar, BottomTabs, type NavItem, type TopBarProps } from "./components/Nav";
+export { Sidebar, TopBar, BottomTabs, SheetRow, type NavItem, type TopBarProps, type MoreTab } from "./components/Nav";
 export { Skeleton, ErrorCard, EmptyState, type SkeletonVariant } from "./components/States";
 export {
   TextField,

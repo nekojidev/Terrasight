@@ -1,7 +1,18 @@
 "use client";
 
-import { BottomTabs, Sidebar, TopBar, type NavItem } from "@terrasight/ui";
-import { FileText, Home, LogOut, Map, RefreshCw, Settings, Sparkles, Users, Wind } from "lucide-react";
+import { BottomTabs, Button, SheetRow, Sidebar, TopBar, type NavItem } from "@terrasight/ui";
+import {
+  ClipboardList,
+  FileText,
+  Home,
+  Languages,
+  LogOut,
+  Map,
+  RefreshCw,
+  Settings,
+  Sparkles,
+  Wind,
+} from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import type { DecisionList } from "@terrasight/shared";
 import { usePathname, useRouter } from "next/navigation";
@@ -79,41 +90,36 @@ export function AppShell({
   // A badge is a hint, not content: when the request fails the nav simply shows no count (silent).
   const needYou = answers ? (open.data?.counts.waiting ?? 0) : 0;
 
-  const items: NavItem[] = [
-    { href: "/", label: t("n_today"), icon: <Home />, active: path === "/" },
-    { href: "/fields", label: t("n_fields"), icon: <Map />, active: path.startsWith("/fields") },
-    { href: "/rotation", label: t("n_rot"), icon: <RefreshCw />, active: path.startsWith("/rotation") },
-    {
-      href: "/work-windows",
-      label: a("navWorkWindows"),
-      icon: <Wind />,
-      active: path.startsWith("/work-windows"),
+  const settingsHref = user.role === "owner" ? "/settings/workspace" : "/settings/account";
+  const nav = {
+    today: { href: "/", label: a("navToday"), icon: <Home />, active: path === "/" },
+    fields: { href: "/fields", label: a("navFields"), icon: <Map />, active: path.startsWith("/fields") },
+    plan: { href: "/rotation", label: a("navPlan"), icon: <RefreshCw />, active: path.startsWith("/rotation") },
+    assistant: {
+      href: "/assistant",
+      label: a("navAssistant"),
+      icon: <Sparkles />,
+      active: path.startsWith("/assistant"),
     },
-    { href: "/assistant", label: t("n_ai"), icon: <Sparkles />, active: path.startsWith("/assistant") },
-    {
+    decisions: {
       href: "/decisions",
       label: needYou > 0 ? a("navDecisionsNeed") : a("navDecisions"),
       icon: <FileText />,
       active: path.startsWith("/decisions"),
       ...(needYou > 0 ? { badge: needYou } : {}),
     },
-    ...(user.role === "owner"
-      ? [
-          {
-            href: "/settings/team",
-            label: a("navTeam"),
-            icon: <Users />,
-            active: path.startsWith("/settings/team"),
-          },
-        ]
-      : []),
-    {
-      href: user.role === "owner" ? "/settings/workspace" : "/settings/account",
-      label: a("navSettings"),
-      icon: <Settings />,
-      active: path.startsWith("/settings") && !path.startsWith("/settings/team"),
-    },
+  } satisfies Record<string, NavItem>;
+  // Owner answers decisions, so they come first; the agronomist does field work, so Today leads (design review v5).
+  const items: NavItem[] =
+    user.role === "owner"
+      ? [nav.decisions, nav.today, nav.fields, nav.plan, nav.assistant]
+      : [nav.today, nav.fields, nav.plan, nav.assistant, nav.decisions];
+  const settingsActive = path.startsWith("/settings");
+  const bottomItems: NavItem[] = [
+    { href: settingsHref, label: a("navSettings"), icon: <Settings />, active: settingsActive },
   ];
+  const tabs: NavItem[] = [nav.today, nav.fields, nav.assistant, nav.decisions];
+  const moreActive = settingsActive || nav.plan.active || path.startsWith("/work-windows");
 
   const setLocale = (l: "uk" | "en") => {
     setCookie("ts_locale", l);
@@ -124,6 +130,31 @@ export function AppShell({
     router.replace("/login");
     router.refresh();
   };
+
+  const moreRows = (
+    <>
+      <SheetRow href="/rotation" label={a("navPlan")} icon={<RefreshCw />} active={nav.plan.active} />
+      <SheetRow
+        href="/work-windows"
+        label={a("navWorkWindows")}
+        icon={<Wind />}
+        active={path.startsWith("/work-windows")}
+      />
+      {/* The work log belongs to a field: this opens the field list, where each field has its log tab. */}
+      <SheetRow href="/fields" label={a("navWorkLog")} icon={<ClipboardList />} />
+      <SheetRow href={settingsHref} label={a("navSettings")} icon={<Settings />} active={settingsActive} />
+      <ThemeToggle row />
+      <SheetRow
+        label={a("langRow")}
+        icon={<Languages />}
+        trailing={locale === "uk" ? "UA" : "EN"}
+        onSelect={() => setLocale(locale === "uk" ? "en" : "uk")}
+      />
+      <span data-sheet-close className="contents">
+        <SheetRow label={a("signOut")} icon={<LogOut />} onSelect={() => void signOut()} />
+      </span>
+    </>
+  );
 
   return (
     <div className="flex min-h-dvh">
@@ -148,6 +179,7 @@ export function AppShell({
             </div>
           }
           items={items}
+          bottomItems={bottomItems}
           footer={
             <div className="sb-row flex items-center gap-3">
               <span className="inline-flex size-10 items-center justify-center rounded-chip bg-ink-2 text-small font-bold text-surface">
@@ -158,15 +190,7 @@ export function AppShell({
                 <span className="block text-small text-ink-2">{a(`role_${user.role}`)}</span>
               </span>
               <ThemeToggle />
-              <button
-                type="button"
-                onClick={() => void signOut()}
-                aria-label={a("signOut")}
-                title={a("signOut")}
-                className="focus-ring inline-flex size-11 items-center justify-center rounded-btn text-ink-2 hover:bg-surface-2"
-              >
-                <LogOut aria-hidden className="size-5" strokeWidth={1.7} />
-              </button>
+              <Button variant="icon" label={a("signOut")} icon={<LogOut />} onClick={() => void signOut()} />
             </div>
           }
         />
@@ -189,10 +213,10 @@ export function AppShell({
             </>
           }
         />
-        <main className="mx-auto w-full max-w-[1180px] px-4 pt-6 pb-24 sm:px-8 sm:py-10 lg:pb-10">
-          <div className="mb-4 empty:hidden">
-            <OfflineBanner />
-          </div>
+        <div className="sticky top-20 z-20 empty:hidden">
+          <OfflineBanner />
+        </div>
+        <main className="mx-auto w-full max-w-[1180px] px-4 pt-6 pb-[calc(var(--ts-tabbar)+env(safe-area-inset-bottom)+1.5rem)] sm:px-8 sm:pt-10 lg:pb-10">
           {children}
         </main>
       </div>
@@ -202,9 +226,13 @@ export function AppShell({
         open={paletteOpen}
         onClose={() => setPaletteOpen(false)}
       />
-      {/* Phones and tablets: bottom tabs Home · Fields · Assistant · Reports (design 05). */}
+      {/* Phones and tablets: Today · Fields · Assistant · Decisions · More. */}
       <div className="lg:hidden">
-        <BottomTabs label={t("nav_label")} items={items.filter((i) => i.href !== "/rotation")} />
+        <BottomTabs
+          label={t("nav_label")}
+          items={tabs}
+          more={{ label: a("navMore"), title: a("navMoreTitle"), closeLabel: a("toastDismiss"), active: moreActive, children: moreRows }}
+        />
       </div>
     </div>
   );

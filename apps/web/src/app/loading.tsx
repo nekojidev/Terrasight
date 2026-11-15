@@ -1,13 +1,14 @@
-import { Skeleton } from "@terrasight/ui";
+import { PageContainer, Skeleton } from "@terrasight/ui";
 import { getTranslations } from "next-intl/server";
 
-/** Root loading state while a server page fetches: the same skeleton as the cards, so nothing jumps. */
+/** Root loading state while a server page fetches: skeletons of the final shape (headline number, cards, rows). */
 export default async function Loading() {
   const t = await getTranslations("App");
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-[1180px] flex-col gap-4 px-4 py-8 sm:px-8">
-      <Skeleton label={t("loading")} />
-      <Skeleton label={t("loading")} />
-    </main>
+    <PageContainer className="flex min-h-dvh flex-col gap-4 py-8">
+      <Skeleton variant="number" label={t("loading")} />
+      <Skeleton variant="card" label={t("loading")} />
+      <Skeleton variant="rows" rows={3} label={t("loading")} />
+    </PageContainer>
   );
 }
