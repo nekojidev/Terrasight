@@ -1,4 +1,7 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { Mailer } from "../src/mail/mailer.js";
 import { fileURLToPath } from "node:url";
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
 import { GenericContainer } from "testcontainers";
@@ -64,10 +67,12 @@ beforeAll(async () => {
     RABBITMQ_URL: "amqp://localhost:5672",
     JWT_SECRET: "integration-test-secret-0123456789abcdef",
     NODE_ENV: "test",
+    UPLOADS_DIR: mkdtempSync(join(tmpdir(), "ts-outbox-")),
   });
   prisma = new PrismaService(env);
-  auth = new AuthService(prisma, env);
-  workspaces = new WorkspacesService(prisma);
+  const mailer = new Mailer(env);
+  auth = new AuthService(prisma, env, mailer);
+  workspaces = new WorkspacesService(prisma, env, mailer);
 });
 
 afterAll(async () => {
@@ -123,7 +128,7 @@ describe("owner creates users (PD v2.9)", () => {
     expect(audit.rows.map((r) => r.action)).toEqual(expect.arrayContaining(["member.create", "user.setup"]));
   });
 
-  it("an existing account is just added; a second time is 409", async () => {
+  it("an existing account is invited, not silently added; a member is 409", async () => {
     const ws = await workspace();
     const owner = await member(ws, "owner");
     const other = await member(await workspace(), "owner");
@@ -135,18 +140,24 @@ describe("owner creates users (PD v2.9)", () => {
       email: email.toUpperCase(),
       role: "agronomist",
     });
-    expect(r).toEqual({ userId: other.id, existing: true });
+    expect(r).toMatchObject({ userId: other.id, existing: true, invited: true });
     const m = await client.query(`SELECT role FROM memberships WHERE workspace_id = $1 AND user_id = $2`, [
       ws,
       other.id,
     ]);
-    expect(m.rows[0].role).toBe("agronomist");
+    expect(m.rows).toHaveLength(0);
+    const inv = await client.query(`SELECT role FROM invitations WHERE workspace_id = $1`, [ws]);
+    expect(inv.rows[0].role).toBe("agronomist");
     // The existing password stays untouched and no setup token is issued.
     const u = (
       await client.query(`SELECT password_hash, setup_token_hash FROM users WHERE id = $1`, [other.id])
     ).rows[0];
     expect(u).toEqual({ password_hash: "x", setup_token_hash: null });
 
+    await client.query(`INSERT INTO memberships (workspace_id, user_id, role) VALUES ($1, $2, 'agronomist')`, [
+      ws,
+      other.id,
+    ]);
     expect(await code(workspaces.createUser(ws, owner, { name: "Someone", email, role: "agronomist" }))).toBe(
       409,
     );

@@ -29,16 +29,36 @@ export interface AuthedRequest extends Request {
 
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-/** Verifies the access JWT from the httpOnly cookie (Tech Design §14.1). */
+const EXISTS_TTL_MS = 15_000;
+const knownUsers = new Map<string, number>();
+
+/** Verifies the access JWT from the httpOnly cookie (Tech Design §14.1) and that the user still exists. */
 @Injectable()
 export class AuthGuard implements CanActivate {
-  constructor(@Inject(ENV) private readonly env: Env) {}
+  constructor(
+    @Inject(ENV) private readonly env: Env,
+    private readonly prisma: PrismaService,
+  ) {}
+
+  private async exists(userId: string): Promise<boolean> {
+    const seen = knownUsers.get(userId);
+    if (seen && seen > Date.now()) return true;
+    const u = await this.prisma.system.user.findUnique({ where: { id: userId }, select: { id: true } });
+    if (!u) {
+      knownUsers.delete(userId);
+      return false;
+    }
+    if (knownUsers.size > 10_000) knownUsers.clear();
+    knownUsers.set(userId, Date.now() + EXISTS_TTL_MS);
+    return true;
+  }
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
     const req = ctx.switchToHttp().getRequest<AuthedRequest>();
     const cookies = (req.cookies ?? {}) as Record<string, string | undefined>;
     const userId = await verifyAccess(cookies[ACCESS_COOKIE], this.env.JWT_SECRET);
-    if (!userId) throw new UnauthorizedException();
+    // A token of a deleted account is refused even while the 15-minute JWT is still valid.
+    if (!userId || !(await this.exists(userId))) throw new UnauthorizedException();
     req.user = { id: userId };
     return true;
   }

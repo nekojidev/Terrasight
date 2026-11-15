@@ -6,6 +6,7 @@ import { Logger } from "nestjs-pino";
 import { AppModule } from "./app.module.js";
 import { requireRequestedWith } from "./http/csrf.js";
 import { ProblemFilter } from "./http/problem.js";
+import { securityHeaders } from "./http/security-headers.js";
 import { loadEnv } from "./config/config.js";
 import { installProcessGuards } from "./process-guards.js";
 
@@ -24,6 +25,7 @@ async function bootstrap(): Promise<void> {
       { path: "readyz", method: RequestMethod.GET },
     ],
   });
+  app.use(securityHeaders({ hsts: env.NODE_ENV === "production" }));
   app.use(cookieParser());
   app.use(requireRequestedWith);
   app.useGlobalFilters(new ProblemFilter());

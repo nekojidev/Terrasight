@@ -8,6 +8,7 @@ import {
 } from "@nestjs/common";
 import type { Request, Response } from "express";
 import { z } from "zod";
+import { redactUrl } from "./redact.js";
 
 /** RFC 9457 problem details, the error format of every endpoint (Tech Design §14). */
 export interface Problem {
@@ -74,7 +75,7 @@ export class ProblemFilter implements ExceptionFilter {
         errors: exception.issues.map((i) => ({ path: i.path.join("."), message: i.message })),
       };
     } else {
-      this.log.error(`${req.method} ${req.url}: ${(exception as Error)?.stack ?? exception}`);
+      this.log.error(`${req.method} ${redactUrl(req.originalUrl ?? req.url)}:${(exception as Error)?.stack ?? exception}`);
       problem = { type: "about:blank", title: TITLES[500]!, status: HttpStatus.INTERNAL_SERVER_ERROR };
     }
     if (typeof problem.detail === "object") delete problem.detail;

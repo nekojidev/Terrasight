@@ -1,4 +1,5 @@
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
+import { ENV, type Env } from "../config/config.js";
 import { EventKeys } from "@terrasight/shared";
 import { PrismaService } from "../db/prisma.service.js";
 import type { Irrigation } from "../generated/prisma/enums.js";
@@ -29,6 +30,7 @@ export class FieldsService {
     private readonly geo: GeoService,
     private readonly sources: SourcesService,
     private readonly outbox: OutboxService,
+    @Inject(ENV) private readonly env: Env,
   ) {}
 
   /** Design 13 "what we'll find": area, county, region and tier before saving (S-02.01). */
@@ -50,6 +52,13 @@ export class FieldsService {
 
   /** Field + gather job + one task per applicable source + their jobs, in one transaction (RFC §3, Tech Design §7). */
   async create(workspaceId: string, userId: string, input: CreateFieldInput) {
+    const active = await this.prisma.db.field.count({ where: { workspaceId, archivedAt: null } });
+    if (active >= this.env.MAX_FIELDS_PER_WORKSPACE)
+      throw new ProblemException(
+        409,
+        "field-limit",
+        `A company can have up to ${this.env.MAX_FIELDS_PER_WORKSPACE} active fields`,
+      );
     const p = await this.geo.place(input.geometry);
     const fieldGeometry = {
       polygons: p.multipolygon,

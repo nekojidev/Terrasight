@@ -103,6 +103,9 @@ export class ScoutingPhotosController {
       throw new ProblemException(403, "forbidden", "The photo link has expired");
     const f = await this.scouting.getLocal(photoId);
     res.setHeader("Content-Type", f.contentType);
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Content-Security-Policy", "default-src 'none'; sandbox");
+    res.setHeader("Content-Disposition", "inline");
     res.setHeader("Cache-Control", "private, max-age=300");
     f.stream.pipe(res);
   }

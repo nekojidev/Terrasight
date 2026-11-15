@@ -6,7 +6,7 @@ import { ProblemException } from "../http/problem.js";
 import { ZodPipe } from "../http/zod.js";
 import { AuthService, type Session } from "./auth.service.js";
 import { AuthGuard, type AuthedRequest } from "./current-user.js";
-import { AUTH_BUCKET, RateLimitService } from "./rate-limit.js";
+import { AUTH_BUCKET, FORGOT_BUCKET, MAIL_BUCKET, RESEND_BUCKET, RateLimitService } from "./rate-limit.js";
 import { ACCESS_COOKIE, hashToken, ACCESS_TTL_S, REFRESH_COOKIE, REFRESH_TTL_S } from "./tokens.js";
 
 const Email = z.string().trim().toLowerCase().pipe(z.email().max(254));
@@ -17,6 +17,7 @@ const SignupBody = z.object({
   uiLanguage: z.enum(["uk", "en"]).default("en"),
 });
 const SetupBody = z.object({ password: z.string().min(10, "at least 10 characters").max(200) });
+const ForgotBody = z.object({ email: Email });
 const LoginBody = z.object({ email: Email, password: z.string().min(1).max(200) });
 
 @Controller("auth")
@@ -56,16 +57,52 @@ export class AuthController {
     if (!a || !b) throw new ProblemException(429, "rate-limited", "Too many attempts; try again in a minute");
   }
 
+  /** Uniform answer for new and existing addresses: no session, "check your email". */
   @Post("signup")
-  async signup(
-    @Body(new ZodPipe(SignupBody)) body: z.infer<typeof SignupBody>,
-    @Req() req: Request,
-    @Res({ passthrough: true }) res: Response,
-  ) {
+  @HttpCode(202)
+  async signup(@Body(new ZodPipe(SignupBody)) body: z.infer<typeof SignupBody>, @Req() req: Request) {
     await this.limit(req, body.email);
-    const s = await this.auth.signup(body);
-    this.setSession(res, s);
-    return this.auth.me(s.userId);
+    const mailOk = await this.limits.take(`mail:${body.email}`, MAIL_BUCKET);
+    await this.auth.signup(body, mailOk);
+    return { status: "verification-sent" };
+  }
+
+  @Post("verify/:token")
+  @HttpCode(200)
+  async verify(@Param("token") token: string, @Req() req: Request) {
+    await this.limit(req, `verify:${hashToken(token).slice(0, 16)}`);
+    await this.auth.verifyEmail(token);
+    return { verified: true };
+  }
+
+  @Post("resend-verification")
+  @HttpCode(200)
+  @UseGuards(AuthGuard)
+  async resend(@Req() req: AuthedRequest) {
+    await this.limits.enforce(`resend:${req.user!.id}`, RESEND_BUCKET);
+    return this.auth.resendVerification(req.user!.id);
+  }
+
+  /** Uniform answer whether or not the address has an account. */
+  @Post("forgot")
+  @HttpCode(202)
+  async forgot(@Body(new ZodPipe(ForgotBody)) body: z.infer<typeof ForgotBody>, @Req() req: Request) {
+    await this.limits.enforce(`forgot:${req.ip ?? "unknown"}:${body.email}`, FORGOT_BUCKET);
+    await this.limits.enforce(`forgot:ip:${req.ip ?? "unknown"}`, AUTH_BUCKET);
+    const mailOk = await this.limits.take(`mail:${body.email}`, MAIL_BUCKET);
+    await this.auth.forgotPassword(body.email, mailOk);
+    return { status: "reset-sent" };
+  }
+
+  @Post("reset/:token")
+  @HttpCode(204)
+  async reset(
+    @Param("token") token: string,
+    @Body(new ZodPipe(SetupBody)) body: z.infer<typeof SetupBody>,
+    @Req() req: Request,
+  ): Promise<void> {
+    await this.limit(req, `reset:${hashToken(token).slice(0, 16)}`);
+    await this.auth.resetPassword(token, body.password);
   }
 
   @Get("setup/:token")

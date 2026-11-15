@@ -1,6 +1,7 @@
 import { Body, Controller, Get, HttpCode, Param, Post, Req, UseGuards } from "@nestjs/common";
 import { z } from "zod";
 import { AuthGuard, Requires, UUID, WorkspaceGuard, type AuthedRequest } from "../auth/current-user.js";
+import { COST_BUCKETS, RateLimitService } from "../auth/rate-limit.js";
 import { PrismaService } from "../db/prisma.service.js";
 import { ProblemException } from "../http/problem.js";
 import { ZodPipe } from "../http/zod.js";
@@ -21,6 +22,7 @@ export class AnalysisController {
   constructor(
     private readonly analysis: AnalysisService,
     private readonly prisma: PrismaService,
+    private readonly limits: RateLimitService,
   ) {}
 
   private async today(workspaceId: string): Promise<string> {
@@ -35,6 +37,7 @@ export class AnalysisController {
   @HttpCode(202)
   @Requires("analysis.run")
   async start(@Body(new ZodPipe(StartBody)) body: z.infer<typeof StartBody>, @Req() req: AuthedRequest) {
+    await this.limits.enforce(`analysis:${req.user!.id}`, COST_BUCKETS.analysisRun);
     return this.analysis.start(
       req.workspaceId!,
       "manual",

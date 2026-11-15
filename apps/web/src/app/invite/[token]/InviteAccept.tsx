@@ -25,7 +25,9 @@ export function InviteAccept({ token, email }: { token: string; email: string })
       setError(
         code === "invitation-other-email"
           ? a("inviteOtherEmail", { email })
-          : code === "invitation-used"
+          : code === "email-unverified"
+            ? a("inviteVerifyFirst")
+            : code === "invitation-used"
             ? a("inviteUsed")
             : code === "invitation-expired"
               ? a("inviteExpired")

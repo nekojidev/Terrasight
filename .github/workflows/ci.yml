@@ -76,6 +76,8 @@ jobs:
       NODE_ENV: test
       # The collection signs in many times from one IP; production keeps the default burst of 10.
       AUTH_RATE_BURST: "100"
+      # GET /api/test/outbox lets the collection read verification / reset emails (refused in production).
+      AUTH_TEST_HOOKS: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

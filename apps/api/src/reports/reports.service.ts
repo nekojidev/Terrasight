@@ -7,6 +7,19 @@ import { ProblemException } from "../http/problem.js";
 const hashToken = (t: string) => createHash("sha256").update(t).digest("hex");
 
 /** Report links (RFC §14.1): the owner opens the decisions without an account. Decisions live in DecisionsService. */
+export const REPORT_LINK_DEFAULT_DAYS = 60;
+export const REPORT_LINK_MAX_DAYS = 365;
+
+/** Report links always expire: 60 days unless a (future, at most one year away) date is given. */
+export function linkExpiry(requested: string | null | undefined, now = Date.now()): Date {
+  const max = now + REPORT_LINK_MAX_DAYS * 864e5;
+  if (!requested) return new Date(now + REPORT_LINK_DEFAULT_DAYS * 864e5);
+  const at = new Date(requested).getTime();
+  if (!Number.isFinite(at) || at <= now)
+    throw new ProblemException(422, "invalid-input", "The expiry date must be in the future");
+  return new Date(Math.min(at, max));
+}
+
 @Injectable()
 export class ReportsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -24,7 +37,7 @@ export class ReportsService {
         workspaceId,
         tokenHash: hashToken(token),
         language: body.language,
-        expiresAt: body.expiresAt ? new Date(body.expiresAt) : null,
+        expiresAt: linkExpiry(body.expiresAt),
       },
     });
     await this.prisma.db.auditLog.create({

@@ -4,7 +4,7 @@ import { isTimeZone, slugify } from "../workspaces/workspaces.service.js";
 import { requireRequestedWith } from "../http/csrf.js";
 import { can, PERMISSIONS, type Permission } from "./permissions.js";
 import { MemoryBuckets } from "./rate-limit.js";
-import { RefreshTokens, type RefreshRow, type RefreshStore } from "./refresh.js";
+import { REFRESH_GRACE_MS, RefreshTokens, type RefreshRow, type RefreshStore } from "./refresh.js";
 import { hashToken, signAccess, verifyAccess } from "./tokens.js";
 
 const SECRET = "s".repeat(32);
@@ -16,6 +16,9 @@ class MemoryStore implements RefreshStore {
   }
   async findByHash(hash: string) {
     return [...this.rows.values()].find((r) => r.tokenHash === hash) ?? null;
+  }
+  async findById(id: string) {
+    return this.rows.get(id) ?? null;
   }
   async markReplaced(oldId: string, newId: string, at: Date) {
     const r = this.rows.get(oldId);
@@ -58,24 +61,45 @@ describe("refresh token rotation (Tech Design §14.1)", () => {
     expect(families.size).toBe(1);
   });
 
-  it("revokes the whole family when a rotated token is reused", async () => {
+  it("revokes the whole family when a rotated token is reused after the grace window", async () => {
     const store = new MemoryStore();
-    const tokens = new RefreshTokens(store);
+    let now = new Date("2026-11-14T00:00:00Z");
+    const tokens = new RefreshTokens(store, () => now);
     const t1 = await tokens.issue("u1");
     const r1 = await tokens.rotate(t1);
     expect(r1.ok).toBe(true);
+    now = new Date(now.getTime() + REFRESH_GRACE_MS + 1000);
     expect(await tokens.rotate(t1)).toEqual({ ok: false, reason: "reused" });
     // The legitimate newer token is now dead too: the user is signed out everywhere.
     expect(await tokens.rotate(r1.ok ? r1.token : "")).toEqual({ ok: false, reason: "reused" });
   });
 
-  it("treats two concurrent refreshes with one token as reuse", async () => {
+  it("lets a concurrent refresh with the same token through inside the grace window", async () => {
     const store = new MemoryStore();
     const tokens = new RefreshTokens(store);
     const t1 = await tokens.issue("u1");
     const results = await Promise.all([tokens.rotate(t1), tokens.rotate(t1)]);
-    expect(results.filter((r) => r.ok)).toHaveLength(1);
+    expect(results.every((r) => r.ok)).toBe(true);
+    // Both answers stay usable (no family revocation); the old token itself is dead.
+    expect([...store.rows.values()].filter((r) => !r.revokedAt)).toHaveLength(2);
+  });
+
+  it("grace does not apply once the successor was used (theft stays detectable)", async () => {
+    const store = new MemoryStore();
+    const tokens = new RefreshTokens(store);
+    const t1 = await tokens.issue("u1");
+    const r1 = await tokens.rotate(t1);
+    expect((await tokens.rotate(r1.ok ? r1.token : "")).ok).toBe(true);
+    expect(await tokens.rotate(t1)).toEqual({ ok: false, reason: "reused" });
     expect([...store.rows.values()].every((r) => r.revokedAt)).toBe(true);
+  });
+
+  it("an explicitly revoked token never gets grace", async () => {
+    const store = new MemoryStore();
+    const tokens = new RefreshTokens(store);
+    const t1 = await tokens.issue("u1");
+    await tokens.revoke(t1);
+    expect(await tokens.rotate(t1)).toEqual({ ok: false, reason: "reused" });
   });
 
   it("rejects expired and unknown tokens", async () => {

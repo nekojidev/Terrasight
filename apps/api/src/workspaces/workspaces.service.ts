@@ -1,6 +1,9 @@
 import { randomBytes } from "node:crypto";
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 import { hashToken, newOpaqueToken } from "../auth/tokens.js";
+import { ENV, type Env } from "../config/config.js";
+import { Mailer } from "../mail/mailer.js";
+import { templates } from "../mail/templates.js";
 import { PrismaService } from "../db/prisma.service.js";
 import type { Language, Role, Units } from "../generated/prisma/enums.js";
 import { ProblemException } from "../http/problem.js";
@@ -42,10 +45,52 @@ export interface WorkspaceInput {
 
 @Injectable()
 export class WorkspacesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(ENV) private readonly env: Env,
+    private readonly mailer: Mailer,
+  ) {}
+
+  /** Creates an invitation and emails the link; returns the token (the owner can also copy the link). */
+  private async createInvitation(
+    workspaceId: string,
+    actor: { id: string },
+    email: string,
+    role: Role,
+  ): Promise<{ id: string; email: string; role: Role; expiresAt: Date; token: string }> {
+    const token = newOpaqueToken();
+    const invitation = await this.prisma.system.invitation.create({
+      data: {
+        workspaceId,
+        email,
+        role,
+        tokenHash: hashToken(token),
+        expiresAt: new Date(Date.now() + INVITE_TTL_DAYS * 864e5),
+      },
+      select: { id: true, email: true, role: true, expiresAt: true, workspace: { select: { name: true } } },
+    });
+    await this.prisma.db.auditLog.create({
+      data: { workspaceId, userId: actor.id, action: "member.invite", target: `${email}:${role}` },
+    });
+    const invitee = await this.prisma.system.user.findUnique({ where: { email }, select: { uiLanguage: true } });
+    const link = `${this.env.WEB_ORIGIN.replace(/\/$/, "")}/invite/${token}`;
+    await this.mailer.trySend({
+      to: email,
+      ...templates.invitation(invitee?.uiLanguage ?? "en", invitation.workspace.name, link),
+    });
+    const { workspace: _w, ...rest } = invitation;
+    return { ...rest, token };
+  }
 
   /** Onboarding step 1 (S-01.02): the creator becomes the Owner. */
   async create(userId: string, input: WorkspaceInput) {
+    const owned = await this.prisma.system.membership.count({ where: { userId, role: "owner" } });
+    if (owned >= this.env.MAX_WORKSPACES_PER_USER)
+      throw new ProblemException(
+        409,
+        "workspace-limit",
+        `You can own up to ${this.env.MAX_WORKSPACES_PER_USER} companies`,
+      );
     return this.prisma.system.$transaction(async (tx) => {
       const ws = await tx.workspace.create({
         data: {
@@ -118,28 +163,24 @@ export class WorkspacesService {
     workspaceId: string,
     actor: { id: string; role: Role },
     input: { name: string; email: string; role: Role },
-  ): Promise<{ userId: string; setupUrl: string; expiresAt: Date } | { userId: string; existing: true }> {
+  ): Promise<
+    | { userId: string; setupUrl: string; expiresAt: Date }
+    | { userId: string; existing: true; invited: true; expiresAt: Date }
+  > {
     if (input.role === "owner" && actor.role !== "owner")
       throw new ProblemException(403, "owner-only", "Only an Owner can create an Owner");
     const email = input.email.trim().toLowerCase();
+    // An existing account is never added silently: it gets an invitation it must accept with a verified email.
+    const existing = await this.prisma.system.user.findUnique({ where: { email }, select: { id: true } });
+    if (existing) {
+      const member = await this.prisma.system.membership.findUnique({
+        where: { workspaceId_userId: { workspaceId, userId: existing.id } },
+      });
+      if (member) throw new ProblemException(409, "already-member", "This person is already a member");
+      const inv = await this.createInvitation(workspaceId, actor, email, input.role);
+      return { userId: existing.id, existing: true as const, invited: true as const, expiresAt: inv.expiresAt };
+    }
     return this.prisma.system.$transaction(async (tx) => {
-      const existing = await tx.user.findUnique({ where: { email }, select: { id: true } });
-      if (existing) {
-        const member = await tx.membership.findUnique({
-          where: { workspaceId_userId: { workspaceId, userId: existing.id } },
-        });
-        if (member) throw new ProblemException(409, "already-member", "This person is already a member");
-        await tx.membership.create({ data: { workspaceId, userId: existing.id, role: input.role } });
-        await tx.auditLog.create({
-          data: {
-            workspaceId,
-            userId: actor.id,
-            action: "member.add",
-            target: `${existing.id}:${input.role}`,
-          },
-        });
-        return { userId: existing.id, existing: true as const };
-      }
       const token = newOpaqueToken();
       const expiresAt = new Date(Date.now() + SETUP_TTL_DAYS * 864e5);
       const user = await tx.user.create({
@@ -186,21 +227,7 @@ export class WorkspacesService {
       select: { userId: true },
     });
     if (already) throw new ProblemException(409, "already-member", "This person is already a member");
-    const token = newOpaqueToken();
-    const invitation = await this.prisma.system.invitation.create({
-      data: {
-        workspaceId,
-        email,
-        role,
-        tokenHash: hashToken(token),
-        expiresAt: new Date(Date.now() + INVITE_TTL_DAYS * 864e5),
-      },
-      select: { id: true, email: true, role: true, expiresAt: true },
-    });
-    await this.prisma.db.auditLog.create({
-      data: { workspaceId, userId: actor.id, action: "member.invite", target: `${email}:${role}` },
-    });
-    return { ...invitation, token };
+    return this.createInvitation(workspaceId, actor, email, role);
   }
 
   async invitationInfo(token: string) {
@@ -232,10 +259,16 @@ export class WorkspacesService {
         throw new ProblemException(410, "invitation-used", "This invitation was already used");
       if (inv.expiresAt <= new Date())
         throw new ProblemException(410, "invitation-expired", "This invitation has expired");
-      const user = await tx.user.findUnique({ where: { id: userId }, select: { email: true } });
+      const user = await tx.user.findUnique({
+        where: { id: userId },
+        select: { email: true, emailVerifiedAt: true },
+      });
       if (!user || user.email.toLowerCase() !== inv.email.toLowerCase()) {
         throw new ProblemException(403, "invitation-other-email", `This invitation is for ${inv.email}`);
       }
+      // The invitation proves nothing about who owns the mailbox; the account must have verified it.
+      if (!user.emailVerifiedAt)
+        throw new ProblemException(403, "email-unverified", "Verify your email address to accept this invitation");
       const claimed = await tx.invitation.updateMany({
         where: { id: inv.id, acceptedAt: null },
         data: { acceptedAt: new Date() },

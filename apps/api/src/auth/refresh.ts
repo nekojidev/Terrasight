@@ -15,6 +15,7 @@ export interface RefreshRow {
 export interface RefreshStore {
   insert(row: Omit<RefreshRow, "revokedAt" | "replacedBy">): Promise<void>;
   findByHash(hash: string): Promise<RefreshRow | null>;
+  findById(id: string): Promise<RefreshRow | null>;
   /** Marks `oldId` revoked and replaced by `newId`, only if it is still active. Returns false if it wasn't. */
   markReplaced(oldId: string, newId: string, at: Date): Promise<boolean>;
   revokeFamily(familyId: string, at: Date): Promise<void>;
@@ -23,6 +24,9 @@ export interface RefreshStore {
 
 export type RotateResult =
   { ok: true; userId: string; token: string } | { ok: false; reason: "unknown" | "expired" | "reused" };
+
+/** Two tabs refreshing at once present the same token; the loser within this window is not treated as theft. */
+export const REFRESH_GRACE_MS = 20_000;
 
 /** Refresh token rotation with family revocation (Tech Design §14.1). */
 export class RefreshTokens {
@@ -46,7 +50,8 @@ export class RefreshTokens {
 
   /**
    * Exchanges a refresh token for a new one in the same family. Presenting a token that was already
-   * rotated or revoked means it leaked: the whole family is revoked and the user is signed out everywhere.
+   * rotated or revoked means it leaked: the whole family is revoked and the user is signed out everywhere,
+   * except for a rotated token re-presented within REFRESH_GRACE_MS while its successor is still unused.
    */
   async rotate(token: string | undefined): Promise<RotateResult> {
     if (!token) return { ok: false, reason: "unknown" };
@@ -54,11 +59,27 @@ export class RefreshTokens {
     if (!row) return { ok: false, reason: "unknown" };
     const now = this.now();
     if (row.revokedAt || row.replacedBy) {
+      if (await this.withinGrace(row, now)) return this.mint(row, now, false);
       await this.store.revokeFamily(row.familyId, now);
       return { ok: false, reason: "reused" };
     }
     if (row.expiresAt <= now) return { ok: false, reason: "expired" };
+    return this.mint(row, now, true);
+  }
 
+  /**
+   * A rotated token may be presented again for REFRESH_GRACE_MS (concurrent refresh), but only while its successor
+   * is still unused and the family is intact. A later presentation, or one after the successor was rotated or the
+   * family revoked, is reuse. Grace answers are siblings: the successor stays valid, the old token is never revived.
+   */
+  private async withinGrace(row: RefreshRow, now: Date): Promise<boolean> {
+    if (!row.replacedBy || !row.revokedAt) return false;
+    if (now.getTime() - row.revokedAt.getTime() > REFRESH_GRACE_MS || row.expiresAt <= now) return false;
+    const successor = await this.store.findById(row.replacedBy);
+    return !!successor && !successor.revokedAt && !successor.replacedBy && successor.expiresAt > now;
+  }
+
+  private async mint(row: RefreshRow, now: Date, replace: boolean): Promise<RotateResult> {
     const next = newOpaqueToken();
     const nextId = randomUUID();
     await this.store.insert({
@@ -68,8 +89,11 @@ export class RefreshTokens {
       tokenHash: hashToken(next),
       expiresAt: new Date(now.getTime() + REFRESH_TTL_S * 1000),
     });
-    // Two concurrent refreshes with the same token: only one wins; the loser is treated as reuse.
-    if (!(await this.store.markReplaced(row.id, nextId, now))) {
+    // Two concurrent refreshes with the same active token: only one wins the swap; the loser is a grace case
+    // if the winner has just rotated the row, otherwise it is reuse.
+    if (replace && !(await this.store.markReplaced(row.id, nextId, now))) {
+      const fresh = await this.store.findById(row.id);
+      if (fresh && (await this.withinGrace(fresh, now))) return { ok: true, userId: row.userId, token: next };
       await this.store.revokeFamily(row.familyId, now);
       return { ok: false, reason: "reused" };
     }

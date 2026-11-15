@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, ParseIntPipe, Post, Put, Req, UseGuards } from "@nestjs/common";
 import { z } from "zod";
 import { AuthGuard, Requires, UUID, WorkspaceGuard, type AuthedRequest } from "../auth/current-user.js";
+import { COST_BUCKETS, RateLimitService } from "../auth/rate-limit.js";
 import { ProblemException } from "../http/problem.js";
 import { ZodPipe } from "../http/zod.js";
 import { ScenariosService } from "./scenarios.service.js";
@@ -42,15 +43,20 @@ export class RotationsOverviewController {
 @Controller("w/:ws/fields/:id")
 @UseGuards(AuthGuard, WorkspaceGuard)
 export class ScenariosController {
-  constructor(private readonly scenarios: ScenariosService) {}
+  constructor(
+    private readonly scenarios: ScenariosService,
+    private readonly limits: RateLimitService,
+  ) {}
 
+  /** Also the entry point of AI-proposed rotations (Gemini), so the per-user bucket is the AI cost limit too. */
   @Post("scenario-runs")
   @Requires("scenarios.explore")
-  run(
+  async run(
     @Param("id") id: string,
     @Body(new ZodPipe(RunBody)) body: z.infer<typeof RunBody>,
     @Req() req: AuthedRequest,
   ) {
+    await this.limits.enforce(`scenario:${req.user!.id}`, COST_BUCKETS.scenarioRun);
     return this.scenarios.run(req.workspaceId!, uuid(id), body.overrides);
   }
 

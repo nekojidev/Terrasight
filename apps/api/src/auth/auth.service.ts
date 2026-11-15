@@ -5,7 +5,12 @@ import { PrismaService } from "../db/prisma.service.js";
 import type { Language } from "../generated/prisma/enums.js";
 import { ProblemException } from "../http/problem.js";
 import { RefreshTokens, type RefreshRow, type RefreshStore } from "./refresh.js";
-import { hashToken, signAccess } from "./tokens.js";
+import { Mailer } from "../mail/mailer.js";
+import { templates } from "../mail/templates.js";
+import { hashToken, newOpaqueToken, signAccess } from "./tokens.js";
+
+export const VERIFY_TTL_H = 24;
+export const RESET_TTL_H = 1;
 
 export interface Session {
   userId: string;
@@ -28,6 +33,9 @@ class PrismaRefreshStore implements RefreshStore {
       data: { revokedAt: at, replacedBy: newId },
     });
     return r.count === 1;
+  }
+  async findById(id: string): Promise<RefreshRow | null> {
+    return this.prisma.system.refreshToken.findUnique({ where: { id } });
   }
   async revokeFamily(familyId: string, at: Date): Promise<void> {
     await this.prisma.system.refreshToken.updateMany({
@@ -54,8 +62,24 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     @Inject(ENV) private readonly env: Env,
+    private readonly mailer: Mailer,
   ) {
     this.refresh = new RefreshTokens(new PrismaRefreshStore(prisma));
+  }
+
+  private link(path: string, token?: string): string {
+    return `${this.env.WEB_ORIGIN.replace(/\/$/, "")}${path}${token ? `/${token}` : ""}`;
+  }
+
+  /** Stores a fresh 24 h verification token for the user and emails the link. */
+  private async sendVerification(user: { id: string; email: string; name: string; uiLanguage: Language }) {
+    const token = newOpaqueToken();
+    await this.prisma.system.user.update({
+      where: { id: user.id },
+      data: { verifyTokenHash: hashToken(token), verifyExpiresAt: new Date(Date.now() + VERIFY_TTL_H * 36e5) },
+    });
+    const m = templates.verify(user.uiLanguage, user.name, this.link("/verify", token));
+    await this.mailer.trySend({ to: user.email, ...m });
   }
 
   private async session(userId: string): Promise<Session> {
@@ -66,21 +90,110 @@ export class AuthService {
     };
   }
 
-  async signup(input: {
-    email: string;
-    password: string;
-    name: string;
-    uiLanguage: Language;
-  }): Promise<Session> {
+  /**
+   * Uniform sign-up: the caller always gets the same answer ("check your email") and no session, whether the
+   * address is new or already registered. A new address gets a verification link; an existing one gets a
+   * "you already have an account" email. `sendMail=false` (throttled address) skips the email silently.
+   */
+  async signup(
+    input: { email: string; password: string; name: string; uiLanguage: Language },
+    sendMail = true,
+  ): Promise<void> {
     const email = input.email.trim().toLowerCase();
-    const existing = await this.prisma.system.user.findUnique({ where: { email }, select: { id: true } });
-    if (existing) throw new ProblemException(409, "email-taken", "An account with this email already exists");
+    // Hash in both branches so response time doesn't reveal whether the account exists.
     const passwordHash = await argon2.hash(input.password, { type: argon2.argon2id });
-    const user = await this.prisma.system.user.create({
-      data: { email, passwordHash, name: input.name.trim(), uiLanguage: input.uiLanguage },
-      select: { id: true },
+    const existing = await this.prisma.system.user.findUnique({
+      where: { email },
+      select: { uiLanguage: true },
     });
-    return this.session(user.id);
+    let created: { id: string; email: string; name: string; uiLanguage: Language } | null = null;
+    if (!existing) {
+      try {
+        created = await this.prisma.system.user.create({
+          data: { email, passwordHash, name: input.name.trim(), uiLanguage: input.uiLanguage },
+          select: { id: true, email: true, name: true, uiLanguage: true },
+        });
+      } catch (e) {
+        if ((e as { code?: string }).code !== "P2002") throw e; // lost a race with another sign-up: treat as existing
+      }
+    }
+    if (!sendMail) return;
+    if (created) await this.sendVerification(created);
+    else {
+      const m = templates.alreadyRegistered(existing?.uiLanguage ?? input.uiLanguage, this.link("/login"));
+      await this.mailer.trySend({ to: email, ...m });
+    }
+  }
+
+  /** Marks the email verified (single-use link, 24 h). */
+  async verifyEmail(token: string): Promise<void> {
+    const tokenHash = hashToken(token);
+    const claimed = await this.prisma.system.user.updateMany({
+      where: { verifyTokenHash: tokenHash, verifyExpiresAt: { gt: new Date() } },
+      data: { emailVerifiedAt: new Date(), verifyTokenHash: null, verifyExpiresAt: null },
+    });
+    if (claimed.count !== 1)
+      throw new ProblemException(410, "verify-link-invalid", "This link has expired or was already used");
+  }
+
+  /** New verification link for a signed-in user whose email is not verified yet. */
+  async resendVerification(userId: string): Promise<{ alreadyVerified: boolean }> {
+    const user = await this.prisma.system.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true, name: true, uiLanguage: true, emailVerifiedAt: true },
+    });
+    if (!user) throw new ProblemException(401, "unknown-user");
+    if (user.emailVerifiedAt) return { alreadyVerified: true };
+    await this.sendVerification(user);
+    return { alreadyVerified: false };
+  }
+
+  /** Password reset request. Always resolves the same way; an email goes out only if the account exists. */
+  async forgotPassword(emailRaw: string, sendMail = true): Promise<void> {
+    const email = emailRaw.trim().toLowerCase();
+    const user = await this.prisma.system.user.findUnique({
+      where: { email },
+      select: { id: true, uiLanguage: true },
+    });
+    if (!user || !sendMail) return;
+    const token = newOpaqueToken();
+    await this.prisma.system.user.update({
+      where: { id: user.id },
+      data: { resetTokenHash: hashToken(token), resetExpiresAt: new Date(Date.now() + RESET_TTL_H * 36e5) },
+    });
+    await this.mailer.trySend({ to: email, ...templates.reset(user.uiLanguage, this.link("/reset", token)) });
+  }
+
+  /**
+   * Sets a new password from a reset link (1 h, single use). Following the link proves the mailbox, so the email
+   * becomes verified; every session of the user is revoked and a pending setup link is dropped.
+   */
+  async resetPassword(token: string, password: string): Promise<void> {
+    const tokenHash = hashToken(token);
+    const user = await this.prisma.system.user.findUnique({
+      where: { resetTokenHash: tokenHash },
+      select: { id: true, resetExpiresAt: true, emailVerifiedAt: true },
+    });
+    const invalid = () =>
+      new ProblemException(410, "reset-link-invalid", "This link has expired or was already used");
+    if (!user?.resetExpiresAt || user.resetExpiresAt <= new Date()) throw invalid();
+    const passwordHash = await argon2.hash(password, { type: argon2.argon2id });
+    const now = new Date();
+    await this.prisma.system.$transaction(async (tx) => {
+      const claimed = await tx.user.updateMany({
+        where: { id: user.id, resetTokenHash: tokenHash, resetExpiresAt: { gt: now } },
+        data: {
+          passwordHash,
+          resetTokenHash: null,
+          resetExpiresAt: null,
+          setupTokenHash: null,
+          setupExpiresAt: null,
+          emailVerifiedAt: user.emailVerifiedAt ?? now,
+        },
+      });
+      if (claimed.count !== 1) throw invalid();
+      await tx.refreshToken.updateMany({ where: { userId: user.id, revokedAt: null }, data: { revokedAt: now } });
+    });
   }
 
   async login(emailRaw: string, password: string): Promise<Session> {
@@ -148,6 +261,7 @@ export class AuthService {
         email: true,
         name: true,
         uiLanguage: true,
+        emailVerifiedAt: true,
         memberships: {
           select: {
             role: true,
@@ -172,6 +286,7 @@ export class AuthService {
       email: user.email,
       name: user.name,
       uiLanguage: user.uiLanguage,
+      emailVerified: user.emailVerifiedAt !== null,
       workspaces: user.memberships.map((m) => ({ ...m.workspace, role: m.role })),
     };
   }

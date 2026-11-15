@@ -2,6 +2,8 @@ import { Module } from "@nestjs/common";
 import { LoggerModule } from "nestjs-pino";
 import { loadEnv } from "./config/config.js";
 import { AiModule } from "./ai/ai.module.js";
+import { reqSerializer } from "./http/redact.js";
+import { MailModule } from "./mail/mail.module.js";
 import { AnalysisModule } from "./analysis/analysis.module.js";
 import { AssistantModule } from "./assistant/assistant.module.js";
 import { AuthModule } from "./auth/auth.module.js";
@@ -30,7 +32,13 @@ const env = loadEnv();
       pinoHttp: {
         level: env.LOG_LEVEL,
         autoLogging: { ignore: (req) => req.url === "/healthz" || req.url === "/readyz" },
-        redact: ["req.headers.cookie", "req.headers.authorization", 'res.headers["set-cookie"]'],
+        serializers: { req: reqSerializer },
+        redact: [
+          "req.headers.cookie",
+          "req.headers.authorization",
+          "req.headers.referer",
+          'res.headers["set-cookie"]',
+        ],
         ...(env.NODE_ENV === "development"
           ? { transport: { target: "pino-pretty", options: { singleLine: true } } }
           : {}),
@@ -41,6 +49,7 @@ const env = loadEnv();
     DbModule,
     RedisModule,
     AiModule,
+    MailModule,
     MessagingModule,
     AuthModule,
     EventsModule,
