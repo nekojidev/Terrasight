@@ -1,11 +1,16 @@
 "use client";
 
-import { Chip, FieldThumb } from "@terrasight/ui";
-import { ChevronRight, MapPin, Plus } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Chip, FieldThumb, Surface, Tabs } from "@terrasight/ui";
+import { CheckCircle2, ChevronRight, Clock, MapPin, OctagonAlert, Plus } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type KeyboardEvent } from "react";
 import { LandChip, type LandStatus } from "@/components/LandSuitability";
+import { QueryState } from "@/components/QueryState";
+import { api } from "@/lib/api";
+import { useFormat } from "@/lib/useFormat";
 
 type Localised = { en: string; uk: string };
 type Urgency = "urgent" | "this_week" | "all_good";
@@ -41,7 +46,6 @@ export interface FieldsOverviewData {
   }>;
 }
 
-const AC = 2.471054;
 const TONE: Record<Urgency, "urgent" | "week" | "ok"> = {
   urgent: "urgent",
   this_week: "week",
@@ -79,9 +83,50 @@ const UA_OBLAST: Record<string, string> = {
 };
 const countryOf = (c: { state: string | null }) => c.state?.split("-")[0] ?? "";
 const PIN: Record<Urgency, string> = { urgent: "fill-urgent", this_week: "fill-week", all_good: "fill-ok" };
+const STATUS_KEY = { urgent: "stUrgent", this_week: "stWeek", all_good: "stOk" } as const;
+const STATUS_ICON = { urgent: OctagonAlert, this_week: Clock, all_good: CheckCircle2 } as const;
+/** Data tier by country: A = US, B = EU, C = the rest (including Ukraine). Mirrors the API's place lookup. */
+const EU = new Set(
+  "AT BE BG HR CY CZ DK EE FI FR DE GR HU IE IT LV LT LU MT NL PL PT RO SK SI ES SE".split(" "),
+);
+export const tierOf = (country: string): "A" | "B" | "C" =>
+  country === "US" ? "A" : EU.has(country) ? "B" : "C";
 
 /** Fields (design 07, S-04.08): county chips, a schematic map with one pin per county, the list grouped by county. */
 export function FieldsOverview({
+  data: initial,
+  units,
+  canEdit,
+  workspaceId,
+}: {
+  data: FieldsOverviewData;
+  units: "metric" | "imperial";
+  canEdit: boolean;
+  workspaceId: string;
+}) {
+  const f = useTranslations("Fields");
+  const router = useRouter();
+  // The server already fetched the page; the query keeps it fresh and shows the error card with Retry if a refresh fails.
+  const query = useQuery({
+    queryKey: ["fields-overview", workspaceId],
+    queryFn: () => api<FieldsOverviewData>(`/api/w/${workspaceId}/fields-overview`),
+    initialData: initial,
+    staleTime: 30_000,
+  });
+  return (
+    <QueryState
+      query={query}
+      skeletonVariant="rows"
+      what={f("loadWhat")}
+      isEmpty={(d) => d.counties.length === 0}
+      empty={{ text: f("emptyText"), actionLabel: f("emptyAction"), onAction: () => router.push("/fields/new") }}
+    >
+      {(data) => <Body data={data} units={units} canEdit={canEdit} />}
+    </QueryState>
+  );
+}
+
+function Body({
   data,
   units,
   canEdit,
@@ -91,18 +136,24 @@ export function FieldsOverview({
   canEdit: boolean;
 }) {
   const t = useTranslations("App");
+  const f = useTranslations("Fields");
+  const router = useRouter();
   const locale = useLocale() as "en" | "uk";
+  const fmt = useFormat({ units });
   const [filter, setFilter] = useState<string | null>(null);
-  const area = (ha: number) =>
-    units === "imperial" ? `${Math.round(ha * AC).toLocaleString()} ac` : `${ha.toFixed(1)} ha`;
-  const temp = (c: number | null) =>
-    c === null ? "—" : units === "imperial" ? `${Math.round((c * 9) / 5 + 32)}°F` : `${Math.round(c)}°`;
-  const date = (iso: string) =>
-    new Intl.DateTimeFormat(locale === "uk" ? "uk-UA" : "en-US", {
-      timeZone: "UTC",
-      day: "numeric",
-      month: "long",
-    }).format(new Date(`${iso}T12:00:00Z`));
+  const area = fmt.area;
+  const temp = (c: number | null) => (c === null ? "—" : fmt.temp(c));
+  const date = (iso: string) => fmt.date(`${iso}T12:00:00Z`, "dayMonth", { timeZone: "UTC" });
+  const countryName = (cc: string) => {
+    try {
+      return new Intl.DisplayNames(locale === "uk" ? "uk-UA" : "en-US", { type: "region" }).of(cc) ?? cc;
+    } catch {
+      return cc;
+    }
+  };
+  /** US states and other admin areas: the name the API sends with the outline, never the raw code. */
+  const areaName = (code: string | null) =>
+    (code && data.states.find((s) => s.code === code)?.name) || code?.split("-")[1] || "";
   const oblast = (state: string | null, fallback: string) =>
     locale === "uk" && state && UA_OBLAST[state]
       ? state === "UA-30" || state === "UA-40"
@@ -110,7 +161,7 @@ export function FieldsOverview({
         : `${UA_OBLAST[state]} обл.`
       : fallback;
   const label = (c: FieldsOverviewData["counties"][number]) =>
-    countryOf(c) === "UA" ? oblast(c.state, c.county) : `${c.state?.split("-")[1] ?? ""} · ${c.county}`;
+    countryOf(c) === "UA" ? oblast(c.state, c.county) : `${areaName(c.state)} · ${c.county}`;
   const stateName = (code: string, name: string) => (code.startsWith("UA-") ? oblast(code, name) : name);
   const weatherText = (w: NonNullable<FieldsOverviewData["counties"][number]["weather"]>) =>
     [
@@ -119,10 +170,7 @@ export function FieldsOverview({
         ? null
         : w.precipMm < 0.2
           ? t("fpDry")
-          : t("fpRain", {
-              mm:
-                units === "imperial" ? (w.precipMm / 25.4).toFixed(2) + " in" : `${w.precipMm.toFixed(1)} mm`,
-            }),
+          : t("fpRain", { mm: fmt.rain(w.precipMm) }),
     ]
       .filter(Boolean)
       .join(", ");
@@ -236,6 +284,16 @@ export function FieldsOverview({
   }, [data, activeCountry, locale]);
 
   const shown = data.counties.filter((c) => !filter || c.key === filter);
+  const selected = data.counties.find((c) => c.key === filter) ?? null;
+  const statusText = (u: Urgency) => f(STATUS_KEY[u]);
+  const pinKey = (c: FieldsOverviewData["counties"][number]) => (e: KeyboardEvent) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    e.preventDefault();
+    const only = c.fields[0];
+    if (e.key === "Enter" && only && c.fields.length === 1) router.push(`/fields/${only.fieldId}`);
+    else setFilter(filter === c.key ? null : c.key);
+  };
+  let rowNo = 0;
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-wrap items-start justify-between gap-3">
@@ -256,52 +314,40 @@ export function FieldsOverview({
         )}
       </header>
 
-      <div role="radiogroup" className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          role="radio"
-          aria-checked={!filter}
-          onClick={() => setFilter(null)}
-          className={`focus-ring rounded-chip border px-4 py-2 text-small font-semibold ${!filter ? "border-ink bg-ink text-surface" : "border-line bg-surface text-ink"}`}
-        >
+      <div role="group" aria-label={f("regionLabel")} className="flex flex-wrap gap-2">
+        <Chip pressed={!filter} onClick={() => setFilter(null)}>
           {t("fpAll", { n })}
-        </button>
+        </Chip>
         {data.counties.map((c) => (
-          <button
-            key={c.key}
-            type="button"
-            role="radio"
-            aria-checked={filter === c.key}
-            onClick={() => setFilter(c.key)}
-            className={`focus-ring rounded-chip border px-4 py-2 text-small font-semibold ${filter === c.key ? "border-ink bg-ink text-surface" : "border-line bg-surface text-ink"}`}
-          >
+          <Chip key={c.key} pressed={filter === c.key} onClick={() => setFilter(filter === c.key ? null : c.key)}>
             {label(c)}
-          </button>
+          </Chip>
         ))}
       </div>
+      {selected && (
+        <p role="status" className="-mt-3 text-small text-ink-2">
+          {f("selected", { name: label(selected) })}
+        </p>
+      )}
 
       {map && (
-        <section className="grid gap-6 rounded-card border border-line bg-surface p-6 lg:grid-cols-[1fr_260px]">
+        <Surface as="section" pad="lg" className="grid gap-6 lg:grid-cols-[1fr_260px]">
           <div>
             {countries.length > 1 && !filter && (
-              <div role="tablist" className="mb-2 flex gap-2">
-                {countries.map((cc) => (
-                  <button
-                    key={cc}
-                    type="button"
-                    role="tab"
-                    aria-selected={cc === activeCountry}
-                    onClick={() => setMapCountry(cc)}
-                    className={`focus-ring rounded-chip border px-3 py-1 text-small font-semibold ${cc === activeCountry ? "border-ink bg-ink text-surface" : "border-line bg-surface text-ink"}`}
-                  >
-                    {cc === "UA" ? t("fpUkraine") : cc === "US" ? t("fpUsa") : cc}
-                  </button>
-                ))}
-              </div>
+              <Tabs
+                label={f("mapCountry")}
+                value={activeCountry}
+                onChange={setMapCountry}
+                items={countries.map((cc) => ({
+                  id: cc,
+                  label: cc === "UA" ? t("fpUkraine") : cc === "US" ? t("fpUsa") : countryName(cc),
+                }))}
+                className="mb-2"
+              />
             )}
-            <svg viewBox="0 0 640 340" role="img" aria-label={t("fpMap")} className="w-full">
+            <svg viewBox="0 0 640 340" role="group" aria-label={t("fpMap")} className="w-full">
               {map.states.map((s, i) => (
-                <g key={`${s.code}-${i}`}>
+                <g key={`${s.code}-${i}`} aria-hidden>
                   <polygon points={s.d} className="fill-muted stroke-line-strong" strokeWidth="1.5" />
                   {s.main && (
                     <text
@@ -315,123 +361,154 @@ export function FieldsOverview({
                   )}
                 </g>
               ))}
-              {map.pins.map(({ c, xy, home, label: l }) => (
-                <g
-                  key={c.key}
-                  onClick={() => setFilter(filter === c.key ? null : c.key)}
-                  className="cursor-pointer"
-                >
-                  {Math.hypot(xy[0] - home[0], xy[1] - home[1]) > 4 && (
-                    <>
-                      <line
-                        x1={home[0]}
-                        y1={home[1]}
-                        x2={xy[0]}
-                        y2={xy[1]}
-                        className="stroke-ink-3"
-                        strokeWidth="1.5"
-                      />
-                      <circle cx={home[0]} cy={home[1]} r={3} className="fill-ink-3" />
-                    </>
-                  )}
-                  <circle
-                    cx={xy[0]}
-                    cy={xy[1]}
-                    r={13}
-                    className={`${PIN[c.urgency]} stroke-surface`}
-                    strokeWidth="3"
-                  />
-                  <text
-                    x={xy[0]}
-                    y={xy[1] + 4}
-                    textAnchor="middle"
-                    className="fill-surface text-[12px] font-bold"
+              {map.pins.map(({ c, xy, home, label: l }) => {
+                const only = c.fields.length === 1 ? c.fields[0]! : null;
+                const on = filter === c.key;
+                return (
+                  <g
+                    key={c.key}
+                    role="button"
+                    tabIndex={0}
+                    aria-pressed={on}
+                    aria-label={
+                      only
+                        ? f("pinLabelOne", { name: label(c), field: only.name, status: statusText(c.urgency) })
+                        : f("pinLabel", { name: label(c), n: c.fields.length, status: statusText(c.urgency) })
+                    }
+                    onClick={() => setFilter(on ? null : c.key)}
+                    onKeyDown={pinKey(c)}
+                    className="group cursor-pointer outline-none"
                   >
-                    {c.fields.length}
-                  </text>
-                  <text x={l.x} y={l.y} textAnchor={l.anchor} className="fill-ink text-[12px]">
-                    {l.text}
-                  </text>
-                </g>
-              ))}
+                    {Math.hypot(xy[0] - home[0], xy[1] - home[1]) > 4 && (
+                      <>
+                        <line
+                          x1={home[0]}
+                          y1={home[1]}
+                          x2={xy[0]}
+                          y2={xy[1]}
+                          className="stroke-ink-3"
+                          strokeWidth="1.5"
+                        />
+                        <circle cx={home[0]} cy={home[1]} r={3} className="fill-ink-3" />
+                      </>
+                    )}
+                    {/* 44 px touch target (the viewBox is scaled down on a phone, so the target is larger than the dot) */}
+                    <circle cx={xy[0]} cy={xy[1]} r={22} className="fill-transparent" />
+                    <circle
+                      cx={xy[0]}
+                      cy={xy[1]}
+                      r={19}
+                      fill="none"
+                      strokeWidth="3"
+                      className={`stroke-ink ${on ? "opacity-100" : "opacity-0 group-focus-visible:opacity-100"}`}
+                    />
+                    <circle
+                      cx={xy[0]}
+                      cy={xy[1]}
+                      r={13}
+                      className={`${PIN[c.urgency]} stroke-surface`}
+                      strokeWidth="3"
+                    />
+                    <text
+                      x={xy[0]}
+                      y={xy[1] + 4}
+                      textAnchor="middle"
+                      className="fill-surface text-[12px] font-bold"
+                    >
+                      {c.fields.length}
+                    </text>
+                    <text x={l.x} y={l.y} textAnchor={l.anchor} className="fill-ink text-[12px]">
+                      {l.text}
+                    </text>
+                  </g>
+                );
+              })}
             </svg>
             {map.states.length === 0 && <p className="text-small text-ink-2">{t("fpNoOutline")}</p>}
           </div>
           <div>
             <h2 className="text-h2 text-ink">{t("fpMap")}</h2>
-            <p className="mb-3 text-small text-ink-2">{t("fpMapSub")}</p>
-            {(["urgent", "this_week", "all_good"] as const).map((u) => (
-              <p key={u} className="flex items-center gap-2 text-small text-ink">
-                <span
-                  aria-hidden
-                  className={`size-3 rounded-chip ${u === "urgent" ? "bg-urgent" : u === "this_week" ? "bg-week" : "bg-ok"}`}
-                />
-                {t(u === "urgent" ? "fpUrgent" : u === "this_week" ? "fpWeek" : "fpOk")}
-              </p>
-            ))}
+            <p className="mb-3 text-small text-ink-2">{f("mapKb")}</p>
+            {(["urgent", "this_week", "all_good"] as const).map((u) => {
+              const Icon = STATUS_ICON[u];
+              return (
+                <p key={u} className="flex items-center gap-2 text-small text-ink">
+                  <span
+                    aria-hidden
+                    className={`size-3 rounded-chip ${u === "urgent" ? "bg-urgent" : u === "this_week" ? "bg-week" : "bg-ok"}`}
+                  />
+                  <Icon aria-hidden className="size-4" strokeWidth={1.7} />
+                  {statusText(u)}
+                </p>
+              );
+            })}
           </div>
-        </section>
+        </Surface>
       )}
 
-      {shown.map((c) => (
-        <section key={c.key} className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="flex items-center gap-2 text-h2 text-ink">
-              <MapPin aria-hidden className="size-5" strokeWidth={1.7} />
-              {label(c)}
-              <span className="text-small font-normal text-ink-2">
-                {c.fields.length} · {area(c.areaHa)}
-              </span>
-            </h2>
-            {c.weather && <Chip tone="neutral">{t("fpToday", { t: weatherText(c.weather) })}</Chip>}
-          </div>
-          {c.fields.map((f) => (
-            <Link
-              key={f.fieldId}
-              href={`/fields/${f.fieldId}`}
-              className="focus-ring flex flex-wrap items-center gap-4 rounded-card border border-line bg-surface p-4 hover:bg-muted"
-            >
-              <FieldThumb name={f.name} outline={f.thumb ?? null} crop={f.lastCropId ?? null} size={40} />
-              <span className="min-w-48 flex-1">
-                <span className="block text-body font-semibold text-ink">{f.name}</span>
-                <span className="text-small text-ink-2">
-                  {[f.lastCrop?.[locale], area(f.areaHa)].filter(Boolean).join(" · ")}
+      {shown.map((c) => {
+        const tier = tierOf(countryOf(c));
+        return (
+          <section key={c.key} className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="flex items-center gap-2 text-h2 text-ink">
+                <MapPin aria-hidden className="size-5" strokeWidth={1.7} />
+                {label(c)}
+                <span className="text-small font-normal text-ink-2">
+                  {c.fields.length} · {area(c.areaHa)}
                 </span>
-              </span>
-              <span className="min-w-64 flex-1 text-small">
-                {f.next ? (
-                  <>
-                    <span className="block font-semibold text-ink">{f.next.title[locale]}</span>
-                    {f.next.deadline && (
-                      <span
-                        className={
-                          TONE[f.urgency] === "urgent"
-                            ? "text-urgent"
-                            : TONE[f.urgency] === "week"
-                              ? "text-week"
-                              : "text-ink-2"
-                        }
-                      >
-                        {t("fpBy", { date: date(f.next.deadline) })}
-                      </span>
+              </h2>
+              {c.weather && <Chip tone="neutral">{t("fpToday", { t: weatherText(c.weather) })}</Chip>}
+            </div>
+            {c.fields.map((fl) => {
+              const Icon = STATUS_ICON[fl.urgency];
+              const open = fl.next && !fl.next.plan ? 1 + fl.next.more : 0;
+              return (
+                <Link
+                  key={fl.fieldId}
+                  href={`/fields/${fl.fieldId}`}
+                  style={{ "--i": rowNo++ } as React.CSSProperties}
+                  className="stagger animate-rise focus-ring flex min-h-tap flex-wrap items-center gap-4 rounded-card border border-line bg-surface p-4 hover:bg-muted"
+                >
+                  <FieldThumb name={fl.name} outline={fl.thumb ?? null} crop={fl.lastCropId ?? null} size={40} />
+                  <span className="min-w-48 flex-1">
+                    <span className="block text-body font-semibold text-ink">{fl.name}</span>
+                    <span className="block text-small text-ink-2">
+                      {[fl.lastCrop?.[locale], area(fl.areaHa)].filter(Boolean).join(" · ")}
+                    </span>
+                    <span className="block text-caption text-ink-2">{f(`tier${tier}`)}</span>
+                  </span>
+                  <span className="min-w-64 flex-1 text-small">
+                    {fl.next ? (
+                      <>
+                        <span className="block font-semibold text-ink">{fl.next.title[locale]}</span>
+                        {fl.next.deadline && (
+                          <span className={TONE[fl.urgency] === "urgent" ? "text-urgent" : "text-ink-2"}>
+                            {t("fpBy", { date: date(fl.next.deadline) })}
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <span className="text-ink-2">{t("fpNothing")}</span>
                     )}
-                    {f.next.more > 0 && (
-                      <span className="ml-2 text-ink-2">{t("more", { n: f.next.more })}</span>
-                    )}
-                  </>
-                ) : (
-                  <span className="text-ink-2">{t("fpNothing")}</span>
-                )}
-              </span>
-              <LandChip status={f.suitabilityStatus} overridden={f.suitabilityOverridden} />
-              <Chip tone={TONE[f.urgency]}>
-                {t(f.urgency === "urgent" ? "fpUrgent" : f.urgency === "this_week" ? "fpWeek" : "fpOk")}
-              </Chip>
-              <ChevronRight aria-hidden className="size-5 text-ink-3" />
-            </Link>
-          ))}
-        </section>
-      ))}
+                    <span className="block text-ink-2">{open > 0 ? f("openRecs", { n: open }) : f("noRecs")}</span>
+                  </span>
+                  <span className="flex flex-wrap items-center gap-2">
+                    <Chip tone={TONE[fl.urgency]} icon={<Icon />}>
+                      {statusText(fl.urgency)}
+                    </Chip>
+                    <LandChip
+                      status={fl.suitabilityStatus ?? null}
+                      overridden={fl.suitabilityOverridden ?? false}
+                    />
+                  </span>
+                  <ChevronRight aria-hidden className="size-5 text-ink-3" />
+                </Link>
+              );
+            })}
+          </section>
+        );
+      })}
     </div>
   );
 }

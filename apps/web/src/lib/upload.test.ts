@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseCoordinates, ringFromFile } from "./upload";
+import { parseCoordinates, ringFromFile, selfIntersects, UploadError } from "./upload";
 
 describe("parseCoordinates", () => {
   it("reads 'lat, lon' into [lon, lat]", () => {
@@ -41,5 +41,41 @@ describe("ringFromFile", () => {
     await expect(
       ringFromFile(file("f.geojson", JSON.stringify({ type: "Point", coordinates: [0, 0] }))),
     ).rejects.toThrow();
+  });
+});
+
+describe("upload errors", () => {
+  const code = async (f: File) => ringFromFile(f).catch((e: unknown) => (e as UploadError).code);
+  it("names the problem", async () => {
+    expect(await code(new File(["x"], "a.txt"))).toBe("format");
+    expect(await code(new File(["{nope"], "a.geojson"))).toBe("unreadable");
+    expect(await code(new File([JSON.stringify({ type: "Point", coordinates: [0, 0] })], "a.geojson"))).toBe(
+      "no-polygon",
+    );
+    const bow = [
+      [0, 0],
+      [1, 1],
+      [1, 0],
+      [0, 1],
+      [0, 0],
+    ];
+    expect(
+      await code(new File([JSON.stringify({ type: "Polygon", coordinates: [bow] })], "a.geojson")),
+    ).toBe("self-intersect");
+  });
+  it("reports progress up to 1", async () => {
+    const seen: number[] = [];
+    const sq = [[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]];
+    await ringFromFile(new File([JSON.stringify({ type: "Polygon", coordinates: [sq] })], "a.geojson"), (f) =>
+      seen.push(f),
+    );
+    expect(seen.at(-1)).toBe(1);
+  });
+});
+
+describe("selfIntersects", () => {
+  it("is false for a square and true for a bow-tie", () => {
+    expect(selfIntersects([[0, 0], [1, 0], [1, 1], [0, 1]])).toBe(false);
+    expect(selfIntersects([[0, 0], [1, 1], [1, 0], [0, 1]])).toBe(true);
   });
 });
