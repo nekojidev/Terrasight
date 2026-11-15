@@ -9,25 +9,47 @@ export const probe = (file, entries) =>
 
 const ENC = ["-c:v", "libx264", "-preset", "medium", "-crf", "16", "-pix_fmt", "yuv420p", "-r", "30", "-an"];
 
-// segs: [{from,to,ramp?}] seconds in the take. Output is exactly `len` seconds.
-// ramp = target seconds for a section that is sped up (max 8x; if the section is longer, only its tail is kept).
+// segs: [{from,to,ramp?,zoom?}] seconds in the take. Output is exactly `len` seconds.
+// ramp = target seconds for a section that is sped up: eased (slow-fast-slow, up to 8x in the middle); if the section is
+// too long for 8x, only its tail is kept. zoom = {from,to,cx,cy}: push-in on the segment (scale 1 = the full frame).
+const PROFILE = [1, 2.2, 5, 5, 2.2, 1];
+const f3 = (n) => Number(n).toFixed(3);
 export function renderClip({ input, segs, len, out, phone }) {
   const parts = [];
   let total = 0;
   segs.forEach((s, i) => {
     let { from, to } = s;
-    let speed = 1;
+    let pieces;
     if (s.ramp) {
-      speed = Math.max(1, (to - from) / s.ramp);
-      if (speed > 8) {
-        speed = 8;
-        from = to - 8 * s.ramp;
+      let span = to - from;
+      // k: base speed so that the eased profile yields `ramp` seconds of output; peak (5k) capped at 8x
+      const sumInv = PROFILE.reduce((a, v) => a + 1 / v, 0);
+      let k = (span / PROFILE.length) * sumInv / s.ramp;
+      if (5 * k > 8) {
+        k = 8 / 5;
+        const need = ((s.ramp * k) / sumInv) * PROFILE.length; // source span giving exactly `ramp` at that k
+        from = to - need;
+        span = need;
       }
-    }
-    total += (to - from) / speed;
-    parts.push(
-      `[0:v]trim=start=${from.toFixed(3)}:end=${to.toFixed(3)},setpts=(PTS-STARTPTS)/${speed.toFixed(4)}[s${i}]`,
-    );
+      k = Math.max(k, 1 / 5);
+      const d = span / PROFILE.length;
+      pieces = PROFILE.map((v, j) => ({ a: from + j * d, b: from + (j + 1) * d, speed: v * k }));
+    } else pieces = [{ a: from, b: to, speed: 1 }];
+    const dur = pieces.reduce((acc, p) => acc + (p.b - p.a) / p.speed, 0);
+    total += dur;
+    const labels = pieces.map((p, j) => {
+      parts.push(
+        `[0:v]trim=start=${f3(p.a)}:end=${f3(p.b)},setpts=(PTS-STARTPTS)/${p.speed.toFixed(4)}[s${i}_${j}]`,
+      );
+      return `[s${i}_${j}]`;
+    });
+    let chain = labels.length > 1 ? `${labels.join("")}concat=n=${labels.length}:v=1:a=0` : null;
+    const z = s.zoom;
+    const zoom = z
+      ? `scale=w='trunc(1920*(${z.from}+(${z.to}-${z.from})*min(1,t/${f3(dur)}))/2)*2':h=-2:eval=frame:flags=bilinear,crop=1920:1080:x='(iw-1920)*${z.cx ?? 0.5}':y='(ih-1080)*${z.cy ?? 0.5}'`
+      : null;
+    if (chain) parts.push(`${chain}${zoom ? "," + zoom : ""}[s${i}]`);
+    else parts.push(`${labels[0]}${zoom ? zoom : "null"}[s${i}]`);
   });
   const concat = `${segs.map((_, i) => `[s${i}]`).join("")}concat=n=${segs.length}:v=1:a=0[c]`;
   let post;
@@ -103,7 +125,18 @@ export function makeSfx(dir) {
     "1",
     whoosh,
   ]);
-  return { click, whoosh };
+  const pad = `${dir}/pad.wav`;
+  // a low pulse at 120 bpm (E1 + B1), the tempo of the edit
+  run([
+    "-f",
+    "lavfi",
+    "-i",
+    "aevalsrc='0.35*sin(2*PI*41.2*t)*(0.55+0.45*pow(sin(PI*t*2),2))+0.2*sin(2*PI*82.4*t)*(0.5+0.5*pow(sin(PI*t*2),4))+0.1*sin(2*PI*123.5*t)*(0.7+0.3*sin(2*PI*0.5*t))':d=31:s=48000",
+    "-ac",
+    "1",
+    pad,
+  ]);
+  return { click, whoosh, pad };
 }
 
 const lufs = (file) => {
@@ -115,7 +148,7 @@ const lufs = (file) => {
 };
 
 /** items: voice lines {file, at}; sfx: {file, at, db}. 10 ms fades on every clip edge; two-pass loudnorm to -16 LUFS. */
-export function mixAudio({ items, sfx = [], total, out }) {
+export function mixAudio({ items, sfx = [], pad = null, total, out }) {
   const build = (list, name) => {
     if (!list.length) return null;
     const inputs = list.flatMap((it) => ["-i", it.file]);
@@ -134,9 +167,18 @@ export function mixAudio({ items, sfx = [], total, out }) {
   const sf = build(sfx, "sfx");
   const levels = { voice: lufs(vf), sfx: sf ? lufs(sf) : null };
   const raw = out.replace(/\.wav$/, ".raw.wav");
-  if (sf)
-    run(["-i", vf, "-i", sf, "-filter_complex", "[0:a][1:a]amix=inputs=2:normalize=0:duration=first[m]", "-map", "[m]", raw]);
-  else run(["-i", vf, "-c", "copy", raw]);
+  const ins = ["-i", vf, ...(sf ? ["-i", sf] : []), ...(pad ? ["-i", pad.file] : [])];
+  const n = 1 + (sf ? 1 : 0) + (pad ? 1 : 0);
+  const pi = n - 1;
+  let fc = "";
+  let labels = "[0:a]" + (sf ? "[1:a]" : "");
+  if (pad) {
+    // the pad: fades in, ducks under the voice, fades out under the last line
+    fc += `[${pi}:a]aformat=channel_layouts=stereo:sample_rates=48000,volume=${pad.db}dB,afade=t=in:st=0:d=1.2,afade=t=out:st=${(total - pad.fade).toFixed(2)}:d=${(pad.fade - 0.1).toFixed(2)},atrim=0:${total.toFixed(3)}[p0];[0:a]asplit=2[v0][v1];[p0][v1]sidechaincompress=threshold=0.015:ratio=9:attack=15:release=450:makeup=1[pd];`;
+    labels = "[v0]" + (sf ? "[1:a]" : "") + "[pd]";
+  }
+  fc += `${labels}amix=inputs=${n}:normalize=0:duration=first[m]`;
+  run([...ins, "-filter_complex", fc, "-map", "[m]", raw]);
   const p1 = spawnSync(
     FFMPEG,
     ["-hide_banner", "-i", raw, "-af", "loudnorm=I=-16:TP=-1.5:LRA=11:print_format=json", "-f", "null", "-"],
@@ -148,21 +190,29 @@ export function mixAudio({ items, sfx = [], total, out }) {
   return { ...j, levels };
 }
 
-/** Map a time in the take to the time in the cut clip (segments, with speed-up for ramps). */
+function piecesOf(s) {
+  let { from, to } = s;
+  if (!s.ramp) return [{ a: from, b: to, speed: 1 }];
+  let span = to - from;
+  const sumInv = PROFILE.reduce((a, v) => a + 1 / v, 0);
+  let k = ((span / PROFILE.length) * sumInv) / s.ramp;
+  if (5 * k > 8) {
+    k = 8 / 5;
+    span = ((s.ramp * k) / sumInv) * PROFILE.length;
+    from = to - span;
+  }
+  k = Math.max(k, 1 / 5);
+  const d = span / PROFILE.length;
+  return PROFILE.map((v, j) => ({ a: from + j * d, b: from + (j + 1) * d, speed: v * k }));
+}
+
+/** Map a time in the take to the time in the cut clip (segments, eased speed-ups). */
 export function mapTime(segs, t) {
   let acc = 0;
-  for (const s of segs) {
-    let { from, to } = s;
-    let speed = 1;
-    if (s.ramp) {
-      speed = Math.max(1, (to - from) / s.ramp);
-      if (speed > 8) {
-        speed = 8;
-        from = to - 8 * s.ramp;
-      }
+  for (const s of segs)
+    for (const p of piecesOf(s)) {
+      if (t >= p.a && t <= p.b) return acc + (t - p.a) / p.speed;
+      acc += (p.b - p.a) / p.speed;
     }
-    if (t >= from && t <= to) return acc + (t - from) / speed;
-    acc += (to - from) / speed;
-  }
   return null;
 }

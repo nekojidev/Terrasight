@@ -1,26 +1,23 @@
 # Demo video (30 s)
 
-**Story: three acts, "We add a field, we see what the data say, we ask the assistant."** Cold open (2 s, the field from
-space, "Ask your field.") -> act 1 add a field (upload the real outline, checklist fills in, "Add the field") -> act 2
-North quarter: 45 years of NASA POWER weather (three clear trends and the rainfall row that says "no clear trend"), risks /
-week / 18 seasons, the 2026-2030 plan and the "How far can you trust this" proof -> act 3 the assistant answers a typed
-question, "N numbers checked against the models" -> end card. Straight cuts inside an act, one lime wipe between acts.
-Two AI voices (Gemini TTS): the narrator "we" (`Charon`) and the assistant (`Kore`); set per line with `voice:` in `STORY`
-(`build.mjs`; defaults via `DEMO_VOICE_NARRATOR` / `DEMO_VOICE_ASSISTANT`; the cache key includes the voice). To change a
-line, edit its `line` in `STORY` and rebuild: scene lengths follow the measured voice, and the build fails outside 29.0-29.9 s.
-Voice lines start 0.15 s before their picture (J-cut). Sound design is synthesised with ffmpeg (clicks on clicks, a whoosh
-on each act wipe, 10 ms fades), mixed under the voice and normalised to -16 LUFS.
+**Story (v3, "premise, answer, how it feels, why believe it, close")**: every field has a history and NASA recorded 45
+years of it -> Terrasight reads it for you -> add your field -> it shows what changed / what to watch / what to plant for
+five seasons -> ask it anything, every number is checked -> it shows where it was wrong -> close. Two AI voices (Gemini TTS):
+the narrator (`Charon`) and the assistant (`Kore`, the closing line); set per line with `voice:` in `STORY` (`build.mjs`).
+To change a line, edit `line` in `STORY` and rebuild: scene lengths follow the measured voice and the build fails outside
+29.0-29.9 s. Straight cuts inside an act, a lime wipe between acts, eased speed ramps, J-cuts (a line starts 0.15 s before its
+picture), synthesised clicks / whooshes / a low 120 bpm pulse (ducked under the voice, faded out under the last line), -16 LUFS.
 
-Once-only takes (not re-recorded unless `--rerecord-all` or the cache file is removed): `addField` (really adds a field to the
-company: running it again adds another), `ask1` (a live Gemini call), `assistant` and `owner` (older cached takes; `assistant`
-is used in act 3, `owner` is not in the current cut). `ask2` exists but is not used in the cut.
+Motion graphics fed with real data (`lib/graphics.mjs`, pages built from `design/tokens.css`, recorded like any take):
+`openGraph` draws the first autumn frost of every year 1981-2025 for North quarter's NASA POWER grid cell (lat 38,
+lon -100.625; the series is fetched once with the `power` adapter of `packages/sources` into `out/power-cell.json`, annual values
+from `packages/climate` `seasonSeries`, Theil-Sen from `theilSen`) and asserts that baseline, recent, "9 days later" and
+"clear trend" equal what the field page states; `sources` (the data sources converge into the assistant mark), `tiles` (three real
+screenshots of the field page and the rotation page, the GPM line cropped out), `proof` (the app's own rings for the missed years
+appear one by one). `lib/series.mjs` is the data step.
 
-Records the real running app and assembles `demo/terrasight-30s.mp4` (1920x1080, 30 fps, H.264 + AAC) and
-`demo/terrasight-30s.srt`. One command from the repo root:
-
-```sh
-pnpm demo:video
-```
+Once-only takes (never re-recorded unless `--rerecord-all`): `addField` (really added a field; the cut re-uses it through
+`RECUT` in `build.mjs`), `ask1` (a live Gemini call; also re-cut), plus older `assistant`, `owner`, `ask2` (not in this cut).
 
 Needs: the local stack running (web :3000, API :4000) and seeded with `apps/api/scripts/seed-presentation.mjs`;
 ffmpeg and ffprobe in `/opt/homebrew/bin`; Playwright's Chromium (`playwright@1.63.0` uses `chromium-1243`;

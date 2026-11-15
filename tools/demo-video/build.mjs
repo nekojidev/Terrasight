@@ -17,56 +17,90 @@ const only = args
   ?.slice(7)
   .split(",");
 
-// ---- the story: "We add a field. We see what the data say. We ask the assistant."
-// Scene length = voice + lead + tail (never shorter than `min`). `group` = act: wipe between groups, straight cuts inside.
-// Voices: N = narrator ("we", Charon), A = the assistant (Kore). J-cut: a line starts JCUT s before its picture (lead 0).
+// ---- the story: premise -> answer -> how it feels -> why believe it -> close
+// Scene length = voice + lead + tail (never shorter than `min`). `group` = act: the lime wipe goes between groups, straight
+// cuts inside. Voices: narrator (Charon) and the assistant (Kore, the closing line). A line without `lead` is a J-cut:
+// it starts JCUT s before its picture.
 const NARRATOR = process.env.DEMO_VOICE_NARRATOR || "Charon";
 const ASSISTANT = process.env.DEMO_VOICE_ASSISTANT || "Kore";
-const LEAD = 0;
 const TAIL = 0.3;
 const JCUT = 0.15;
 const OV = 0.25; // act wipe
 const STORY = [
-  { id: "cold", group: 0, min: 2.0, line: null, shots: [["coldOpen", 1]] },
-  { id: "add", group: 1, min: 5.2, lead: 0.45, line: "We add a field.", voice: NARRATOR, shots: [["addField", 1]] },
   {
-    id: "climate",
-    group: 2,
-    min: 4.0,
-    line: "We see what forty-five years of NASA data say about it.",
+    id: "open",
+    group: 0,
+    min: 4.8,
+    lead: 0.3,
+    line: "Every field has a history. NASA has recorded forty-five years of it.",
     voice: NARRATOR,
-    shots: [["climate", 1]],
-  },
-  { id: "overview", group: 2, min: 3.0, line: "Risks, weather, history.", voice: NARRATOR, shots: [["overview", 1]] },
-  {
-    id: "plan",
-    group: 2,
-    min: 3.8,
-    line: "A five-season plan, and how far to trust it.",
-    voice: NARRATOR,
-    shots: [
-      ["plan", 0.58],
-      ["trust", 0.42],
-    ],
+    shots: [["openGraph", 1]],
   },
   {
-    id: "ask1",
-    group: 3,
-    min: 4.2,
-    line: "And we ask the assistant whatever we want to know.",
+    id: "sources",
+    group: 0,
+    min: 3.2,
+    line: "Terrasight is the AI assistant that reads it for you.",
+    voice: NARRATOR,
+    shots: [["sources", 1]],
+  },
+  { id: "add", group: 1, min: 3.0, line: "Add your field.", voice: NARRATOR, shots: [["addField", 1]] },
+  {
+    id: "tiles",
+    group: 1,
+    min: 5.4,
+    line: "It shows what changed, what to do today, and what to plant for five seasons.",
+    voice: NARRATOR,
+    shots: [["tiles", 1]],
+  },
+  {
+    id: "ask",
+    group: 2,
+    min: 4.3,
+    line: "Ask it anything. Every number is checked against the models.",
     voice: NARRATOR,
     shots: [["ask1", 1]],
   },
-  { id: "ask2", group: 3, min: 3.6, lead: 0.85, line: "Every number, checked against the models.", voice: ASSISTANT, shots: [["assistant", 1]] },
+  {
+    id: "proof",
+    group: 2,
+    min: 5.0,
+    lead: 0.4,
+    line: "And it shows you where it was wrong.",
+    voice: NARRATOR,
+    shots: [["proof", 1]],
+  },
   {
     id: "end",
-    group: 4,
-    min: 3.6,
+    group: 3,
+    min: 3.4,
     line: "Terrasight. The AI assistant for your farm.",
     voice: ASSISTANT,
     shots: [["endCard", 1]],
   },
 ];
+// Re-cuts of the once-only takes (the take itself is never re-recorded: it holds a real field creation / a live Gemini call)
+const RECUT = {
+  addField: (c) => {
+    const m = c.marks;
+    c.segs = [
+      { from: m.uploaded - 0.42, to: m.uploaded },
+      { from: m.uploaded, to: m.checked, ramp: 0.8, zoom: { from: 1, to: 1.22, cx: 0.35, cy: 0.55 } },
+      { from: m.checked, to: m.checked + 1.19 },
+      { from: c.clicks[1] - 0.85, to: c.clicks[2] + 0.35, ramp: 0.6 },
+    ];
+  },
+  ask1: (c) => {
+    const m = c.marks;
+    const post = c.segs.at(-1);
+    c.segs = [
+      { from: m.ready, to: m.typed, ramp: 1.25 },
+      { from: m.typed, to: m.sent + 0.23 },
+      { from: m.sent + 0.23, to: m.answered - 0.1, ramp: 0.3 },
+      post,
+    ];
+  },
+};
 const DISCLOSURE =
   "Narration: AI-generated voices (Google Gemini TTS). Screen recording of the real application; no AI-generated imagery.";
 const ONCE = new Set(["addField", "ask1", "ask2", "assistant", "owner"]);
@@ -89,7 +123,7 @@ console.log(`voice: ${voice.provider} / ${voice.voice}${voice.draft ? "  (DRAFT)
 let t = 0;
 for (const s of STORY) {
   s.dur = s.line ? voice.durations[s.id] : 0;
-  s.lead = s.lead ?? LEAD;
+  s.lead = s.lead ?? 0;
   s.at = s.line ? (s.lead ? s.lead : -JCUT) : 0; // offset of the voice from the scene start (negative: J-cut)
   s.len = Math.max(s.min, Math.max(s.at, 0) + s.dur + TAIL);
   s.start = t;
@@ -134,7 +168,7 @@ try {
         else useCache = false;
       }
       if (useCache) {
-        if (id === "assistant") c.segs[0].from = Math.max(c.segs[0].from, c.marks.click - 0.45); // start close to the click
+        RECUT[id]?.(c);
         results[id] = c;
         console.log("reuse take", id);
         continue;
@@ -276,9 +310,12 @@ STORY.forEach((s) =>
   }),
 );
 const mix = path.join(OUT, "voice-mix.wav");
+const ask = STORY.find((x) => x.id === "ask");
+sfx.push({ file: sfxFiles.whoosh, at: ask.start + 1.45, db: -14 });
 const ln = mixAudio({
   items: STORY.filter((s) => s.line).map((s) => ({ file: voice.files[s.id], at: s.start + s.at })),
   sfx,
+  pad: { file: sfxFiles.pad, db: -26, fade: 3.4 },
   total,
   out: mix,
 });

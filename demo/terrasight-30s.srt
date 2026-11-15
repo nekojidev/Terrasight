@@ -1,27 +1,27 @@
 1
-00:00:02,450 --> 00:00:03,547
-We add a field.
+00:00:00,300 --> 00:00:04,554
+Every field has a history. NASA has recorded forty-five years of it.
 
 2
-00:00:07,050 --> 00:00:10,037
-We see what forty-five years of NASA data say about it.
+00:00:04,704 --> 00:00:07,749
+Terrasight is the AI assistant that reads it for you.
 
 3
-00:00:11,050 --> 00:00:13,385
-Risks, weather, history.
+00:00:08,049 --> 00:00:09,119
+Add your field.
 
 4
-00:00:14,050 --> 00:00:16,744
-A five-season plan, and how far to trust it.
+00:00:11,049 --> 00:00:15,922
+It shows what changed, what to do today, and what to plant for five seasons.
 
 5
-00:00:17,850 --> 00:00:20,236
-And we ask the assistant whatever we want to know.
+00:00:16,449 --> 00:00:19,817
+Ask it anything. Every number is checked against the models.
 
 6
-00:00:23,050 --> 00:00:25,496
-Every number, checked against the models.
+00:00:21,299 --> 00:00:23,251
+And it shows you where it was wrong.
 
 7
-00:00:25,650 --> 00:00:28,899
+00:00:25,749 --> 00:00:28,998
 Terrasight. The AI assistant for your farm.

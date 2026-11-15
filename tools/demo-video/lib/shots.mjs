@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { OUT, ROOT } from "./env.mjs";
 import { settle } from "./take.mjs";
+import { openGraph, sources, tiles, proof } from "./graphics.mjs";
 
 const must = (v, what) => {
   if (v == null || (Array.isArray(v) && !v.length)) throw new Error("Could not read from the page: " + what);
@@ -501,7 +502,14 @@ async function endCard(take, cfg, L) {
       );
     document.documentElement.appendChild(card);
     const d = window.__demo;
-    [...card.children].forEach((r, i) =>
+    // the wordmark draws in (left to right) and the mark pops; then the rows rise one after another
+    const lg = card.children[0].firstElementChild;
+    lg.animate([{ clipPath: "inset(0 100% 0 0)" }, { clipPath: "inset(0 0 0 0)" }], {
+      duration: 700,
+      easing: d.tok("--ts-ease-standard"),
+      fill: "both",
+    });
+    [...card.children].slice(1).forEach((r, i) =>
       r.animate(
         [
           { transform: "translateY(30px)", opacity: 0 },
@@ -509,7 +517,7 @@ async function endCard(take, cfg, L) {
         ],
         {
           duration: d.ms("--ts-dur-base"),
-          delay: i * d.ms("--ts-stagger") * 2,
+          delay: 500 + i * d.ms("--ts-stagger") * 2,
           easing: d.tok("--ts-ease-enter"),
           fill: "both",
         },
@@ -867,4 +875,4 @@ export async function renderPhoneBackdrop(browser, cfg, stateFile, file) {
   return geo;
 }
 
-export const SHOTS = { coldOpen, addField, climate, overview, plan, trust, ask1, ask2, endCard, hook, briefHome, briefField, rotation, assistant, owner };
+export const SHOTS = { openGraph, sources, tiles, proof, coldOpen, addField, climate, overview, plan, trust, ask1, ask2, endCard, hook, briefHome, briefField, rotation, assistant, owner };
