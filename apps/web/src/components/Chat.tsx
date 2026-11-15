@@ -1,14 +1,16 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button } from "@terrasight/ui";
-import { ArrowDown, RotateCcw, Send, ShieldCheck, Sparkles, TriangleAlert } from "lucide-react";
+import { Button, Kicker, Surface } from "@terrasight/ui";
+import { ArrowDown, RotateCcw, Send, ShieldAlert, ShieldCheck, Sparkles, TriangleAlert } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { api, ApiError } from "@/lib/api";
 import { QueryState } from "@/components/QueryState";
 import { displayText, restoreAliases } from "@/lib/assistant-text";
+import { ToolCard } from "@/components/ToolCard";
 import { connectStream } from "@/lib/events";
+import { useActionToast } from "@/lib/useActionToast";
 
 interface Message {
   id: string;
@@ -30,39 +32,17 @@ interface Conversation {
 /** Within this many pixels of the bottom the thread follows new messages; further up it stays where the user is. */
 const STICK_PX = 80;
 
-/** A plain table of a tool result for the fallback card (S-05.03). */
-function ResultTable({
-  result,
-  aliases,
-  lang,
-}: {
-  result: unknown;
-  aliases: Conversation["aliases"];
-  lang: "en" | "uk";
-}) {
-  const rows: Array<[string, string]> = [];
-  const walk = (node: unknown, path: string) => {
-    if (rows.length > 30 || node === null || node === undefined) return;
-    if (typeof node !== "object") return rows.push([path, displayText(String(node), aliases, lang)]);
-    const o = node as Record<string, unknown>;
-    if (typeof o.value === "number" && "unit" in o) return rows.push([path, `${o.value} ${String(o.unit)}`]);
-    for (const [k, v] of Object.entries(o)) walk(v, path ? `${path}.${k}` : k);
-  };
-  walk(result, "");
+/** Three dots while an answer is written; they pulse only when motion is allowed. */
+function Typing({ label }: { label: string }) {
   return (
-    // Wide tables scroll inside the card instead of pushing the page sideways on phones.
-    <div className="max-w-full overflow-x-auto">
-      <table className="w-full min-w-[260px] text-small">
-        <tbody>
-          {rows.map(([k, v], i) => (
-            <tr key={`${i}:${k}`} className="border-b border-line last:border-0">
-              <th className="py-1 pr-3 text-left font-normal break-words text-ink-2">{k}</th>
-              <td className="py-1 text-right font-mono break-words text-ink">{v}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <span role="status" className="inline-flex items-center gap-1.5 text-caption text-ink-2">
+      <span aria-hidden className="inline-flex gap-1">
+        {[0, 1, 2].map((i) => (
+          <span key={i} className="size-1.5 rounded-full bg-ink-3 motion-safe:animate-pulse" style={{ animationDelay: `${i * 160}ms` }} />
+        ))}
+      </span>
+      {label}
+    </span>
   );
 }
 
@@ -89,6 +69,7 @@ export function Chat({
   const t = useTranslations("App");
   const a = useTranslations("Assistant");
   const client = useQueryClient();
+  const { fail } = useActionToast();
   const locale = useLocale();
   const lang = locale === "uk" ? "uk" : "en";
   const key = ["conversation", workspaceId, conversationId];
@@ -105,7 +86,6 @@ export function Chat({
   });
   const [progress, setProgress] = useState<string | null>(null);
   const [live, setLive] = useState<string[]>([]);
-  const [error, setError] = useState<string | null>(null);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
@@ -174,7 +154,6 @@ export function Chat({
   async function ask(q: string) {
     const question = q.trim();
     if (!question || busy) return;
-    setError(null);
     setText("");
     setSending(true);
     stick.current = true;
@@ -187,7 +166,11 @@ export function Chat({
       void client.invalidateQueries({ queryKey: ["conversations", workspaceId] });
     } catch (e) {
       setText(question);
-      setError(e instanceof ApiError && e.problem.status === 429 ? t("aiRateLimited") : t("errGeneric"));
+      fail(
+        e instanceof ApiError && e.problem.status === 429 ? new Error(t("aiRateLimited")) : e,
+        a("sendFail"),
+        () => void ask(question),
+      );
     } finally {
       setSending(false);
       input.current?.focus();
@@ -214,7 +197,9 @@ export function Chat({
   const show = (s: string) => displayText(s, aliases, lang);
   const chips = suggestions ?? [t("aiSugg1"), t("aiSugg2"), t("aiSugg3")];
   return (
-    <div className={`flex min-h-0 flex-col ${compact ? "h-[min(560px,70dvh)]" : "h-[calc(100dvh-220px)]"}`}>
+    <div
+      className={`flex min-h-0 flex-col ${compact ? "h-[min(560px,70dvh)]" : "h-[max(360px,calc(100dvh-var(--ts-tabbar)-200px))] lg:h-[calc(100dvh-220px)]"}`}
+    >
       <div className="relative flex min-h-0 flex-1 flex-col">
         <div
           ref={scroller}
@@ -236,18 +221,19 @@ export function Chat({
             m.role === "user" ? (
               <p
                 key={m.id}
-                className="max-w-[85%] self-end rounded-card bg-ink px-4 py-3 text-body break-words whitespace-pre-wrap text-surface"
+                className="animate-rise max-w-[85%] self-end rounded-card bg-ink px-4 py-3 text-body break-words whitespace-pre-wrap text-surface"
               >
                 {restoreAliases(m.text, aliases)}
               </p>
             ) : (
-              <div key={m.id} className="flex max-w-[95%] min-w-0 flex-col gap-2">
+              <div key={m.id} className="animate-rise flex max-w-[95%] min-w-0 flex-col gap-2">
                 {m.error ? (
-                  <div className="flex flex-col items-start gap-2">
-                    <p className="flex items-center gap-2 text-body text-urgent">
-                      <TriangleAlert aria-hidden className="size-4 shrink-0" />
-                      {t("aiUnavailable")}
+                  <Surface as="div" tone="inset" pad="sm" role="alert" className="flex flex-col items-start gap-2">
+                    <p className="flex items-center gap-2 text-body font-semibold text-urgent">
+                      <TriangleAlert aria-hidden className="size-5 shrink-0" strokeWidth={1.7} />
+                      {a("unavailTitle")}
                     </p>
+                    <p className="text-small text-ink-2">{a("unavailBody")}</p>
                     {retryText(i) && (
                       <Button
                         variant="outline"
@@ -255,36 +241,39 @@ export function Chat({
                         disabled={busy}
                         onClick={() => void ask(retryText(i)!)}
                       >
-                        {t("aiRetry")}
+                        {t("retry")}
                       </Button>
                     )}
-                  </div>
+                  </Surface>
                 ) : m.text ? (
                   <p className="text-body break-words whitespace-pre-wrap text-ink">{show(m.text)}</p>
                 ) : (
-                  <p className="text-body break-words text-ink">
-                    {live.length ? (
-                      show(live.join(" "))
-                    ) : (
-                      <span className="text-ink-2">{progress ?? t("aiThinking")}</span>
-                    )}
-                  </p>
+                  <div className="flex flex-col gap-2 text-body break-words text-ink">
+                    {live.length > 0 && <p className="whitespace-pre-wrap">{show(live.join(" "))}</p>}
+                    <Typing label={progress ?? a("typing")} />
+                  </div>
                 )}
                 {m.fallback && m.card && (
-                  <div className="min-w-0 rounded-card border border-line bg-surface-2 p-4">
-                    <p className="mb-2 text-small text-week">{t("aiFallback")}</p>
+                  <div className="flex min-w-0 flex-col gap-3">
+                    <p className="flex items-start gap-2 text-small text-week">
+                      <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0" strokeWidth={1.7} />
+                      {t("aiFallback")}
+                    </p>
                     {m.card.map((c, ci) => (
-                      <div key={ci} className="mb-3 min-w-0">
-                        <p className="mb-1 font-mono text-micro break-words text-ink-2">{t("aiTool", { tool: c.tool })}</p>
-                        <ResultTable result={c.result} aliases={aliases} lang={lang} />
-                      </div>
+                      <ToolCard key={ci} tool={c.tool} result={c.result} aliases={aliases} lang={lang} />
                     ))}
                   </div>
                 )}
-                {m.checked && m.text && !m.fallback && m.numbersChecked > 0 && (
-                  <p className="flex w-fit items-center gap-1.5 rounded-chip bg-ok-soft px-3 py-1 text-small text-ok">
-                    <ShieldCheck aria-hidden className="size-4" strokeWidth={1.7} />
-                    {t("aiNumbers", { n: m.numbersChecked })}
+                {m.text && !m.fallback && (
+                  <p
+                    className={`flex w-fit items-center gap-1.5 rounded-chip px-3 py-1 text-caption ${m.checked ? "bg-ok-soft text-ok" : "bg-week-soft text-week"}`}
+                  >
+                    {m.checked ? (
+                      <ShieldCheck aria-hidden className="size-4" strokeWidth={1.7} />
+                    ) : (
+                      <ShieldAlert aria-hidden className="size-4" strokeWidth={1.7} />
+                    )}
+                    {m.checked ? t("aiNumbers", { n: m.numbersChecked }) : a("notChecked")}
                   </p>
                 )}
               </div>
@@ -306,28 +295,28 @@ export function Chat({
           </button>
         )}
       </div>
-      <div className="flex flex-wrap gap-2 py-3">
-        {chips.map((s) => (
-          <button
-            key={s}
-            type="button"
-            disabled={busy}
-            onClick={() => void ask(s)}
-            className="focus-ring flex max-w-full items-center gap-1.5 rounded-chip bg-muted px-3 py-1.5 text-left text-small font-semibold text-ink hover:bg-line disabled:opacity-60"
-          >
-            <Sparkles aria-hidden className="size-3.5 shrink-0" strokeWidth={1.7} />
-            <span className="min-w-0 break-words">{s}</span>
-          </button>
-        ))}
-      </div>
-      {error && (
-        <p role="alert" className="mb-2 text-small text-urgent">
-          {error}
-        </p>
+      {chips.length > 0 && (
+        <div className="flex flex-col gap-2 py-3">
+          <Kicker>{a("ask")}</Kicker>
+          <div className="flex flex-wrap gap-2">
+            {chips.slice(0, 4).map((s) => (
+              <button
+                key={s}
+                type="button"
+                disabled={busy}
+                onClick={() => void ask(s)}
+                className="focus-ring flex min-h-tap max-w-full items-center gap-1.5 rounded-chip bg-muted px-3 py-1.5 text-left text-caption font-semibold text-ink hover:bg-line disabled:opacity-60"
+              >
+                <Sparkles aria-hidden className="size-3.5 shrink-0" strokeWidth={1.7} />
+                <span className="min-w-0 break-words">{s}</span>
+              </button>
+            ))}
+          </div>
+        </div>
       )}
       <form
         onSubmit={submit}
-        className="flex items-end gap-2 rounded-input border border-line-strong bg-surface p-2"
+        className="sticky bottom-[calc(var(--ts-tabbar)+env(safe-area-inset-bottom))] z-10 flex items-end gap-2 rounded-input border border-line-control bg-surface p-2 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-ink lg:bottom-0"
       >
         <textarea
           ref={input}
@@ -346,11 +335,12 @@ export function Chat({
           variant="icon"
           label={a("send")}
           icon={<Send />}
+          className="size-12!"
           disabled={busy || !text.trim()}
           aria-busy={sending}
         />
       </form>
-      <p className="mt-2 text-small text-ink-3">{a("disclaimer")}</p>
+      <p className="mt-2 text-caption text-ink-3">{a("disclaimer")}</p>
     </div>
   );
 }

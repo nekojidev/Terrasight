@@ -1,16 +1,17 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, ConfirmDialog } from "@terrasight/ui";
-import { FileText, MessageSquare, Play, Plus, RefreshCw, ScanSearch, Trash2 } from "lucide-react";
+import { BottomSheet, Button, ConfirmDialog, Kicker, Surface } from "@terrasight/ui";
+import { FileText, History, MessageSquare, Play, Plus, RefreshCw, ScanSearch, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Chat } from "@/components/Chat";
 import { QueryState } from "@/components/QueryState";
-import { useReportError } from "@/components/useReportError";
 import { api } from "@/lib/api";
+import { useActionToast } from "@/lib/useActionToast";
+import { useFormat } from "@/lib/useFormat";
 import { clearActive, latestForFieldPath, readActive, writeActive } from "@/lib/assistant-context";
 
 interface FieldRow {
@@ -43,7 +44,10 @@ export function AssistantClient({
   const app = useTranslations("App");
   const client = useQueryClient();
   const router = useRouter();
-  const report = useReportError();
+  const { fail } = useActionToast();
+  const fmt = useFormat();
+  const [sheet, setSheet] = useState(false);
+  const [noContext, setNoContext] = useState(false);
   const key = ["conversations", workspaceId];
   const list = useQuery({
     queryKey: key,
@@ -63,33 +67,35 @@ export function AssistantClient({
   const hasContext = Boolean(context.fieldId || context.recommendationId);
   const convField = list.data?.find((c) => c.id === current)?.contextFieldId ?? undefined;
   // Questions in an open chat carry the field it was opened from (or the page's context).
-  const chatContext = hasContext ? context : convField ? { fieldId: convField } : {};
+  const chatContext = noContext ? {} : hasContext ? context : convField ? { fieldId: convField } : {};
   const fieldName = fields.data?.find((f) => f.id === (chatContext.fieldId ?? ""))?.name;
 
   /** The chip texts under the thread: about the chat's field when it has one, company-wide otherwise. */
   const suggestions = useMemo(() => {
     if (chatContext.fieldId) return [app("faSugg1"), app("faSugg2"), app("faSugg3")];
     const f = fields.data ?? [];
-    const out = [app("aiSugg1")];
-    if (f[0]) out.push(app("asSuggRisk", { name: f[0].name }));
+    const out = [app("aiSugg1"), app("aiSugg2")];
+    if (f[0]) out.push(t("askRisk", { name: f[0].name }));
     const x = f[1] ?? f[0];
-    if (x) out.push(app("asSuggCrop", { name: x.name }));
-    return out;
-  }, [fields.data, app, chatContext.fieldId]);
+    if (x) out.push(t("askCrop", { name: x.name }));
+    return out.slice(0, 4);
+  }, [fields.data, app, t, chatContext.fieldId]);
 
   const groups = useMemo(() => {
-    const today = new Date().toDateString();
+    const today = fmt.date(new Date(), "full");
     const all = list.data ?? [];
     return [
-      { key: "asToday", rows: all.filter((c) => new Date(c.createdAt).toDateString() === today) },
-      { key: "asEarlier", rows: all.filter((c) => new Date(c.createdAt).toDateString() !== today) },
+      { key: "asToday", rows: all.filter((c) => fmt.date(c.createdAt, "full") === today) },
+      { key: "asEarlier", rows: all.filter((c) => fmt.date(c.createdAt, "full") !== today) },
     ].filter((g) => g.rows.length > 0);
-  }, [list.data]);
+  }, [list.data, fmt]);
 
   /** Opens a chat and remembers it for this page's context, so coming back restores it. */
   const choose = useCallback(
     (id: string) => {
       setCurrent(id);
+      setNoContext(false);
+      setSheet(false);
       writeActive(workspaceId, context.fieldId, id);
     },
     [workspaceId, context.fieldId],
@@ -103,7 +109,7 @@ export function AssistantClient({
       await client.invalidateQueries({ queryKey: key });
       choose(c.id);
     } catch (e) {
-      report(e);
+      fail(e, t("newFail"), () => void start());
     }
   }
   const [ran, setRan] = useState<"idle" | "busy" | "done" | "error">("idle");
@@ -113,8 +119,9 @@ export function AssistantClient({
       await api(`/api/w/${workspaceId}/analysis-runs`, { body: {} });
       void client.invalidateQueries({ queryKey: ["brief", workspaceId] });
       setRan("done");
-    } catch {
+    } catch (e) {
       setRan("error");
+      fail(e, t("analyzeFail"), () => void analyze());
     }
   }
 
@@ -144,7 +151,7 @@ export function AssistantClient({
       forget(id);
       setToDelete(null);
     } catch (e) {
-      report(e);
+      fail(e, t("deleteFail"), () => void remove());
     } finally {
       setDeleting(false);
     }
@@ -179,7 +186,6 @@ export function AssistantClient({
 
   // `?q=`: send the question into the chat that just opened, once, and take it out of the address.
   const sentFor = useRef<string | null>(null);
-  const [sendError, setSendError] = useState(false);
   useEffect(() => {
     if (!question) {
       sentFor.current = null;
@@ -198,25 +204,24 @@ export function AssistantClient({
         void client.invalidateQueries({ queryKey: ["conversation", workspaceId, current] });
         void client.invalidateQueries({ queryKey: key });
       })
-      .catch(() => setSendError(true));
+      .catch((e) => fail(e, t("sendFail")));
   }, [current, question]);
 
-  return (
-    <div className="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
-      <aside className="order-2 flex flex-col gap-3 lg:order-1">
-        <Button icon={<Plus />} onClick={() => void start()}>
-          {t("new")}
-        </Button>
-        <h2 className="mt-2 font-mono text-small tracking-wide text-ink-2 uppercase">{t("hist")}</h2>
-        {!list.data && <QueryState query={list}>{() => null}</QueryState>}
-        {groups.map((g) => (
-          <div key={g.key} className="flex flex-col gap-1">
-            <h3 className="px-3 pt-1 font-mono text-micro tracking-wide text-ink-3 uppercase">{app(g.key)}</h3>
-            <ul className="flex max-h-72 flex-col gap-1 overflow-y-auto">
-              {g.rows.map((c) => (
+  const historyList = (
+    <>
+      {!list.data && <QueryState query={list} skeletonVariant="rows" what={t("hist")}>{() => null}</QueryState>}
+      {groups.map((g) => (
+        <div key={g.key} className="flex flex-col gap-1">
+          <Kicker as="h3" className="px-3 pt-1">
+            {app(g.key)}
+          </Kicker>
+          <ul className="flex max-h-72 flex-col gap-1 overflow-y-auto">
+            {g.rows.map((c) => {
+              const title = c.title ?? t("new");
+              return (
                 <li
                   key={c.id}
-                  className={`group flex items-center gap-2 rounded-input px-3 py-2 ${current === c.id ? "bg-muted" : "hover:bg-muted"}`}
+                  className={`flex items-center gap-1 rounded-input pl-3 ${current === c.id ? "bg-muted" : "hover:bg-muted"}`}
                 >
                   <button
                     type="button"
@@ -225,25 +230,41 @@ export function AssistantClient({
                     className="focus-ring flex min-h-tap min-w-0 flex-1 items-center gap-2 text-left text-small text-ink"
                   >
                     <MessageSquare aria-hidden className="size-4 shrink-0 text-ink-3" strokeWidth={1.7} />
-                    <span className={`line-clamp-2 break-words ${current === c.id ? "font-semibold" : ""}`}>
-                      {c.title ?? t("new")}
-                    </span>
+                    <span className={`line-clamp-2 break-words ${current === c.id ? "font-semibold" : ""}`}>{title}</span>
                   </button>
                   <button
                     type="button"
-                    aria-label={app("aiDelete")}
+                    aria-label={t("deleteChat", { title })}
                     title={app("aiDelete")}
                     onClick={() => setToDelete(c.id)}
-                    className="focus-ring inline-flex size-9 shrink-0 items-center justify-center rounded-btn text-ink-3 hover:text-ink lg:opacity-0 lg:group-hover:opacity-100 lg:focus:opacity-100"
+                    className="focus-ring inline-flex size-11 shrink-0 items-center justify-center rounded-btn text-ink-2 hover:text-ink"
                   >
                     <Trash2 aria-hidden className="size-4" strokeWidth={1.7} />
                   </button>
                 </li>
-              ))}
-            </ul>
-          </div>
-        ))}
-        <h2 className="mt-4 font-mono text-small tracking-wide text-ink-2 uppercase">{t("cmds")}</h2>
+              );
+            })}
+          </ul>
+        </div>
+      ))}
+    </>
+  );
+  const linkClass =
+    "focus-ring inline-flex min-h-tap items-center gap-2 rounded-btn border border-line-control px-4 text-body font-semibold text-ink hover:bg-muted";
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
+      <aside className="hidden flex-col gap-3 lg:flex">
+        <Button variant="outline" icon={<Plus />} onClick={() => void start()}>
+          {t("new")}
+        </Button>
+        <Kicker as="h2" className="mt-2">
+          {t("hist")}
+        </Kicker>
+        {historyList}
+        <Kicker as="h2" className="mt-4">
+          {t("do")}
+        </Kicker>
         <div className="flex flex-col gap-2">
           <Button
             variant="outline"
@@ -253,52 +274,56 @@ export function AssistantClient({
             aria-busy={ran === "busy"}
             className="justify-start"
           >
-            {t("k1")}
+            {t("doAnalyze")}
           </Button>
           {ran === "done" && (
-            <p role="status" className="text-small text-ok">
-              {app("aiAnalyzeStarted")}
+            <p role="status" className="text-caption text-ok">
+              {t("analyzeStarted")}
             </p>
           )}
-          {ran === "error" && (
-            <p role="alert" className="text-small text-urgent">
-              {app("errGeneric")}
-            </p>
-          )}
-          <Link
-            href="/decisions"
-            className="focus-ring inline-flex min-h-tap items-center gap-2 rounded-btn border border-line-strong px-4 text-body font-semibold text-ink hover:bg-muted"
-          >
+          <Link href="/decisions" className={linkClass}>
             <FileText aria-hidden className="size-4" strokeWidth={1.7} />
-            {app("decOpen")}
+            {t("doDecisions")}
           </Link>
-          <Link
-            href="/rotation"
-            className="focus-ring inline-flex min-h-tap items-center gap-2 rounded-btn border border-line-strong px-4 text-body font-semibold text-ink hover:bg-muted"
-          >
+          <Link href="/reports" className={linkClass}>
+            <FileText aria-hidden className="size-4" strokeWidth={1.7} />
+            {t("doReport")}
+          </Link>
+          <Link href="/rotation" className={linkClass}>
             <RefreshCw aria-hidden className="size-4" strokeWidth={1.7} />
-            {t("k3")}
+            {t("doRotation")}
           </Link>
         </div>
       </aside>
-      <section className="order-1 min-w-0 rounded-card border border-line bg-surface p-4 lg:order-2 lg:p-5">
+      <Surface as="section" pad="sm" className="min-w-0 lg:p-5">
         <div className="mb-3 flex items-center justify-between gap-3">
-          <span className="inline-flex max-w-full items-center gap-2 rounded-chip bg-muted px-3 py-1 text-small font-semibold text-ink">
+          <span className="inline-flex max-w-full min-w-0 items-center gap-1 rounded-chip bg-muted pl-3 text-caption font-semibold text-ink">
             <ScanSearch aria-hidden className="size-4 shrink-0" strokeWidth={1.7} />
-            <span className="truncate">
+            <span className="truncate py-1.5">
               {chatContext.fieldId && fieldName
-                ? app("aiContextField", { name: fieldName })
-                : hasContext
-                  ? app("aiScopeContext")
-                  : app("aiScopeAll", { n: fieldCount })}
+                ? t("about", { name: fieldName })
+                : hasContext && !noContext
+                  ? t("aboutThis")
+                  : t("aboutAll", { n: fieldCount })}
             </span>
+            {chatContext.fieldId && fieldName ? (
+              <button
+                type="button"
+                aria-label={t("removeAbout")}
+                title={t("removeAbout")}
+                onClick={() => setNoContext(true)}
+                className="focus-ring inline-flex size-11 shrink-0 items-center justify-center rounded-chip text-ink-2 hover:text-ink"
+              >
+                <X aria-hidden className="size-4" strokeWidth={1.7} />
+              </button>
+            ) : (
+              <span className="w-2" />
+            )}
           </span>
+          <Button variant="outline" icon={<History />} className="lg:hidden" onClick={() => setSheet(true)}>
+            {t("history")}
+          </Button>
         </div>
-        {sendError && (
-          <p role="alert" className="mb-3 text-small text-urgent">
-            {app("errGeneric")}
-          </p>
-        )}
         {current && (
           <Chat
             key={current}
@@ -310,7 +335,20 @@ export function AssistantClient({
             autoFocus
           />
         )}
-      </section>
+      </Surface>
+      <BottomSheet
+        open={sheet}
+        title={t("historyTitle")}
+        primaryLabel={t("newShort")}
+        cancelLabel={t("close")}
+        onPrimary={() => {
+          setSheet(false);
+          void start();
+        }}
+        onClose={() => setSheet(false)}
+      >
+        <div className="flex max-h-[50dvh] flex-col gap-3 overflow-y-auto">{historyList}</div>
+      </BottomSheet>
       <ConfirmDialog
         open={toDelete !== null}
         title={app("aiDeleteTitle")}
