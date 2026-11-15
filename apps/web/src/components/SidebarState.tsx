@@ -2,7 +2,9 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
-export const SIDEBAR_COOKIE = "ts_sidebar";
+import { SIDEBAR_COOKIE } from "@/lib/sidebar";
+
+export { SIDEBAR_COOKIE };
 
 interface SidebarState {
   collapsed: boolean;
