@@ -730,6 +730,27 @@ const collection = {
           },
         ),
         req(
+          "Year-set comparison with an out-of-range slider is invalid (EP-10)",
+          "POST",
+          "/api/w/{{ws}}/fields/{{fieldId}}/scenario-runs/year-sets",
+          {
+            body: { overrides: { precipFactor: 9 } },
+            tests: problem(422, "invalid-input"),
+          },
+        ),
+        req(
+          "Year-set comparison for an unknown field is not found (EP-10)",
+          "POST",
+          "/api/w/{{ws}}/fields/00000000-0000-4000-8000-000000000000/scenario-runs/year-sets",
+          { body: {}, tests: problem(404) },
+        ),
+        req("Farm stress test has the contract shape (S-10.13)", "GET", "/api/w/{{ws}}/farm-stress", {
+          tests: [
+            status(200),
+            `pm.test("shape", () => { const r = pm.response.json(); pm.expect(["ready", "unavailable"]).to.include(r.status); pm.expect(r.stressYear).to.eql(2022); pm.expect(r.season).to.be.a("number"); pm.expect(r.counted).to.be.an("array"); pm.expect(r.notCounted).to.be.an("array"); r.notCounted.forEach((n) => pm.expect(["no-run", "no-2022-weather", "no-prices", "land-unsuitable"]).to.include(n.reason)); if (r.status === "ready") { pm.expect(r.current.atRisk).to.be.a("number"); pm.expect(r.recommended.atRisk).to.be.a("number"); pm.expect(r.difference).to.eql(r.current.atRisk - r.recommended.atRisk); } else { pm.expect(r.current).to.eql(null); pm.expect(r.difference).to.eql(null); } });`,
+          ],
+        }),
+        req(
           "A check needs an existing recommendation (S-07.01)",
           "POST",
           "/api/w/{{ws}}/recommendations/00000000-0000-4000-8000-000000000000/scouting-tasks",

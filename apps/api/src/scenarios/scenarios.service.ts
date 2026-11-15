@@ -26,6 +26,7 @@ import { AiRotationsService, toRotations, type AiStatus, type Proposal } from ".
 import { PoolBusyError, WorkerPool, WorkerTimeoutError } from "./worker-pool.js";
 
 import { priceLabel } from "./price-resolution.js";
+import { priceBasisText, runDataBasis } from "./scenario-basis.js";
 import { pendingView } from "./scenario-pending.js";
 import { ScenarioInputsService, type InputMeta, type Overrides } from "./scenario-inputs.service.js";
 import { ScenarioPlansService } from "./scenario-plans.service.js";
@@ -75,11 +76,24 @@ export class ScenariosService implements OnModuleDestroy {
   }
 
   async run(workspaceId: string, fieldId: string, o: Overrides, aiMode: "generate" | "cached" = "generate") {
+    const prep = await this.prepare(workspaceId, fieldId, o, aiMode);
+    if (prep.early) return prep.early;
+    const { input, meta, ai, missing } = prep;
+    const row = await this.execute(fieldId, input);
+    return this.view(row.id, row.result, row.createdAt, row.durationMs, missing, input, meta, ai);
+  }
+
+  /**
+   * Everything before the engine: suitability, inputs, the evaluable candidates, agronomy-only fallback and the
+   * assistant's proposals. `early` is a view that needs no run (unsuitable land, no library, missing data).
+   */
+  async prepare(workspaceId: string, fieldId: string, o: Overrides, aiMode: "generate" | "cached" = "generate") {
     // Unsuitable land (not overridden): the page explains why instead of showing options.
     const suitability = await fieldSuitability(this.prisma.system, fieldId);
-    if (suitability?.blocked) return { id: null, landUnsuitable: true as const, suitability };
-    const { input: full, meta, aiCtx } = await this.inputsSvc.build(workspaceId, fieldId, o);
-    if (!full.rotations.length) return { id: null, noLibrary: true as const };
+    if (suitability?.blocked)
+      return { early: { id: null, landUnsuitable: true as const, suitability } };
+    const { input: full, meta, aiCtx, power } = await this.inputsSvc.build(workspaceId, fieldId, o);
+    if (!full.rotations.length) return { early: { id: null, noLibrary: true as const } };
     const missing = [
       ...new Set(
         full.rotations.flatMap((r) =>
@@ -89,7 +103,8 @@ export class ScenariosService implements OnModuleDestroy {
     ].filter((c) => c !== "fallow" && !full.prices[c]);
     const split = splitRotations(full.rotations, full.prices);
     // Never invent the current rotation, never rank on missing prices: say what is missing instead.
-    if (meta.currentBasis === "missing") return pendingView(this.lib, "crop-history", full, meta, missing);
+    if (meta.currentBasis === "missing")
+      return { early: pendingView(this.lib, "crop-history", full, meta, missing) };
     // Only rotations whose every crop has a verified price compete (a missing price would count as $0 revenue).
     const bad = unevaluableCrops(full.current.sequence, full.prices);
     const curAll = new Set(
@@ -117,7 +132,7 @@ export class ScenariosService implements OnModuleDestroy {
           ? [...curAll].every((c) => c === "fallow" || CROPS[c])
           : noFarmCrop || [...curAll].some((c) => c !== "fallow" && CROPS[c]);
       if (!modelled.usable.length || !currentModelled)
-        return pendingView(this.lib, "crops", full, meta, missing, modelled.unmodelled);
+        return { early: pendingView(this.lib, "crops", full, meta, missing, modelled.unmodelled) };
       agronomyOnly = true;
       candidates = modelled.usable;
       split.unmodelled = modelled.unmodelled;
@@ -137,7 +152,12 @@ export class ScenariosService implements OnModuleDestroy {
       ...full,
       rotations: [...candidates, ...toRotations(ai.proposals, full.irrigated)],
     };
-    const hash = createHash("sha256")
+    return { input, meta, ai, missing, power };
+  }
+
+  /** Inputs hash of a run: everything the engine reads, the library versions and the engine version. */
+  inputsHash(input: EngineInput): string {
+    return createHash("sha256")
       .update(
         stableStringify({
           ...input,
@@ -148,34 +168,43 @@ export class ScenariosService implements OnModuleDestroy {
         }),
       )
       .digest("hex");
-    const cached = await this.prisma.db.scenarioRun.findUnique({
-      where: { fieldId_inputsHash: { fieldId, inputsHash: hash } },
+  }
+
+  /** The stored run of these inputs, if it is current (a result made before `if2022BySeason` existed is not). */
+  async cachedRun(fieldId: string, input: EngineInput) {
+    const row = await this.prisma.db.scenarioRun.findUnique({
+      where: { fieldId_inputsHash: { fieldId, inputsHash: this.inputsHash(input) } },
     });
-    if (cached)
-      return this.view(
-        cached.id,
-        cached.result as unknown as EngineResult,
-        cached.createdAt,
-        cached.durationMs,
-        missing,
-        input,
-        meta,
-        ai,
-      );
+    const result = row?.result as unknown as EngineResult | undefined;
+    if (!row || !result || !Array.isArray(result.current?.if2022BySeason) || !result.weather) return null;
+    return { id: row.id, result, createdAt: row.createdAt, durationMs: row.durationMs };
+  }
+
+  /** True when no scenario job is running or waiting (heavy work that nobody asked for may start). */
+  poolIdle(): boolean {
+    return !this.pool || (this.pool.busy === 0 && this.pool.queued === 0);
+  }
+
+  /** Cached run of these inputs, else computed on the worker pool and stored. */
+  async execute(fieldId: string, input: EngineInput) {
+    const cached = await this.cachedRun(fieldId, input);
+    if (cached) return cached;
+    const hash = this.inputsHash(input);
     const t0 = Date.now();
     const result = await this.inWorker(input);
     const durationMs = Date.now() - t0;
-    const row = await this.prisma.db.scenarioRun.create({
-      data: {
-        fieldId,
-        inputsHash: hash,
-        libraryVersions: this.lib.versions as unknown as Prisma.InputJsonValue,
-        result: result as unknown as Prisma.InputJsonValue,
-        durationMs,
-      },
+    const data = {
+      libraryVersions: this.lib.versions as unknown as Prisma.InputJsonValue,
+      result: result as unknown as Prisma.InputJsonValue,
+      durationMs,
+    };
+    const row = await this.prisma.db.scenarioRun.upsert({
+      where: { fieldId_inputsHash: { fieldId, inputsHash: hash } },
+      create: { fieldId, inputsHash: hash, ...data },
+      update: { ...data, createdAt: new Date() },
     });
     this.log.log(`scenarios for ${fieldId}: ${result.candidates} candidates in ${durationMs} ms`);
-    return this.view(row.id, result, row.createdAt, durationMs, missing, input, meta, ai);
+    return { id: row.id, result, createdAt: row.createdAt, durationMs };
   }
 
   /**
@@ -258,6 +287,8 @@ export class ScenariosService implements OnModuleDestroy {
       this.lib.rotations.rotations.find((x) => x.id === input.rotations[0]?.id)?.region ?? null;
     const regionPrices = regionId ? (this.lib.prices.regions[regionId]?.crops ?? {}) : {};
     const proposed = new Map(ai.proposals.map((p) => [p.id, p]));
+    const usedCrops = [result.current, ...result.alternatives].flatMap((s) => s.plan.flatMap((p) => p.crops));
+    const label = priceLabel(meta.priceSources, usedCrops);
     // Names and reasons of the assistant's options; all their numbers are already in the engine result.
     const decorate = <T extends { id: string }>(s: T) =>
       proposed.has(s.id)
@@ -283,10 +314,19 @@ export class ScenariosService implements OnModuleDestroy {
       mode: result.mode ?? "money",
       currency: meta.currency,
       priceSources: meta.priceSources,
-      priceLabel: priceLabel(
-        meta.priceSources,
-        [result.current, ...result.alternatives].flatMap((s) => s.plan.flatMap((p) => p.crops)),
-      ),
+      priceLabel: label,
+      /** In words, derived from the sources of the used crops (library values are typed in from cited reports). */
+      priceBasis: priceBasisText(label, usedCrops, regionPrices),
+      weather: { ...result.weather, lastDate: meta.weatherLastDate },
+      dataBasis: runDataBasis({
+        weather: result.weather,
+        firstDate: input.weatherByYear.get(result.weather.from)?.[0]?.date ?? null,
+        lastBootstrapDate: input.weatherByYear.get(result.weather.to)?.at(-1)?.date ?? null,
+        lastDate: meta.weatherLastDate,
+        stress2022: result.current.if2022BySeason?.some((x) => x != null) ?? false,
+        soilBasis: meta.soilBasis,
+        history: meta.historyRead,
+      }),
       needYield: meta.needYield,
       yieldHints: meta.yieldHints,
       /** Modelled crops of the library rotations (and the current one) that have no price yet: the price form lists them. */
@@ -300,18 +340,24 @@ export class ScenariosService implements OnModuleDestroy {
         Object.entries(this.lib.rotations.crops).map(([id, c]) => [id, { en: c.en, uk: c.uk }]),
       ),
       aiStatus: ai.status,
-      names: Object.fromEntries(
-        input.rotations.map((r) => [
-          r.id,
-          proposed.get(r.id)?.name ??
-            (
-              this.lib.rotations.rotations.find((x) => x.id === r.id) as unknown as
-                { name: { en: string; uk: string } } | undefined
-            )?.name ?? { en: r.id, uk: r.id },
-        ]),
-      ),
+      names: this.namesOf(input, ai.proposals),
       result: { ...result, alternatives: result.alternatives.map(decorate) },
     };
+  }
+
+  /** Display names of the rotations of an input: the assistant's own name for its proposals, else the library's. */
+  namesOf(input: EngineInput, proposals: Proposal[]): Record<string, { en: string; uk: string }> {
+    const proposed = new Map(proposals.map((p) => [p.id, p]));
+    return Object.fromEntries(
+      input.rotations.map((r) => [
+        r.id,
+        proposed.get(r.id)?.name ??
+          (
+            this.lib.rotations.rotations.find((x) => x.id === r.id) as unknown as
+              { name: { en: string; uk: string } } | undefined
+          )?.name ?? { en: r.id, uk: r.id },
+      ]),
+    );
   }
 
   /** Crops the simulator can model that lack a usable price, for the candidate rotations: what the company can enter. */
@@ -410,8 +456,11 @@ export class ScenariosService implements OnModuleDestroy {
       ] as unknown as Prisma.InputJsonValue,
       evidence: [
         {
-          source:
-            "Scenario engine (FAO-56, FAO-33, ICBM, RUSLE; NASA POWER 1981–2025; USDA NASS / K-State prices)",
+          source: `Scenario engine (FAO-56, FAO-33, ICBM, RUSLE; NASA POWER ${result.weather.from}–${result.weather.to}; ${
+            ("priceBasis" in view ? view.priceBasis?.en : null) ?? "no prices"
+          })`,
+          from: String(result.weather.from),
+          to: String(result.weather.to),
           value: runId ?? view.id ?? "",
           note: `${result.candidates + 1} rotations compared`,
         },

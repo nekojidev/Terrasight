@@ -2946,6 +2946,98 @@
           }
         },
         {
+          "name": "Year-set comparison with an out-of-range slider is invalid (EP-10)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 422\", () => pm.response.to.have.status(422));",
+                  "pm.test(\"problem+json\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"));",
+                  "pm.test(\"type invalid-input\", () => pm.expect(pm.response.json().type).to.include(\"invalid-input\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/fields/{{fieldId}}/scenario-runs/year-sets",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"overrides\": {\n    \"precipFactor\": 9\n  }\n}"
+            }
+          }
+        },
+        {
+          "name": "Year-set comparison for an unknown field is not found (EP-10)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"problem+json\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/fields/00000000-0000-4000-8000-000000000000/scenario-runs/year-sets",
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          }
+        },
+        {
+          "name": "Farm stress test has the contract shape (S-10.13)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"shape\", () => { const r = pm.response.json(); pm.expect([\"ready\", \"unavailable\"]).to.include(r.status); pm.expect(r.stressYear).to.eql(2022); pm.expect(r.season).to.be.a(\"number\"); pm.expect(r.counted).to.be.an(\"array\"); pm.expect(r.notCounted).to.be.an(\"array\"); r.notCounted.forEach((n) => pm.expect([\"no-run\", \"no-2022-weather\", \"no-prices\", \"land-unsuitable\"]).to.include(n.reason)); if (r.status === \"ready\") { pm.expect(r.current.atRisk).to.be.a(\"number\"); pm.expect(r.recommended.atRisk).to.be.a(\"number\"); pm.expect(r.difference).to.eql(r.current.atRisk - r.recommended.atRisk); } else { pm.expect(r.current).to.eql(null); pm.expect(r.difference).to.eql(null); } });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/farm-stress"
+          }
+        },
+        {
           "name": "A check needs an existing recommendation (S-07.01)",
           "event": [
             {
