@@ -265,6 +265,8 @@ model Field {
   irrigationSource ValueSource                                 @default(unknown) @map("irrigation_source")
   slopePct         Float?                                      @map("slope_pct")
   thumbnailKey     String?                                     @map("thumbnail_key")
+  /// Simplified outline for thumbnails, filled by a trigger when geom changes (see migration 20261116000000).
+  thumbGeojson     String?                                     @map("thumb_geojson")
   createdBy        String?                                     @map("created_by") @db.Uuid
   createdAt        DateTime                                    @default(now()) @map("created_at") @db.Timestamptz(3)
   archivedAt       DateTime?                                   @map("archived_at") @db.Timestamptz(3)
@@ -351,6 +353,7 @@ model SourceCache {
   expiresAt DateTime? @map("expires_at") @db.Timestamptz(3)
 
   @@index([source])
+  @@index([expiresAt])
   @@map("source_cache")
 }
 
@@ -368,6 +371,7 @@ model GatherJob {
   field Field        @relation(fields: [fieldId], references: [id], onDelete: Cascade)
   tasks GatherTask[]
 
+  @@index([fieldId, startedAt])
   @@map("gather_jobs")
 }
 
@@ -407,6 +411,7 @@ model AnalysisRun {
   fields    AnalysisRunField[]
 
   @@index([workspaceId, startedAt])
+  @@index([workspaceId, trigger, asOf])
   @@map("analysis_runs")
 }
 
@@ -423,6 +428,7 @@ model AnalysisRunField {
   field Field       @relation(fields: [fieldId], references: [id], onDelete: Cascade)
 
   @@id([runId, fieldId])
+  @@index([fieldId, updatedAt])
   @@map("analysis_run_fields")
 }
 
@@ -457,6 +463,7 @@ model Plan {
   scenarioRun ScenarioRun? @relation(fields: [scenarioRunId], references: [id], onDelete: SetNull)
 
   @@id([fieldId, season])
+  @@index([fieldId, savedAt])
   @@map("plans")
 }
 
@@ -473,34 +480,34 @@ model Recommendation {
   level           RiskLevel
   confidence      Confidence
   tier            Tier
-  deadline        DateTime?   @db.Date
-  irreversible    Boolean     @default(false)
-  planning        Boolean     @default(false)
-  keyNumbers      Json        @default("[]") @map("key_numbers")
-  drivers         Json        @default("[]")
-  evidence        Json        @default("[]")
-  unknowns        Json        @default("[]")
-  modelRef        String?     @map("model_ref")
-  versions        Json        @default("{}")
-  inputSnapshotId String?     @map("input_snapshot_id") @db.Uuid
-  textOverride    Json?       @map("text_override")
+  deadline        DateTime?  @db.Date
+  irreversible    Boolean    @default(false)
+  planning        Boolean    @default(false)
+  keyNumbers      Json       @default("[]") @map("key_numbers")
+  drivers         Json       @default("[]")
+  evidence        Json       @default("[]")
+  unknowns        Json       @default("[]")
+  modelRef        String?    @map("model_ref")
+  versions        Json       @default("{}")
+  inputSnapshotId String?    @map("input_snapshot_id") @db.Uuid
+  textOverride    Json?      @map("text_override")
   /// Assistant-written text {source: "ai" or "template", hash, title, action, why}; the template text stays the fallback (PD v2.11).
-  aiText          Json?       @map("ai_text")
+  aiText          Json?      @map("ai_text")
   /// A "worth scouting" watch-item proposed by the assistant for a pest with no verified model (never Urgent).
-  aiSuggested     Boolean     @default(false) @map("ai_suggested")
-  editedBy        String?     @map("edited_by") @db.Uuid
-  snoozedAt       DateTime?   @map("snoozed_at") @db.Timestamptz(3)
-  snoozedUntil    DateTime?   @map("snoozed_until") @db.Timestamptz(3)
-  acceptedAt      DateTime?   @map("accepted_at") @db.Timestamptz(3)
-  acceptedBy      String?     @map("accepted_by") @db.Uuid
-  committedAt     DateTime?   @map("committed_at") @db.Timestamptz(3)
-  askOwnerAt      DateTime?   @map("ask_owner_at") @db.Timestamptz(3)
-  askOwnerBy      String?     @map("ask_owner_by") @db.Uuid
-  askNote         String?     @map("ask_note")
-  askCommittedAt  DateTime?   @map("ask_committed_at") @db.Timestamptz(3)
-  dismissedAt     DateTime?   @map("dismissed_at") @db.Timestamptz(3)
-  createdAt       DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt       DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
+  aiSuggested     Boolean    @default(false) @map("ai_suggested")
+  editedBy        String?    @map("edited_by") @db.Uuid
+  snoozedAt       DateTime?  @map("snoozed_at") @db.Timestamptz(3)
+  snoozedUntil    DateTime?  @map("snoozed_until") @db.Timestamptz(3)
+  acceptedAt      DateTime?  @map("accepted_at") @db.Timestamptz(3)
+  acceptedBy      String?    @map("accepted_by") @db.Uuid
+  committedAt     DateTime?  @map("committed_at") @db.Timestamptz(3)
+  askOwnerAt      DateTime?  @map("ask_owner_at") @db.Timestamptz(3)
+  askOwnerBy      String?    @map("ask_owner_by") @db.Uuid
+  askNote         String?    @map("ask_note")
+  askCommittedAt  DateTime?  @map("ask_committed_at") @db.Timestamptz(3)
+  dismissedAt     DateTime?  @map("dismissed_at") @db.Timestamptz(3)
+  createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   workspace     Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   field         Field                 @relation(fields: [fieldId], references: [id], onDelete: Cascade)
@@ -511,6 +518,8 @@ model Recommendation {
   outcomes      Outcome[]
 
   @@index([workspaceId, status])
+  @@index([fieldId, status])
+  @@index([workspaceId, fieldId, status])
   @@map("recommendations")
 }
 
@@ -559,6 +568,8 @@ model ScoutingTask {
   points         ScoutingPoint[]
   photos         ScoutingPhoto[]
 
+  @@index([fieldId])
+  @@index([recommendationId])
   @@map("scouting_tasks")
 }
 
@@ -587,6 +598,7 @@ model ScoutingPhoto {
 
   task ScoutingTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
+  @@index([taskId])
   @@map("scouting_photos")
 }
 
@@ -689,6 +701,7 @@ model Message {
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   toolCalls    ToolCall[]
 
+  @@index([conversationId, createdAt])
   @@map("messages")
 }
 
@@ -787,6 +800,8 @@ model FieldZoneBuild {
   ndviSceneId   String?   @map("ndvi_scene_id")
   ndviCorners   Json?     @map("ndvi_corners")
   ndviPng       Bytes?    @map("ndvi_png")
+  /// Object-storage key of the NDVI PNG when S3_BUCKET is set (ndvi_png stays NULL then).
+  ndviPngKey    String?   @map("ndvi_png_key")
   ndviStats     Json?     @map("ndvi_stats")
   ndviCheckedAt DateTime? @map("ndvi_checked_at") @db.Timestamptz(3)
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
@@ -824,9 +839,36 @@ model FieldZoneCache {
   height    Int
   scenes    Int
   listed    Int
-  data      Bytes
+  /// Raster bytes in PostgreSQL, or NULL when they live in object storage under dataKey.
+  data      Bytes?
+  dataKey   String?  @map("data_key")
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   @@id([geomHash, season, res])
   @@map("field_zone_cache")
+}
+
+// ---------- AI cost control ----------
+
+/// AI-proposed rotations by (context hash, engine version, model); rows expire after 7 days.
+model AiRotationProposal {
+  contextHash   String   @map("context_hash")
+  engineVersion String   @map("engine_version")
+  model         String
+  payload       Json
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  expiresAt     DateTime @map("expires_at") @db.Timestamptz(3)
+
+  @@id([contextHash, engineVersion, model])
+  @@index([expiresAt])
+  @@map("ai_rotation_proposals")
+}
+
+/// Daily Gemini usage when Redis is not available (UTC day).
+model AiUsage {
+  day    DateTime @id @db.Date
+  tokens BigInt   @default(0)
+  calls  Int      @default(0)
+
+  @@map("ai_usage")
 }

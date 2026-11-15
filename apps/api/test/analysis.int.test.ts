@@ -179,6 +179,8 @@ beforeAll(async () => {
     RABBITMQ_URL: "amqp://localhost:5672",
     JWT_SECRET: "integration-test-secret-0123456789abcdef",
     NODE_ENV: "test",
+    // The 06:00 start is spread out in production; the test pins the exact minute.
+    MORNING_JITTER_MINUTES: "0",
     DATA_DIR,
     // Tests never see the recorded fixtures.
     FIXTURES_DIR: "/nonexistent/fixtures",

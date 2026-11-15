@@ -47,9 +47,18 @@ export class AssistantController {
 
   @Get(":id")
   @Requires("assistant.use")
-  get(@Param("id") id: string, @Query("include") include: string | undefined, @Req() req: AuthedRequest) {
+  get(
+    @Param("id") id: string,
+    @Query("include") include: string | undefined,
+    @Query("limit") limit: string | undefined,
+    @Query("before") before: string | undefined,
+    @Req() req: AuthedRequest,
+  ) {
     // ?include=tools adds tool results (golden-question recordings, audit); only for the chat's owner.
-    return this.assistant.get(req.workspaceId!, uuid(id), req.user!.id, include === "tools");
+    return this.assistant.get(req.workspaceId!, uuid(id), req.user!.id, include === "tools", {
+      limit: limit === undefined || Number.isNaN(Number(limit)) ? undefined : Number(limit),
+      before,
+    });
   }
 
   @Post(":id/messages")

@@ -1,6 +1,8 @@
-import { Inject, Injectable, Logger } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import { EventKeys } from "@terrasight/shared";
 import type { SafetyFilter } from "@terrasight/assistant-core";
+import { AiBudgetService } from "../ai/ai-budget.service.js";
+import { TtlLru } from "../ai/ttl-lru.js";
 import { aiEnabled, GeminiJson, loadSafety } from "../ai/gemini-json.js";
 import { ENV, type Env } from "../config/config.js";
 import { PrismaService } from "../db/prisma.service.js";
@@ -13,7 +15,6 @@ const RETRY_AFTER_FAILURE_MS = 10 * 60_000;
 const CACHE_MAX = 200;
 
 interface Entry {
-  at: number;
   text: Text2 | null;
 }
 
@@ -27,7 +28,8 @@ export class AiDaySummaryService {
   private readonly log = new Logger(AiDaySummaryService.name);
   private readonly safety: SafetyFilter;
   readonly gemini: GeminiJson;
-  private readonly cache = new Map<string, Entry>();
+  /** Bounded, with the same TTL as the stored sentence; a failed generation is remembered for the (shorter) retry delay. */
+  private readonly cache = new TtlLru<Entry>(CACHE_MAX, CACHE_TTL_MS);
   private readonly inflight = new Set<string>();
   readonly stats = { calls: 0, ok: 0, rejected: 0, failed: 0, tokensIn: 0, tokensOut: 0 };
 
@@ -35,8 +37,9 @@ export class AiDaySummaryService {
     @Inject(ENV) private readonly env: Env,
     private readonly prisma: PrismaService,
     private readonly outbox: OutboxService,
+    @Optional() budget?: AiBudgetService,
   ) {
-    this.gemini = new GeminiJson(env, this.log);
+    this.gemini = new GeminiJson(env, this.log, budget);
     this.safety = loadSafety(env, this.log);
   }
 
@@ -52,9 +55,8 @@ export class AiDaySummaryService {
     if (!this.enabled()) return null;
     const key = `${workspaceId}:${hashOf({ facts, model: this.env.GEMINI_MODEL })}`;
     const hit = this.cache.get(key);
-    const age = hit ? Date.now() - hit.at : Infinity;
-    if (hit?.text && age < CACHE_TTL_MS) return hit.text;
-    if (hit && !hit.text && age < RETRY_AFTER_FAILURE_MS) return null;
+    if (hit?.text) return hit.text;
+    if (hit && !hit.text && this.cache.age(key) < RETRY_AFTER_FAILURE_MS) return null;
     if (!this.inflight.has(key)) {
       this.inflight.add(key);
       void this.generate(workspaceId, key, facts, names).finally(() => this.inflight.delete(key));
@@ -65,6 +67,18 @@ export class AiDaySummaryService {
   /** Exposed for tests: runs the generation and resolves when it is cached. */
   async generate(workspaceId: string, key: string, facts: unknown, names: Map<string, string>): Promise<void> {
     let text: Text2 | null = null;
+    // A sentence stored for these facts (it survives restarts and other instances) means no Gemini call.
+    const stored = await this.prisma.system.sourceCache
+      .findUnique({ where: { key: `ai-day:${key}` } })
+      .catch(() => null);
+    const storedText = stored?.payload as unknown as Text2 | null | undefined;
+    if (storedText && stored?.expiresAt && stored.expiresAt > new Date()) {
+      this.cache.set(key, { text: storedText });
+      await this.outbox
+        .add(this.prisma.system, [eventRow(EventKeys.brief(workspaceId), "brief.changed", workspaceId, {})])
+        .catch((e: Error) => this.log.warn(`brief refresh event failed: ${e.message}`));
+      return;
+    }
     try {
       this.stats.calls += 1;
       const call = await this.gemini.call(SUMMARY_SYSTEM, JSON.stringify(facts), summarySchema);
@@ -82,8 +96,19 @@ export class AiDaySummaryService {
       this.stats.failed += 1;
       this.log.warn(`AI day summary unavailable: ${(e as Error).message}`);
     }
-    this.cache.set(key, { at: Date.now(), text });
-    if (this.cache.size > CACHE_MAX) this.cache.delete(this.cache.keys().next().value!);
+    this.cache.set(key, { text });
+    if (text) {
+      const data = {
+        source: "ai-day",
+        params: {},
+        payload: text as never,
+        fetchedAt: new Date(),
+        expiresAt: new Date(Date.now() + CACHE_TTL_MS),
+      };
+      await this.prisma.system.sourceCache
+        .upsert({ where: { key: `ai-day:${key}` }, create: { key: `ai-day:${key}`, ...data }, update: data })
+        .catch((e: Error) => this.log.warn(`day summary not stored: ${e.message}`));
+    }
     if (text)
       await this.outbox
         .add(this.prisma.system, [eventRow(EventKeys.brief(workspaceId), "brief.changed", workspaceId, {})])

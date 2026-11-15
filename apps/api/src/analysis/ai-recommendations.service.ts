@@ -1,7 +1,9 @@
-import { Inject, Injectable, Logger } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import { daysUntil } from "@terrasight/evaluators";
 import type { Library } from "@terrasight/library";
 import type { SafetyFilter } from "@terrasight/assistant-core";
+import { AiBudgetService } from "../ai/ai-budget.service.js";
+import { TtlLru } from "../ai/ttl-lru.js";
 import { aiEnabled, GeminiJson, loadSafety } from "../ai/gemini-json.js";
 import { ENV, type Env } from "../config/config.js";
 import { PrismaService } from "../db/prisma.service.js";
@@ -24,6 +26,7 @@ const LIVE: RecStatus[] = ["open", "accepted", "snoozed", "in_report", "dismisse
 const TEXT_LEVELS = ["high", "moderate", "unknown"] as const;
 const DISEASE_KINDS = new Set(["fungus", "oomycete", "bacteria", "virus", "mycotoxin"]);
 const CACHE_MAX = 500;
+const CACHE_TTL_MS = 24 * 3600_000;
 const WATCH_CANDIDATES = 10;
 const BREAKER_FAILURES = 3;
 const BREAKER_MS = 5 * 60_000;
@@ -82,7 +85,7 @@ export class AiRecommendationsService {
   private readonly safety: SafetyFilter;
   /** Replaceable in tests (`gemini.client`); null without an API key. */
   readonly gemini: GeminiJson;
-  private readonly cache = new Map<string, WrittenText>();
+  private readonly cache = new TtlLru<WrittenText>(CACHE_MAX, CACHE_TTL_MS);
   private failures = 0;
   private openUntil = 0;
   readonly stats: AiStats = {
@@ -102,8 +105,9 @@ export class AiRecommendationsService {
     @Inject(ENV) private readonly env: Env,
     @Inject(LIBRARY) private readonly lib: Library,
     private readonly prisma: PrismaService,
+    @Optional() budget?: AiBudgetService,
   ) {
-    this.gemini = new GeminiJson(env, this.log);
+    this.gemini = new GeminiJson(env, this.log, budget);
     this.safety = loadSafety(env, this.log);
   }
 
@@ -344,7 +348,6 @@ export class AiRecommendationsService {
       if (w) {
         this.stats.aiTexts += 1;
         this.cache.set(hash, w);
-        if (this.cache.size > CACHE_MAX) this.cache.delete(this.cache.keys().next().value!);
         await this.saveText(id, { source: "ai", hash, at, ...w });
       } else {
         this.stats.templateFallbacks += 1;

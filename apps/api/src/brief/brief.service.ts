@@ -47,7 +47,7 @@ export class BriefService {
         }>
       >`
         SELECT id, name, alias_no, area_ha, county_name, admin_code, ST_Y(centroid) AS lat, ST_X(centroid) AS lon,
-          ST_AsGeoJSON(ST_SimplifyPreserveTopology(geom, GREATEST(ST_XMax(geom) - ST_XMin(geom), ST_YMax(geom) - ST_YMin(geom)) / 40), 6) AS thumb_geojson
+          thumb_geojson
         FROM fields WHERE workspace_id = ${workspaceId}::uuid AND archived_at IS NULL ORDER BY alias_no`,
       this.prisma.system.recommendation.findMany({
         where: { workspaceId, status: "open", field: { archivedAt: null } },
@@ -120,9 +120,10 @@ export class BriefService {
     const hero = urgent[0] ?? thisWeek[0] ?? null;
     const worthALook = watch.sort((a, b) => a.fieldName.localeCompare(b.fieldName) || a.id.localeCompare(b.id));
 
+    const cropsOf = new Map<string, typeof crops>();
+    for (const c of crops) (cropsOf.get(c.fieldId) ?? cropsOf.set(c.fieldId, []).get(c.fieldId)!).push(c);
     const strip = (fieldId: string) =>
-      crops
-        .filter((c) => c.fieldId === fieldId)
+      (cropsOf.get(fieldId) ?? [])
         .slice(-5)
         .map((c) => ({ season: c.season, crop: c.mainCrop, secondCrop: c.secondCrop }));
     const thumbs = new Map(fields.map((f) => [f.id, thumbPath(f.thumb_geojson)]));

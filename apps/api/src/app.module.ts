@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { LoggerModule } from "nestjs-pino";
 import { loadEnv } from "./config/config.js";
+import { AiModule } from "./ai/ai.module.js";
 import { AnalysisModule } from "./analysis/analysis.module.js";
 import { AssistantModule } from "./assistant/assistant.module.js";
 import { AuthModule } from "./auth/auth.module.js";
@@ -16,6 +17,7 @@ import { ScenariosModule } from "./scenarios/scenarios.module.js";
 import { NotificationsModule } from "./notifications/notifications.module.js";
 import { ReportsModule } from "./reports/reports.module.js";
 import { ScoutingModule } from "./scouting/scouting.module.js";
+import { RetentionModule } from "./retention/retention.module.js";
 import { RedisModule } from "./redis/redis.module.js";
 import { WorkWindowsModule } from "./work-windows/work-windows.module.js";
 import { WorkspacesModule } from "./workspaces/workspaces.module.js";
@@ -38,6 +40,7 @@ const env = loadEnv();
     LibraryModule,
     DbModule,
     RedisModule,
+    AiModule,
     MessagingModule,
     AuthModule,
     EventsModule,
@@ -51,6 +54,7 @@ const env = loadEnv();
     ReportsModule,
     NotificationsModule,
     WorkWindowsModule,
+    RetentionModule,
   ],
   controllers: [HealthController],
 })

@@ -9,6 +9,7 @@ import {
   Patch,
   Post,
   Put,
+  Query,
   Req,
   UseGuards,
 } from "@nestjs/common";
@@ -70,8 +71,14 @@ export class FieldsController {
 
   @Get()
   @Requires("fields.read")
-  list(@Req() req: AuthedRequest) {
-    return this.fields.list(req.workspaceId!);
+  list(
+    @Query("limit") limit: string | undefined,
+    @Query("cursor") cursor: string | undefined,
+    @Req() req: AuthedRequest,
+  ) {
+    const n = limit === undefined ? undefined : Number(limit);
+    if (n !== undefined && !Number.isInteger(n)) throw new ProblemException(422, "invalid-input", "Bad limit");
+    return this.fields.list(req.workspaceId!, n === undefined ? undefined : { limit: n, cursor });
   }
 
   @Post("preview")

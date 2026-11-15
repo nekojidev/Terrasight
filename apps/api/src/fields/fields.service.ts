@@ -100,7 +100,15 @@ export class FieldsService {
     return { areaHa: p.areaHa, placeLabel: p.placeLabel, regionId: p.regionId, tier: p.tier, sources };
   }
 
-  async list(workspaceId: string) {
+  /**
+   * Active fields by alias number. Without `limit` the whole list is returned as an array (unchanged shape); with
+   * `limit` (and optional `cursor` = last aliasNo) one page comes back as `{ items, nextCursor }`.
+   */
+  async list(workspaceId: string, page?: { limit?: number; cursor?: string | null }) {
+    const paged = page?.limit !== undefined;
+    const limit = paged ? Math.min(Math.max(Math.trunc(page!.limit!), 1), 500) : null;
+    const after = page?.cursor ? Number(page.cursor) : null;
+    if (after !== null && !Number.isInteger(after)) throw new ProblemException(422, "invalid-input", "Bad cursor");
     const rows = await this.prisma.system.$queryRaw<
       Array<{
         id: string;
@@ -121,8 +129,11 @@ export class FieldsService {
       SELECT f.id, f.name, f.alias_no, f.area_ha, f.county_name, f.country, f.admin_code, f.region_id, f.tier, f.irrigation,
              ST_X(f.centroid) AS lon, ST_Y(f.centroid) AS lat,
              (SELECT status FROM gather_jobs g WHERE g.field_id = f.id ORDER BY started_at DESC LIMIT 1) AS gather_status
-      FROM fields f WHERE f.workspace_id = ${workspaceId}::uuid AND f.archived_at IS NULL ORDER BY f.alias_no`;
-    return rows.map((r) => ({
+      FROM fields f WHERE f.workspace_id = ${workspaceId}::uuid AND f.archived_at IS NULL
+        AND (${after}::int IS NULL OR f.alias_no > ${after}::int)
+      ORDER BY f.alias_no LIMIT ${limit === null ? null : limit + 1}::int`;
+    const hasMore = limit !== null && rows.length > limit;
+    const items = (limit === null ? rows : rows.slice(0, limit)).map((r) => ({
       id: r.id,
       name: r.name,
       aliasNo: r.alias_no,
@@ -136,6 +147,8 @@ export class FieldsService {
       centroid: { lon: r.lon, lat: r.lat },
       gatherStatus: r.gather_status,
     }));
+    if (!paged) return items;
+    return { items, nextCursor: hasMore ? String(items.at(-1)!.aliasNo) : null };
   }
 
   async get(workspaceId: string, fieldId: string) {
@@ -162,7 +175,7 @@ export class FieldsService {
     >`
       SELECT id, name, alias_no, area_ha, county_name, country, admin_code, region_id, tier, irrigation, irrigation_source, slope_pct,
              ST_AsGeoJSON(geom, 7) AS geojson,
-             ST_AsGeoJSON(ST_SimplifyPreserveTopology(geom, GREATEST(ST_XMax(geom) - ST_XMin(geom), ST_YMax(geom) - ST_YMin(geom)) / 40), 6) AS thumb_geojson,
+             thumb_geojson,
              ST_X(centroid) AS lon, ST_Y(centroid) AS lat, created_at
       FROM fields WHERE id = ${fieldId}::uuid AND workspace_id = ${workspaceId}::uuid AND archived_at IS NULL`;
     const r = rows[0];

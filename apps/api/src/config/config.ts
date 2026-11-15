@@ -36,6 +36,21 @@ export const EnvSchema = z.object({
   S3_BUCKET: z.string().optional(),
   AWS_REGION: z.string().default("us-east-1"),
   UPLOADS_DIR: z.string().default(fileURLToPath(new URL("../../../../uploads/", import.meta.url))),
+  /** Daily Gemini budget in tokens across all instances (0 = unlimited). Over budget: template text, no calls. */
+  GEMINI_DAILY_TOKEN_BUDGET: z.coerce.number().int().min(0).default(0),
+  /** Daily Gemini budget in calls (0 = unlimited). */
+  GEMINI_DAILY_CALL_BUDGET: z.coerce.number().int().min(0).default(0),
+  /** `field.check` jobs one worker handles at once. */
+  FIELD_CHECK_PREFETCH: z.coerce.number().int().min(1).max(64).default(8),
+  /** Spread of each workspace's 06:00 start, minutes (0 = all at once). */
+  MORNING_JITTER_MINUTES: z.coerce.number().int().min(0).max(120).default(30),
+  /** Retention jobs (daily; set RETENTION_ENABLED=0 to turn them off) and the ages they keep, in days. */
+  RETENTION_ENABLED: z.enum(["0", "1"]).default("1"),
+  RETENTION_SOURCE_CACHE_DAYS: z.coerce.number().int().min(0).default(8),
+  RETENTION_INPUT_SNAPSHOT_DAYS: z.coerce.number().int().min(1).default(90),
+  RETENTION_LEVEL_DAYS: z.coerce.number().int().min(1).default(180),
+  RETENTION_RUN_FIELD_DAYS: z.coerce.number().int().min(1).default(90),
+  RETENTION_NOTIFICATION_DAYS: z.coerce.number().int().min(1).default(90),
   /** First planned season (harvest year) of the 5-season horizon (RFC §7.7: 2026–2030). */
   PLAN_FIRST_SEASON: z.coerce.number().int().min(2020).max(2100).default(2026),
   /** Recorded real responses served when a live call fails (RFC §5.4). */

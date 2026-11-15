@@ -47,10 +47,17 @@ export class ReportsController {
 
   @Get("decisions")
   @Requires("report.read")
-  list(@Query("state") state: string | undefined, @Req() req: AuthedRequest) {
+  list(
+    @Query("state") state: string | undefined,
+    @Query("limit") limit: string | undefined,
+    @Query("cursor") cursor: string | undefined,
+    @Req() req: AuthedRequest,
+  ) {
     const parsed = StateQuery.safeParse(state ?? "all");
     if (!parsed.success) throw new ProblemException(422, "invalid-input", "Unknown state");
-    return this.decisions.list(req.workspaceId!, parsed.data);
+    const n = limit === undefined ? undefined : Number(limit);
+    if (n !== undefined && !Number.isInteger(n)) throw new ProblemException(422, "invalid-input", "Bad limit");
+    return this.decisions.list(req.workspaceId!, parsed.data, { limit: n, cursor });
   }
 
   @Post("decisions/:id/answer")

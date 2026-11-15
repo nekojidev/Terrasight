@@ -190,18 +190,26 @@ export class AnalysisService implements OnModuleInit {
 
   private async completeIfDone(tx: Tx, workspaceId: string, runId: string): Promise<OutboxRow[]> {
     await tx.$queryRaw`SELECT id FROM analysis_runs WHERE id = ${runId}::uuid FOR UPDATE`;
-    const run = await tx.analysisRun.findUnique({
-      where: { id: runId },
-      include: { fields: { include: { field: { select: { name: true } } } } },
-    });
+    const run = await tx.analysisRun.findUnique({ where: { id: runId } });
     if (!run || run.status !== "running") return [];
     if ((run.summary as RunningSummary | null)?.attached?.length) return [];
-    if (run.fields.some((f) => !FINAL.includes(f.status))) return [];
+    // Count statuses in SQL; the rows are loaded only once, when the run is really done.
+    const counts = await tx.analysisRunField.groupBy({
+      by: ["status"],
+      where: { runId },
+      _count: { _all: true },
+    });
+    if (counts.some((c) => !FINAL.includes(c.status))) return [];
+    const fields = await tx.analysisRunField.findMany({
+      where: { runId },
+      include: { field: { select: { name: true } } },
+    });
+    const done = { ...run, fields };
     const summary: RunSummary = {
-      total: run.fields.length,
-      checked: run.fields.filter((f) => f.status !== "failed").length,
-      newRecommendations: run.fields.reduce((n, f) => n + f.newRecommendations, 0),
-      problems: run.fields
+      total: fields.length,
+      checked: fields.filter((f) => f.status !== "failed").length,
+      newRecommendations: fields.reduce((n, f) => n + f.newRecommendations, 0),
+      problems: fields
         .filter(
           (f): f is typeof f & { status: "stale" | "failed" } =>
             f.status === "stale" || f.status === "failed",
@@ -218,7 +226,7 @@ export class AnalysisService implements OnModuleInit {
       where: { id: runId },
       data: { status: "done", finishedAt: new Date(), summary: summary as unknown as Prisma.InputJsonValue },
     });
-    await this.notify(tx, workspaceId, run, summary);
+    await this.notify(tx, workspaceId, done, summary);
     return [
       eventRow(EventKeys.analysis(workspaceId), "analysis.done", workspaceId, { runId, summary }),
       eventRow(EventKeys.brief(workspaceId), "brief.changed", workspaceId, { runId }),
