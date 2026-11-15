@@ -5,6 +5,7 @@ import { GenericContainer } from "testcontainers";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AccountService } from "../src/account/account.module.js";
+import { Mailer } from "../src/mail/mailer.js";
 import { AuthService } from "../src/auth/auth.service.js";
 import { loadEnv } from "../src/config/config.js";
 import { PrismaService } from "../src/db/prisma.service.js";
@@ -47,9 +48,9 @@ beforeAll(async () => {
     NODE_ENV: "test",
   });
   prisma = new PrismaService(env);
-  auth = new AuthService(prisma, env);
+  auth = new AuthService(prisma, env, new Mailer(env));
   account = new AccountService(prisma);
-  fields = new FieldsService(prisma, null as never, null as never, null as never);
+  fields = new FieldsService(prisma, null as never, null as never, null as never, env);
   exporter = new ExportService(prisma);
 });
 
@@ -59,10 +60,14 @@ afterAll(async () => {
   await container?.stop();
 });
 
+/** fields.list returns an array, or a page when a limit is given. */
+const listed = <T>(l: T[] | { items: T[] }): T[] => (Array.isArray(l) ? l : l.items);
+
 async function signup(): Promise<{ id: string; email: string }> {
   const email = `${Math.random().toString(36).slice(2)}@example.com`;
-  const s = await auth.signup({ email, password: "a long enough password", name: "Ann", uiLanguage: "en" });
-  return { id: s.userId, email };
+  await auth.signup({ email, password: "a long enough password", name: "Ann", uiLanguage: "en" }, false);
+  const r = await client.query<{ id: string }>("SELECT id FROM users WHERE email = $1", [email]);
+  return { id: r.rows[0]!.id, email };
 }
 async function workspaceOf(userId: string): Promise<string> {
   const r = await client.query(
@@ -70,7 +75,10 @@ async function workspaceOf(userId: string): Promise<string> {
     [`co-${Math.random().toString(36).slice(2)}`],
   );
   const ws = r.rows[0].id as string;
-  await client.query(`INSERT INTO memberships (workspace_id, user_id, role) VALUES ($1, $2, 'owner')`, [ws, userId]);
+  await client.query(`INSERT INTO memberships (workspace_id, user_id, role) VALUES ($1, $2, 'owner')`, [
+    ws,
+    userId,
+  ]);
   return ws;
 }
 async function field(ws: string, name: string): Promise<string> {
@@ -96,9 +104,9 @@ describe("account", () => {
     const here = await auth.login(u.email, "a long enough password");
     const other = await auth.login(u.email, "a long enough password");
 
-    expect(await status(account.changePassword(u.id, "not my password", "a brand new password", here.refresh))).toBe(
-      401,
-    );
+    expect(
+      await status(account.changePassword(u.id, "not my password", "a brand new password", here.refresh)),
+    ).toBe(401);
     await account.changePassword(u.id, "a long enough password", "a brand new password", here.refresh);
 
     expect(await status(auth.login(u.email, "a long enough password"))).toBe(401);
@@ -126,12 +134,12 @@ describe("archive, restore and export", () => {
 
     expect(await status(fields.restore(ws, u.id, id))).toBe(404);
     await fields.archive(ws, u.id, id);
-    expect(await fields.list(ws)).toHaveLength(0);
+    expect(listed(await fields.list(ws))).toHaveLength(0);
     expect((await fields.listArchived(ws)).map((f) => f.id)).toEqual([id]);
     expect(await status(fields.restore(other, u.id, id))).toBe(404);
 
     await fields.restore(ws, u.id, id);
-    expect((await fields.list(ws)).map((f) => f.id)).toEqual([id]);
+    expect(listed(await fields.list(ws)).map((f) => f.id)).toEqual([id]);
     expect(await fields.listArchived(ws)).toHaveLength(0);
   });
 
@@ -141,7 +149,10 @@ describe("archive, restore and export", () => {
     const a = await field(ws, "Alpha");
     const b = await field(ws, "Beta");
     await fields.archive(ws, u.id, b);
-    await client.query(`INSERT INTO season_records (field_id, season, crop, updated_at) VALUES ($1, 2026, 'corn', now())`, [a]);
+    await client.query(
+      `INSERT INTO season_records (field_id, season, crop, updated_at) VALUES ($1, 2026, 'corn', now())`,
+      [a],
+    );
     const foreign = await workspaceOf((await signup()).id);
     await field(foreign, "Foreign");
 
