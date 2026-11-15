@@ -5,7 +5,7 @@ import { slopes } from "./dem.js";
 import { CRS, cellKey, geometryHash, pointInPolygons, project, projectPolygons } from "./geo.js";
 import { mapLimit } from "./http.js";
 import { adaptersFor } from "./index.js";
-import { parsePower, powerCell } from "./power.js";
+import { parsePower, power, powerCell } from "./power.js";
 import { summariseSoil } from "./ssurgo.js";
 
 const square = (cx: number, cy: number, h: number) => [
@@ -44,6 +44,13 @@ describe("geometry", () => {
 describe("NASA POWER", () => {
   it("snaps to its grid so neighbouring fields share one request", () => {
     expect(powerCell(-100.87, 37.97)).toEqual(powerCell(-100.8, 38.1));
+  });
+
+  it("keys the cache by the same POWER cell, so neighbouring fields reuse one cached series", () => {
+    const f = (lon: number, lat: number) => ({ centroid: { lon, lat } }) as Parameters<typeof power.cacheKey>[0];
+    const ctx = { today: "2026-11-14" };
+    expect(power.cacheKey(f(-100.87, 37.97), ctx)).toBe(power.cacheKey(f(-100.8, 38.1), ctx));
+    expect(power.cacheKey(f(-100.87, 37.97), ctx)).not.toBe(power.cacheKey(f(-100.87, 38.6), ctx));
   });
 
   it("parses values, maps -999 to null and drops the unfilled recent tail", () => {

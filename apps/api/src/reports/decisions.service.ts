@@ -10,7 +10,7 @@ import type {
 } from "@terrasight/shared";
 import { EventKeys } from "@terrasight/shared";
 import { PrismaService } from "../db/prisma.service.js";
-import type { Prisma } from "../generated/prisma/client.js";
+import { Prisma } from "../generated/prisma/client.js";
 import type { OwnerAnswerKind } from "../generated/prisma/enums.js";
 import { ProblemException } from "../http/problem.js";
 import { eventRow } from "../messaging/outbox.js";
@@ -47,6 +47,37 @@ const FROM_DB: Record<OwnerAnswerKind, DecisionAnswer> = {
   not_yet: "not_now",
   question: "question",
 };
+
+export const DECISIONS_PAGE = 100;
+export const DECISIONS_PAGE_MAX = 200;
+
+/** Live (not superseded) decisions with their state worked out in SQL; mirrors decisionState(). */
+const stateCte = (workspaceId: string) => Prisma.sql`WITH s AS (
+  SELECT ri.id, ri.committed_at,
+    CASE
+      WHEN la.answer IS NULL THEN 'waiting'
+      WHEN la.answer = 'done' THEN 'approved'
+      WHEN la.answer = 'not_yet' THEN 'not_now'
+      WHEN EXISTS (SELECT 1 FROM report_replies rr WHERE rr.report_item_id = ri.id AND rr.created_at > la.created_at) THEN 'waiting'
+      ELSE 'question'
+    END AS state
+  FROM report_items ri
+  LEFT JOIN LATERAL (
+    SELECT oa.answer, oa.created_at FROM owner_answers oa
+    WHERE oa.report_item_id = ri.id ORDER BY oa.created_at DESC, oa.id DESC LIMIT 1
+  ) la ON true
+  WHERE ri.workspace_id = ${workspaceId}::uuid AND ri.superseded_by IS NULL)`;
+
+export function encodeCursor(at: Date, id: string): string {
+  return Buffer.from(`${at.toISOString()}|${id}`).toString("base64url");
+}
+
+export function decodeCursor(cursor: string): { at: string; id: string } {
+  const [at, id] = Buffer.from(cursor, "base64url").toString().split("|");
+  if (!at || !id || Number.isNaN(Date.parse(at)) || !/^[0-9a-f-]{36}$/i.test(id))
+    throw new ProblemException(422, "invalid-input", "Bad cursor");
+  return { at, id };
+}
 
 const include = {
   answers: { orderBy: { createdAt: "asc" } },
@@ -187,29 +218,56 @@ export class DecisionsService {
     return i;
   }
 
-  /** The staff view: all live decisions, counts per state, the Owners who receive them. */
-  async list(workspaceId: string, state: "waiting" | "question" | "decided" | "all"): Promise<DecisionList> {
+  /**
+   * The staff view: live decisions newest first, one page at a time (cursor on committedAt, id), counts per state
+   * computed in SQL over all decisions, the Owners who receive them.
+   */
+  async list(
+    workspaceId: string,
+    state: "waiting" | "question" | "decided" | "all",
+    page: { limit?: number; cursor?: string | null } = {},
+  ): Promise<DecisionList> {
     const ws = await this.prisma.system.workspace.findUniqueOrThrow({
       where: { id: workspaceId },
       select: { name: true, reportLanguage: true },
     });
-    const all = await this.decisions(workspaceId);
-    const decided = (d: Decision) => d.state === "approved" || d.state === "not_now";
-    const owners = await this.prisma.system.membership.findMany({
-      where: { workspaceId, role: "owner" },
-      orderBy: { createdAt: "asc" },
-      select: { user: { select: { name: true } } },
-    });
+    const limit = Math.min(Math.max(Math.trunc(page.limit ?? DECISIONS_PAGE), 1), DECISIONS_PAGE_MAX);
+    const cur = page.cursor ? decodeCursor(page.cursor) : null;
+    const states = state === "all" ? ["waiting", "question", "approved", "not_now"] : state === "decided" ? ["approved", "not_now"] : [state];
+    const [countRows, idRows, owners] = await Promise.all([
+      this.prisma.system.$queryRaw<Array<{ state: DecisionState; n: bigint }>>`
+        ${stateCte(workspaceId)}
+        SELECT state, count(*) AS n FROM s GROUP BY state`,
+      this.prisma.system.$queryRaw<Array<{ id: string }>>`
+        ${stateCte(workspaceId)}
+        SELECT id FROM s
+        WHERE state = ANY(${states})
+          AND (${cur?.at ?? null}::timestamptz IS NULL OR (committed_at, id) < (${cur?.at ?? null}::timestamptz, ${cur?.id ?? null}::uuid))
+        ORDER BY committed_at DESC, id DESC LIMIT ${limit + 1}`,
+      this.prisma.system.membership.findMany({
+        where: { workspaceId, role: "owner" },
+        orderBy: { createdAt: "asc" },
+        select: { user: { select: { name: true } } },
+      }),
+    ]);
+    const n = (s: string) => Number(countRows.find((r) => r.state === s)?.n ?? 0);
+    const ids = idRows.slice(0, limit).map((r) => r.id);
+    const rows = ids.length
+      ? await this.prisma.system.reportItem.findMany({ where: { id: { in: ids }, workspaceId }, include })
+      : [];
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const ordered = ids.map((id) => byId.get(id)).filter((r): r is Row => !!r);
+    const names = await this.names(
+      ordered.flatMap((r) => [r.askedBy, ...r.answers.map((a) => a.userId), ...r.replies.map((x) => x.userId)]),
+    );
+    const last = ordered.at(-1);
     return {
       workspaceName: ws.name,
       language: ws.reportLanguage,
-      counts: {
-        waiting: all.filter((d) => d.state === "waiting").length,
-        question: all.filter((d) => d.state === "question").length,
-        decided: all.filter(decided).length,
-      },
+      counts: { waiting: n("waiting"), question: n("question"), decided: n("approved") + n("not_now") },
       recipients: owners.map((v) => v.user.name),
-      items: all.filter((d) => state === "all" || (state === "decided" ? decided(d) : d.state === state)),
+      items: ordered.map((r) => this.build(r, names)),
+      nextCursor: idRows.length > limit && last ? encodeCursor(last.committedAt, last.id) : null,
     };
   }
 

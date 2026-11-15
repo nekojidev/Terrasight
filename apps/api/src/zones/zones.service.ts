@@ -22,6 +22,7 @@ import { ENV, type Env } from "../config/config.js";
 import { PrismaService } from "../db/prisma.service.js";
 import type { Prisma } from "../generated/prisma/client.js";
 import { ProblemException } from "../http/problem.js";
+import { BlobStore } from "../storage/blob-store.js";
 import { jobRow } from "../messaging/outbox.js";
 import { OutboxService } from "../messaging/outbox.service.js";
 import { QUEUES } from "../messaging/topology.js";
@@ -59,12 +60,15 @@ function bytesToF32(b: Uint8Array): Float32Array {
 @Injectable()
 export class ZonesService {
   private readonly log = new Logger(ZonesService.name);
+  private readonly blobs: BlobStore;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly outbox: OutboxService,
     @Inject(ENV) private readonly env: Env,
-  ) {}
+  ) {
+    this.blobs = new BlobStore(env);
+  }
 
   private async assertField(workspaceId: string, fieldId: string): Promise<void> {
     const f = await this.prisma.db.field.findFirst({
@@ -172,14 +176,15 @@ export class ZonesService {
       }
       b = await this.prisma.system.fieldZoneBuild.findUnique({ where: { fieldId } });
     }
-    if (!b?.ndviPng || !b.ndviDate)
+    const png = b?.ndviPng ?? (b?.ndviPngKey ? await this.blobs.get(b.ndviPngKey) : null);
+    if (!b || !png || !b.ndviDate)
       return { available: false as const, reason: b?.ndviCheckedAt ? "no-clear-image" : "unavailable" };
     return {
       available: true as const,
       date: b.ndviDate.toISOString().slice(0, 10),
       sceneId: b.ndviSceneId,
       corners: b.ndviCorners,
-      image: `data:image/png;base64,${Buffer.from(b.ndviPng).toString("base64")}`,
+      image: `data:image/png;base64,${Buffer.from(png).toString("base64")}`,
       stats: b.ndviStats,
       stops: NDVI_STOPS,
       attribution: S2_ATTRIBUTION,
@@ -240,7 +245,7 @@ export class ZonesService {
     if (!latest) {
       await this.prisma.system.fieldZoneBuild.update({
         where: { fieldId },
-        data: { ...checked, ndviPng: null, ndviDate: null, ndviSceneId: null, ndviCorners: undefined },
+        data: { ...checked, ndviPng: null, ndviPngKey: null, ndviDate: null, ndviSceneId: null, ndviCorners: undefined },
       });
       return;
     }
@@ -253,11 +258,15 @@ export class ZonesService {
         sum += latest.ndvi[i]!;
         n += 1;
       }
+    // Object storage (or local disk) holds the image; the row keeps its key.
+    const pngKey = `zones/ndvi/${fieldId}.png`;
+    await this.blobs.put(pngKey, png, "image/png");
     await this.prisma.system.fieldZoneBuild.update({
       where: { fieldId },
       data: {
         ...checked,
-        ndviPng: new Uint8Array(png),
+        ndviPng: null,
+        ndviPngKey: pngKey,
         ndviDate: new Date(`${latest.date}T00:00:00Z`),
         ndviSceneId: latest.sceneId,
         ndviCorners: gridCorners(fg.grid) as Prisma.InputJsonValue,
@@ -344,8 +353,9 @@ export class ZonesService {
         await this.progress(fieldId, runId, { phase: "seasons", done: i + 1, total, season });
         const key = { geomHash_season_res: { geomHash: hash, season, res: grid.res } };
         const hit = await this.prisma.system.fieldZoneCache.findUnique({ where: key });
-        if (hit && hit.width === grid.width && hit.height === grid.height) {
-          peaks.push({ season, values: bytesToF32(hit.data), scenes: hit.scenes, listed: hit.listed });
+        const hitBytes = hit ? (hit.data ?? (hit.dataKey ? await this.blobs.get(hit.dataKey) : null)) : null;
+        if (hit && hitBytes && hit.width === grid.width && hit.height === grid.height) {
+          peaks.push({ season, values: bytesToF32(hitBytes), scenes: hit.scenes, listed: hit.listed });
           continue;
         }
         const p = await seasonPeak(fg, bbox, f.lat, season, ctx);
@@ -357,8 +367,10 @@ export class ZonesService {
           height: grid.height,
           scenes: p.scenes,
           listed: p.listed,
-          data: f32ToBytes(p.peak),
+          data: null,
+          dataKey: `zones/cache/${hash}/${season}-${grid.res}.f32`,
         };
+        await this.blobs.put(data.dataKey, f32ToBytes(p.peak));
         await this.prisma.system.fieldZoneCache.upsert({
           where: key,
           create: { geomHash: hash, season, res: grid.res, ...data },

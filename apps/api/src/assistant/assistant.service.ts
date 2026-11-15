@@ -71,6 +71,19 @@ interface ToolRun {
 }
 
 /** AI assistant (RFC D9, Tech Design §12): Gemini with read-only tools; every sentence passes the number check. */
+const MESSAGES_PAGE = 100;
+
+export function encodeMessageCursor(at: Date, id: string): string {
+  return Buffer.from(`${at.toISOString()}|${id}`).toString("base64url");
+}
+
+export function decodeMessageCursor(cursor: string): { at: Date; id: string } {
+  const [at, id] = Buffer.from(cursor, "base64url").toString().split("|");
+  if (!at || !id || Number.isNaN(Date.parse(at)) || !/^[0-9a-f-]{36}$/i.test(id))
+    throw new ProblemException(422, "invalid-input", "Bad cursor");
+  return { at: new Date(at), id };
+}
+
 @Injectable()
 export class AssistantService implements OnModuleInit, OnModuleDestroy {
   private readonly log = new Logger(AssistantService.name);
@@ -192,13 +205,41 @@ export class AssistantService implements OnModuleInit, OnModuleDestroy {
   }
 
   /** The conversation with its messages and the alias → field name map the UI uses to restore names. */
-  async get(workspaceId: string, id: string, userId: string | null = null, includeResults = false) {
+  async get(
+    workspaceId: string,
+    id: string,
+    userId: string | null = null,
+    includeResults = false,
+    page: { limit?: number; before?: string | null } = {},
+  ) {
     const c = await this.own(workspaceId, userId, id);
-    const messages = await this.prisma.system.message.findMany({
-      where: { conversationId: id },
-      orderBy: { createdAt: "asc" },
-      include: { toolCalls: true },
+    // The last `limit` messages (default 100); `before` is the nextCursor of a page to read the older ones.
+    const limit = Math.min(Math.max(Math.trunc(page.limit ?? MESSAGES_PAGE), 1), 500);
+    const before = page.before ? decodeMessageCursor(page.before) : null;
+    const newestFirst = await this.prisma.system.message.findMany({
+      where: {
+        conversationId: id,
+        ...(before
+          ? {
+              OR: [
+                { createdAt: { lt: before.at } },
+                { createdAt: before.at, id: { lt: before.id } },
+              ],
+            }
+          : {}),
+      },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: limit + 1,
+      // Tool results can be large: they are read only when asked for (?include=tools).
+      include: {
+        toolCalls: {
+          select: { tool: true, args: true, durationMs: true, ...(includeResults ? { result: true } : {}) },
+        },
+      },
     });
+    const hasMore = newestFirst.length > limit;
+    const messages = newestFirst.slice(0, limit).reverse();
+    const oldest = messages[0];
     const aliases = Object.fromEntries(
       [...(await this.executor.aliases(workspaceId)).entries()].map(([a, f]) => [
         a,
@@ -209,6 +250,7 @@ export class AssistantService implements OnModuleInit, OnModuleDestroy {
       id: c.id,
       title: c.title,
       expiresAt: c.expiresAt,
+      nextCursor: hasMore && oldest ? encodeMessageCursor(oldest.createdAt, oldest.id) : null,
       aliases,
       messages: messages.map((m) => ({
         id: m.id,
@@ -224,7 +266,7 @@ export class AssistantService implements OnModuleInit, OnModuleDestroy {
           tool: t.tool,
           args: t.args,
           durationMs: t.durationMs,
-          ...(includeResults ? { result: t.result } : {}),
+          ...(includeResults && "result" in t ? { result: t.result } : {}),
         })),
       })),
     };

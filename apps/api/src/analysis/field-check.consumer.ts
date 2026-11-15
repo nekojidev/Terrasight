@@ -43,7 +43,11 @@ export class FieldCheckConsumer extends JobConsumer<FieldCheckJob> implements On
     private readonly alerts: AlertsService,
     @Optional() private readonly ai?: AiRecommendationsService,
   ) {
-    super(broker, { queue: QUEUES.fieldCheck, prefetch: 4, retries: FIELD_CHECK_RETRIES });
+    super(broker, {
+      queue: QUEUES.fieldCheck,
+      prefetch: env.FIELD_CHECK_PREFETCH,
+      retries: FIELD_CHECK_RETRIES,
+    });
   }
 
   async onModuleInit(): Promise<void> {

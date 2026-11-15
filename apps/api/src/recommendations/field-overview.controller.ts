@@ -57,7 +57,7 @@ export class FieldsOverviewController {
         }>
       >`
         SELECT id, name, area_ha, county_name, admin_code, irrigation, ST_X(centroid) AS lon, ST_Y(centroid) AS lat,
-          ST_AsGeoJSON(ST_SimplifyPreserveTopology(geom, GREATEST(ST_XMax(geom) - ST_XMin(geom), ST_YMax(geom) - ST_YMin(geom)) / 40), 6) AS thumb_geojson
+          thumb_geojson
         FROM fields WHERE workspace_id = ${ws}::uuid AND archived_at IS NULL ORDER BY alias_no`,
     ]);
     const codes = [...new Set(fields.map((r) => r.admin_code).filter((c): c is string => Boolean(c)))];
@@ -72,16 +72,22 @@ export class FieldsOverviewController {
     });
     const items = [...(b.hero ? [b.hero] : []), ...b.urgent, ...b.thisWeek];
     const rank = { urgent: 0, this_week: 1, all_good: 2 } as const;
+    const itemOf = new Map<string, (typeof items)[number]>();
+    for (const i of items) if (!itemOf.has(i.fieldId)) itemOf.set(i.fieldId, i);
+    const goodOf = new Map(b.allGood.map((g) => [g.fieldId, g]));
+    const lastCrop = new Map<string, string>(); // crops are ordered season desc: the first per field is the latest
+    for (const c of crops) if (!lastCrop.has(c.fieldId)) lastCrop.set(c.fieldId, c.mainCrop);
+    const weatherOf = new Map(b.rail.weather.map((x) => [`${x.county}|${x.region}`, x]));
     const rows = fields.map((f) => {
-      const item = items.find((i) => i.fieldId === f.id);
-      const good = b.allGood.find((g) => g.fieldId === f.id);
+      const item = itemOf.get(f.id);
+      const good = goodOf.get(f.id);
       return {
         fieldId: f.id,
         name: f.name,
         areaHa: f.area_ha,
         irrigation: f.irrigation,
-        lastCropId: crops.find((c) => c.fieldId === f.id)?.mainCrop ?? null,
-        lastCrop: this.cropName(crops.find((c) => c.fieldId === f.id)?.mainCrop ?? null),
+        lastCropId: lastCrop.get(f.id) ?? null,
+        lastCrop: this.cropName(lastCrop.get(f.id) ?? null),
         urgency: (item?.urgency ?? "all_good") as keyof typeof rank,
         next: item
           ? { id: item.id, title: item.text.title, deadline: item.deadline, more: item.more }
@@ -106,7 +112,7 @@ export class FieldsOverviewController {
     return {
       totalHa: rows.reduce((s, r) => s + r.areaHa, 0),
       counties: [...counties.values()].map((list) => {
-        const w = b.rail.weather.find((x) => x.county === list[0]!.weatherKey && x.region === list[0]!.state);
+        const w = weatherOf.get(`${list[0]!.weatherKey}|${list[0]!.state}`);
         return {
           key: `${list[0]!.state}|${list[0]!.county}`,
           county: list[0]!.county,

@@ -65,6 +65,8 @@ export interface DecisionList {
   /** Names of the company's Owners who receive decisions. */
   recipients: string[];
   items: Decision[];
+  /** Opaque cursor for the next page (`?cursor=`); null on the last page. `counts` always cover all decisions. */
+  nextCursor?: string | null;
 }
 
 export interface PublicDecisions {

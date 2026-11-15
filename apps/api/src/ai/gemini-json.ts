@@ -4,6 +4,7 @@ import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 import { createSafetyFilter, parseActives, type SafetyFilter } from "@terrasight/assistant-core";
 import type { Logger } from "@nestjs/common";
 import type { Env } from "../config/config.js";
+import type { AiBudgetService } from "./ai-budget.service.js";
 
 export const AI_TIMEOUT_MS = 15_000;
 
@@ -23,11 +24,13 @@ export class GeminiJson {
   constructor(
     private readonly env: Env,
     private readonly log: Logger,
+    private readonly budget?: AiBudgetService,
   ) {
     this.client = env.GEMINI_API_KEY ? new GoogleGenAI({ apiKey: env.GEMINI_API_KEY }) : null;
   }
 
   async call(system: string, prompt: string, schema: unknown, timeoutMs = AI_TIMEOUT_MS): Promise<JsonCall> {
+    await this.budget?.reserve(); // throws AiBudgetExceeded: the caller falls back to the template text
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), timeoutMs);
     try {
@@ -60,6 +63,9 @@ export class GeminiJson {
         throw new Error("response is not valid JSON");
       }
       const u = resp.usageMetadata;
+      await this.budget
+        ?.record((u?.promptTokenCount ?? 0) + (u?.candidatesTokenCount ?? 0) + (u?.thoughtsTokenCount ?? 0))
+        .catch(() => undefined);
       return {
         json,
         tokens: {

@@ -28,6 +28,28 @@ export function localTime(timeZone: string, now = new Date()): string {
   }).format(now);
 }
 
+/** Deterministic offset in whole minutes in [0, windowMinutes) for a workspace, so the 06:00 fan-out is spread out. */
+export function jitterMinutes(workspaceId: string, windowMinutes: number): number {
+  if (windowMinutes <= 0) return 0;
+  let h = 0x811c9dc5; // FNV-1a
+  for (let i = 0; i < workspaceId.length; i++) {
+    h ^= workspaceId.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h % windowMinutes;
+}
+
+/** Minutes after midnight of an hh:mm string. */
+export function minutesOf(hhmm: string): number {
+  const [h, m] = hhmm.split(":").map(Number);
+  return (h ?? 0) * 60 + (m ?? 0);
+}
+
+/** Has this workspace's jittered 06:00 passed? */
+export function isMorningDue(workspaceId: string, localHhmm: string, windowMinutes: number): boolean {
+  return minutesOf(localHhmm) >= minutesOf(MORNING) + jitterMinutes(workspaceId, windowMinutes);
+}
+
 /**
  * Every minute: workspaces whose local time has passed 06:00 with no `schedule` run for today get one (RFC §10.2).
  * Runs missed while the process was down are caught up on the next tick, once per day.
@@ -65,9 +87,13 @@ export class AnalysisScheduler implements OnModuleInit, OnModuleDestroy {
     try {
       const candidates = await this.prisma.system.$queryRaw<Array<{ id: string; time_zone: string }>>`
         SELECT w.id, w.time_zone FROM workspaces w
-        WHERE EXISTS (SELECT 1 FROM fields f WHERE f.workspace_id = w.id AND f.archived_at IS NULL)`;
+        WHERE EXISTS (SELECT 1 FROM fields f WHERE f.workspace_id = w.id AND f.archived_at IS NULL)
+          AND NOT EXISTS (
+            SELECT 1 FROM analysis_runs r
+            WHERE r.workspace_id = w.id AND r.trigger = 'schedule'
+              AND r.as_of = (${now}::timestamptz AT TIME ZONE w.time_zone)::date)`;
       for (const w of candidates) {
-        if (localTime(w.time_zone, now) < MORNING) continue;
+        if (!isMorningDue(w.id, localTime(w.time_zone, now), this.env.MORNING_JITTER_MINUTES)) continue;
         try {
           if (await this.schedule(w.id, localDate(w.time_zone, now), now)) started.push(w.id);
         } catch (e) {

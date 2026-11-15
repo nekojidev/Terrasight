@@ -1,14 +1,18 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { Inject, Injectable, Logger } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import { GoogleGenAI, ThinkingLevel, Type } from "@google/genai";
 import { createSafetyFilter, parseActives, splitSentences, type SafetyFilter } from "@terrasight/assistant-core";
 import { stableStringify } from "@terrasight/evaluators";
 import type { Library } from "@terrasight/library";
 import { ENGINE_VERSION, pestPressure, planSeasons, type EngineInput, type Rotation } from "@terrasight/scenario-engine";
 import { CROPS } from "@terrasight/simulator";
+import { AiBudgetExceeded, AiBudgetService } from "../ai/ai-budget.service.js";
+import { TtlLru } from "../ai/ttl-lru.js";
 import { ENV, type Env } from "../config/config.js";
+import { PrismaService } from "../db/prisma.service.js";
+import type { Prisma } from "../generated/prisma/client.js";
 
 /**
  * AI-proposed rotations (Product Definition v2.8). The assistant only proposes crop sequences and a short reason; every
@@ -21,6 +25,8 @@ const MAX_PROPOSALS = 5;
 const SEASONS = 5;
 const MAX_FALLOW = 2;
 const CACHE_TTL_MS = 24 * 3600_000;
+/** Stored proposals live this long (table ai_rotation_proposals). */
+export const PROPOSAL_STORE_TTL_MS = 7 * 24 * 3600_000;
 const CACHE_MAX = 200;
 
 export type AiStatus = "ok" | "unavailable" | "skipped";
@@ -276,11 +282,6 @@ export function buildPrompt(ctx: ProposalContext): string {
 }
 const cropLabel = (s: Rotation["sequence"][number]) => (typeof s === "string" ? s : `${s.main}+${s.second}`);
 
-interface CacheEntry {
-  at: number;
-  proposals: Proposal[];
-}
-
 /** Asks Gemini for rotation ideas (structured JSON), validates them, caches them per field inputs + engine + model. */
 @Injectable()
 export class AiRotationsService {
@@ -289,10 +290,14 @@ export class AiRotationsService {
   /** Replaceable in tests; null when there is no API key. */
   client: Pick<GoogleGenAI, "models"> | null;
   private thinking = true;
-  private readonly cache = new Map<string, CacheEntry>();
+  private readonly cache = new TtlLru<Proposal[]>(CACHE_MAX, CACHE_TTL_MS);
   private readonly inflight = new Map<string, Promise<Proposal[]>>();
 
-  constructor(@Inject(ENV) private readonly env: Env) {
+  constructor(
+    @Inject(ENV) private readonly env: Env,
+    @Optional() private readonly prisma?: PrismaService,
+    @Optional() private readonly budget?: AiBudgetService,
+  ) {
     this.client = env.GEMINI_API_KEY ? new GoogleGenAI({ apiKey: env.GEMINI_API_KEY }) : null;
     let actives: string[] = [];
     try {
@@ -325,7 +330,12 @@ export class AiRotationsService {
     if (!this.enabled() || ctx.allowed.length < 3) return { status: "skipped", proposals: [] };
     const key = this.key(ctx);
     const hit = this.cache.get(key);
-    if (hit && Date.now() - hit.at < CACHE_TTL_MS) return { status: "ok", proposals: hit.proposals };
+    if (hit) return { status: "ok", proposals: hit };
+    const stored = await this.loadStored(ctx);
+    if (stored) {
+      this.cache.set(key, stored);
+      return { status: "ok", proposals: stored };
+    }
     if (mode === "cached") return { status: "skipped", proposals: [] };
     try {
       let p = this.inflight.get(key);
@@ -334,16 +344,65 @@ export class AiRotationsService {
         this.inflight.set(key, p);
       }
       const proposals = await p;
-      this.cache.set(key, { at: Date.now(), proposals });
-      if (this.cache.size > CACHE_MAX) this.cache.delete(this.cache.keys().next().value!);
+      this.cache.set(key, proposals);
+      if (proposals.length) await this.store(ctx, proposals);
       return { status: "ok", proposals };
     } catch (e) {
-      this.log.warn(`AI rotation proposals unavailable: ${(e as Error).message}`);
+      if (!(e instanceof AiBudgetExceeded)) this.log.warn(`AI rotation proposals unavailable: ${(e as Error).message}`);
       return { status: "unavailable", proposals: [] };
     }
   }
 
+  private contextHash(ctx: ProposalContext): string {
+    return createHash("sha256").update(stableStringify(ctx)).digest("hex");
+  }
+
+  /** Proposals saved for this context, engine version and model within the last 7 days (survive restarts). */
+  private async loadStored(ctx: ProposalContext): Promise<Proposal[] | null> {
+    if (!this.prisma) return null;
+    try {
+      const row = await this.prisma.system.aiRotationProposal.findUnique({
+        where: {
+          contextHash_engineVersion_model: {
+            contextHash: this.contextHash(ctx),
+            engineVersion: ENGINE_VERSION,
+            model: this.env.GEMINI_MODEL,
+          },
+        },
+      });
+      return row && row.expiresAt > new Date() ? (row.payload as unknown as Proposal[]) : null;
+    } catch (e) {
+      this.log.warn(`stored AI proposals not read: ${(e as Error).message}`);
+      return null;
+    }
+  }
+
+  private async store(ctx: ProposalContext, proposals: Proposal[]): Promise<void> {
+    if (!this.prisma) return;
+    const data = {
+      payload: proposals as unknown as Prisma.InputJsonValue,
+      createdAt: new Date(),
+      expiresAt: new Date(Date.now() + PROPOSAL_STORE_TTL_MS),
+    };
+    try {
+      await this.prisma.system.aiRotationProposal.upsert({
+        where: {
+          contextHash_engineVersion_model: {
+            contextHash: this.contextHash(ctx),
+            engineVersion: ENGINE_VERSION,
+            model: this.env.GEMINI_MODEL,
+          },
+        },
+        create: { contextHash: this.contextHash(ctx), engineVersion: ENGINE_VERSION, model: this.env.GEMINI_MODEL, ...data },
+        update: data,
+      });
+    } catch (e) {
+      this.log.warn(`AI proposals not stored: ${(e as Error).message}`);
+    }
+  }
+
   private async generate(ctx: ProposalContext): Promise<Proposal[]> {
+    await this.budget?.reserve(); // over budget: propose() reports "unavailable" and the library rotations show alone
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), PROPOSAL_TIMEOUT_MS);
     try {
@@ -371,6 +430,9 @@ export class AiRotationsService {
         resp = await request(false);
       }
       const usage = resp.usageMetadata;
+      await this.budget
+        ?.record((usage?.promptTokenCount ?? 0) + (usage?.candidatesTokenCount ?? 0) + (usage?.thoughtsTokenCount ?? 0))
+        .catch(() => undefined);
       let raw: unknown;
       try {
         raw = JSON.parse(resp.text ?? "");
