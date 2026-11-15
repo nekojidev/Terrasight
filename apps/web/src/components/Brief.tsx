@@ -6,6 +6,7 @@ import {
   Chip,
   ErrorCard,
   HeroItem,
+  InfoHint,
   QueueRow,
   RailCard,
   FieldThumb,
@@ -255,6 +256,11 @@ export function Brief({
             title={b.hero.text.title[locale]}
             numbers={numbers(b.hero)}
             confidence={conf(b.hero)}
+            confidenceHint={
+              <InfoHint label={t("hintLabel")} align="end">
+                {t("hintConf")} {t(`hintTier_${b.hero.tier}` as "hintTier_A")} {t("hintKeyNumbers")}
+              </InfoHint>
+            }
             labels={{ accept: m("acc4"), snooze: m("snooze"), details: m("details") }}
             detailsHref={`/recommendations/${b.hero.id}`}
             onAccept={() => canAct && void act(b.hero!, "accept")}

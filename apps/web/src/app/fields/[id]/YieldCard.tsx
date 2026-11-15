@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { InfoHint, seasonHintText } from "@terrasight/ui";
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/lib/api";
 
@@ -81,12 +82,20 @@ export function YieldCard({
         <h2 className="text-h2 text-ink">{t("ycTitle")}</h2>
         <span className="text-small text-ink-2">
           {t("ycCropSeason", { crop: name, season: d.season ?? "" })} · {t(`ycSrc_${d.source ?? "plan"}`)}
+          {d.season != null && (
+            <InfoHint label={t("hintLabel")} align="end" className="ml-2">
+              {seasonHintText(t("hintSeason"), d.season)}
+            </InfoHint>
+          )}
         </span>
       </div>
       <p className="mt-3 text-ink">
         <span className="text-big-number">{fmt(p50)}</span>{" "}
         <span className="text-small text-ink-2">{unit}</span>
         <span className="ml-2 text-small text-ink-2">{t("ycP50")}</span>
+        <InfoHint label={t("hintLabel")} className="ml-2">
+          {t("hintYieldRange")}
+        </InfoHint>
       </p>
       {p90 - p10 < 0.05 ? (
         <p className="mt-3 text-small text-ink-2">{t("ycStable")}</p>

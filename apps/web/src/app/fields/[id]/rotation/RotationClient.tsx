@@ -2,7 +2,16 @@
 
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { rank, type Metric, type ScenarioResult } from "@terrasight/scenario-engine";
-import { Button, Chip, FieldThumb, SeasonStrip, Skeleton, cropColour } from "@terrasight/ui";
+import {
+  Button,
+  Chip,
+  FieldThumb,
+  InfoHint,
+  SeasonStrip,
+  Skeleton,
+  cropColour,
+  seasonHintText,
+} from "@terrasight/ui";
 import { Check, Droplet, Leaf, PiggyBank, ShieldCheck, Sparkles, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
@@ -221,7 +230,12 @@ export function RotationClient({
                 : t("rotRecommended", { season: first })}
             </p>
             <p className="text-h1">{cropName(firstCrop ?? "fallow")}</p>
-            <p className="text-small text-surface/70">{t("rotBannerSub", { from: first, to: first + 4 })}</p>
+            <p className="text-small text-surface/70">
+              {t("rotBannerSub", { from: first, to: first + 4 })}{" "}
+              <InfoHint label={t("hintLabel")}>
+                {seasonHintText(t("hintSeason"), first)} {t("hintHorizon")}
+              </InfoHint>
+            </p>
           </div>
         </div>
         {canSave ? (
@@ -323,12 +337,27 @@ export function RotationClient({
                 <ul className="flex flex-col gap-2 text-small">
                   {METRICS.map((m) => (
                     <li key={m.key} className="flex items-center justify-between gap-3">
-                      <span className="text-ink-2">{t(m.label)}</span>
+                      <span className="text-ink-2">
+                        {t(m.label)}
+                        {m.key === "margin" && (
+                          <InfoHint label={t("hintLabel")} className="ml-1.5">
+                            {t("hintRotDots")}
+                          </InfoHint>
+                        )}
+                        {m.key === "drought" && (
+                          <InfoHint label={t("hintLabel")} className="ml-1.5">
+                            {t("hintWorst10")}
+                          </InfoHint>
+                        )}
+                      </span>
                       <Dots n={dots(s, m.key)} label={`${t(m.label)}: ${dots(s, m.key)}/5`} strong={isPick} />
                     </li>
                   ))}
                 </ul>
-                <p className="text-small text-ink-2">{t("rotPrice", { n: s.priceWins })}</p>
+                <p className="text-small text-ink-2">
+                  {t("rotPrice", { n: s.priceWins })}{" "}
+                  <InfoHint label={t("hintLabel")}>{t("hintPrices")}</InfoHint>
+                </p>
                 {s.capped && (
                   <p className="text-small text-week">
                     {t("rotCapped", { loss: Math.abs(money(s.capLoss)), unit: area })}

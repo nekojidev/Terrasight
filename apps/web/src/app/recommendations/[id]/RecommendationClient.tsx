@@ -1,7 +1,16 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, Chip, cropColour, DoneRow, FactorRows, TextField, type Factor } from "@terrasight/ui";
+import {
+  Button,
+  Chip,
+  cropColour,
+  DoneRow,
+  FactorRows,
+  InfoHint,
+  TextField,
+  type Factor,
+} from "@terrasight/ui";
 import {
   ArrowLeft,
   Bug,
@@ -302,11 +311,16 @@ export function RecommendationClient({
               <dd className={`text-h2 ${LEVEL_TONE[r.level]}`}>{t(`recLevel_${r.level}`)}</dd>
             </div>
             <div>
-              <dt className="text-small text-ink-2">{r9("conf")}</dt>
+              <dt className="text-small text-ink-2">
+                {r9("conf")} <InfoHint label={t("hintLabel")}>{t("hintConf")}</InfoHint>
+              </dt>
               <dd className="text-h2 text-ink">{t(`conf_${r.confidence}`)}</dd>
             </div>
             <div>
-              <dt className="text-small text-ink-2">{r9("data")}</dt>
+              <dt className="text-small text-ink-2">
+                {r9("data")}{" "}
+                <InfoHint label={t("hintLabel")}>{t(`hintTier_${r.tier}` as "hintTier_A")}</InfoHint>
+              </dt>
               <dd className="text-h2 text-ink">{f(`tier_${r.tier}`)}</dd>
             </div>
           </dl>

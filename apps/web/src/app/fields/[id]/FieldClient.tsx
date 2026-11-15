@@ -1,7 +1,16 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, Chip, FieldThumb, SelectField, TextField, cropColour } from "@terrasight/ui";
+import {
+  Button,
+  Chip,
+  FieldThumb,
+  InfoHint,
+  SeasonLabel,
+  SelectField,
+  TextField,
+  cropColour,
+} from "@terrasight/ui";
 import {
   AlertTriangle,
   CalendarDays,
@@ -173,6 +182,7 @@ export function FieldClient({
             >
               {f(`tier_${initial.tier}`)}
             </Chip>
+            <InfoHint label={t("hintLabel")}>{t(`hintTier_${initial.tier}` as "hintTier_A")}</InfoHint>
           </p>
         </header>
         <FieldTabs fieldId={id} />
@@ -568,7 +578,12 @@ function SeasonCard({
   return (
     <section className="rounded-card border border-line bg-surface p-5">
       <h2 className="text-h2 text-ink">
-        {t("seasonTitle")} · <span className="font-mono">{r.season}</span>
+        {t("seasonTitle")} ·{" "}
+        <SeasonLabel
+          year={r.season}
+          hintLabel={t("hintLabel")}
+          hintTemplate={`${t("hintSeason")} ${t("hintSeasonNow")}`}
+        />
       </h2>
       <form onSubmit={submit} className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <SelectField

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AnalysisPanel, Button, type FieldRunStatus } from "@terrasight/ui";
+import { AnalysisPanel, Button, InfoHint, type FieldRunStatus } from "@terrasight/ui";
 import { Play } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { dateShortIn, isAutumn, isSameDayIn, timeIn, useNow } from "@/lib/time";
@@ -100,15 +100,20 @@ export function AnalysisCard({
               : null}
         </p>
         {canRun && (
-          <Button
-            variant="outline"
-            icon={<Play />}
-            onClick={() => start.mutate(undefined)}
-            disabled={running}
-            aria-busy={running}
-          >
-            {running ? m("analyzing") : m("analyze")}
-          </Button>
+          <span className="inline-flex items-center gap-2">
+            <Button
+              variant="outline"
+              icon={<Play />}
+              onClick={() => start.mutate(undefined)}
+              disabled={running}
+              aria-busy={running}
+            >
+              {running ? m("analyzing") : m("analyze")}
+            </Button>
+            <InfoHint label={t("hintLabel")} align="end">
+              {t("hintAnalyze")}
+            </InfoHint>
+          </span>
         )}
       </div>
       {running && r?.fields && (

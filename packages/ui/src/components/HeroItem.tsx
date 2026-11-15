@@ -16,6 +16,8 @@ export interface HeroItemProps {
   numbers: BigNumberProps[];
   /** "High confidence · Full data". */
   confidence: string;
+  /** Optional `InfoHint` explaining confidence, data tier and the key numbers. */
+  confidenceHint?: ReactNode;
   labels: { accept: string; snooze: string; details: string };
   detailsHref: string;
   onAccept: () => void;
@@ -60,6 +62,7 @@ export function HeroItem(p: HeroItemProps) {
       <p className="mt-4 flex items-center justify-end gap-1.5 text-small text-ink-2">
         <ShieldCheck aria-hidden className="size-4 text-ok" strokeWidth={1.7} />
         {p.confidence}
+        {p.confidenceHint}
       </p>
     </article>
   );

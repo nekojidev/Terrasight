@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, Chip, TextField } from "@terrasight/ui";
+import { Button, Chip, InfoHint, TextField } from "@terrasight/ui";
 import {
   ArrowRight,
   Calendar,
@@ -329,12 +329,15 @@ export function AddFieldClient({
             </ul>
           </div>
           {preview && (
-            <Chip
-              tone={preview.tier === "A" ? "ok" : preview.tier === "B" ? "info" : "week"}
-              icon={<ShieldCheck />}
-            >
-              {preview.tier === "A" ? t("tier") : t(`tier_${preview.tier}`)}
-            </Chip>
+            <span className="inline-flex items-center gap-2">
+              <Chip
+                tone={preview.tier === "A" ? "ok" : preview.tier === "B" ? "info" : "week"}
+                icon={<ShieldCheck />}
+              >
+                {preview.tier === "A" ? t("tier") : t(`tier_${preview.tier}`)}
+              </Chip>
+              <InfoHint label={a("hintLabel")}>{a(`hintTier_${preview.tier}` as "hintTier_A")}</InfoHint>
+            </span>
           )}
           {preview && !preview.hasRotationLibrary && (
             <p className="text-small text-week">{a("noRotationLibrary")}</p>
