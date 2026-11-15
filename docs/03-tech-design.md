@@ -65,7 +65,7 @@ flowchart TB
     RD[("Redis (optional)<br/>hot cache · rate limits")]
     S3[("S3<br/>scouting photos · thumbnails")]
     PKG["packages/: simulator · scenario-engine<br/>evaluators · library · shared"]
-    EXT["NASA POWER · MODIS · SMAP · GPM · Sentinel-2<br/>CDL · SSURGO · OpenET · SoilGrids · DEM"]
+    EXT["NASA POWER · MODIS · GPM · Sentinel-2<br/>CDL · SSURGO · OpenET · SoilGrids · DEM"]
     FC["Open-Meteo · NOAA NWS"]
     GEM["Google Gemini API"]
 
@@ -109,7 +109,7 @@ apps/
 packages/
   shared/              zod schemas + types shared by web and api (DTOs, enums, events), units, date formatting
   library/             loaders + validators for rotations.json, pests.json, pest-models.json, prices.json; region matching
-  sources/             source adapters (POWER, MODIS, Sentinel-2, CDL, SSURGO, OpenET, SMAP, GPM, SoilGrids, DEM, Open-Meteo, NWS)
+  sources/             source adapters (POWER, MODIS, Sentinel-2, CDL, SSURGO, OpenET, GPM (rainfall check), SoilGrids, DEM, Open-Meteo, NWS)
   simulator/           FAO-56 water balance, FAO-33 Ky, SCS-CN, relative RUSLE, ICBM (ported from the PoC)
   scenario-engine/     D5 pipeline: filter → FAO-56 quick pass → Monte Carlo → price step → score → pick
   evaluators/          evaluator kinds, pest-model trees, confidence rule, urgency function, key numbers
@@ -372,7 +372,7 @@ Budget: first recommendations in < 60 s (PD §7). History is built provisionally
 
 - **Scheduler:** every minute, the scheduler process (one instance, protected by a PostgreSQL advisory lock) finds workspaces whose local time has passed 06:00 with no `schedule` run for today, creates the run and its field rows in one transaction, and enqueues one `field.check` per field.
 - **Manual:** `POST /analysis-runs {fieldIds?}`; fields already being checked are attached to their running check instead of starting another.
-- **`field.check`:** refresh by grid cell (POWER recent days, Open-Meteo recent observed days and forecast, NDVI if a new composite exists, SMAP) → season state → evaluators whose `stageWindow` matches → upsert recommendations → status `ok` / `stale` (a source failed; last good data and its date are kept) / `failed`.
+- **`field.check`:** refresh by grid cell (POWER recent days, Open-Meteo recent observed days and forecast, NDVI if a new composite exists) → season state → evaluators whose `stageWindow` matches → upsert recommendations → status `ok` / `stale` (a source failed; last good data and its date are kept) / `failed`.
 - **Summary:** when the last field finishes, the run's summary is computed ("7 of 8 fields checked. Pivot 21: NASA POWER didn't respond — showing yesterday's data") and sent as `workspace.<id>.analysis`.
 - **Retry:** a new single-field manual run.
 - **Budget:** "Analyze fields" for the demo company < 30 s with history already built (PD §7).
@@ -508,7 +508,7 @@ As in RFC §12.3: `list_fields`, `get_brief`, `get_field_summary`, `get_field_hi
 | USDA CDL | Crop per year (US) | CropScape service (GMU); Planetary Computer `usda-cdl` covers only 2008–2021, so it is a fallback for those years | Permanent |
 | SSURGO / SoilGrids | Soil water capacity, texture | Soil Data Access (SQL over REST, area-weighted by map unit) / SoilGrids REST | Permanent |
 | OpenET | Irrigation detection, model check | OpenET API (key) | Permanent per year |
-| SMAP, GPM IMERG | Soil-moisture check, recent rain | NASA Earthdata (account) | Daily |
+| GPM IMERG | Monthly precipitation from 2001, an independent check of POWER rainfall (EP-10; SMAP removed in PD v2.13: never used) | NASA Earthdata (token, `EARTHDATA_TOKEN`) | Monthly (cached 30 days) |
 | DEM | Slope | Copernicus DEM GLO-30 on Planetary Computer (`cop-dem-glo-30`, COG) | Permanent |
 | Open-Meteo | Forecast, recent observed days, soil temperature, ET₀ | Commercial API key | Per 0.1° cell, 6 h |
 | NOAA NWS | US forecast fallback | `api.weather.gov` points → gridpoint forecast, generic User-Agent | Per 0.1° cell, 6 h |

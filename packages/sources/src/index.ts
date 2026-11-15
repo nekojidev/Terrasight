@@ -52,6 +52,17 @@ export {
   type HourlyForecast,
 } from "./forecast.js";
 export { openMeteoSeasonal, parseSeasonal, type SeasonalEnsemble } from "./seasonal.js";
+export {
+  fetchGpmSeries,
+  gpmCell,
+  parseGpmValue,
+  parseGranules,
+  rateToMm,
+  GPM_FIRST_YEAR,
+  GPM_PRODUCT,
+  type GpmMonth,
+  type GpmSeries,
+} from "./gpm.js";
 
 import { cdl } from "./cdl.js";
 import { cropland } from "./landcover.js";

@@ -71,6 +71,7 @@ Copy `.env.example` to `.env` for runs outside Docker. In production, secrets li
 | `AI_ROTATIONS`, `AI_RECOMMENDATIONS` | on when a key is set | `0` / `1` to switch AI-proposed rotations and AI-written recommendations |
 | `OPEN_METEO_API_KEY` | unset | Commercial Open-Meteo key (the free endpoint is non-commercial) |
 | `OPENET_API_KEY`, `EARTHDATA_TOKEN`, `CDSE_CLIENT_ID`, `CDSE_CLIENT_SECRET` | unset | Source credentials; sources report "not configured" without them |
+| `EARTHDATA_TOKEN` | unset | Optional. NASA Earthdata bearer token for the GPM IMERG rainfall check (an independent check of POWER rainfall, EP-10); without it the check reports "unavailable" |
 | `S3_BUCKET`, `AWS_REGION` | unset, `us-east-1` | Scouting photos (else `UPLOADS_DIR`) and backups |
 | `DATA_DIR`, `UPLOADS_DIR`, `FIXTURES_DIR` | `data/`, `uploads/`, `fixtures/` | Library data, local uploads, recorded fixtures |
 | `PLAN_FIRST_SEASON` | `2026` | First season of the 5-season horizon |

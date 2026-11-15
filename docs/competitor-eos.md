@@ -42,7 +42,7 @@
 | Pests & diseases    | Generic risk map            | **62 pest/disease models with drivers (rotation, degree days, weather) + "scout to confirm"**                     |
 | Crop history        | Crop rotation shown as data | **18 seasons used as evidence: corn-after-corn → rootworm, sunflower interval → broomrape**                       |
 | Planning            | Season view                 | **Rotation planner: current + 2 alternatives, 5 seasons (2026–2030), 150 weather runs × 10 price scenarios**                  |
-| Cloudy weeks        | Optical gaps                | **Model-based water balance (FAO-56) + SMAP microwave soil moisture, which sees through clouds**                  |
+| Cloudy weeks        | Optical gaps                | **Model-based water balance (FAO-56)** (SMAP microwave soil moisture dropped in PD v2.13: never used)                  |
 | Scouting            | Send scout to a zone        | **Pest-specific checklist (route, counts, photos), offline; the result updates the field's risk**                 |
 | Owner communication | Reports                     | **One-tap farmer report: "Done / Not yet / Question" closes the loop**                                            |
 | Analysis            | Continuous monitoring       | **Daily automatic check + "Analyze fields" command, season-aware checks**                                         |

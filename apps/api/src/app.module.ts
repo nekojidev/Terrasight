@@ -27,6 +27,7 @@ import { ScoutingModule } from "./scouting/scouting.module.js";
 import { RetentionModule } from "./retention/retention.module.js";
 import { RedisModule } from "./redis/redis.module.js";
 import { SeasonSuggestModule } from "./seasons/season-suggest.module.js";
+import { GpmModule } from "./gpm/gpm.module.js";
 import { WorkWindowsModule } from "./work-windows/work-windows.module.js";
 import { WorkspacesModule } from "./workspaces/workspaces.module.js";
 
@@ -86,6 +87,7 @@ function hasPrettyPrinter(): boolean {
     NotificationsModule,
     WorkWindowsModule,
     SeasonSuggestModule,
+    GpmModule,
     RetentionModule,
   ],
   controllers: [HealthController],
