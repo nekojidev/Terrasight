@@ -279,19 +279,18 @@ export async function sources(take, cfg, L) {
 // ---------------------------------------------------------------- c. three calm shots: what changed / what to do today / what to plant
 export async function tiles(take, cfg, L) {
   const { page } = take;
-  const q = (L + 0.4) / 3;
+  const total = L + 0.4;
+  const qa = total * 0.47;
   const clicks = [];
-  const wait = async (t0, t) => {
-    const d = t0 + t - take.now();
-    if (d > 0.02) await page.waitForTimeout(d * 1000);
-  };
-  // ---- (a) the field's climate row opens into three plain takeaways
+  const S = await loadFrostSeries();
+  if (S.years.length !== 45) throw new Error("expected 45 years of NASA weather");
+  // ---- (a) the field's climate row opens into plain takeaways: the NASA data, as the page states it
   await page.goto(`${cfg.base}/fields/${cfg.fieldId}`);
   const row = page.getByText(/How this field's climate has changed/).first();
   await row.waitFor({ timeout: 45000 });
   await settle(page, 900);
   const rowSel = await take.card(row, "row", 40);
-  await take.cam(rowSel, { dur: 1, fill: [0.74, 0.3], anchor: [0.5, 0.42], maxScale: 1.45 });
+  await take.cam(rowSel, { dur: 1, fill: [0.78, 0.3], anchor: [0.5, 0.42], maxScale: 1.55 });
   const t0 = take.mark("ready");
   await take.cursorClick(row, "row", { dur: 400 });
   clicks.push(take.now());
@@ -308,28 +307,13 @@ export async function tiles(take, cfg, L) {
     })).match(/The first autumn frost comes (\d+ days? later)/),
     "takeaway",
   )[1];
-  const camA = take.cam(rowSel, { dur: 650, fill: [0.8, 0.56], anchor: [0.5, 0.45], maxScale: 1.75 });
-  await take.d("say", [{ segs: [{ id: "a", text: takeaway, mono: true }, { text: "first autumn frost", small: true }], accent: true, size: px(68) }], { pos: "bl" });
+  const camA = take.cam(rowSel, { dur: 650, fill: [0.84, 0.56], anchor: [0.5, 0.45], maxScale: 1.85 });
+  await take.d("say", [{ segs: [{ id: "a", text: takeaway, mono: true }, { text: "first autumn frost", small: true }], accent: true, size: px(68) }, { segs: [{ text: `from ${S.years.length} years of NASA weather` }], size: px(38), weight: 500 }], { pos: "bl" });
   take.d("countUp", "a", takeaway, 550);
   await camA;
-  await take.cam(rowSel, { dur: Math.max(300, (t0 + q - take.now()) * 1000), ease: "--ts-ease-enter", fill: [0.84, 0.6], anchor: [0.5, 0.45], maxScale: 1.85 });
+  await take.cam(rowSel, { dur: Math.max(300, (t0 + qa - take.now()) * 1000), ease: "--ts-ease-enter", fill: [0.88, 0.6], anchor: [0.5, 0.45], maxScale: 1.95 });
   const endA = take.now();
-  // ---- (b) Today: the headline card with its action sentence and the trust line
-  await page.goto(cfg.base + "/");
-  const startWith = page.getByText("Start with this", { exact: true }).first();
-  await startWith.waitFor({ timeout: 45000 });
-  await settle(page, 900);
-  const card = await take.card(startWith, "tcard", 300);
-  const lines = await fieldLines(page, card);
-  const action = must(lines.find((l) => /^Scout the field/.test(l)), "action sentence");
-  const am = must(action.match(/^(\w+) the field[^.]*?before (\w+ \d+)/), "action parse");
-  const trust = must(lines.find((l) => /^Reliability: /.test(l)), "trust line");
-  await take.cam(card, { dur: 1, fill: [0.72, 0.74], anchor: [0.5, 0.45], maxScale: 1.55 });
-  const tB = take.mark("today");
-  await take.d("say", [{ segs: [{ text: `${am[1]} the field before ${am[2]}` }], accent: true, size: px(56) }, { segs: [{ text: trust }], size: px(30), weight: 500 }], { pos: "bl" });
-  await take.cam(card, { dur: q * 1000 - 100, ease: "--ts-ease-enter", fill: [0.86, 0.84], anchor: [0.5, 0.45], maxScale: 1.8 });
-  const endB = take.now();
-  // ---- (c) the rotation decision, then a flick over the three option cards
+  // ---- (b) the rotation decision, then a flick over the three option cards
   await page.goto(`${cfg.base}/fields/${cfg.fieldId}/rotation`);
   const dec = page.getByText(/^Sow .+ in \d{4}$/).first();
   await dec.waitFor({ timeout: 45000 });
@@ -341,18 +325,17 @@ export async function tiles(take, cfg, L) {
   const decCard = await take.card(dec, "dec", 200);
   const optsHead = await take.tag(page.getByText(/We compared \d+ options over \d+ seasons/).first(), "optshead");
   const optsBtn = await take.tag(page.getByRole("button", { name: /Choose this option|Chosen/ }).first(), "optsbtn");
-  await take.cam(decCard, { dur: 1, fill: [0.72, 0.62], anchor: [0.5, 0.42], maxScale: 1.5 });
+  await take.cam(decCard, { dur: 1, fill: [0.76, 0.66], anchor: [0.5, 0.42], maxScale: 1.6 });
   const tC = take.mark("rotation");
-  await take.d("say", [{ segs: [{ text: title }], accent: true, size: px(60) }, { segs: [{ text: gain }], size: px(40) }], { pos: "bl" });
-  await take.cam(decCard, { dur: (q - 0.65) * 1000, ease: "--ts-ease-enter", fill: [0.84, 0.7], anchor: [0.5, 0.42], maxScale: 1.7 });
+  await take.d("say", [{ segs: [{ text: title }], accent: true, size: px(64) }, { segs: [{ text: gain }], size: px(42) }], { pos: "bl" });
+  await take.cam(decCard, { dur: (total - qa - 0.65) * 1000, ease: "--ts-ease-enter", fill: [0.86, 0.72], anchor: [0.5, 0.42], maxScale: 1.8 });
   await take.cam(null, { union: [optsHead, optsBtn], dur: 550, fill: [0.9, 0.84], anchor: [0.5, 0.5], maxScale: 1.35 });
   return {
     segs: [
       { from: t0, to: endA },
-      { from: tB, to: endB },
       { from: tC, to: take.now() },
     ],
-    facts: { takeaway, action, trust, title, gain, plan },
+    facts: { takeaway, years: S.years.length, title, gain, plan },
     clicks,
   };
 }
@@ -536,16 +519,30 @@ export async function today(take, cfg, L) {
   const h1 = page.getByRole("heading", { level: 1 }).first();
   const cardSel = await take.card(startWith, "tcard", 300);
   const lines = await fieldLines(page, cardSel);
-  const sowIdx = must(lines.findIndex((l) => l === "sowing date"), "sowing date label");
-  const sow = lines[sowIdx - 1];
   const action = must(lines.find((l) => /^Scout the field/.test(l)), "action sentence");
+  const am = must(action.match(/^(\w+) the field[^.]*?before (\w+ \d+)/), "action parse");
+  const sow = `${am[1]} the field before ${am[2]}`;
   const hSel = await take.tag(h1, "h1");
   void hSel;
-  await take.cam(cardSel, { dur: 1, fill: [0.66, 0.66], anchor: [0.5, 0.42], maxScale: 1.6 });
+  await take.cam(cardSel, { dur: 1, fill: [0.76, 0.8], anchor: [0.5, 0.4], maxScale: 1.85 });
+  await take.d("say", [{ segs: [{ text: sow }], accent: true, size: px(72) }], { pos: "bl" });
+  // the designed title: wordmark and one line over the product, in for 240 ms, out after about 1.6 s
+  await page.evaluate(() => {
+    const layer = document.getElementById("demo-layer");
+    const tok = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+    const el = document.createElement("div");
+    el.style.cssText = "position:absolute;left:96px;top:58px;display:flex;flex-direction:column;gap:var(--ts-s3);align-items:flex-start;font-family:var(--ts-font)";
+    el.innerHTML = `<div style="padding:var(--ts-s3) var(--ts-s8);border-radius:var(--ts-r-card);background:var(--ts-ink);color:var(--ts-surface);box-shadow:var(--ts-shadow-hero);font-size:104px;font-weight:700;letter-spacing:-0.045em;line-height:1.05">Terrasight</div>
+      <div style="padding:var(--ts-s3) var(--ts-s6);border-radius:var(--ts-r-card);background:var(--ts-signal);color:var(--ts-on-signal);box-shadow:var(--ts-shadow-hero);font-size:52px;font-weight:700;letter-spacing:-0.03em">The AI assistant for your farm</div>`;
+    layer.appendChild(el);
+    [...el.children].forEach((c, i) =>
+      c.animate([{ transform: "translateY(26px)", opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 240, delay: i * 90, easing: tok("--ts-ease-enter"), fill: "both" }),
+    );
+    setTimeout(() => el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 160, easing: tok("--ts-ease-exit"), fill: "both" }).finished.then(() => el.remove()), 1750);
+  });
+  await page.waitForTimeout(380);
   const t0 = take.mark("ready");
-  const camP = take.cam(cardSel, { dur: (L + 0.4) * 1000, ease: "--ts-ease-enter", fill: [0.72, 0.7], anchor: [0.5, 0.42], maxScale: 1.75 });
-  await take.d("say", [{ segs: [{ id: "a", text: sow, mono: true }, { text: "sowing date", small: true }], accent: true, size: px(68) }], { pos: "bl" });
-  take.d("countUp", "a", sow, 600);
+  const camP = take.cam(cardSel, { dur: (L + 0.4) * 1000, ease: "--ts-ease-enter", fill: [0.8, 0.84], anchor: [0.5, 0.4], maxScale: 1.95 });
   // the data sources fly across the shot (0.8 s) toward the product
   await page.evaluate(() => {
     const layer = document.getElementById("demo-layer");
@@ -562,7 +559,7 @@ export async function today(take, cfg, L) {
           { transform: `translateX(${dir * 120}px)`, opacity: 1, offset: 0.5 },
           { transform: "translateX(0) scale(.5)", opacity: 0 },
         ],
-        { duration: 800, delay: 900 + i * 120, easing: tok("--ts-ease-standard"), fill: "both" },
+        { duration: 800, delay: 2000 + i * 120, easing: tok("--ts-ease-standard"), fill: "both" },
       ).finished.then(() => e.remove());
     });
   });

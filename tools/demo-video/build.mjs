@@ -30,17 +30,9 @@ const STORY = [
   {
     id: "open",
     group: 0,
-    min: 3.0,
+    min: 5.6,
     lead: 0.3,
-    line: "Forty-five years of NASA weather.",
-    voice: NARRATOR,
-    shots: [["openGraph", 1]],
-  },
-  {
-    id: "today",
-    group: 1,
-    min: 3.1,
-    line: "Terrasight is the AI assistant that reads it for you.",
+    line: "Terrasight is an AI assistant for farmers. Every morning, it says what to do, and why.",
     voice: NARRATOR,
     shots: [["today", 1]],
   },
@@ -48,15 +40,15 @@ const STORY = [
   {
     id: "tiles",
     group: 1,
-    min: 6.4,
-    line: "It shows what changed, what to do today, and what to plant for five seasons.",
+    min: 6.0,
+    line: "It shows what has changed on the field, and what to plant for five seasons.",
     voice: NARRATOR,
     shots: [["tiles", 1]],
   },
   {
     id: "ask",
     group: 2,
-    min: 7.2,
+    min: 7.6,
     lead: 0.9,
     line: "Ask it anything. Every number is checked against the models.",
     voice: NARRATOR,
@@ -65,7 +57,7 @@ const STORY = [
   {
     id: "proof",
     group: 2,
-    min: 4.0,
+    min: 4.5,
     lead: 0.5,
     line: "And it shows you where it was wrong.",
     voice: NARRATOR,
@@ -77,7 +69,7 @@ const STORY = [
     min: 3.0,
     jcut: 0.3,
     tail: 0.05,
-    line: "Terrasight. The AI assistant for your farm.",
+    line: "From NASA data to your next decision.",
     voice: ASSISTANT,
     shots: [["endCard", 1]],
   },
@@ -93,11 +85,13 @@ const RECUT = {
     ];
   },
   askLive: (c) => {
-    // the last segment is trimmed so the beat is 7.2 s long
-    const out = (s) => (s.ramp ? s.ramp : s.to - s.from);
-    const rest = c.segs.slice(0, -1).reduce((a, s) => a + out(s), 0);
-    const last = c.segs.at(-1);
-    last.to = last.from + Math.max(1, 7.2 + 0.4 - rest);
+    // palette typing (already zoomed), then straight to the question bubble + finished answer + opened data card:
+    // no wide field page, no loading skeleton, no empty assistant page
+    const m = c.marks;
+    c.segs = [
+      { from: c.clicks[0] + 0.3, to: m.typed + 0.02, ramp: 1.3 },
+      { from: m.answered - 0.1, to: m.answered - 0.1 + 6.28 },
+    ];
   },
 };
 const DISCLOSURE =

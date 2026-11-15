@@ -1,27 +1,23 @@
 1
-00:00:00,300 --> 00:00:02,360
-Forty-five years of NASA weather.
+00:00:00,300 --> 00:00:05,569
+Terrasight is an AI assistant for farmers. Every morning, it says what to do, and why.
 
 2
-00:00:02,850 --> 00:00:05,827
-Terrasight is the AI assistant that reads it for you.
-
-3
-00:00:05,977 --> 00:00:07,047
+00:00:05,719 --> 00:00:06,789
 Add your field.
 
-4
-00:00:08,477 --> 00:00:13,350
-It shows what changed, what to do today, and what to plant for five seasons.
+3
+00:00:08,219 --> 00:00:12,291
+It shows what has changed on the field, and what to plant for five seasons.
 
-5
-00:00:15,927 --> 00:00:19,295
+4
+00:00:15,269 --> 00:00:18,637
 Ask it anything. Every number is checked against the models.
 
-6
-00:00:22,727 --> 00:00:24,679
+5
+00:00:22,469 --> 00:00:24,421
 And it shows you where it was wrong.
 
-7
-00:00:25,927 --> 00:00:29,175
-Terrasight. The AI assistant for your farm.
+6
+00:00:26,169 --> 00:00:28,624
+From NASA data to your next decision.

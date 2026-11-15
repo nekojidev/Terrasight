@@ -506,7 +506,7 @@ async function endCard(take, cfg, L) {
     // the wordmark draws in (left to right) and the mark pops; then the rows rise one after another
     const lg = card.children[0].firstElementChild;
     lg.animate([{ clipPath: "inset(0 100% 0 0)" }, { clipPath: "inset(0 0 0 0)" }], {
-      duration: 700,
+      duration: 300,
       easing: d.tok("--ts-ease-standard"),
       fill: "both",
     });
@@ -520,7 +520,7 @@ async function endCard(take, cfg, L) {
         ],
         {
           duration: d.ms("--ts-dur-base"),
-          delay: 500 + i * d.ms("--ts-stagger") * 2,
+          delay: 250 + i * 90,
           easing: d.tok("--ts-ease-enter"),
           fill: "both",
         },
