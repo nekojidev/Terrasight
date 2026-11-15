@@ -1,6 +1,6 @@
-import { geometryHash, projectPolygons } from "./geo.js";
-import { mapLimit } from "./http.js";
-import { signHref, stacSearch } from "./planetary.js";
+import { bboxOf, geometryHash, projectPolygons } from "./geo.js";
+import { mapLimit, withRetry, type RetryOptions } from "./http.js";
+import { signHref, stacSearch, type StacItem } from "./planetary.js";
 import { readMasked } from "./raster.js";
 import {
   SourceError,
@@ -25,6 +25,81 @@ export interface CroplandSeason {
 export interface CroplandHistory {
   product: string;
   seasons: CroplandSeason[];
+  /** Years the product has nothing for at this location (no item, or only cloud / no-data pixels): not an error. */
+  noDataYears?: number[];
+}
+
+/** Last year of io-lulc-annual-v02 at the time of writing; a year without an item up to here is reported as "no data". */
+export const CROPLAND_LAST_YEAR = 2023;
+
+/** What happened to one season. `failed` is only for real read errors (after retries). */
+export type SeasonOutcome =
+  | { year: number; state: "ok"; cropShare: number; n: number }
+  | { year: number; state: "nodata" }
+  | { year: number; state: "failed"; error: string };
+
+const itemYear = (it: StacItem): number =>
+  Number(String(it.properties.start_datetime ?? it.properties.datetime ?? "").slice(0, 4));
+
+/**
+ * Reads every season: items are grouped by year (a field on a tile border has two items per year), each tile is read
+ * with retries and backoff, and a year with no item or no valid pixels is "nodata", not a failure. Pure apart from
+ * `read` (injected so tests need no network).
+ */
+export async function readSeasons(
+  items: StacItem[],
+  read: (item: StacItem) => Promise<number[]>,
+  opts: { concurrency?: number; retry?: RetryOptions } = {},
+): Promise<SeasonOutcome[]> {
+  const byYear = new Map<number, StacItem[]>();
+  for (const it of items) {
+    const year = itemYear(it);
+    if (!year) continue;
+    byYear.set(year, [...(byYear.get(year) ?? []), it]);
+  }
+  const years = new Set<number>(byYear.keys());
+  for (let y = CROPLAND_FIRST_YEAR; y <= CROPLAND_LAST_YEAR; y++) years.add(y);
+  const ordered = [...years].sort((a, b) => a - b);
+  return mapLimit(ordered, opts.concurrency ?? 3, async (year): Promise<SeasonOutcome> => {
+    const tiles = byYear.get(year) ?? [];
+    if (!tiles.length) return { year, state: "nodata" };
+    const values: number[] = [];
+    for (const tile of tiles) {
+      try {
+        values.push(...(await withRetry(() => read(tile), { attempts: 3, baseMs: 500, ...opts.retry })));
+      } catch (e) {
+        return { year, state: "failed", error: (e as Error).message };
+      }
+    }
+    const s = cropShare(values);
+    return s ? { year, state: "ok", ...s } : { year, state: "nodata" };
+  });
+}
+
+/** Outcomes → adapter result: partial (with the exact years) only when a read really failed. */
+export function summariseCropland(outcomes: SeasonOutcome[]): SourceResult<CroplandHistory> {
+  const ok = outcomes.filter((o): o is Extract<SeasonOutcome, { state: "ok" }> => o.state === "ok");
+  const failed = outcomes.filter((o) => o.state === "failed").map((o) => o.year);
+  const noData = outcomes.filter((o) => o.state === "nodata").map((o) => o.year);
+  if (!ok.length) {
+    if (failed.length) throw new SourceError(`could not read land cover for ${failed.join(", ")}`, true);
+    throw new SourceError("has no land cover data for this field", false);
+  }
+  const parts = [
+    failed.length ? `${failed.length} season(s) could not be read: ${failed.join(", ")}` : "",
+    noData.length ? `no data for ${noData.join(", ")}` : "",
+  ].filter(Boolean);
+  return {
+    status: failed.length ? "partial" : "done",
+    payload: {
+      product: "Esri / Impact Observatory 10 m annual land cover",
+      seasons: ok.map(({ year, cropShare, n }) => ({ year, cropShare, n })),
+      ...(noData.length ? { noDataYears: noData } : {}),
+    },
+    dataDate: `${ok.at(-1)!.year}-12-31`,
+    attribution: "Esri / Impact Observatory 10 m Annual Land Use Land Cover (CC BY 4.0, Planetary Computer)",
+    ...(parts.length ? { reason: parts.join("; ") } : {}),
+  };
 }
 
 export const CROPLAND_FIRST_YEAR = 2017;
@@ -55,41 +130,38 @@ export const cropland: SourceAdapter<CroplandHistory> = {
   appliesTo: (field) => field.country !== null && field.country !== "US",
   cacheKey: (field, { today }) => `${geometryHash(field.polygons)}:${today.slice(0, 4)}`,
   async fetch(field: FieldGeometry, ctx: FetchContext): Promise<SourceResult<CroplandHistory>> {
+    // Only the tiles that intersect the field (a bbox polygon, so a field on a UTM tile border gets both tiles).
+    const [w, s, e, n] = bboxOf(field.polygons);
     const items = await stacSearch(
       {
         collections: ["io-lulc-annual-v02"],
-        intersects: { type: "Point", coordinates: [field.centroid.lon, field.centroid.lat] },
+        intersects: {
+          type: "Polygon",
+          coordinates: [
+            [
+              [w, s],
+              [e, s],
+              [e, n],
+              [w, n],
+              [w, s],
+            ],
+          ],
+        },
       },
       ctx,
-      50,
+      100,
     );
-    const seasons = await mapLimit(items, 4, async (it) => {
-      const year = Number(String(it.properties.start_datetime ?? it.properties.datetime ?? "").slice(0, 4));
+    const outcomes = await readSeasons(items, async (it) => {
       const proj = utmProj(it.id);
       const href = it.assets.data?.href;
-      if (!proj || !href || !year) return null;
-      try {
-        const px = await readMasked(await signHref(href, ctx), projectPolygons(field.polygons, proj), {
-          nodata: 0,
-          signal: ctx.signal,
-        });
-        const s = cropShare(px.values);
-        return s ? { year, ...s } : null;
-      } catch {
-        return null;
-      }
+      if (!proj || !href) throw new SourceError("returned a tile without a readable asset", false);
+      const signal = AbortSignal.any([ctx.signal, AbortSignal.timeout(30_000)]);
+      const px = await readMasked(await signHref(href, ctx), projectPolygons(field.polygons, proj), {
+        nodata: 0,
+        signal,
+      });
+      return px.values; // empty when the window lies outside the tile
     });
-    const ok = seasons.filter((s): s is CroplandSeason => s !== null).sort((a, b) => a.year - b.year);
-    if (!ok.length) throw new SourceError("returned no land cover for this field", true);
-    return {
-      status: ok.length < items.length ? "partial" : "done",
-      payload: { product: "Esri / Impact Observatory 10 m annual land cover", seasons: ok },
-      dataDate: `${ok.at(-1)!.year}-12-31`,
-      attribution:
-        "Esri / Impact Observatory 10 m Annual Land Use Land Cover (CC BY 4.0, Planetary Computer)",
-      ...(ok.length < items.length
-        ? { reason: `${items.length - ok.length} season(s) could not be read` }
-        : {}),
-    };
+    return summariseCropland(outcomes);
   },
 };

@@ -71,7 +71,8 @@ export class GatherService implements OnModuleInit {
         data: { status: "running", finishedAt: null },
       });
       await this.outbox.add(tx, [
-        jobRow(QUEUES.gatherSource, workspaceId, { jobId: status.jobId, fieldId, source }),
+        // probe: a manual retry runs now, even when the source's circuit breaker is paused.
+        jobRow(QUEUES.gatherSource, workspaceId, { jobId: status.jobId, fieldId, source, probe: true }),
         eventRow(EventKeys.fieldGather(fieldId, source), "gather.source", workspaceId, {
           fieldId,
           source,

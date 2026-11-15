@@ -7,10 +7,11 @@ import { PrismaService } from "../db/prisma.service.js";
 import type { JobStatus } from "../generated/prisma/enums.js";
 import { GeoService } from "../geo/geo.service.js";
 import { BROKER, type Broker } from "../messaging/broker.js";
-import { JobConsumer } from "../messaging/consumer.js";
+import { ATTEMPT_HEADER, JobConsumer } from "../messaging/consumer.js";
 import { eventRow, jobRow } from "../messaging/outbox.js";
 import { OutboxService } from "../messaging/outbox.service.js";
-import { QUEUES } from "../messaging/topology.js";
+import { EXCHANGES, QUEUES } from "../messaging/topology.js";
+import { CircuitOpenError } from "../sources/circuit-breaker.js";
 import {
   SOURCE_LABELS,
   SOURCE_PROVIDES,
@@ -22,7 +23,14 @@ export interface GatherSourceJob {
   jobId: string;
   fieldId: string;
   source: SourceId;
+  /** Manual "Retry": probe the source now, even when its circuit breaker is paused. */
+  probe?: boolean;
+  /** How many times this task was put back on the queue because the source was paused. */
+  pauses?: number;
 }
+
+/** A paused source is retried after its cooldown this many times before the task is given up. */
+export const MAX_PAUSES = 6;
 
 const FINISHED: JobStatus[] = ["done", "partial", "failed", "cached"];
 /** Shared per-source limits for all workers (Tech Design §13). */
@@ -99,9 +107,18 @@ export class GatherSourceConsumer extends JobConsumer<GatherSourceJob> implement
           return adapter.fetch(field, { signal, fetch, today: day });
         },
         (r) => r.status === "failed",
+        { force: env.data.probe === true },
       );
     } catch (e) {
       const err = e as Error;
+      // Paused source: wait out the cooldown and run again instead of ending as failed (a recorded fixture still wins).
+      if (err instanceof CircuitOpenError && !this.sources.fixture(adapter, field)) {
+        const pauses = env.data.pauses ?? 0;
+        if (pauses < MAX_PAUSES) {
+          await this.requeuePaused(env, attempt, err, workspaceId);
+          return;
+        }
+      }
       const retryable = err instanceof SourceError ? err.retryable : true;
       if (retryable && attempt < this.options.retries) throw err; // consumer base schedules the retry
       const fixture = this.sources.fixture(adapter, field);
@@ -125,7 +142,9 @@ export class GatherSourceConsumer extends JobConsumer<GatherSourceJob> implement
         source,
         "failed",
         null,
-        `${SOURCE_LABELS[source]} ${err.message}, ${SOURCE_PROVIDES[source]}`,
+        err instanceof CircuitOpenError
+          ? `${SOURCE_LABELS[source]} is still unavailable after several tries, ${SOURCE_PROVIDES[source]}`
+          : `${SOURCE_LABELS[source]} ${err.message}, ${SOURCE_PROVIDES[source]}`,
       );
     }
 
@@ -140,6 +159,27 @@ export class GatherSourceConsumer extends JobConsumer<GatherSourceJob> implement
       result.status === "failed" ? null : key,
       result.reason ? `${SOURCE_LABELS[source]}: ${result.reason}` : null,
       result,
+    );
+  }
+
+  private async requeuePaused(
+    env: Envelope<GatherSourceJob>,
+    attempt: number,
+    err: CircuitOpenError,
+    workspaceId: string,
+  ): Promise<void> {
+    const { jobId, fieldId, source } = env.data;
+    const reason = `${SOURCE_LABELS[source]} is temporarily unavailable, retrying`;
+    await this.prisma.system.gatherTask.update({
+      where: { jobId_source: { jobId, source } },
+      data: { status: "queued", error: reason },
+    });
+    await this.emit(workspaceId, fieldId, source, { status: "queued", reason });
+    await this.broker.publish(
+      EXCHANGES.retry,
+      this.options.queue,
+      { ...env, data: { ...env.data, pauses: (env.data.pauses ?? 0) + 1 } },
+      { messageId: env.id, headers: { delay: err.retryInMs <= 8_000 ? "8s" : "30s", [ATTEMPT_HEADER]: attempt } },
     );
   }
 

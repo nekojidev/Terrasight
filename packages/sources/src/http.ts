@@ -63,3 +63,46 @@ export async function mapLimit<T, R>(
   await Promise.all(workers);
   return out;
 }
+
+export interface RetryOptions {
+  /** Total attempts including the first. */
+  attempts?: number;
+  /** First backoff; doubles each retry (plus up to 25 % jitter). */
+  baseMs?: number;
+  signal?: AbortSignal;
+  /** Injected for tests. */
+  sleep?: (ms: number) => Promise<void>;
+}
+
+const wait = (ms: number, signal?: AbortSignal): Promise<void> =>
+  new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        resolve();
+      },
+      { once: true },
+    );
+  });
+
+/**
+ * Runs `fn`, retrying with exponential backoff while it throws something retryable (a retryable SourceError such as
+ * 429 / 5xx / timeout, or any non-SourceError such as a dropped range request). A non-retryable SourceError and an
+ * aborted signal end it at once; the last error is rethrown.
+ */
+export async function withRetry<T>(fn: (attempt: number) => Promise<T>, opts: RetryOptions = {}): Promise<T> {
+  const attempts = opts.attempts ?? 3;
+  const base = opts.baseMs ?? 500;
+  const sleep = opts.sleep ?? ((ms: number) => wait(ms, opts.signal));
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fn(attempt);
+    } catch (e) {
+      const retryable = e instanceof SourceError ? e.retryable : true;
+      if (!retryable || attempt + 1 >= attempts || opts.signal?.aborted) throw e;
+      await sleep(base * 2 ** attempt * (1 + Math.random() * 0.25));
+    }
+  }
+}
