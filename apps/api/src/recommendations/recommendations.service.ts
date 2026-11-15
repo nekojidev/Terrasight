@@ -12,6 +12,7 @@ import { QUEUES } from "../messaging/topology.js";
 import { NotificationsService } from "../notifications/notifications.service.js";
 import { planDecisionAsked } from "../notifications/plan.js";
 import { buildDataBasis, type BasisEvidence } from "./data-basis.js";
+import { hasForeignScript } from "./text-script.js";
 import { recommendationText, type Localised, type RecText } from "./text.js";
 
 /** The Undo window for Accept and Snooze, enforced on the server (RFC §10.4). */
@@ -92,7 +93,10 @@ export class RecommendationsService {
   ): RecText {
     const template = recommendationText(rec, this.lib);
     const ai = rec.aiText as { source?: string; title?: Localised; action?: Localised; why?: Localised } | null | undefined;
-    const written = ai?.source === "ai" && ai.title && ai.action && ai.why;
+    // A stored AI text with letters of another script (defect: "道の" inside an English sentence) falls back to the template.
+    const clean = (l: Localised) => !hasForeignScript(l.en, "en") && !hasForeignScript(l.uk, "uk");
+    const written =
+      ai?.source === "ai" && ai.title && ai.action && ai.why && clean(ai.title) && clean(ai.action) && clean(ai.why);
     const base: RecText = written
       ? { ...template, title: ai.title!, action: ai.action!, why: ai.why!, source: "ai" }
       : { ...template, source: "template" };

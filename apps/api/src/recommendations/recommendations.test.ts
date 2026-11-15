@@ -54,6 +54,12 @@ describe("RecommendationsService.text (AI text with the template as the fallback
       expect(t.title.en).toMatch(/rootworm/i);
     }
   });
+  it("a stored AI text with stray CJK letters falls back to the template (no migration)", () => {
+    const bad = { ...ai, action: { en: "Discuss resistant hybrids with道の seed supplier", uk: "Д" } };
+    const t = svc.text({ ...rec, aiText: bad } as never);
+    expect(t.source).toBe("template");
+    expect(JSON.stringify(t)).not.toContain("道");
+  });
   it("an agronomist's edit wins over the assistant text", () => {
     const t = svc.text({ ...rec, aiText: ai, textOverride: { title: { en: "Mine", uk: "Моє" } } } as never);
     expect(t.title.en).toBe("Mine");

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   dayShift,
   formatArea,
+  moneyPerArea,
   formatDayOfYear,
   formatRainDelta,
   formatSigned,
@@ -64,6 +65,17 @@ describe("units", () => {
     expect(formatWind(10, "imperial", "en")).toBe("22 mph");
     expect(formatRain(25.4, "imperial", "en")).toBe("1 in");
     expect(formatRain(4.25, "metric", "en")).toBe("4.3 mm");
+  });
+});
+
+describe("moneyPerArea", () => {
+  it("converts and labels per acre for a US field and per hectare for metric", () => {
+    expect(moneyPerArea(128.5, "USD", "imperial", "en").replace(/\u00A0/g, " ")).toBe("$52 per ac");
+    expect(moneyPerArea(130, "USD", "metric", "en").replace(/\u00A0/g, " ")).toBe("$130 per ha");
+  });
+  it("labels in Ukrainian", () => {
+    expect(moneyPerArea(100, "UAH", "metric", "uk")).toMatch(/\u00A0за\u00A0га$/);
+    expect(moneyPerArea(100, "UAH", "imperial", "uk")).toMatch(/\u00A0за\u00A0ак$/);
   });
 });
 

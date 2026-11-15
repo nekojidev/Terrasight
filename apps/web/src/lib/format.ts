@@ -181,6 +181,23 @@ export function formatWind(metresPerSecond: number, units: Units, locale: Format
       unitNumber(metresPerSecond, locale, "meter-per-second", metresPerSecond < 10 ? 1 : 0);
 }
 
+/**
+ * Money per hectare in, labelled per hectare or per acre by the unit system: "$130 per ha" / "$52 per ac"
+ * (UK: "130 $ за га" / "52 $ за ак"). The amount is converted, not only relabelled.
+ */
+export function moneyPerArea(
+  amountPerHa: number,
+  currency: "USD" | "UAH",
+  units: Units,
+  locale: FormatLocale,
+  opts: { compact?: boolean; maximumFractionDigits?: number } = {},
+): string {
+  const imperial = units === "imperial";
+  const money = formatMoney(imperial ? amountPerHa * HA_PER_AC : amountPerHa, currency, locale, opts);
+  const unit = locale === "uk" ? (imperial ? "ак" : "га") : imperial ? "ac" : "ha";
+  return `${money}\u00A0${locale === "uk" ? "за" : "per"}\u00A0${unit}`;
+}
+
 /** Millimetres in; mm or in. */
 export function formatRain(mm: number, units: Units, locale: FormatLocale): string {
   return units === "imperial"
