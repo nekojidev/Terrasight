@@ -54,7 +54,7 @@ export function AppShell({
     { href: "/fields", label: t("n_fields"), icon: <Map />, active: path.startsWith("/fields") },
     { href: "/rotation", label: t("n_rot"), icon: <RefreshCw />, active: path.startsWith("/rotation") },
     { href: "/assistant", label: t("n_ai"), icon: <Sparkles />, active: path.startsWith("/assistant") },
-    { href: "/reports", label: t("n_reports"), icon: <FileText />, active: path.startsWith("/reports") },
+    { href: "/decisions", label: a("navDecisions"), icon: <FileText />, active: path.startsWith("/decisions") },
   ];
 
   const setLocale = (l: "uk" | "en") => {

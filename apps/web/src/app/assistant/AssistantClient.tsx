@@ -170,11 +170,11 @@ export function AssistantClient({
             </p>
           )}
           <Link
-            href="/reports"
+            href="/decisions"
             className="focus-ring inline-flex min-h-tap items-center gap-2 rounded-btn border border-line-strong px-4 text-body font-semibold text-ink hover:bg-muted"
           >
             <FileText aria-hidden className="size-4" strokeWidth={1.7} />
-            {t("k2")}
+            {app("decOpen")}
           </Link>
           <Link
             href="/rotation"

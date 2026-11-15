@@ -1,6 +1,6 @@
 /**
  * The P0 path (S-09.04): sign up → onboarding → add field → history → Analyze fields → brief → Accept + Undo + Accept →
- * assistant "why?" → rotation Save to the 2026 plan → scouting Send → Owner report answer via link.
+ * Ask the owner → assistant "why?" → rotation Save to the 2026 plan → scouting Send → Owner decision answered via link.
  * The field reuses the Garden City pivot's outline so its sources come from the cache (no multi-minute gather).
  */
 const run = Date.now().toString(36);
@@ -40,14 +40,19 @@ describe("P0 path", () => {
     cy.contains("button", "Analyze fields", { timeout: 20_000 }).click();
     cy.contains(/Done: 1 of 1 fields checked/, { timeout: 90_000 });
 
-    // The rootworm planning item: Accept → Undo → Accept on its page.
+    // The rootworm planning item: Accept → Undo → Accept on its page (Accept goes into the plan, not to the owner).
     cy.get("@fieldId").then((id) => cy.visit(`/fields/${id}`));
     cy.contains("a", /rootworm/i, { timeout: 30_000 }).click();
-    cy.contains("button", "Accept and add to the owner report").click();
+    cy.contains("button", /^Accept$/).click();
     cy.contains("button", "Undo").click();
-    cy.contains("button", "Accept and add to the owner report", { timeout: 15_000 }).click();
-    cy.contains("Added to the owner report");
-    cy.contains("In the owner report", { timeout: 20_000 });
+    cy.contains("button", /^Accept$/, { timeout: 15_000 }).click();
+    cy.contains("Accepted into your plan");
+
+    // Ask the owner: a deliberate second step with a note, then the 8 s Undo row.
+    cy.contains("button", "Ask the owner", { timeout: 20_000 }).click();
+    cy.get("textarea").type("Seed order needs your approval.");
+    cy.contains("button", /^Send$/).click();
+    cy.contains("Asked the owner");
 
     // Ask the assistant why.
     cy.contains("a", "Why?").click();
@@ -77,15 +82,15 @@ describe("P0 path", () => {
     cy.contains("Check summary", { timeout: 20_000 });
     cy.contains("5%");
 
-    // Owner report: create a link and answer through it.
-    cy.visit("/reports");
+    // Owner decisions: the asked item waits for the owner; create a link and answer through it.
+    cy.visit("/decisions");
+    cy.contains("Waiting for the owner", { timeout: 30_000 });
     cy.contains("button", "Create a link").click();
     cy.get("code")
       .invoke("text")
       .then((url) => {
         cy.visit(new URL(url).pathname);
-        cy.contains("What to do next");
-        cy.contains("button", "Done").click();
+        cy.contains("button", "Approve").click();
         cy.contains("Thanks! Your agronomist got your answer.");
       });
   });

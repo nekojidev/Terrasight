@@ -2,7 +2,6 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  BottomSheet,
   Button,
   Chip,
   ErrorCard,
@@ -22,8 +21,10 @@ import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { AnalysisCard } from "@/components/AnalysisCard";
+import { AskOwnerSheet } from "@/components/AskOwnerSheet";
 import { api } from "@/lib/api";
 import { useWorkspaceEvents } from "@/lib/events";
+import type { AskOwnerBody } from "@terrasight/shared";
 import { greetingKey, useNow } from "@/lib/time";
 
 type Localised = { en: string; uk: string };
@@ -73,7 +74,7 @@ interface Brief {
   };
 }
 interface Done {
-  kind: "accept" | "snooze";
+  kind: "accept" | "snooze" | "ask";
   undoUntil: string;
 }
 
@@ -103,7 +104,6 @@ export function Brief({
   const now = useNow();
   const [done, setDone] = useState<Record<string, Done>>({});
   const [sheet, setSheet] = useState<Item | null>(null);
-  const [note, setNote] = useState("");
 
   if (brief.isPending) {
     return (
@@ -168,21 +168,11 @@ export function Brief({
   );
   const hello = greetingKey(now, b.timeZone);
 
-  async function act(i: Item, kind: "accept" | "snooze", note?: string) {
-    // On a phone, Accept first shows what the owner will see, with an optional note (design 05, RFC §10.4).
-    if (
-      kind === "accept" &&
-      note === undefined &&
-      typeof window !== "undefined" &&
-      window.matchMedia("(max-width: 639px)").matches
-    ) {
-      setSheet(i);
-      setNote("");
-      return;
-    }
+  async function act(i: Item, kind: "accept" | "snooze" | "ask", note?: string) {
+    const body: AskOwnerBody = kind === "ask" && note ? { note } : {};
     const r = await api<{ undoUntil: string | null }>(
-      `/api/w/${workspaceId}/recommendations/${i.id}/${kind}`,
-      { body: note ? { note } : {} },
+      `/api/w/${workspaceId}/recommendations/${i.id}/${kind === "ask" ? "ask-owner" : kind}`,
+      { body },
     );
     if (r.undoUntil) {
       setDone((d) => ({ ...d, [i.id]: { kind, undoUntil: r.undoUntil! } }));
@@ -207,7 +197,7 @@ export function Brief({
     const d = done[id];
     return d
       ? {
-          label: d.kind === "accept" ? m("acc_done") : m("snz_done"),
+          label: d.kind === "accept" ? t("accDone") : d.kind === "ask" ? t("askDone") : m("snz_done"),
           undoLabel: m("undo"),
           undoUntil: d.undoUntil,
           onUndo: () => void undo(id),
@@ -299,9 +289,10 @@ export function Brief({
                 {t("hintConf")} {t(`hintTier_${hero.tier}` as "hintTier_A")} {t("hintKeyNumbers")}
               </InfoHint>
             }
-            labels={{ accept: m("acc4"), snooze: m("snooze"), details: m("details") }}
+            labels={{ accept: t("acceptBtn"), snooze: m("snooze"), details: m("details"), ask: t("askBtn") }}
             detailsHref={`/recommendations/${hero.id}`}
             onAccept={() => canAct && void act(hero!, "accept")}
+            onAsk={() => canAct && setSheet(hero!)}
             onSnooze={() => canAct && void act(hero!, "snooze")}
             {...(doneRow(hero.id) ? { done: doneRow(hero.id)! } : {})}
           />
@@ -339,8 +330,9 @@ export function Brief({
                 dueTone={i.urgency === "urgent" ? "urgent" : "week"}
                 strip={strip(i.seasons)}
                 factors={factors(i)}
-                labels={{ why: m("why_k"), accept: m("accept"), snooze: m("snooze") }}
+                labels={{ why: m("why_k"), accept: t("acceptBtn"), snooze: m("snooze"), ask: t("askBtn") }}
                 onAccept={() => canAct && void act(i, "accept")}
+                onAsk={() => canAct && setSheet(i)}
                 onSnooze={() => canAct && void act(i, "snooze")}
                 {...(doneRow(i.id) ? { done: doneRow(i.id)! } : {})}
               />
@@ -465,7 +457,7 @@ export function Brief({
           )}
           {b.rail.ownerQuestion && (
             <Link
-              href="/reports"
+              href="/decisions"
               className="focus-ring mt-4 flex min-h-tap items-center justify-center gap-2 rounded-btn bg-muted px-4 text-body font-semibold text-ink hover:brightness-95"
             >
               {t("replyLink")}
@@ -473,35 +465,25 @@ export function Brief({
           )}
         </RailCard>
       </aside>
-      <BottomSheet
-        open={sheet !== null}
-        title={t("bsTitle")}
-        primaryLabel={t("bsAdd")}
-        cancelLabel={t("bsCancel")}
+      <AskOwnerSheet
+        preview={
+          sheet
+            ? {
+                fieldName: sheet.fieldName,
+                title: sheet.text.title[locale],
+                action: sheet.text.action[locale],
+                deadline: due(sheet),
+                numbers: numbers(sheet).map((n) => ({ label: n.label, value: n.value })),
+              }
+            : null
+        }
         onClose={() => setSheet(null)}
-        onPrimary={() => {
+        onSend={(note) => {
           const i = sheet;
           setSheet(null);
-          if (i) void act(i, "accept", note);
+          if (i) void act(i, "ask", note);
         }}
-      >
-        {sheet && (
-          <div className="flex flex-col gap-3">
-            <p className="text-small text-ink-2">{sheet.fieldName}</p>
-            <p className="text-body font-semibold text-ink">{sheet.text.action[locale]}</p>
-            <p className="text-small text-ink-2">{sheet.text.title[locale]}</p>
-            <label className="flex flex-col gap-1 text-small text-ink-2">
-              {t("bsNote")}
-              <textarea
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                maxLength={1000}
-                className="min-h-20 rounded-input border border-line-strong bg-surface p-3 text-body text-ink"
-              />
-            </label>
-          </div>
-        )}
-      </BottomSheet>
+      />
     </div>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { clsx } from "clsx";
-import { Check, Clock } from "lucide-react";
+import { Check, Clock, MessageCircleQuestion } from "lucide-react";
 import { useId, useState, type ReactNode } from "react";
 import { Button } from "./Button";
 import { DoneRow, type DoneRowProps } from "./DoneRow";
@@ -17,9 +17,11 @@ export interface QueueRowProps {
   dueTone?: "urgent" | "week" | "ok";
   strip?: ReactNode;
   factors: Factor[];
-  labels: { why: string; accept: string; snooze: string };
+  labels: { why: string; accept: string; snooze: string; ask?: string };
   onAccept: () => void;
   onSnooze: () => void;
+  /** "Ask the owner": a secondary icon action when set (together with `labels.ask`). */
+  onAsk?: () => void;
   done?: Omit<DoneRowProps, "className">;
   /** "Snoozed until tomorrow 06:00" after the Undo window closes. */
   snoozedLabel?: string;
@@ -54,6 +56,9 @@ export function QueueRow(p: QueueRowProps) {
           {p.labels.why}
         </Button>
         <Button variant="icon" label={p.labels.accept} icon={<Check />} onClick={p.onAccept} />
+        {p.onAsk && p.labels.ask && (
+          <Button variant="icon" label={p.labels.ask} icon={<MessageCircleQuestion />} onClick={p.onAsk} />
+        )}
         <Button variant="icon" label={p.labels.snooze} icon={<Clock />} onClick={p.onSnooze} />
       </div>
       <div id={whyId} hidden={!open} className="mt-4 rounded-input bg-surface-2 p-4">

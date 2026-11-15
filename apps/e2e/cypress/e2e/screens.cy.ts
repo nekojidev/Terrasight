@@ -11,7 +11,7 @@ describe("screens", () => {
     );
   });
   it("captures the main screens", () => {
-    for (const path of ["/", "/fields", "/rotation", "/reports"]) {
+    for (const path of ["/", "/fields", "/rotation", "/decisions"]) {
       cy.visit(path);
       cy.wait(2500);
       cy.screenshot(`desktop${path.replace(/\//g, "_") || "_home"}`, { capture: "fullPage" });
@@ -28,7 +28,7 @@ describe("screens", () => {
     cy.visit("/");
     cy.wait(2500);
     cy.screenshot("phone_home", { capture: "fullPage" });
-    cy.contains("button", "Accept and add to the report").click();
+    cy.contains("button", "Ask the owner").click();
     cy.wait(500);
     cy.screenshot("phone_sheet");
   });

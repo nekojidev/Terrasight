@@ -23,9 +23,9 @@ interface NotificationList {
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
 const num = (v: unknown): number => (typeof v === "number" ? v : 0);
 
-/** Where a notification leads (RFC §15.4): report → /reports, recommendation → /recommendations/:id, run → /. */
+/** Where a notification leads (RFC §15.4): report → /decisions, recommendation → /recommendations/:id, run → /. */
 export function notificationHref(n: Pick<NotificationItem, "kind" | "payload">): string {
-  if (n.kind === "report_answered") return "/reports";
+  if (n.kind === "report_answered") return "/decisions";
   if (n.kind === "urgent_recommendation") return `/recommendations/${str(n.payload.recommendationId)}`;
   return "/";
 }
@@ -71,7 +71,11 @@ export function NotificationsBell({ workspaceId }: { workspaceId: string }) {
     if (n.kind === "report_answered") {
       const ans = str(n.payload.answer);
       return a(
-        ans === "done" ? "notifAnswerDone" : ans === "question" ? "notifAnswerQuestion" : "notifAnswerNotYet",
+        ans === "approve" || ans === "done"
+          ? "notifAnswerDone"
+          : ans === "question"
+            ? "notifAnswerQuestion"
+            : "notifAnswerNotYet",
         {
           field,
         },

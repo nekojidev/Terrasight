@@ -35,7 +35,7 @@ function shoot(PIVOT12: string, REC: string) {
     ["11-log", `/fields/${PIVOT12}/log`],
     ["13-addfield", "/fields/new"],
     ["14-assistant", "/assistant"],
-    ["15-reports", "/reports"],
+    ["15-decisions", "/decisions"],
   ];
   for (const [name, path] of shots) {
     cy.visit(path);

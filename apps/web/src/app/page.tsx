@@ -29,8 +29,8 @@ export default async function Home() {
   if (!active) redirect("/onboarding");
   const ws = await serverGet<WorkspaceDetail>(`/api/w/${active.id}`);
   if (!ws.ok) redirect("/onboarding");
-  // The owner / manager reads the Owner report, not the brief (PD: Viewer role).
-  if (ws.data.role === "viewer") redirect("/reports");
+  // The owner / manager reads the decisions, not the brief (PD: Viewer role).
+  if (ws.data.role === "viewer") redirect("/decisions");
   const t = await getTranslations("EmptyHome");
 
   return (
