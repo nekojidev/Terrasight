@@ -90,6 +90,18 @@ describe("DataBasis", () => {
     expect(screen.getByText("Сезони 2023–2024")).toBeTruthy();
   });
 
+  it("prints one year when the period sits inside one year", () => {
+    wrap(
+      <DataBasis
+        items={[
+          { dataset: "MODIS NDVI (MOD13Q1)", agency: "NASA", from: "2025-01-01", to: "2025-12-31", lastDate: null, supports: [] },
+        ]}
+      />,
+    );
+    expect(screen.getByText("Season 2025")).toBeTruthy();
+    expect(screen.queryByText(/2025–2025/)).toBeNull();
+  });
+
   it("compact hides the sentences", () => {
     wrap(<DataBasis items={[power]} compact />);
     expect(screen.queryByText(/heat accumulated/)).toBeNull();

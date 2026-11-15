@@ -15,12 +15,14 @@ let runGate: Promise<void> | null = null;
 let climate: unknown = { status: "pending" };
 let yearSets: unknown = null;
 let yearSetsStatus = 0;
+let decisions: unknown = { items: [] };
 vi.mock("@/lib/api", async () => {
   const actual = await vi.importActual<typeof import("@/lib/api")>("@/lib/api");
   return {
     ...actual,
     api: vi.fn(async (path: string) => {
       if (path.endsWith("/climate-shift")) return climate;
+      if (path.includes("/decisions")) return decisions;
       if (path.endsWith("/year-sets")) {
         if (yearSetsStatus)
           throw new actual.ApiError({ type: "about:blank", title: "x", status: yearSetsStatus });
@@ -35,6 +37,8 @@ vi.mock("@/lib/api", async () => {
     }),
   };
 });
+const push = vi.fn();
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 vi.mock("../Overview", () => ({ FieldTabs: () => <nav aria-label="Field sections" /> }));
 vi.mock("next/link", () => ({
   default: ({ href, children, ...rest }: { href: string; children: ReactNode }) => (
@@ -64,7 +68,10 @@ const wrap = (ui: ReactNode) => (
 const scenario = (id: string, kind: "current" | "alternative", over: Record<string, unknown> = {}) => ({
   id,
   kind,
-  plan: [2026, 2027, 2028, 2029, 2030].map((season) => ({ season, crops: [id === "cur" ? "corn" : "alfalfa"] })),
+  plan: [2026, 2027, 2028, 2029, 2030].map((season) => ({
+    season,
+    crops: [id === "cur" ? "corn" : "alfalfa"],
+  })),
   margin: id === "cur" ? 300 : 420,
   marginBySeason: [300, 300, 300, 300, 300],
   water: 200,
@@ -119,7 +126,13 @@ const readyClimate = {
   metrics: [],
   alpha: 0.05,
   skippedYears: [],
-  source: { dataset: "NASA POWER", from: "1981-01-01", lastDate: "2025-10-30", cell: { lat: 37.9, lon: -100.9 }, resolutionKm: 55 },
+  source: {
+    dataset: "NASA POWER",
+    from: "1981-01-01",
+    lastDate: "2025-10-30",
+    cell: { lat: 37.9, lon: -100.9 },
+    resolutionKm: 55,
+  },
   gpm: null,
 };
 
@@ -136,8 +149,15 @@ const comparison = (bests: [string, string, string, string]): YearSetComparison 
       const other = best === "alt" ? "cur" : "alt";
       return {
         id,
-        years: { from: id === "climate-1981-2000" ? 1981 : id === "all" ? 1982 : 2011, to: id === "climate-1981-2000" ? 2000 : 2025, count: id === "all" ? 44 : 15 },
-        shift: id === "trend-2030" ? { deltaT: 0.2, precipFactor: 1, applied: { temperature: true, precipitation: false } } : null,
+        years: {
+          from: id === "climate-1981-2000" ? 1981 : id === "all" ? 1982 : 2011,
+          to: id === "climate-1981-2000" ? 2000 : 2025,
+          count: id === "all" ? 44 : 15,
+        },
+        shift:
+          id === "trend-2030"
+            ? { deltaT: 0.2, precipFactor: 1, applied: { temperature: true, precipitation: false } }
+            : null,
         best,
         options: [
           { id: best, rank: 1, margin: 400, drought: 250, score: 1 },
@@ -149,7 +169,10 @@ const comparison = (bests: [string, string, string, string]): YearSetComparison 
 };
 
 const loadedBlock = async (): Promise<HTMLElement> => {
-  const block = (await screen.findByRole("region", { name: "Sensitivity to the weather years" })) as HTMLElement;
+  const block = (await screen.findByRole("region", {
+    name: "Does the pick change with other weather?",
+    hidden: true,
+  })) as HTMLElement;
   await waitFor(() => expect(block.querySelector("[data-year-set]")).toBeTruthy());
   return block;
 };
@@ -168,12 +191,17 @@ describe("Rotation page", () => {
     const save = await screen.findByRole("button", { name: /Save to the 2026 plan/ });
     const text = container.textContent ?? "";
     const at = (s: string) => text.indexOf(s);
-    expect(at("Sow Alfalfa")).toBeGreaterThan(-1);
+    expect(at("Sow Alfalfa in 2026")).toBeGreaterThan(-1);
     expect(at("Reliability")).toBeGreaterThan(at("Sow Alfalfa"));
+    expect(at("Plan for 2026–2030")).toBeGreaterThan(at("Sow Alfalfa"));
     expect(at("We compared 2 options")).toBeGreaterThan(at("Reliability"));
-    expect(at("What the field earns over 5 seasons")).toBeGreaterThan(at("We compared 2 options"));
-    expect(at("If a year like 2022 happens again")).toBeGreaterThan(at("What the field earns over 5 seasons"));
-    expect(at("Test robustness")).toBeGreaterThan(at("If a year like 2022 happens again"));
+    expect(at("Data and reliability")).toBeGreaterThan(at("We compared 2 options"));
+    expect(at("What the field earns over 5 seasons")).toBeGreaterThan(at("Data and reliability"));
+    expect(at("If the 2022 drought comes back")).toBeGreaterThan(at("What the field earns over 5 seasons"));
+    expect(at("Try other prices and weather")).toBeGreaterThan(at("If the 2022 drought comes back"));
+    expect(screen.getAllByTestId("trust-line")).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: /What happens in a bad year/ }));
+    expect(push).toHaveBeenCalledWith(expect.stringMatching(/^\/assistant\?ask=.*&field=f$/));
     expect(screen.getAllByRole("button", { name: /Save to the 2026 plan/ })).toHaveLength(1);
     expect(save.className).toContain("bg-ink");
     // Money uses the company currency and the price source is the company's, not USDA.
@@ -220,13 +248,13 @@ describe("Rotation page", () => {
     await screen.findByText("No prices for your crops yet");
     expect(screen.getAllByText(/^No prices for your crops yet$/)).toHaveLength(1);
     expect(screen.queryByText("What did grow here recently?")).toBeNull();
-    expect(screen.getByRole("button", { name: "Notes on these numbers" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Notes on these numbers/ })).toBeTruthy();
   });
 
   it("says who can change the plan when read-only", async () => {
     run = payload();
     mount(false);
-    await screen.findByText(/Only an Agronomist can save this plan/);
+    await screen.findByText("Only the Agronomist changes the plan.");
     expect(screen.queryByRole("button", { name: /Save to the 2026 plan/ })).toBeNull();
   });
 
@@ -240,39 +268,42 @@ describe("Rotation page", () => {
     expect(await screen.findByRole("button", { name: "Retry" })).toBeTruthy();
   });
 
-  it("renders the climate card before the run resolves, and the Save button does not wait for the year sets", async () => {
-    let open!: () => void;
-    runGate = new Promise<void>((res) => (open = res));
+  it("puts the climate card in one collapsed row under the decision, and Save does not wait for the year sets", async () => {
     run = payload();
     climate = readyClimate;
-    mount();
-    expect(await screen.findByText(/Field shift · NASA POWER/i)).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /Save to the 2026 plan/ })).toBeNull();
-    expect(screen.getByText(/Usually under a minute/)).toBeTruthy();
-    // the year-set comparison never resolves: Save still works
     yearSets = new Promise(() => {});
-    open();
+    const { container } = mount();
     expect(await screen.findByRole("button", { name: /Save to the 2026 plan/ })).toBeTruthy();
+    const text = container.textContent ?? "";
+    expect(text.indexOf("Data and reliability")).toBeGreaterThan(text.indexOf("Save to the 2026 plan"));
+    expect(text).not.toContain("Field shift · NASA POWER");
   });
 
-  it("shows the sensitivity block with the same best option in every set, and one hero sentence", async () => {
+  it("shows the sensitivity block with the headline's option best in every set", async () => {
     run = payload();
     yearSets = comparison(["alt", "alt", "alt", "alt"]);
     const { container } = mount();
     const block = await loadedBlock();
-    expect(within(block).getByText(/Not a climate forecast/)).toBeTruthy();
-    expect(within(block).getAllByRole("listitem").filter((li) => li.hasAttribute("data-year-set"))).toHaveLength(4);
+    expect(within(block).getByText(/Not a forecast/)).toBeTruthy();
+    expect(
+      within(block)
+        .getAllByRole("listitem", { hidden: true })
+        .filter((li) => li.hasAttribute("data-year-set")),
+    ).toHaveLength(4);
     const cols = [...block.querySelectorAll("[data-year-set]")].map((c) => c.getAttribute("data-year-set"));
     expect(cols).toEqual(["all", "climate-1981-2000", "last-15", "trend-2030"]);
-    expect(within(block).getAllByText("best in this set")).toHaveLength(4);
+    expect(within(block).getAllByText("best in these years")).toHaveLength(4);
     expect(within(block).getAllByText("recommended")).toHaveLength(4);
-    expect(within(block).getByText(/\+0\.2\s?°C; rainfall unchanged because its trend is not clear/)).toBeTruthy();
+    expect(
+      within(block).getByText(/\+0\.2\s?°C; rainfall unchanged because its trend is not clear/),
+    ).toBeTruthy();
     expect(within(block).getByText("The same option is best in every set of years.")).toBeTruthy();
-    expect(container.textContent).toContain("The order of the options is the same in every set of weather years.");
     expect(container.textContent).not.toMatch(/forecast of the climate/);
     // the block comes after the 2022 check
     const text = container.textContent ?? "";
-    expect(text.indexOf("Sensitivity to the weather years")).toBeGreaterThan(text.indexOf("If a year like 2022 happens again"));
+    expect(text.indexOf("Does the pick change with other weather?")).toBeGreaterThan(
+      text.indexOf("If the 2022 drought comes back"),
+    );
   });
 
   it("states a change only when the data has one, including the current rotation note", async () => {
@@ -285,7 +316,9 @@ describe("Rotation page", () => {
     expect(concl).toContain("With the 1981–2000 climate, A · ");
     expect(concl).not.toContain("With the last 15 years");
     expect(concl).not.toContain("trend continued");
-    expect(concl).toContain("The current rotation was the best in the 1981–2000 climate; in the last 15 years it ranks 2.");
+    expect(concl).toContain(
+      "The current rotation was the best in the 1981–2000 climate; in the last 15 years it ranks 2.",
+    );
     expect(container.textContent).toContain("With the 1981–2000 climate, A · ");
     expect(container.textContent).not.toContain("The order of the options is the same");
   });
@@ -315,7 +348,7 @@ describe("Rotation page", () => {
     yearSetsStatus = 404;
     mount();
     expect(await screen.findByText("Not available yet.")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Retry", hidden: true })).toBeTruthy();
     expect(screen.getByRole("button", { name: /Save to the 2026 plan/ })).toBeTruthy();
     expect(screen.queryByText(/same in every set/)).toBeNull();
   });
@@ -323,7 +356,14 @@ describe("Rotation page", () => {
   it("renders the NASA block and the weather years from the run, and nothing fixed when they are absent", async () => {
     run = payload({
       dataBasis: [
-        { dataset: "NASA POWER", agency: "NASA", from: "1981-01-01", to: "2025-10-30", lastDate: "2025-10-30", supports: ["weather-years"] },
+        {
+          dataset: "NASA POWER",
+          agency: "NASA",
+          from: "1981-01-01",
+          to: "2025-10-30",
+          lastDate: "2025-10-30",
+          supports: ["weather-years"],
+        },
       ],
       weather: { yearSet: "all", from: 1982, to: 2025, count: 44, lastDate: "2025-10-30" },
     });
@@ -339,5 +379,48 @@ describe("Rotation page", () => {
     expect(screen.queryByText("What NASA data contributed here")).toBeNull();
     expect(second.container.textContent).not.toMatch(/harvest years|1981–2025/);
     expect(second.container.textContent).not.toMatch(/150 weather paths \(NASA/);
+  });
+
+  it("shows money, not percent, in the 2022 check, and says it once for an irrigated field", async () => {
+    run = payload();
+    const { container } = mount();
+    await screen.findByRole("button", { name: /Save to the 2026 plan/ });
+    expect(container.textContent).toMatch(/With 2022 weather: .* instead of .* for that season/);
+    expect(container.textContent).not.toMatch(/Loses \d/);
+    cleanup();
+    const flat = (id: string) =>
+      scenario(id, id === "cur" ? "current" : "alternative", {
+        drought: id === "cur" ? 300 : 420,
+        if2022: { margin: 300, typical: 300, season: 2027 },
+      });
+    run = payload({ result: { ...payload().result, current: flat("cur"), alternatives: [flat("alt")] } });
+    const second = mount();
+    await screen.findByRole("button", { name: /Save to the 2026 plan/ });
+    expect(second.container.textContent).toContain("Irrigation covers a 2022-like season for every option.");
+    expect(second.container.textContent).toContain("no difference between good and bad weather years");
+    expect(second.container.textContent).not.toContain("In a bad year:");
+  });
+
+  it("shows 3 options by default and the rest behind Show all", async () => {
+    const alts = ["a1", "a2", "a3"].map((id, k) => scenario(id, "alternative", { margin: 400 + k }));
+    run = payload({
+      names: {},
+      result: { ...payload().result, alternatives: alts },
+    });
+    mount();
+    await screen.findByRole("button", { name: /Save to the 2026 plan/ });
+    expect(screen.getAllByRole("article")).toHaveLength(3);
+    fireEvent.click(screen.getByRole("button", { name: "Show all 4 options" }));
+    expect(screen.getAllByRole("article")).toHaveLength(4);
+  });
+
+  it("gives the Owner a read-only view with a link to the waiting decision", async () => {
+    run = payload();
+    decisions = { items: [{ id: "d1", fieldId: "f", state: "waiting" }] };
+    mount(false);
+    await screen.findByText("Only the Agronomist changes the plan.");
+    expect(await screen.findByRole("link", { name: "Open decisions" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Save to the 2026 plan/ })).toBeNull();
+    decisions = { items: [] };
   });
 });
