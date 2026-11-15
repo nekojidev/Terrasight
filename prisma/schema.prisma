@@ -279,6 +279,8 @@ model Field {
   plans         Plan[]
   recs          Recommendation[]
   scoutingTasks ScoutingTask[]
+  zoneBuild     FieldZoneBuild?
+  zones         FieldZone[]
 
   @@unique([workspaceId, aliasNo])
   @@index([workspaceId])
@@ -765,4 +767,66 @@ model UsCounty {
   geom      Unsupported("geometry(MultiPolygon, 4326)")
 
   @@map("us_counties")
+}
+
+// ---------- rate-map zones (PD FR-ZN-1..3) ----------
+
+/// Build state of a field's stable zones (one row per field; the job rewrites it).
+model FieldZoneBuild {
+  fieldId       String    @id @map("field_id") @db.Uuid
+  runId         String?   @map("run_id") @db.Uuid
+  status        String // queued | running | done | failed
+  progress      Json      @default("{}")
+  startedAt     DateTime? @map("started_at") @db.Timestamptz(3)
+  finishedAt    DateTime? @map("finished_at") @db.Timestamptz(3)
+  error         String?
+  seasons       Json?
+  stats         Json?
+  params        Json?
+  ndviDate      DateTime? @map("ndvi_date") @db.Date
+  ndviSceneId   String?   @map("ndvi_scene_id")
+  ndviCorners   Json?     @map("ndvi_corners")
+  ndviPng       Bytes?    @map("ndvi_png")
+  ndviStats     Json?     @map("ndvi_stats")
+  ndviCheckedAt DateTime? @map("ndvi_checked_at") @db.Timestamptz(3)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  field Field @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  @@map("field_zone_builds")
+}
+
+/// One row per zone class of a field: a MultiPolygon clipped to the field outline, with its area.
+model FieldZone {
+  fieldId        String                                      @map("field_id") @db.Uuid
+  zone           String // strong | variable | weak
+  geom           Unsupported("geometry(MultiPolygon, 4326)")
+  areaHa         Float                                       @map("area_ha")
+  share          Float
+  meanPercentile Float?                                      @map("mean_percentile")
+  createdAt      DateTime                                    @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  field Field @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  @@id([fieldId, zone])
+  @@map("field_zones")
+}
+
+/// Peak-season NDVI raster per field outline and season (float32 little-endian, NaN = no value); past seasons never change.
+model FieldZoneCache {
+  geomHash  String   @map("geom_hash")
+  season    Int
+  res       Int
+  epsg      Int
+  x0        Float
+  y0        Float
+  width     Int
+  height    Int
+  scenes    Int
+  listed    Int
+  data      Bytes
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@id([geomHash, season, res])
+  @@map("field_zone_cache")
 }

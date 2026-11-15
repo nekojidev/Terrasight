@@ -49,14 +49,15 @@ const LEVEL_TONE = {
 } as const;
 const BARS = { high: 3, moderate: 2, low: 1, none: 0, unknown: 0 } as const;
 
-/** Tabs of the field page (design 08). Overview, Work log, Rotation, Owner report. */
-export function FieldTabs({ fieldId, active = 0 }: { fieldId: string; active?: 0 | 1 | 2 }) {
+/** Tabs of the field page (design 08). Overview, Work log, Rotation, Zones, Owner decisions. */
+export function FieldTabs({ fieldId, active = 0 }: { fieldId: string; active?: 0 | 1 | 2 | 3 }) {
   const r = useTranslations("Field");
   const t = useTranslations("App");
   const tabs: Array<{ label: string; href: string | null }> = [
     { label: r("tab1"), href: `/fields/${fieldId}` },
     { label: t("tabLog"), href: `/fields/${fieldId}/log` },
     { label: r("tab3"), href: `/fields/${fieldId}/rotation` },
+    { label: t("tabZones"), href: `/fields/${fieldId}/zones` },
     { label: t("navDecisions"), href: `/decisions?field=${fieldId}` },
   ];
   return (
