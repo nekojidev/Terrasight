@@ -48,6 +48,12 @@ const SHOWING_DATA: Record<"en" | "uk", string> = {
 };
 
 /** Replaces the company's field names in free text with their aliases F<n>, longest names first, case-insensitive. */
+/** A chat's title is its first question: whitespace collapsed, at most 60 characters. */
+export function titleFromQuestion(text: string): string {
+  const t = text.replace(/\s+/g, " ").trim();
+  return t.length <= 60 ? t : `${t.slice(0, 59).trimEnd()}…`;
+}
+
 export function pseudonymise(text: string, aliases: Map<string, { name: string }>): string {
   const pairs = [...aliases.entries()]
     .filter(([, f]) => f.name.trim().length > 0)
@@ -170,28 +176,45 @@ export class AssistantService implements OnModuleInit, OnModuleDestroy {
     return r.count;
   }
 
-  async create(workspaceId: string, userId: string, title?: string) {
+  async create(workspaceId: string, userId: string, title?: string, fieldId?: string) {
+    if (fieldId) {
+      // A chat can only be tied to a field of this company.
+      const f = await this.prisma.system.field.findFirst({
+        where: { id: fieldId, workspaceId },
+        select: { id: true },
+      });
+      if (!f) throw new ProblemException(404, "not-found");
+    }
     const c = await this.prisma.system.conversation.create({
       data: {
         workspaceId,
         userId,
         title: title ?? null,
+        contextFieldId: fieldId ?? null,
         expiresAt: new Date(Date.now() + RETENTION_DAYS * 864e5),
       },
     });
-    return { id: c.id, title: c.title, createdAt: c.createdAt, expiresAt: c.expiresAt };
+    return {
+      id: c.id,
+      title: c.title,
+      contextFieldId: c.contextFieldId,
+      createdAt: c.createdAt,
+      expiresAt: c.expiresAt,
+    };
   }
 
-  async list(workspaceId: string, userId: string) {
+  /** The caller's own chats, newest first; `fieldId` narrows to the latest chat opened from that field. */
+  async list(workspaceId: string, userId: string, fieldId?: string) {
     const rows = await this.prisma.system.conversation.findMany({
-      where: { workspaceId, userId },
-      orderBy: { createdAt: "desc" },
-      take: 50,
+      where: { workspaceId, userId, ...(fieldId ? { contextFieldId: fieldId } : {}) },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: fieldId ? 1 : 50,
       include: { messages: { orderBy: { createdAt: "asc" }, take: 1, select: { text: true } } },
     });
     return rows.map((c) => ({
       id: c.id,
-      title: c.title ?? c.messages[0]?.text.slice(0, 80) ?? null,
+      title: c.title ?? (c.messages[0] ? titleFromQuestion(c.messages[0].text) : null),
+      contextFieldId: c.contextFieldId,
       createdAt: c.createdAt,
     }));
   }
@@ -249,6 +272,7 @@ export class AssistantService implements OnModuleInit, OnModuleDestroy {
     return {
       id: c.id,
       title: c.title,
+      contextFieldId: c.contextFieldId,
       expiresAt: c.expiresAt,
       nextCursor: hasMore && oldest ? encodeMessageCursor(oldest.createdAt, oldest.id) : null,
       aliases,
@@ -284,11 +308,17 @@ export class AssistantService implements OnModuleInit, OnModuleDestroy {
     text: string,
     context: { fieldId?: string; recommendationId?: string },
   ) {
-    await this.own(scope.workspaceId, scope.userId, conversationId);
+    const conv = await this.own(scope.workspaceId, scope.userId, conversationId);
     const okUser = await this.limits.take(`assistant:user:${scope.userId}`, USER_BUCKET);
     const okWs = await this.limits.take(`assistant:ws:${scope.workspaceId}`, WORKSPACE_BUCKET);
     if (!okUser || !okWs)
       throw new ProblemException(429, "rate-limited", "Too many questions; try again in a minute");
+    // The first question names the chat.
+    if (!conv.title)
+      await this.prisma.system.conversation.update({
+        where: { id: conversationId },
+        data: { title: titleFromQuestion(text) },
+      });
     const user = await this.prisma.system.message.create({
       data: { conversationId, role: "user", text, context: context as Prisma.InputJsonValue },
     });

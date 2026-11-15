@@ -118,7 +118,10 @@ export function Sidebar({
 
 export interface TopBarProps {
   crumb: string;
+  /** Placeholder-style text of the search control ("Search fields or ask the assistant…"). */
   searchLabel: string;
+  /** Shortcut shown in the control ("⌘K" or "Ctrl K"). */
+  searchHint?: string;
   onSearch: () => void;
   languages: Array<{ code: string; label: string; active: boolean; onSelect: () => void }>;
   languageGroupLabel: string;
@@ -138,13 +141,20 @@ export function TopBar(p: TopBarProps) {
       <button
         type="button"
         onClick={p.onSearch}
-        className="focus-ring flex min-h-tap w-auto max-w-full items-center sm:w-[450px] gap-3 rounded-input border border-line bg-surface px-4 text-left text-body text-ink-3"
+        aria-haspopup="dialog"
+        aria-keyshortcuts="Control+K Meta+K"
+        className="focus-ring flex min-h-tap w-auto max-w-full items-center gap-3 rounded-input border border-line bg-surface px-3 text-left text-body text-ink-3 hover:border-line-strong sm:w-[450px] sm:px-4"
       >
-        <Search aria-hidden className="size-5" strokeWidth={1.7} />
-        <span className="sr-only sm:not-sr-only sm:flex-1">{p.searchLabel}</span>
-        <kbd className="hidden rounded-[6px] sm:inline border border-line px-1.5 font-mono text-[12px]">
-          ⌘K
-        </kbd>
+        <Search aria-hidden className="size-5 shrink-0 text-ink-2" strokeWidth={1.7} />
+        <span className="sr-only sm:not-sr-only sm:flex-1 sm:truncate">{p.searchLabel}</span>
+        {p.searchHint && (
+          <kbd
+            aria-hidden
+            className="hidden rounded-[6px] border border-line bg-surface-2 px-1.5 font-mono text-[12px] text-ink-2 sm:inline"
+          >
+            {p.searchHint}
+          </kbd>
+        )}
       </button>
       <div
         role="group"

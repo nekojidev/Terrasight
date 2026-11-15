@@ -6,9 +6,10 @@ import { useQuery } from "@tanstack/react-query";
 import type { DecisionList } from "@terrasight/shared";
 import { usePathname, useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { api, setCookie } from "@/lib/api";
 import { Brand } from "./Brand";
+import { CommandPalette } from "./CommandPalette";
 import { NotificationsBell } from "./NotificationsBell";
 import { OfflineBanner } from "./OfflineBanner";
 import { useSidebarState } from "./SidebarState";
@@ -53,6 +54,20 @@ export function AppShell({
   const router = useRouter();
   const path = usePathname();
   const { collapsed, toggle } = useSidebarState();
+  // ⌘K / Ctrl+K opens the command palette from anywhere; the hint shows the key this device has.
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [searchHint, setSearchHint] = useState("⌘K");
+  useEffect(() => {
+    if (!/Mac|iPhone|iPad/.test(navigator.platform)) setSearchHint("Ctrl K");
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPaletteOpen((o) => !o);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   // Owners answer decisions: the nav shows how many need them (PD v2.9).
   const answers = user.role === "owner";
@@ -160,8 +175,9 @@ export function AppShell({
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar
           crumb={crumb}
-          searchLabel={t("search")}
-          onSearch={() => router.push("/assistant")}
+          searchLabel={a("searchPh")}
+          searchHint={searchHint}
+          onSearch={() => setPaletteOpen(true)}
           languageGroupLabel={t("lang_group")}
           languages={[
             { code: "uk", label: "UA", active: locale === "uk", onSelect: () => setLocale("uk") },
@@ -184,6 +200,12 @@ export function AppShell({
           {children}
         </main>
       </div>
+      <CommandPalette
+        workspaceId={workspace.id}
+        role={user.role}
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+      />
       {/* Phones and tablets: bottom tabs Home · Fields · Assistant · Reports (design 05). */}
       <div className="lg:hidden">
         <BottomTabs label={t("nav_label")} items={items.filter((i) => i.href !== "/rotation")} />

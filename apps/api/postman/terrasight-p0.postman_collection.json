@@ -2423,6 +2423,113 @@
           }
         },
         {
+          "name": "Start a chat from the field panel (tied to the field)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "const c = pm.response.json(); pm.collectionVariables.set(\"fieldConvId\", c.id); pm.test(\"tied to the field\", () => pm.expect(c.contextFieldId).to.eql(pm.collectionVariables.get(\"fieldId\")));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/conversations",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fieldId\": \"{{fieldId}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Latest chat of the field: the panel restores it after navigation",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "const rows = pm.response.json(); pm.test(\"one row, the field chat\", () => { pm.expect(rows).to.have.length(1); pm.expect(rows[0].id).to.eql(pm.collectionVariables.get(\"fieldConvId\")); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/conversations?fieldId={{fieldId}}"
+          }
+        },
+        {
+          "name": "A malformed fieldId is refused",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 422\", () => pm.response.to.have.status(422));",
+                  "pm.test(\"problem+json\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/conversations?fieldId=nope"
+          }
+        },
+        {
+          "name": "Delete the field chat",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 204\", () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/conversations/{{fieldConvId}}"
+          }
+        },
+        {
           "name": "Delete the chat",
           "event": [
             {

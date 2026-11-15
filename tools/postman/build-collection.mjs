@@ -600,6 +600,30 @@ const collection = {
           "/api/w/{{ws}}/conversations/00000000-0000-4000-8000-000000000000",
           { tests: problem(404) },
         ),
+        req("Start a chat from the field panel (tied to the field)", "POST", "/api/w/{{ws}}/conversations", {
+          body: { fieldId: "{{fieldId}}" },
+          tests: [
+            status(201),
+            `const c = pm.response.json(); pm.collectionVariables.set("fieldConvId", c.id); pm.test("tied to the field", () => pm.expect(c.contextFieldId).to.eql(pm.collectionVariables.get("fieldId")));`,
+          ],
+        }),
+        req(
+          "Latest chat of the field: the panel restores it after navigation",
+          "GET",
+          "/api/w/{{ws}}/conversations?fieldId={{fieldId}}",
+          {
+            tests: [
+              status(200),
+              `const rows = pm.response.json(); pm.test("one row, the field chat", () => { pm.expect(rows).to.have.length(1); pm.expect(rows[0].id).to.eql(pm.collectionVariables.get("fieldConvId")); });`,
+            ],
+          },
+        ),
+        req("A malformed fieldId is refused", "GET", "/api/w/{{ws}}/conversations?fieldId=nope", {
+          tests: problem(422),
+        }),
+        req("Delete the field chat", "DELETE", "/api/w/{{ws}}/conversations/{{fieldConvId}}", {
+          tests: [status(204)],
+        }),
         req("Delete the chat", "DELETE", "/api/w/{{ws}}/conversations/{{convId}}", { tests: [status(204)] }),
         req("A deleted chat is gone", "GET", "/api/w/{{ws}}/conversations/{{convId}}", {
           tests: problem(404),
