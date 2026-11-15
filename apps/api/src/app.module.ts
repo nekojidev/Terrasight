@@ -1,5 +1,7 @@
+import { createRequire } from "node:module";
 import { Module } from "@nestjs/common";
 import { LoggerModule } from "nestjs-pino";
+import { requestId } from "./http/request-id.js";
 import { loadEnv } from "./config/config.js";
 import { AnalysisModule } from "./analysis/analysis.module.js";
 import { AssistantModule } from "./assistant/assistant.module.js";
@@ -22,14 +24,27 @@ import { WorkspacesModule } from "./workspaces/workspaces.module.js";
 
 const env = loadEnv();
 
+/** pino-pretty is a dev dependency: the production image does not ship it, so `NODE_ENV=development` there logs JSON. */
+function hasPrettyPrinter(): boolean {
+  try {
+    createRequire(import.meta.url).resolve("pino-pretty");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 @Module({
   imports: [
     LoggerModule.forRoot({
       pinoHttp: {
         level: env.LOG_LEVEL,
+        // Request-id correlation: reuse a sane X-Request-Id from the proxy, else mint one. It is `req.id` on every
+        // log line of the request, the X-Request-Id response header and, for 5xx, a tag on the Sentry event.
+        genReqId: requestId,
         autoLogging: { ignore: (req) => req.url === "/healthz" || req.url === "/readyz" },
         redact: ["req.headers.cookie", "req.headers.authorization", 'res.headers["set-cookie"]'],
-        ...(env.NODE_ENV === "development"
+        ...(env.NODE_ENV === "development" && hasPrettyPrinter()
           ? { transport: { target: "pino-pretty", options: { singleLine: true } } }
           : {}),
       },

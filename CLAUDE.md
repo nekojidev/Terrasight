@@ -7,12 +7,13 @@ Built for NASA Space Apps Challenge 2026, challenge _"Field Shift: Adapting Farm
 
 We build this project in three documented stages. Each one builds on the stage before it:
 
-1. **Product Definition** — `docs/01-product-definition.md` — what we build and why ✅ v2.6 (no demo or example data in the product) (AI assistant for agronomists; competitors in `docs/competitor-eos.md`), open questions resolved
+1. **Product Definition** — `docs/01-product-definition.md` — what we build and why ✅ v2.11 (AI assistant for agronomists; two roles Owner / Agronomist; no demo or example data in the product; AI-proposed rotations and AI-written recommendations; competitors in `docs/competitor-eos.md`), open questions resolved
 2. **RFC** — `docs/02-rfc.md` — proposed solution, alternatives, trade-offs, decisions ⏳ v2.2 draft in review (open questions in §19)
    - **Design** — `design/` (v4 "Morning brief", 17 screens) ✅ handed off; see "Design" below
-3. **Tech Design** — `docs/03-tech-design.md` — architecture, data model, API, modules, testing, deploy ✅ v1.1 agreed; backlog in `docs/epics/`
+3. **Tech Design** — `docs/03-tech-design.md` — architecture, data model, API, modules, testing, deploy ✅ v1.1 agreed (decision log kept current to 2026-11-15); backlog in `docs/epics/`
 
-Build: epic by epic in P0-path order (`docs/epics/README.md`). EP-00 … EP-08 ✅ (S-04.05/S-04.08 are P1), EP-09 ✅ except the public host (files in `infra/prod/`, runbook `docs/runbook-demo-host.md`; the team deploys). No demo company or example data in the product (v2.6); fixtures (real recorded responses): `scripts/record-fixtures.mjs <workspace-id>`; E2E: `apps/e2e` (Cypress); demo script: `docs/demo-script.md`.
+Build: epic by epic in P0-path order (`docs/epics/README.md`). EP-00 … EP-08 ✅ (S-04.05/S-04.08 are P1), EP-09 ✅ except the public host (files in `infra/prod/`, runbook `docs/runbook-demo-host.md`; the team deploys). No demo company or example data in the product (v2.6). Built beyond the epics: stable zones with rate-map export (GeoJSON / Shapefile / ISOXML), work windows, work log, owner decisions with report links, Ukraine parity sources (SoilGrids, WaPOR, Esri land cover, Ukrstat yields), AI-proposed rotations, AI-written recommendations.
+Scripts that exist: `apps/api/scripts/record-fixtures.mjs <workspace-id>` (real recorded responses → `fixtures/`), `load-boundaries.mjs`, `check-region-points.mjs`; `tools/build_rotations_v2.py`, `tools/i18n-build.mjs`, `tools/golden/run.mjs`, `tools/postman/build-collection.mjs`, `tools/sources/smoke.mjs`. (`seed-demo.mjs` was removed with the demo company.) E2E: `apps/e2e` (Cypress; nightly + manual workflow `.github/workflows/e2e.yml`); demo script: `docs/demo-script.md`.
 
 Rules:
 
@@ -29,6 +30,8 @@ Design source: `design/README.md` (screens, components, behaviour), `design/toke
 
 - Monorepo: pnpm + Turborepo. Node 26 (`.nvmrc`). `apps/web` (Next.js), `apps/api` (NestJS), `packages/*` (shared, library, ui, …).
 - Local stack: `docker compose -f infra/docker-compose.yml up` (PostGIS, RabbitMQ, Redis, api, web). Redis is optional.
+- Entry points: `README.md` (quick start, env vars, architecture); data and library terms: `THIRD-PARTY-NOTICES.md`.
+- Infra: images are multi-stage and non-root; `infra/api.Dockerfile` has a `migrate` target. Migrations run only in `infra/prod/deploy.sh` (after a pre-migration dump) and the compose `migrate` service, never at container start; `rollback.sh` refuses when the new tag added migrations. CI: `.github/workflows/ci.yml` (checks, integration, contract, docker-build, audit, secret scan). Optional Sentry via `SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN`.
 - Checks: `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`, `pnpm library:check`, `pnpm i18n:check`; integration (Testcontainers): `pnpm test:integration`.
 - npm installs go through the user's CodeArtifact mirror (global `~/.npmrc`); Docker builds take it as a build secret (`--secret id=npmrc,src=$HOME/.npmrc`).
 
@@ -66,7 +69,7 @@ Design source: `design/README.md` (screens, components, behaviour), `design/toke
 - Forecast: Open-Meteo (paid), NOAA NWS as US fallback.
 - One workspace = one farming company with many fields, possibly in several regions. Roles: Owner, Agronomist (the Owner answers decisions and manages users; the Agronomist does the field work and asks the owner). Platform admin is internal to Terrasight.
 - All fields are re-checked every morning at 06:00 and on demand ("Analyze fields"); checks depend on the season.
-- Demo field: a pivot-irrigated field near Garden City, Kansas (2022 = record drought).
+- Demo-script field: a pivot-irrigated field near Garden City, Kansas (2022 = record drought), added as a real field the day before.
 
 ## Existing assets (not in this folder yet)
 

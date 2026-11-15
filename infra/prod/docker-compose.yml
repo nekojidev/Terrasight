@@ -1,3 +1,4 @@
+# CloudWatch Logs: COMPOSE_FILE=infra/prod/docker-compose.yml:infra/prod/docker-compose.cloudwatch.yml (see the runbook).
 # Terrasight demo host (S-09.01, Tech Design §17): one EC2 instance, TLS by Caddy, api ROLE=all.
 #   TAG=v0.9.0 DOMAIN=demo.example.com docker compose -f infra/prod/docker-compose.yml up -d
 # Secrets come from SSM Parameter Store into /opt/terrasight/.env (infra/prod/ssm-env.sh). Images are built on the host
@@ -20,6 +21,7 @@ services:
   postgres:
     image: terrasight-postgis:17
     build: ../postgis
+    container_name: terrasight-postgres # backup.sh / restore-check.sh use `docker exec` on it (no compose env needed)
     restart: unless-stopped
     environment:
       POSTGRES_USER: terrasight
@@ -33,7 +35,7 @@ services:
       retries: 20
 
   rabbitmq:
-    image: rabbitmq:4-alpine
+    image: rabbitmq:4.1-alpine
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
@@ -44,9 +46,16 @@ services:
   redis:
     image: redis:8-alpine
     restart: unless-stopped
+    volumes: [redisdata:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
 
   api:
     image: terrasight-api:${TAG:?set TAG}
+    container_name: terrasight-api # deploy.sh probes /readyz inside it
     restart: unless-stopped
     env_file: [/opt/terrasight/.env]
     environment:
@@ -59,6 +68,8 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    # HEALTHCHECK (/healthz) comes from the image. Migrations are applied by deploy.sh, not here.
     logging: { driver: json-file, options: { max-size: "20m", max-file: "5" } }
 
   web:
@@ -66,10 +77,12 @@ services:
     restart: unless-stopped
     environment:
       API_URL: http://api:4000
-    depends_on: [api]
+    depends_on:
+      api: { condition: service_healthy }
     logging: { driver: json-file, options: { max-size: "20m", max-file: "5" } }
 
 volumes:
   pgdata:
+  redisdata:
   caddy_data:
   caddy_config:

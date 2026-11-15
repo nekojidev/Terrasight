@@ -7,9 +7,11 @@ import { AppModule } from "./app.module.js";
 import { requireRequestedWith } from "./http/csrf.js";
 import { ProblemFilter } from "./http/problem.js";
 import { loadEnv } from "./config/config.js";
+import { initSentry } from "./observability/sentry.js";
 
 async function bootstrap(): Promise<void> {
   const env = loadEnv();
+  await initSentry();
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
   app.useLogger(app.get(Logger));
   app.setGlobalPrefix("api", {

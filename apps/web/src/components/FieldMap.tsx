@@ -23,7 +23,9 @@ const TRACE_PX = 12;
 
 /**
  * Satellite basemap for outlining fields. Default: EOX Sentinel-2 cloudless 2016 (CC BY 4.0; later EOX years are
- * non-commercial). Override with NEXT_PUBLIC_BASEMAP_TILES (an XYZ template) for another provider.
+ * non-commercial). In EOX's WMTS the 2016 layer is the unsuffixed `s2cloudless_3857` (its capabilities title is
+ * "Sentinel-2 cloudless layer for 2016"; `s2cloudless-2016_3857` does not exist and returns 404, checked 2026-11-15).
+ * Override with NEXT_PUBLIC_BASEMAP_TILES (an XYZ template, set at build time) for another provider.
  */
 export const BASEMAP =
   process.env.NEXT_PUBLIC_BASEMAP_TILES ??

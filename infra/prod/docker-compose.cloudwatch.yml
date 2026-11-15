@@ -1,0 +1,19 @@
+# Optional override: ship api and web logs to CloudWatch Logs instead of local json-file.
+#   echo 'COMPOSE_FILE=infra/prod/docker-compose.yml:infra/prod/docker-compose.cloudwatch.yml' >> /opt/terrasight/prod.env
+#   (and AWS_REGION=<region>; the instance role needs logs:CreateLogGroup, logs:CreateLogStream, logs:PutLogEvents)
+# deploy.sh / rollback.sh read prod.env, so every compose call picks the override up.
+services:
+  api:
+    logging:
+      driver: awslogs
+      options: !override
+        awslogs-region: ${AWS_REGION:?set AWS_REGION}
+        awslogs-group: /terrasight/demo/api
+        awslogs-create-group: "true"
+  web:
+    logging:
+      driver: awslogs
+      options: !override
+        awslogs-region: ${AWS_REGION:?set AWS_REGION}
+        awslogs-group: /terrasight/demo/web
+        awslogs-create-group: "true"

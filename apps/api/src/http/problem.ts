@@ -8,6 +8,7 @@ import {
 } from "@nestjs/common";
 import type { Request, Response } from "express";
 import { z } from "zod";
+import { captureException } from "../observability/sentry.js";
 
 /** RFC 9457 problem details, the error format of every endpoint (Tech Design §14). */
 export interface Problem {
@@ -76,6 +77,13 @@ export class ProblemFilter implements ExceptionFilter {
     } else {
       this.log.error(`${req.method} ${req.url}: ${(exception as Error)?.stack ?? exception}`);
       problem = { type: "about:blank", title: TITLES[500]!, status: HttpStatus.INTERNAL_SERVER_ERROR };
+    }
+    if (problem.status >= 500) {
+      captureException(exception, {
+        method: req.method,
+        status: problem.status,
+        requestId: String(req.id ?? ""),
+      });
     }
     if (typeof problem.detail === "object") delete problem.detail;
     res.status(problem.status).type("application/problem+json").json(problem);

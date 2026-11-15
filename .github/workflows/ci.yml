@@ -5,6 +5,10 @@ on:
   push:
     branches: [main]
 
+# Least privilege: no job writes to the repository.
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -12,6 +16,7 @@ concurrency:
 jobs:
   checks:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -39,6 +44,7 @@ jobs:
   integration:
     # Testcontainers suites kept in the hackathon (Tech Design §1.1).
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: checks
     steps:
       - uses: actions/checkout@v4
@@ -53,20 +59,23 @@ jobs:
   contract:
     # Postman contract tests for P0 endpoints (Tech Design §1.1, §16).
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: checks
     services:
       postgres:
-        image: postgis/postgis:17-3.5 # amd64 runners; locally infra/postgis builds a multi-arch image
+        # PostgreSQL 17 + PostGIS 3, the same majors as infra/postgis (postgres:17 + postgresql-17-postgis-3) used locally
+        # and on the demo host. amd64 runners only; infra/postgis is multi-arch.
+        image: postgis/postgis:17-3.5
         env: { POSTGRES_USER: terrasight, POSTGRES_PASSWORD: terrasight, POSTGRES_DB: terrasight }
         ports: ["5432:5432"]
         options: --health-cmd "pg_isready -U terrasight" --health-interval 5s --health-retries 20
       rabbitmq:
-        image: rabbitmq:4-management-alpine
+        image: rabbitmq:4.1-management-alpine # same line as infra/docker-compose.yml and infra/prod
         ports: ["5672:5672"]
       # Same as the local stack: rate limits run at full rate in Redis. Without it the in-process
       # fallback halves them (RFC §5.2) and the auth requests in the collection hit 429.
       redis:
-        image: redis:7-alpine
+        image: redis:8-alpine # same as infra/docker-compose.yml and infra/prod
         ports: ["6379:6379"]
     env:
       DATABASE_URL: postgresql://terrasight:terrasight@localhost:5432/terrasight
@@ -92,8 +101,87 @@ jobs:
         run: |
           (cd apps/api && node dist/main.js > /tmp/api.log 2>&1 &)
           for i in $(seq 1 30); do curl -sf localhost:4000/readyz && break; sleep 1; done
-      - name: Install Postman CLI
-        run: curl -o- "https://dl-cli.pstmn.io/install/linux64.sh" | sh
+      # Pinned release + checksum instead of the moving "latest" install script.
+      - name: Install Postman CLI (pinned)
+        env:
+          POSTMAN_CLI_VERSION: "1.73.0"
+          POSTMAN_CLI_SHA256: 8f95dfcfc113a7af796783f88e19de26cc7606c9438b414e8cc485199b205817
+        run: |
+          curl -fsSL -o /tmp/postman-cli.tgz "https://dl-cli.pstmn.io/download/version/${POSTMAN_CLI_VERSION}/linux64"
+          echo "${POSTMAN_CLI_SHA256}  /tmp/postman-cli.tgz" | sha256sum -c -
+          sudo mkdir -p /usr/local/lib/postman-cli
+          sudo tar -xzf /tmp/postman-cli.tgz -C /usr/local/lib/postman-cli
+          sudo ln -sf /usr/local/lib/postman-cli/postman-cli /usr/local/bin/postman
+          postman --version
       - run: pnpm --filter @terrasight/api test:contract
       - if: failure()
         run: cat /tmp/api.log
+
+  docker-build:
+    # Both images must keep building (multi-stage, non-root, standalone web). No push.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: checks
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build api image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/api.Dockerfile
+          push: false
+          tags: terrasight-api:ci
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,scope=api,mode=max
+      - name: Build migrate image (api.Dockerfile --target migrate)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/api.Dockerfile
+          target: migrate
+          push: false
+          tags: terrasight-api-migrate:ci
+          cache-from: type=gha,scope=api
+      - name: Build web image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/web.Dockerfile
+          push: false
+          tags: terrasight-web:ci
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,scope=web,mode=max
+
+  audit:
+    # Known-vulnerable production dependencies. Non-blocking while the existing findings are triaged:
+    # the step shows as failed (a warning on the run) but does not fail the pipeline. Drop continue-on-error once clean.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - name: pnpm audit (production, high and above)
+        continue-on-error: true
+        run: pnpm audit --prod --audit-level high
+
+  secrets-scan:
+    # Secret scan over the full history; blocking. Binary pinned by version and checksum.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        env:
+          GITLEAKS_VERSION: "8.30.1"
+          GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+        run: |
+          curl -fsSL -o /tmp/gitleaks.tgz "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  /tmp/gitleaks.tgz" | sha256sum -c -
+          tar -xzf /tmp/gitleaks.tgz -C /tmp gitleaks
+          /tmp/gitleaks detect --source . --redact --verbose
