@@ -53,6 +53,8 @@ export interface RecView {
     accessed?: string | null;
     type?: string;
     quote?: string | null;
+    series?: Array<{ date: string; dd: number; forecast?: boolean }>;
+    stages?: Array<{ name: string; dd: number }>;
   }>;
   unknowns: string[];
   text: { title: Localised; action: Localised; why: Localised; scout: Localised | null };
@@ -155,6 +157,90 @@ function useThresholdValue() {
   };
 }
 
+/** Accumulated heat from the degree-day evaluator's own series, with the threshold window (stage thresholds). */
+function HeatChart({
+  series,
+  stages,
+  alt,
+  unit,
+  fmt,
+  legend,
+}: {
+  series: Array<{ date: string; dd: number; forecast?: boolean }>;
+  stages: Array<{ name: string; dd: number }>;
+  alt: string;
+  unit: string;
+  fmt: (iso: string) => string;
+  legend: { observed: string; forecast: string; window: string };
+}) {
+  const W = 600;
+  const H = 200;
+  const pad = { l: 44, r: 12, t: 12, b: 28 };
+  const lo = stages.length ? Math.min(...stages.map((s) => s.dd)) : 0;
+  const hi = stages.length ? Math.max(...stages.map((s) => s.dd)) : 0;
+  const yMax = Math.max(hi, ...series.map((p) => p.dd), 1) * 1.1;
+  const x = (i: number) => pad.l + (i / Math.max(series.length - 1, 1)) * (W - pad.l - pad.r);
+  const y = (v: number) => H - pad.b - (v / yMax) * (H - pad.t - pad.b);
+  const pts = (list: Array<[number, number]>) => list.map(([i, v]) => `${x(i)},${y(v)}`).join(" ");
+  const firstFc = series.findIndex((p) => p.forecast);
+  const obsEnd = firstFc === -1 ? series.length : firstFc;
+  const observed = series.slice(0, obsEnd).map((p, i): [number, number] => [i, p.dd]);
+  const forecast =
+    firstFc === -1
+      ? []
+      : series.slice(Math.max(firstFc - 1, 0)).map((p, i): [number, number] => [Math.max(firstFc - 1, 0) + i, p.dd]);
+  const ticks = [0, Math.floor((series.length - 1) / 2), series.length - 1];
+  return (
+    <figure className="mt-3">
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={alt} className="h-auto w-full max-w-[600px]">
+        <rect
+          x={pad.l}
+          y={y(hi)}
+          width={W - pad.l - pad.r}
+          height={Math.max(y(lo) - y(hi), 2)}
+          className="fill-week"
+          fillOpacity={0.2}
+        />
+        <line x1={pad.l} x2={W - pad.r} y1={H - pad.b} y2={H - pad.b} className="stroke-line-strong" />
+        {[lo, hi].map((v, i) => (
+          <text key={i} x={pad.l - 6} y={y(v) + 4} textAnchor="end" className="fill-ink-2 text-[11px]">
+            {Math.round(v)}
+          </text>
+        ))}
+        {observed.length > 1 && (
+          <polyline points={pts(observed)} fill="none" className="stroke-ink" strokeWidth="2.5" />
+        )}
+        {forecast.length > 1 && (
+          <polyline
+            points={pts(forecast)}
+            fill="none"
+            className="stroke-ink"
+            strokeWidth="2.5"
+            strokeDasharray="5 4"
+          />
+        )}
+        {ticks.map((i) => (
+          <text
+            key={i}
+            x={x(i)}
+            y={H - 8}
+            textAnchor={i === 0 ? "start" : i === series.length - 1 ? "end" : "middle"}
+            className="fill-ink-2 text-[11px]"
+          >
+            {fmt(series[i]!.date)}
+          </text>
+        ))}
+      </svg>
+      <figcaption className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-small text-ink-2">
+        <span>{legend.observed}</span>
+        {firstFc !== -1 && <span>{legend.forecast}</span>}
+        <span>{legend.window}</span>
+        <span className="sr-only">{unit}</span>
+      </figcaption>
+    </figure>
+  );
+}
+
 const LEVEL_TONE = {
   high: "text-urgent",
   moderate: "text-week",
@@ -189,6 +275,7 @@ export function RecommendationClient({
     initialData: initial,
   });
   const [editing, setEditing] = useState(false);
+  const [note, setNote] = useState("");
   const router = useRouter();
   async function startCheck() {
     const task = await api<{ id: string }>(
@@ -214,23 +301,56 @@ export function RecommendationClient({
       hour: "2-digit",
       minute: "2-digit",
     }).format(new Date(iso));
+  const ISO_RE = /^\d{4}-\d{2}-\d{2}$/;
+  const isoOrText = (v: string) => (ISO_RE.test(v) ? date(v) : v);
   const label = (id: string) => (t.has(`kn_${id}`) ? t(`kn_${id}`) : id);
-  const inputs = r.evidence.filter((e) => e.kind !== "citation");
-  const citations = r.evidence.filter((e) => e.kind === "citation");
+  const evidence = r.evidence ?? [];
+  const inputs = evidence.filter((e) => e.kind !== "citation");
+  const citations = evidence.filter((e) => e.kind === "citation");
+  const unknowns = r.unknowns ?? [];
   const short = (src?: string) => (src ? src.split(" (")[0]!.split(";")[0]! : undefined);
-  const stamp = short(inputs[0]?.source);
+  /** Short source chip: "POWER · 2026-11-14", "CDL 2023–2026". */
+  const chip = (e?: RecView["evidence"][number]) => {
+    const s = e?.source;
+    if (!s) return undefined;
+    if (/POWER/.test(s)) return `POWER${e.to ? ` · ${e.to}` : ""}`;
+    if (/Crop history/i.test(s)) return `CDL ${e.from ?? ""}–${e.to ?? ""}`;
+    if (/Sentinel/i.test(s)) return `Sentinel-2${e.to ? ` · ${e.to}` : ""}`;
+    if (/Open-Meteo/i.test(s)) return "Open-Meteo";
+    return short(s)?.slice(0, 28);
+  };
   const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const crops = r.recentCrops ?? [];
   const hostSeasons = crops.filter((c) => r.pest?.hostCrops.includes(c.crop)).length;
-  const factors: Factor[] = r.keyNumbers.map((k) => ({
-    label: label(k.id),
-    value: `${k.value}${k.unit && k.unit !== "seasons" ? ` ${k.unit}` : ""}`,
-    weight: k.weight,
-    ...(stamp ? { source: stamp } : {}),
-  }));
+  const sourceFor = (id: string) => {
+    const re = /^(hostSeasons|lastCrop)/.test(id)
+      ? /Crop history/i
+      : /^(degree|autumn|daysSinceEmergence|frost|daysUntilFrost)/.test(id)
+        ? /POWER|Open-Meteo/
+        : null;
+    return chip((re && inputs.find((e) => re.test(e.source ?? ""))) || inputs[0]);
+  };
+  const factors: Factor[] = (r.keyNumbers ?? []).map((k) => {
+    const num = typeof k.value === "number" ? k.value : Number(k.value);
+    const source = sourceFor(k.id);
+    const tail = source ? { source } : {};
+    if (t.has(`knS_${k.id}`) && k.value !== "" && k.value !== "—" && (Number.isFinite(num) || ISO_RE.test(String(k.value))))
+      return {
+        label: t(`knS_${k.id}`, { n: Number.isFinite(num) ? num : 0, v: isoOrText(String(k.value)) }),
+        weight: k.weight,
+        ...tail,
+      };
+    return {
+      label: label(k.id),
+      value: `${isoOrText(String(k.value))}${k.unit && k.unit !== "seasons" ? ` ${k.unit}` : ""}`,
+      weight: k.weight,
+      ...tail,
+    };
+  });
+  const heat = inputs.find((e) => (e.series?.length ?? 0) > 1);
 
-  async function act(action: "accept" | "snooze" | "dismiss" | "undo") {
-    const next = await api<RecView>(`${base}/${action}`, { body: {} });
+  async function act(action: "accept" | "snooze" | "dismiss" | "undo", note?: string) {
+    const next = await api<RecView>(`${base}/${action}`, { body: note ? { note } : {} });
     client.setQueryData(key, { ...r, ...next });
     void client.invalidateQueries({ queryKey: ["brief", workspaceId] });
     if (next.undoUntil)
@@ -272,10 +392,16 @@ export function RecommendationClient({
   return (
     <div className="grid gap-8 xl:grid-cols-[1fr_380px]">
       <div className="flex min-w-0 flex-col gap-6">
-        <Link href="/" className="flex w-fit items-center gap-1 text-body text-ink-2 hover:text-ink">
-          <ArrowLeft aria-hidden className="size-4" />
-          {r9("back")}
-        </Link>
+        <nav aria-label="breadcrumb" className="flex w-fit items-center gap-2 text-body text-ink-2">
+          <Link href="/" className="flex items-center gap-1 hover:text-ink">
+            <ArrowLeft aria-hidden className="size-4" />
+            {r9("back")}
+          </Link>
+          <span aria-hidden>/</span>
+          <span aria-current="page" className="text-ink">
+            {r9("crumb")}
+          </span>
+        </nav>
         <div className="flex flex-wrap gap-2">
           {r.deadline && (
             <Chip tone={r.planning ? "info" : r.irreversible ? "urgent" : "week"} icon={<Calendar />}>
@@ -329,8 +455,8 @@ export function RecommendationClient({
           ) : (
             canAct &&
             r.status === "open" && (
-              <div className="flex flex-wrap items-center gap-3">
-                <Button icon={<Check />} onClick={() => void act("accept")}>
+              <div className="flex flex-wrap items-center gap-2 md:flex-nowrap">
+                <Button icon={<Check />} onClick={() => void act("accept", note.trim() || undefined)}>
                   {r9("accept")}
                 </Button>
                 <Button variant="outline" onClick={() => void act("snooze")}>
@@ -338,7 +464,7 @@ export function RecommendationClient({
                 </Button>
                 <Link
                   href={`/fields/${r.fieldId}`}
-                  className="focus-ring inline-flex min-h-tap items-center gap-2 rounded-btn border border-line-strong px-4 text-body font-semibold text-ink"
+                  className="focus-ring inline-flex min-h-tap items-center gap-2 rounded-btn border border-line-strong px-3 text-body font-semibold whitespace-nowrap text-ink"
                 >
                   <RefreshCw aria-hidden className="size-4" strokeWidth={1.7} />
                   {r9("compare")}
@@ -399,7 +525,7 @@ export function RecommendationClient({
                 <Step key={i} n={i + 1 + (crops.length > 0 ? 1 : 0)} title={short(e.source) ?? "—"}>
                   <p className="text-body text-ink-2">
                     {[
-                      e.from ? `${e.from}${e.to ? ` → ${e.to}` : ""}` : null,
+                      e.from ? `${isoOrText(e.from)}${e.to ? ` → ${isoOrText(e.to)}` : ""}` : null,
                       e.value !== undefined && !UUID_RE.test(String(e.value))
                         ? `${e.value}${e.unit ? ` ${e.unit}` : ""}`
                         : null,
@@ -410,6 +536,36 @@ export function RecommendationClient({
                   </p>
                   {e.source && e.source !== short(e.source) && (
                     <p className="mt-1 text-small text-ink-3">{e.source}</p>
+                  )}
+                  {e === heat && heat.series && (
+                    <>
+                      <p className="mt-3 text-small font-semibold text-ink">
+                        {t("rcChartTitle", { unit: heat.unit ?? "°C·d" })}
+                      </p>
+                      <HeatChart
+                        series={heat.series}
+                        stages={heat.stages ?? []}
+                        unit={heat.unit ?? "°C·d"}
+                        fmt={date}
+                        alt={t("rcChartAlt", {
+                          from: date(heat.series[0]!.date),
+                          to: date(heat.series.at(-1)!.date),
+                          now: String(heat.value ?? "—"),
+                          unit: heat.unit ?? "°C·d",
+                          a: Math.round(Math.min(...(heat.stages ?? [{ dd: 0 }]).map((s) => s.dd))),
+                          b: Math.round(Math.max(...(heat.stages ?? [{ dd: 0 }]).map((s) => s.dd))),
+                        })}
+                        legend={{
+                          observed: t("rcChartObserved"),
+                          forecast: t("rcChartForecast"),
+                          window: t("rcChartWindow", {
+                            a: Math.round(Math.min(...(heat.stages ?? [{ dd: 0 }]).map((s) => s.dd))),
+                            b: Math.round(Math.max(...(heat.stages ?? [{ dd: 0 }]).map((s) => s.dd))),
+                            unit: heat.unit ?? "°C·d",
+                          }),
+                        }}
+                      />
+                    </>
                   )}
                 </Step>
               ))}
@@ -423,9 +579,9 @@ export function RecommendationClient({
           </div>
           <div>
             <h3 className="mb-2 text-body font-semibold text-ink">{t("recUnknown")}</h3>
-            {r.unknowns.length ? (
+            {unknowns.length ? (
               <ul className="list-disc pl-5 text-small text-ink-2">
-                {r.unknowns.map((u) => (
+                {unknowns.map((u) => (
                   <li key={u}>{u}</li>
                 ))}
               </ul>
@@ -439,8 +595,11 @@ export function RecommendationClient({
           <h2 className="text-h2 text-ink">{t("rcOptions")}</h2>
           <div className="grid gap-4 md:grid-cols-3">
             <article className="flex flex-col gap-3 rounded-card border-2 border-ink bg-surface p-5">
-              <Chip tone="neutral">{t("rcOptRec")}</Chip>
-              <h3 className="text-body font-semibold text-ink">{r.text.title[locale]}</h3>
+              <div className="flex items-center gap-2">
+                <Sparkles aria-hidden className="size-5 text-ink" strokeWidth={1.7} />
+                <Chip tone="neutral">{t("rcOptRec")}</Chip>
+              </div>
+              <h3 className="text-body font-bold text-ink">{r.text.title[locale]}</h3>
               <p className="text-small text-ink-2">{r.text.action[locale]}</p>
               {r.planning && (
                 <Link
@@ -509,10 +668,31 @@ export function RecommendationClient({
         <section className="rounded-card border border-line bg-surface p-5">
           <h2 className="text-body font-semibold text-ink">{t("recMsgTitle")}</h2>
           <p className="mt-3 rounded-input bg-surface-2 p-4 text-body text-ink">{message}</p>
+          <p className="mt-3 flex items-center gap-1.5 text-small font-semibold text-ok">
+            <ShieldCheck aria-hidden className="size-4" strokeWidth={1.7} />
+            {r9("msg_ok")}
+          </p>
           {canAct && !editing && (
-            <Button variant="outline" icon={<Pencil />} className="mt-3" onClick={() => setEditing(true)}>
-              {t("recEdit")}
-            </Button>
+            <div className="mt-3 flex flex-col gap-3">
+              {r.status === "open" && !r.undoUntil && (
+                <TextField
+                  label={t("rcNote")}
+                  name="note"
+                  value={note}
+                  onChange={(e) => setNote(e.currentTarget.value)}
+                />
+              )}
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" icon={<Pencil />} onClick={() => setEditing(true)}>
+                  {r9("edit")}
+                </Button>
+                {r.status === "open" && !r.undoUntil && (
+                  <Button icon={<Check />} onClick={() => void act("accept", note.trim() || undefined)}>
+                    {r9("to_report")}
+                  </Button>
+                )}
+              </div>
+            </div>
           )}
           {editing && (
             <form onSubmit={(e) => void saveText(e)} className="mt-3 flex flex-col gap-3">
@@ -557,12 +737,6 @@ export function RecommendationClient({
                     {c.publisher && ` · ${c.publisher}`}
                     {c.type === "calibration" && ` · ${t("recCalibration")}`}
                   </span>
-                  {c.quote && <span className="block italic">“{c.quote}”</span>}
-                  {c.accessed && (
-                    <span className="block text-micro text-ink-3">
-                      {t("recAccessed", { date: c.accessed })}
-                    </span>
-                  )}
                 </li>
               ))}
             </ul>
@@ -574,6 +748,8 @@ export function RecommendationClient({
             {[...new Set(inputs.map((e) => e.source).filter(Boolean))].map((s) => (
               <li key={s}>{s}</li>
             ))}
+            {crops.length > 0 && <li>USDA Cropland Data Layer</li>}
+            {r.pest && <li>{t("rcSrcLibrary", { id: r.subject })}</li>}
           </ul>
           <p className="mt-3 flex items-center gap-1.5 text-micro text-ink-3">
             <ShieldCheck aria-hidden className="size-3.5" strokeWidth={1.7} />

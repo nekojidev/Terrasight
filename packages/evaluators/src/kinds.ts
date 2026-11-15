@@ -107,6 +107,7 @@ export function degreeDays(
   let projected = 0;
   let missing = 0;
   let lastForecastDay = 0;
+  const series: Array<[string, number, boolean]> = [];
   const horizon = 7; // evaluators use forecast days 1–7 only (RFC §13)
   for (const w of inp.weather) {
     if (w.date < biofix) continue;
@@ -115,6 +116,7 @@ export function degreeDays(
       if (w.date <= asOf || (w.forecastDay ?? 99) > horizon) continue;
       if (t !== null) {
         projected += Math.max(0, t - base);
+        series.push([w.date, Math.round(observed + projected), true]);
         lastForecastDay = Math.max(lastForecastDay, w.forecastDay ?? 0);
       }
       continue;
@@ -122,6 +124,7 @@ export function degreeDays(
     if (w.date > asOf) continue;
     if (t === null) missing += 1;
     else observed += Math.max(0, t - base);
+    series.push([w.date, Math.round(observed), false]);
   }
   const span = daysBetween(biofix, asOf) + 1;
   if (missing > span * 0.2)
@@ -145,6 +148,8 @@ export function degreeDays(
     to: asOf,
     value: now,
     unit: "°C·d",
+    series: series.map(([date, dd, forecast]) => ({ date, dd, ...(forecast ? { forecast: true as const } : {}) })),
+    stages: sorted.map((x) => ({ name: x.name, dd: x.dd! })),
   });
   if (now >= top.dd!) r.level = "high";
   else if (now >= first.dd!) r.level = "moderate";
