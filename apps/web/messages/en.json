@@ -94,7 +94,9 @@
     "errAgName": "Enter the agronomist's name.",
     "errAgEmail": "Enter a valid email for the agronomist.",
     "saveFail": "Couldn't save the company",
-    "inviteFail": "Couldn't create the link"
+    "inviteFail": "Couldn't create the link",
+    "tzLine": "Time zone: {tz}. Fields are checked every morning at 06:00.",
+    "tzChange": "Change"
   },
   "EmptyHome": {
     "lang_group": "Interface language",
@@ -1375,7 +1377,21 @@
     "zz5_format_geojson": "GeoJSON",
     "zz5_format_isoxml": "ISOXML (.zip)",
     "zz5_fill": "Enter a rate for every zone to download.",
-    "zz5_isoxmlUnit": "ISOXML supports kg/ha and l/ha; use Shapefile or GeoJSON for seeds."
+    "zz5_isoxmlUnit": "ISOXML supports kg/ha and l/ha; use Shapefile or GeoJSON for seeds.",
+    "ww6_best": "Best day for {op} this week: {day}, {good} of {total} {total, plural, one {field} other {fields}}",
+    "ww6_bestNone": "No good day for {op} this week on any field.",
+    "ww6_opFor_spraying": "spraying",
+    "ww6_opFor_sowing": "sowing",
+    "ww6_opFor_traffic": "harvest and field traffic",
+    "ww6_opFor_fertiliser": "fertiliser",
+    "ww6_unknownRow": "No verdict yet: {reason}",
+    "ww6_unknownReason": "no thresholds checked against a source for this operation yet.",
+    "ww6_attribution": "Weather data by Open-Meteo.com (CC BY 4.0)",
+    "ww6_opShort_traffic": "Harvest / traffic",
+    "zl6_yesterday": "Yesterday",
+    "zz6_emptyTitle": "No zones yet",
+    "zz6_emptyBody": "Zones show where this field is always strong, always weak, or depends on the year. We read its satellite images from past seasons: 1 to 2 minutes, safe to leave.",
+    "zz6_emptyReadOnly": "Zones are not built yet. The Agronomist builds them from the field's satellite images."
   },
   "Scout": {
     "lang_group": "Interface language",
@@ -1930,7 +1946,10 @@
     "currencyHeading": "Currency",
     "exportSection": "Data export",
     "cropFallback": "Other crop",
-    "pricesNotice": "Rows with price and costs left empty are removed when you save."
+    "pricesNotice": "Rows with price and costs left empty are removed when you save.",
+    "pricesHowTitle": "How prices are used",
+    "setUnitsNote": "Default for new fields and reports. Each screen shows a field in the units of its own country.",
+    "setDataTitle": "Export your data"
   },
   "Trust": {
     "title": "How far can you trust this",

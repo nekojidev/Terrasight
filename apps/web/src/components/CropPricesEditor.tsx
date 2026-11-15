@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, Segmented, SelectField, Surface, useToast } from "@terrasight/ui";
+import { Button, Disclosure, Segmented, SelectField, Surface, useToast } from "@terrasight/ui";
 import { AlertCircle } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { useId, useState } from "react";
@@ -248,13 +248,18 @@ function Table({
             <span className="font-semibold">{t("cpCurrency")}:</span> {data.currency}
           </p>
         )}
-        <p className="max-w-prose text-small text-ink-2">
-          {t("cpCurrencyNote")} {!data.canChangeCurrency && t("cpCurrencyOwner")}
-        </p>
+        {!data.canChangeCurrency && (
+          <p className="max-w-prose text-small text-ink-2">{t("cpCurrencyOwner")}</p>
+        )}
       </div>
       {other > 0 && <p className="text-small text-week">{t("cpOtherCurrency", { n: other })}</p>}
-      <p className="text-small text-ink-2">{t("cpHelp")}</p>
-      <p className="text-small text-ink-2">{s("pricesAgronomyOnly")}</p>
+      <Disclosure summary={s("pricesHowTitle")}>
+        <div className="flex flex-col gap-2 pb-2 text-small text-ink-2">
+          <p>{t("cpCurrencyNote")}</p>
+          <p>{t("cpHelp")}</p>
+          <p>{s("pricesAgronomyOnly")}</p>
+        </div>
+      </Disclosure>
 
       {list.length === 0 ? (
         <p className="text-small text-ink-2">{t("cpEmpty")}</p>

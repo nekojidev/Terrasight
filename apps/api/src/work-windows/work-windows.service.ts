@@ -23,11 +23,14 @@ interface FieldRow {
   alias_no: number;
   lat: number;
   lon: number;
+  country: string | null;
 }
 
 export interface FieldWorkWindows {
   fieldId: string;
   name: string;
+  /** ISO country of the field: screens show units by it. */
+  country: string | null;
   /** The crop the sowing windows are for (plan for the coming season, else the latest crop). */
   sowingCrop: string | null;
   /** false = no hourly forecast could be fetched or read from cache. */
@@ -82,7 +85,7 @@ export class WorkWindowsService {
 
   private fieldRows(workspaceId: string) {
     return this.prisma.system.$queryRaw<FieldRow[]>`
-      SELECT id, name, alias_no, ST_Y(centroid) AS lat, ST_X(centroid) AS lon
+      SELECT id, name, alias_no, ST_Y(centroid) AS lat, ST_X(centroid) AS lon, country
       FROM fields WHERE workspace_id = ${workspaceId}::uuid AND archived_at IS NULL ORDER BY alias_no`;
   }
 
@@ -135,6 +138,7 @@ export class WorkWindowsService {
       return {
         fieldId: f.id,
         name: f.name,
+        country: f.country,
         sowingCrop: crop,
         available: false,
         forecast: null,
@@ -147,6 +151,7 @@ export class WorkWindowsService {
     return {
       fieldId: f.id,
       name: f.name,
+      country: f.country,
       sowingCrop: crop,
       available: true,
       forecast: { origin: h.origin, ageHours: h.ageHours, attribution: h.forecast.attribution },

@@ -43,6 +43,7 @@ export interface OperationWindows {
 export interface FieldWindows {
   fieldId: string;
   name: string;
+  country?: string | null;
   sowingCrop: string | null;
   available: boolean;
   forecast: { origin: "live" | "cache" | "stale"; ageHours: number; attribution: string } | null;
@@ -147,5 +148,57 @@ export function formatCondition<P extends string>(
         v = n(val);
     }
   }
-  return { key: `${prefix}_${l.factor}` as `${P}_${Factor}`, v, h: l.factor === "rain_soon" && val !== null ? n(val, 0) : "" };
+  return {
+    key: `${prefix}_${l.factor}` as `${P}_${Factor}`,
+    v,
+    h: l.factor === "rain_soon" && val !== null ? n(val, 0) : "",
+  };
+}
+
+export interface BestDay {
+  date: string;
+  /** Index of the day in the week (0 = today). */
+  index: number;
+  /** Fields with a "good" verdict that day. */
+  good: number;
+  /** Fields that have a verdict for the operation (no forecast or only "no verdict yet" is not counted). */
+  total: number;
+}
+
+/** True when the field shows a real verdict for the operation on at least one day. */
+export function hasVerdict(f: FieldWindows, op: Operation): boolean {
+  const o = f.operations.find((x) => x.operation === op);
+  return f.available && !!o?.applicable && o.days.some((d) => d.status !== "unknown");
+}
+
+/**
+ * The day of the week with the most fields in "good" condition for one operation (ties: the earlier day).
+ * Computed from the matrix data only; null when no field has a verdict or no day is good anywhere.
+ */
+export function bestDay(fields: FieldWindows[], op: Operation): BestDay | null {
+  const rated = fields.filter((f) => hasVerdict(f, op));
+  if (rated.length === 0) return null;
+  const n = Math.max(...rated.map((f) => f.operations.find((x) => x.operation === op)!.days.length));
+  let best: BestDay | null = null;
+  for (let i = 0; i < n; i++) {
+    let good = 0;
+    let date = "";
+    for (const f of rated) {
+      const d = f.operations.find((x) => x.operation === op)!.days[i];
+      if (!d) continue;
+      date = date || d.date;
+      if (d.status === "good") good++;
+    }
+    if (good > 0 && date && (!best || good > best.good)) best = { date, index: i, good, total: rated.length };
+  }
+  return best;
+}
+
+/** Units follow the field's country (US = imperial); a field without a country uses the company default. */
+export function unitsForCountry(
+  country: string | null | undefined,
+  fallback: "metric" | "imperial",
+): "metric" | "imperial" {
+  if (!country) return fallback;
+  return country.toUpperCase() === "US" ? "imperial" : "metric";
 }

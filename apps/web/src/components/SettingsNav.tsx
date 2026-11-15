@@ -19,14 +19,14 @@ export async function SettingsNav({
   return (
     <nav
       aria-label={t("navSettings")}
-      className="mb-6 flex w-fit max-w-full gap-1 overflow-x-auto rounded-input bg-muted p-1"
+      className="mb-6 grid w-full grid-cols-2 gap-1 rounded-input bg-muted p-1 sm:flex sm:w-fit sm:max-w-full"
     >
       {tabs.map((tab) => (
         <Link
           key={tab.id}
           href={tab.href}
           aria-current={tab.id === active ? "page" : undefined}
-          className={`focus-ring inline-flex min-h-tap items-center rounded-btn px-3 text-body font-semibold whitespace-nowrap sm:px-4 ${tab.id === active ? "bg-ink text-surface" : "text-ink hover:bg-surface"}`}
+          className={`focus-ring inline-flex min-h-tap items-center justify-center rounded-btn px-3 text-center text-body font-semibold sm:px-4 sm:whitespace-nowrap ${tab.id === active ? "bg-ink text-surface" : "text-ink hover:bg-surface"}`}
         >
           {tab.label}
         </Link>
