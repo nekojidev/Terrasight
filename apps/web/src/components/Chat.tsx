@@ -2,12 +2,14 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Kicker, Surface } from "@terrasight/ui";
-import { ArrowDown, RotateCcw, Send, ShieldAlert, ShieldCheck, Sparkles, TriangleAlert } from "lucide-react";
+import { ArrowDown, ArrowRight, ChevronDown, RotateCcw, Send, ShieldAlert, ShieldCheck, Sparkles, TriangleAlert } from "lucide-react";
+import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { api, ApiError } from "@/lib/api";
 import { QueryState } from "@/components/QueryState";
-import { displayText, restoreAliases } from "@/lib/assistant-text";
+import { evidenceLink } from "@/lib/assistant-context";
+import { answerLang, displayText, restoreAliases, type Aliases } from "@/lib/assistant-text";
 import { ToolCard } from "@/components/ToolCard";
 import { connectStream } from "@/lib/events";
 import { useActionToast } from "@/lib/useActionToast";
@@ -21,7 +23,7 @@ interface Message {
   numbersChecked: number;
   card: Array<{ tool: string; result: unknown }> | null;
   error: string | null;
-  tools: Array<{ tool: string }>;
+  tools: Array<{ tool: string; args?: unknown; result?: unknown }>;
 }
 interface Conversation {
   id: string;
@@ -46,6 +48,49 @@ function Typing({ label }: { label: string }) {
   );
 }
 
+/**
+ * The tool results behind one answer, read only when the user opens "Show the numbers" (they can be large, so the
+ * thread itself does not carry them). Three rows per card; the rest behind "All rows".
+ */
+function Evidence({
+  workspaceId,
+  conversationId,
+  message,
+  aliases,
+  lang,
+}: {
+  workspaceId: string;
+  conversationId: string;
+  message: Message;
+  aliases: Aliases;
+  lang: "en" | "uk";
+}) {
+  const a = useTranslations("Assistant");
+  const withCard = message.card && message.card.length > 0;
+  const q = useQuery({
+    queryKey: ["conversation-tools", workspaceId, conversationId, message.id],
+    queryFn: () => api<Conversation>(`/api/w/${workspaceId}/conversations/${conversationId}?include=tools`),
+    enabled: !withCard,
+    staleTime: 60_000,
+  });
+  const cards: Array<{ tool: string; result: unknown }> =
+    (withCard ? message.card : null) ??
+    (q.data?.messages
+      .find((m) => m.id === message.id)
+      ?.tools.filter((t) => t.result && !(typeof t.result === "object" && "error" in (t.result as object)))
+      .map((t) => ({ tool: t.tool, result: t.result })) ??
+      []);
+  return (
+    <section aria-label={a("evidenceTitle")} className="flex min-w-0 flex-col gap-3">
+      {!withCard && q.isPending && <p className="text-caption text-ink-2">{a("evidenceLoading")}</p>}
+      {!withCard && !q.isPending && cards.length === 0 && <p className="text-caption text-ink-2">{a("evidenceNone")}</p>}
+      {cards.map((c, ci) => (
+        <ToolCard key={ci} tool={c.tool} result={c.result} aliases={aliases} lang={lang} answer={message.text} />
+      ))}
+    </section>
+  );
+}
+
 /** Conversation with the assistant (design 14): checked sentences stream in, progress shows while tools run. */
 export function Chat({
   workspaceId,
@@ -55,6 +100,8 @@ export function Chat({
   suggestions,
   onMissing,
   autoFocus = false,
+  placeholder,
+  prefill,
 }: {
   workspaceId: string;
   conversationId: string;
@@ -65,6 +112,10 @@ export function Chat({
   /** The conversation no longer exists (deleted or expired): the owner of the id forgets it. */
   onMissing?: () => void;
   autoFocus?: boolean;
+  /** The composer's hint; defaults to the company-wide one. A field panel passes "Ask about {field}…". */
+  placeholder?: string;
+  /** A prepared question: placed in the composer and focused, never sent. A new `nonce` places it again. */
+  prefill?: { text: string; nonce: number } | null;
 }) {
   const t = useTranslations("App");
   const a = useTranslations("Assistant");
@@ -151,6 +202,31 @@ export function Chat({
     if (autoFocus) input.current?.focus();
   }, [autoFocus, conversationId]);
 
+  // A prepared question ("Ask why", a suggestion, an Ask link): visible in the composer, the user presses Send.
+  const placed = useRef<number | null>(null);
+  useEffect(() => {
+    if (!prefill || placed.current === prefill.nonce) return;
+    placed.current = prefill.nonce;
+    setText(prefill.text);
+    requestAnimationFrame(() => {
+      const el = input.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(el.value.length, el.value.length);
+    });
+  }, [prefill]);
+  const prepare = (q: string) => {
+    setText(q);
+    input.current?.focus();
+  };
+  const [open, setOpen] = useState<Set<string>>(new Set());
+  const toggle = (id: string) =>
+    setOpen((s) => {
+      const n = new Set(s);
+      if (!n.delete(id)) n.add(id);
+      return n;
+    });
+
   async function ask(q: string) {
     const question = q.trim();
     if (!question || busy) return;
@@ -195,10 +271,12 @@ export function Chat({
 
   const aliases = conv.data?.aliases ?? {};
   const show = (s: string) => displayText(s, aliases, lang);
-  const chips = suggestions ?? [t("aiSugg1"), t("aiSugg2"), t("aiSugg3")];
+  const chips = suggestions ?? [a("sugg.all1"), a("sugg.all2"), a("sugg.all3")];
+  const empty = Boolean(conv.data) && messages.length === 0;
+  const hint = placeholder ?? a("ph");
   return (
     <div
-      className={`flex min-h-0 flex-col ${compact ? "h-[min(560px,70dvh)]" : "h-[max(360px,calc(100dvh-var(--ts-tabbar)-200px))] lg:h-[calc(100dvh-220px)]"}`}
+      className={`flex min-h-0 flex-col ${compact ? "max-h-[min(560px,70dvh)]" : "h-[max(360px,calc(100dvh-var(--ts-tabbar)-200px))] lg:h-[calc(100dvh-220px)]"}`}
     >
       <div className="relative flex min-h-0 flex-1 flex-col">
         <div
@@ -216,7 +294,25 @@ export function Chat({
               {t("errGeneric")}
             </p>
           )}
-          {conv.data && messages.length === 0 && <p className="text-body text-ink-2">{t("aiEmpty")}</p>}
+          {empty && (
+            <div className="flex flex-col gap-3">
+              <Kicker>{a("ask")}</Kicker>
+              <div className="flex flex-col items-start gap-2">
+                {chips.slice(0, 3).map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => prepare(s)}
+                    className="focus-ring flex min-h-tap max-w-full items-center gap-2 rounded-chip bg-muted px-4 py-2 text-left text-small font-semibold text-ink hover:bg-line"
+                  >
+                    <Sparkles aria-hidden className="size-4 shrink-0" strokeWidth={1.7} />
+                    <span className="min-w-0 break-words">{s}</span>
+                  </button>
+                ))}
+              </div>
+              <p className="text-caption text-ink-2">{a("canDo")}</p>
+            </div>
+          )}
           {messages.map((m, i) =>
             m.role === "user" ? (
               <p
@@ -246,7 +342,15 @@ export function Chat({
                     )}
                   </Surface>
                 ) : m.text ? (
-                  <p className="text-body break-words whitespace-pre-wrap text-ink">{show(m.text)}</p>
+                  <>
+                    {/* Dates inside an answer follow the answer's own language; the card and chrome follow the interface. */}
+                    <p className="text-body break-words whitespace-pre-wrap text-ink">
+                      {displayText(m.text, aliases, answerLang(m.text) ?? lang)}
+                    </p>
+                    {answerLang(m.text) && answerLang(m.text) !== lang && (
+                      <p className="text-caption text-ink-3">{answerLang(m.text) === "en" ? a("answeredEn") : a("answeredUk")}</p>
+                    )}
+                  </>
                 ) : (
                   <div className="flex flex-col gap-2 text-body break-words text-ink">
                     {live.length > 0 && <p className="whitespace-pre-wrap">{show(live.join(" "))}</p>}
@@ -260,22 +364,58 @@ export function Chat({
                       {t("aiFallback")}
                     </p>
                     {m.card.map((c, ci) => (
-                      <ToolCard key={ci} tool={c.tool} result={c.result} aliases={aliases} lang={lang} />
+                      <ToolCard key={ci} tool={c.tool} result={c.result} aliases={aliases} lang={lang} answer={m.text} />
                     ))}
                   </div>
                 )}
-                {m.text && !m.fallback && (
-                  <p
-                    className={`flex w-fit items-center gap-1.5 rounded-chip px-3 py-1 text-caption ${m.checked ? "bg-ok-soft text-ok" : "bg-week-soft text-week"}`}
-                  >
-                    {m.checked ? (
-                      <ShieldCheck aria-hidden className="size-4" strokeWidth={1.7} />
-                    ) : (
-                      <ShieldAlert aria-hidden className="size-4" strokeWidth={1.7} />
-                    )}
-                    {m.checked ? t("aiNumbers", { n: m.numbersChecked }) : a("notChecked")}
+                {m.text && !m.fallback && !m.checked && (
+                  <p className="flex w-fit items-center gap-1.5 rounded-chip bg-week-soft px-3 py-1 text-caption text-week">
+                    <ShieldAlert aria-hidden className="size-4" strokeWidth={1.7} />
+                    {a("notChecked")}
                   </p>
                 )}
+                {m.text && !m.fallback && m.checked && m.numbersChecked === 0 && (
+                  <p className="flex w-fit items-center gap-1.5 rounded-chip bg-ok-soft px-3 py-1 text-caption text-ok">
+                    <ShieldCheck aria-hidden className="size-4" strokeWidth={1.7} />
+                    {t("aiNumbers", { n: 0 })}
+                  </p>
+                )}
+                {m.text && !m.fallback && m.checked && m.numbersChecked > 0 && (
+                  <>
+                    <button
+                      type="button"
+                      aria-expanded={open.has(m.id)}
+                      onClick={() => toggle(m.id)}
+                      className="focus-ring flex min-h-tap w-fit items-center gap-1.5 rounded-chip bg-ok-soft px-3 py-1 text-left text-caption text-ok"
+                    >
+                      <ShieldCheck aria-hidden className="size-4 shrink-0" strokeWidth={1.7} />
+                      <span>{t("aiNumbers", { n: m.numbersChecked })}</span>
+                      <span aria-hidden>·</span>
+                      <span className="font-semibold underline">{open.has(m.id) ? a("hideEvidence") : a("showEvidence")}</span>
+                      <ChevronDown
+                        aria-hidden
+                        className={`size-4 shrink-0 ${open.has(m.id) ? "rotate-180" : ""}`}
+                        strokeWidth={1.7}
+                      />
+                    </button>
+                    {open.has(m.id) && (
+                      <Evidence workspaceId={workspaceId} conversationId={conversationId} message={m} aliases={aliases} lang={lang} />
+                    )}
+                  </>
+                )}
+                {m.text && !m.error && (() => {
+                  const link = evidenceLink(m.tools, aliases);
+                  if (!link) return null;
+                  return (
+                    <Link
+                      href={link.href}
+                      className="focus-ring inline-flex min-h-tap w-fit items-center gap-1.5 text-small font-semibold text-ink underline"
+                    >
+                      {link.kind === "recommendation" ? a("openRec") : link.kind === "rotation" ? a("openRotation") : a("openField")}
+                      <ArrowRight aria-hidden className="size-4" strokeWidth={1.7} />
+                    </Link>
+                  );
+                })()}
               </div>
             ),
           )}
@@ -295,7 +435,7 @@ export function Chat({
           </button>
         )}
       </div>
-      {chips.length > 0 && (
+      {chips.length > 0 && !empty && (
         <div className="flex flex-col gap-2 py-3">
           <Kicker>{a("ask")}</Kicker>
           <div className="flex flex-wrap gap-2">
@@ -304,7 +444,7 @@ export function Chat({
                 key={s}
                 type="button"
                 disabled={busy}
-                onClick={() => void ask(s)}
+                onClick={() => prepare(s)}
                 className="focus-ring flex min-h-tap max-w-full items-center gap-1.5 rounded-chip bg-muted px-3 py-1.5 text-left text-caption font-semibold text-ink hover:bg-line disabled:opacity-60"
               >
                 <Sparkles aria-hidden className="size-3.5 shrink-0" strokeWidth={1.7} />
@@ -325,8 +465,8 @@ export function Chat({
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onKeyDown}
           disabled={sending}
-          aria-label={a("ph")}
-          placeholder={a("ph")}
+          aria-label={hint}
+          placeholder={hint}
           maxLength={2000}
           className="max-h-32 min-h-11 flex-1 resize-none bg-transparent px-2 py-2.5 text-body text-ink outline-none placeholder:text-ink-3 disabled:opacity-60 [field-sizing:content]"
         />

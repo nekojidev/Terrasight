@@ -2,8 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BottomSheet, Button, ConfirmDialog, Kicker, Surface } from "@terrasight/ui";
-import { FileText, History, MessageSquare, Play, Plus, RefreshCw, ScanSearch, Trash2, X } from "lucide-react";
-import Link from "next/link";
+import { History, MessageSquare, MoreHorizontal, Play, Plus, ScanSearch, Trash2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -12,7 +11,14 @@ import { QueryState } from "@/components/QueryState";
 import { api } from "@/lib/api";
 import { useActionToast } from "@/lib/useActionToast";
 import { useFormat } from "@/lib/useFormat";
-import { clearActive, latestForFieldPath, readActive, writeActive } from "@/lib/assistant-context";
+import {
+  clearActive,
+  distinctTitles,
+  latestForFieldPath,
+  readActive,
+  suggestionKeys,
+  writeActive,
+} from "@/lib/assistant-context";
 
 interface FieldRow {
   id: string;
@@ -32,13 +38,16 @@ interface Item {
 export function AssistantClient({
   workspaceId,
   fieldCount,
-  context,
+  context: contextProp,
   question,
+  ask,
 }: {
   workspaceId: string;
   fieldCount: number;
   context: { fieldId?: string; recommendationId?: string };
   question?: string;
+  /** A question for the composer (`?ask=`): shown, focused, not sent. */
+  ask?: string;
 }) {
   const t = useTranslations("Assistant");
   const app = useTranslations("App");
@@ -46,6 +55,13 @@ export function AssistantClient({
   const router = useRouter();
   const { fail } = useActionToast();
   const fmt = useFormat();
+  // The address loses ?ask= and ?field= once they are used; the field stays the context of this page.
+  const [context, setContext] = useState(contextProp);
+  useEffect(() => {
+    if (contextProp.fieldId || contextProp.recommendationId) setContext(contextProp);
+  }, [contextProp.fieldId, contextProp.recommendationId]);
+  const [prefill, setPrefill] = useState<{ text: string; nonce: number } | null>(null);
+  const [menuFor, setMenuFor] = useState<string | null>(null);
   const [sheet, setSheet] = useState(false);
   const [noContext, setNoContext] = useState(false);
   const key = ["conversations", workspaceId];
@@ -70,17 +86,22 @@ export function AssistantClient({
   const chatContext = noContext ? {} : hasContext ? context : convField ? { fieldId: convField } : {};
   const fieldName = fields.data?.find((f) => f.id === (chatContext.fieldId ?? ""))?.name;
 
-  /** The chip texts under the thread: about the chat's field when it has one, company-wide otherwise. */
-  const suggestions = useMemo(() => {
-    if (chatContext.fieldId) return [app("faSugg1"), app("faSugg2"), app("faSugg3")];
-    const f = fields.data ?? [];
-    const out = [app("aiSugg1"), app("aiSugg2")];
-    if (f[0]) out.push(t("askRisk", { name: f[0].name }));
-    const x = f[1] ?? f[0];
-    if (x) out.push(t("askCrop", { name: x.name }));
-    return out.slice(0, 4);
-  }, [fields.data, app, t, chatContext.fieldId]);
+  /** The chip texts: about the field, about its recommendation, or company-wide. */
+  const suggestions = useMemo(
+    () => suggestionKeys({ fieldId: chatContext.fieldId, recommendationId: noContext ? undefined : context.recommendationId }).map((k) => t(`sugg.${k}` as never)),
+    [t, chatContext.fieldId, context.recommendationId, noContext],
+  );
 
+  const titles = useMemo(
+    () =>
+      distinctTitles(
+        list.data ?? [],
+        (id) => fields.data?.find((f) => f.id === id)?.name,
+        (iso) => fmt.date(iso, "short"),
+        t("new"),
+      ),
+    [list.data, fields.data, fmt, t],
+  );
   const groups = useMemo(() => {
     const today = fmt.date(new Date(), "full");
     const all = list.data ?? [];
@@ -207,6 +228,19 @@ export function AssistantClient({
       .catch((e) => fail(e, t("sendFail")));
   }, [current, question]);
 
+  // `?ask=`: place the question in the composer once the chat has opened, focus it, never send it.
+  const askedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!ask) {
+      askedFor.current = null;
+      return;
+    }
+    if (!current || askedFor.current === ask) return;
+    askedFor.current = ask;
+    setPrefill({ text: ask, nonce: Date.now() });
+    router.replace("/assistant");
+  }, [current, ask]);
+
   const historyList = (
     <>
       {!list.data && <QueryState query={list} skeletonVariant="rows" what={t("hist")}>{() => null}</QueryState>}
@@ -217,7 +251,7 @@ export function AssistantClient({
           </Kicker>
           <ul className="flex max-h-72 flex-col gap-1 overflow-y-auto">
             {g.rows.map((c) => {
-              const title = c.title ?? t("new");
+              const title = titles.get(c.id) ?? t("new");
               return (
                 <li
                   key={c.id}
@@ -232,15 +266,32 @@ export function AssistantClient({
                     <MessageSquare aria-hidden className="size-4 shrink-0 text-ink-3" strokeWidth={1.7} />
                     <span className={`line-clamp-2 break-words ${current === c.id ? "font-semibold" : ""}`}>{title}</span>
                   </button>
-                  <button
-                    type="button"
-                    aria-label={t("deleteChat", { title })}
-                    title={app("aiDelete")}
-                    onClick={() => setToDelete(c.id)}
-                    className="focus-ring inline-flex size-11 shrink-0 items-center justify-center rounded-btn text-ink-2 hover:text-ink"
-                  >
-                    <Trash2 aria-hidden className="size-4" strokeWidth={1.7} />
-                  </button>
+                  {menuFor === c.id ? (
+                    <button
+                      type="button"
+                      aria-label={t("deleteChat", { title })}
+                      onClick={() => {
+                        setMenuFor(null);
+                        setToDelete(c.id);
+                      }}
+                      onBlur={() => setMenuFor(null)}
+                      autoFocus
+                      className="focus-ring inline-flex min-h-tap shrink-0 items-center gap-1.5 rounded-btn px-3 text-caption font-semibold text-urgent"
+                    >
+                      <Trash2 aria-hidden className="size-4" strokeWidth={1.7} />
+                      {t("deleteShort")}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      aria-label={t("rowMenu")}
+                      aria-expanded={false}
+                      onClick={() => setMenuFor(c.id)}
+                      className="focus-ring inline-flex size-11 shrink-0 items-center justify-center rounded-btn text-ink-3 hover:text-ink"
+                    >
+                      <MoreHorizontal aria-hidden className="size-4" strokeWidth={1.7} />
+                    </button>
+                  )}
                 </li>
               );
             })}
@@ -249,9 +300,6 @@ export function AssistantClient({
       ))}
     </>
   );
-  const linkClass =
-    "focus-ring inline-flex min-h-tap items-center gap-2 rounded-btn border border-line-control px-4 text-body font-semibold text-ink hover:bg-muted";
-
   return (
     <div className="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
       <aside className="hidden flex-col gap-3 lg:flex">
@@ -281,18 +329,6 @@ export function AssistantClient({
               {t("analyzeStarted")}
             </p>
           )}
-          <Link href="/decisions" className={linkClass}>
-            <FileText aria-hidden className="size-4" strokeWidth={1.7} />
-            {t("doDecisions")}
-          </Link>
-          <Link href="/reports" className={linkClass}>
-            <FileText aria-hidden className="size-4" strokeWidth={1.7} />
-            {t("doReport")}
-          </Link>
-          <Link href="/rotation" className={linkClass}>
-            <RefreshCw aria-hidden className="size-4" strokeWidth={1.7} />
-            {t("doRotation")}
-          </Link>
         </div>
       </aside>
       <Surface as="section" pad="sm" className="min-w-0 lg:p-5">
@@ -331,6 +367,8 @@ export function AssistantClient({
             conversationId={current}
             context={chatContext}
             suggestions={suggestions}
+            placeholder={fieldName ? app("faPlaceholder", { name: fieldName }) : undefined}
+            prefill={prefill}
             onMissing={() => forget(current)}
             autoFocus
           />

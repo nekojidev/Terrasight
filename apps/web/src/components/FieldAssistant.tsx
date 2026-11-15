@@ -1,6 +1,5 @@
 "use client";
 
-import { useQueryClient } from "@tanstack/react-query";
 import { Button, Chip, Surface, useToast } from "@terrasight/ui";
 import { Plus, Send, Sparkles } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
@@ -19,19 +18,24 @@ export function FieldAssistant({
   workspaceId,
   fieldId,
   fieldName,
+  hasPendingRecommendation = false,
 }: {
   workspaceId: string;
   fieldId: string;
   fieldName: string;
+  /** A recommendation waits on this field: the suggestions ask about it. */
+  hasPendingRecommendation?: boolean;
 }) {
   const f = useTranslations("Field");
   const t = useTranslations("App");
+  const a = useTranslations("Assistant");
   const locale = useLocale();
-  const client = useQueryClient();
   const { id, loading, select, forget } = useActiveConversation(workspaceId, fieldId);
   const lang = locale === "uk" ? "uk" : "en";
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
+  const [prefill, setPrefill] = useState<{ text: string; nonce: number } | null>(null);
+  const emptyInput = useRef<HTMLInputElement>(null);
   const { fail } = useActionToast();
   const toast = useToast();
 
@@ -76,31 +80,28 @@ export function FieldAssistant({
     }
   }
   const panel = useRef<HTMLDivElement>(null);
-  // "Why so?" on the field card asks through the bus instead of poking at this panel's input.
+  // "Ask why" on the field card prepares the question through the bus: it is placed in the composer (not sent, so
+  // nothing is spent before the user presses Send) and the panel scrolls into view.
   useAssistantAsk((question) => {
     if (busy) return false;
     const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     panel.current?.scrollIntoView({ behavior: calm ? "auto" : "smooth", block: "center" });
     if (!id) {
-      void start(question);
-      return true;
-    }
-    // A thread is open: the question goes into it.
-    void api(`/api/w/${workspaceId}/conversations/${id}/messages`, {
-      body: { text: question, context: { fieldId }, lang },
-    })
-      .then(() => client.invalidateQueries({ queryKey: ["conversation", workspaceId, id] }))
-      .catch((e) => fail(e, f("askWhat")));
+      setText(question);
+      requestAnimationFrame(() => emptyInput.current?.focus());
+    } else setPrefill({ text: question, nonce: Date.now() });
     return true;
   });
-  const suggestions = [t("faSugg1"), t("faSugg2"), t("faSugg3")];
+  const suggestions = (hasPendingRecommendation ? ["rec1", "rec2", "rec3"] : ["field1", "field2", "field3"]).map((k) =>
+    a(`sugg.${k}` as never),
+  );
 
   return (
     <div ref={panel}>
     <Surface
       as="section"
       aria-label={f("assistantOpen")}
-      className={`flex flex-col ${id ? "min-h-[420px]" : ""}`}
+      className="flex flex-col"
       pad="none"
     >
       <header className="flex flex-wrap items-center gap-3 border-b border-line p-4">
@@ -109,7 +110,7 @@ export function FieldAssistant({
         </span>
         <span className="min-w-0 flex-1">
           <span className="block text-body font-semibold text-ink">{f("ai_name")}</span>
-          <span className="text-caption text-ink-2">{t("aiContextField", { name: fieldName })}</span>
+          <span className="text-caption text-ink-2">{a("about", { name: fieldName })}</span>
         </span>
         {id && (
           <Button
@@ -122,10 +123,6 @@ export function FieldAssistant({
             {t("aiNewChat")}
           </Button>
         )}
-        <span className="flex items-center gap-1.5 text-caption font-semibold text-ok">
-          <span aria-hidden className="size-2 rounded-full bg-ok" />
-          Gemini
-        </span>
       </header>
       <div className="flex flex-1 flex-col p-4">
         {loading ? (
@@ -137,21 +134,27 @@ export function FieldAssistant({
             conversationId={id}
             context={{ fieldId }}
             suggestions={suggestions}
+            placeholder={t("faPlaceholder", { name: fieldName })}
+            prefill={prefill}
             onMissing={forget}
             compact
           />
         ) : (
           <>
-            <p className="text-body text-ink-2">{t("faIntro")}</p>
+            <p className="text-body text-ink-2">{a("canDo")}</p>
             <div className="mt-4 flex flex-wrap gap-2">
               {suggestions.map((s) => (
-                <Chip key={s} tone="neutral" icon={<Sparkles />} onClick={() => void start(s)}>
+                <Chip key={s} tone="neutral" icon={<Sparkles />} onClick={() => {
+                    setText(s);
+                    emptyInput.current?.focus();
+                  }}>
                   {s}
                 </Chip>
               ))}
             </div>
             <form onSubmit={submit} className="mt-4 flex items-center gap-2">
               <input
+                ref={emptyInput}
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 placeholder={t("faPlaceholder", { name: fieldName })}
