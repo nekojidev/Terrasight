@@ -5,17 +5,13 @@ import {
   Button,
   Chip,
   ErrorCard,
-  HeroItem,
   InfoHint,
-  QueueRow,
   RailCard,
-  FactorRows,
   FieldThumb,
-  SeasonStrip,
   Skeleton,
   type Factor,
 } from "@terrasight/ui";
-import { CloudRain, Clock, MessageCircleQuestion, Plus, ShieldCheck, Snowflake, Sun } from "lucide-react";
+import { CalendarClock, ChevronDown, CloudRain, Gavel, Plus, ShieldCheck, Snowflake, Sun } from "lucide-react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
@@ -24,10 +20,12 @@ import { AnalysisCard } from "@/components/AnalysisCard";
 import { AiMark } from "@/components/AiMark";
 import { AskOwnerSheet } from "@/components/AskOwnerSheet";
 import { OutlookRailLine } from "@/components/OutlookRailLine";
+import { TodayCard } from "@/components/TodayCard";
 import { TodayWindows } from "@/components/TodayWindows";
 import { api } from "@/lib/api";
 import { useWorkspaceEvents } from "@/lib/events";
-import type { AskOwnerBody } from "@terrasight/shared";
+import type { AskOwnerBody, DecisionList } from "@terrasight/shared";
+import { briefHeadline, humanizeDates } from "@/lib/brief";
 import { greetingKey, useNow } from "@/lib/time";
 
 type Localised = { en: string; uk: string };
@@ -94,6 +92,7 @@ export function Brief({
   units,
   canAct,
   canAsk = true,
+  isOwner = false,
 }: {
   workspaceId: string;
   firstName: string;
@@ -101,6 +100,8 @@ export function Brief({
   canAct: boolean;
   /** False for Owners: they never see "Ask the owner" (PD v2.9). */
   canAsk?: boolean;
+  /** The Owner's home leads with the decisions waiting for them, not with agronomist actions. */
+  isOwner?: boolean;
 }) {
   const t = useTranslations("App");
   const m = useTranslations("Main");
@@ -111,6 +112,11 @@ export function Brief({
   const key = ["brief", workspaceId];
   useWorkspaceEvents(workspaceId, ["brief", "analysis"]);
   const brief = useQuery({ queryKey: key, queryFn: () => api<Brief>(`/api/w/${workspaceId}/brief`) });
+  const decisions = useQuery({
+    queryKey: ["decisions", workspaceId, "all"],
+    queryFn: () => api<DecisionList>(`/api/w/${workspaceId}/decisions?state=all`),
+    enabled: isOwner,
+  });
   const now = useNow();
   const [done, setDone] = useState<Record<string, Done>>({});
   const [sheet, setSheet] = useState<Item | null>(null);
@@ -168,15 +174,13 @@ export function Brief({
     const source = i.evidence.find((e) => e.kind !== "citation")?.source;
     return i.keyNumbers.map((k) => ({
       label: t.has(`kn_${k.id}`) ? t(`kn_${k.id}`) : k.id,
-      value: `${k.value}${k.unit && k.unit !== "seasons" ? ` ${k.unit}` : ""}`,
+      value: humanizeDates(`${k.value}${k.unit && k.unit !== "seasons" ? ` ${k.unit}` : ""}`, dateShort),
       weight: k.weight,
       ...(source ? { source } : {}),
     }));
   };
-  const strip = (s: Item["seasons"]) => (
-    <SeasonStrip size="sm" seasons={s.map((x) => ({ crop: x.crop, name: x.crop, year: x.season }))} />
-  );
   const hello = greetingKey(now, b.timeZone);
+  const openDecisions = (decisions.data?.items ?? []).filter((d) => d.state === "waiting" || d.state === "question");
 
   async function act(i: Item, kind: "accept" | "snooze" | "ask", note?: string) {
     const body: AskOwnerBody = kind === "ask" && note ? { note } : {};
@@ -215,9 +219,73 @@ export function Brief({
       : undefined;
   };
 
-  // The hero is the first Urgent item only (design 04); a This-week item the API promoted to hero goes back to the list.
-  const hero = b.hero?.urgency === "urgent" ? b.hero : null;
-  const rows = [...b.urgent, ...(b.hero && !hero ? [b.hero] : []), ...b.thisWeek];
+  const readOnly = isOwner || !canAct;
+  const cardOf = (i: Item, primary: boolean) => (
+    <TodayCard
+      key={i.id}
+      primary={primary}
+      urgent={i.urgency === "urgent"}
+      due={due(i) || (i.urgency === "urgent" ? t("groupUrgent") : t("groupWeek"))}
+      fieldHref={`/fields/${i.fieldId}`}
+      thumb={
+        <FieldThumb
+          name={i.fieldName}
+          outline={i.thumb ?? null}
+          crop={i.seasons.at(-1)?.crop ?? null}
+          size={40}
+          className="size-8"
+        />
+      }
+      fieldName={i.fieldName + (i.more > 0 ? ` · ${t("more", { n: i.more })}` : "")}
+      title={i.text.title[locale]}
+      {...(i.textSource === "ai" ? { titleMark: <AiMark /> } : {})}
+      action={humanizeDates(i.text.action[locale], dateShort)}
+      whyText={humanizeDates(i.text.why[locale], dateShort)}
+      factors={factors(i)}
+      confidence={conf(i)}
+      confidenceHint={
+        <InfoHint label={t("hintLabel")} align="start">
+          {t("hintConf")} {t(`hintTier_${i.tier}` as "hintTier_A")} {t("hintKeyNumbers")}
+        </InfoHint>
+      }
+      labels={{
+        accept: t("acceptBtn"),
+        snooze: m("snooze"),
+        why: t("whyBtn"),
+        details: m("details"),
+        ...(canAsk ? { ask: t("askBtn") } : {}),
+      }}
+      detailsHref={`/recommendations/${i.id}`}
+      {...(readOnly
+        ? {}
+        : {
+            onAccept: () => void act(i, "accept"),
+            onSnooze: () => void act(i, "snooze"),
+            ...(canAsk ? { onAsk: () => setSheet(i) } : {}),
+          })}
+      {...(doneRow(i.id) ? { done: doneRow(i.id)! } : {})}
+    />
+  );
+  // Urgent first, then this week. A This-week item the API promoted to hero goes back to the week list.
+  const heroUrgent = b.hero?.urgency === "urgent" ? b.hero : null;
+  const urgentItems = [...b.urgent, ...(heroUrgent && !b.urgent.some((u) => u.id === heroUrgent.id) ? [heroUrgent] : [])];
+  const weekItems = [...(b.hero && !heroUrgent ? [b.hero] : []), ...b.thisWeek];
+  const todayCount = urgentItems.length + weekItems.length;
+  const head1 = briefHeadline({ isOwner, decisions: openDecisions.length, urgent: urgentItems.length });
+  const emptyText = t("emptyToday", { n: b.counts.fields });
+  const summary = b.daySummary
+    ? humanizeDates(b.daySummary.text[locale], dateShort)
+    : todayCount === 0
+      ? emptyText
+      : t("daySummary", { urgent: b.counts.urgent, week: b.counts.thisWeek, fine: b.counts.allGood });
+  const frosts = b.rail.weather
+    .map((w) => w.nextFrost)
+    .filter((x): x is NonNullable<typeof x> => x !== null)
+    .sort((a, z) => a.date.localeCompare(z.date));
+  const firstFrost = frosts[0];
+  const frostText = firstFrost
+    ? t(firstFrost.uncertain ? "frostUncertain" : "frostFrom", { date: dateShort(firstFrost.date) })
+    : t("noFrost");
   const condition = (w: Brief["rail"]["weather"][number]) => {
     const d = w.today;
     if (!d) return null;
@@ -226,190 +294,168 @@ export function Brief({
     if (d.precipMm === null) return null;
     return { icon: <Sun />, text: t("wx_dry") };
   };
+  const groupTitle = (label: string, n: number) => (
+    <h3 className="text-small font-semibold tracking-wide text-ink-2 uppercase">
+      {label} <span className="text-ink-3">{n}</span>
+    </h3>
+  );
   return (
-    <div className="grid gap-8 xl:grid-cols-[1fr_340px]">
-      <div className="flex min-w-0 flex-col gap-8">
-        <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
-          <div className="flex min-w-0 flex-col gap-2">
-            <p className="font-mono text-small tracking-wide text-ink-2 uppercase max-sm:hidden">
-              {t("kicker", {
-                date: fmt(b.date, { weekday: "long", day: "numeric", month: "long" }),
-                time: "06:00",
-              })}
-            </p>
-            <h1 className="text-h1 text-ink">{t(hello, { name: firstName })}</h1>
-            <p className="flex flex-wrap gap-2 sm:hidden">
-              <Chip tone="neutral" className="font-mono">
-                {t("phoneKicker", { n: b.rail.today.checked ?? 0 })}
-              </Chip>
-              <Chip tone="neutral" className="font-mono">
-                {m("neutral")}
-              </Chip>
-            </p>
-            <p className="text-body text-ink-2 max-sm:hidden">
-              {b.daySummary
-                ? b.daySummary.text[locale]
-                : t("daySummary", { urgent: b.counts.urgent, week: b.counts.thisWeek, fine: b.counts.allGood })}
-              {b.daySummary && <AiMark />}
-            </p>
+    <div className="grid gap-8 xl:grid-cols-[1fr_320px]">
+      <div className="flex min-w-0 flex-col gap-6">
+        <header className="flex flex-col gap-2">
+          <p className="text-small text-ink-2">
+            {t("kickerHello", {
+              hello: t(hello, { name: firstName }).replace(/\.$/, ""),
+              date: fmt(b.date, { weekday: "long", day: "numeric", month: "long" }),
+            })}
+          </p>
+          <h1 className="text-h1 text-ink">
+            {head1.kind === "decisions"
+              ? t("headDecisions", { n: head1.n })
+              : head1.kind === "urgent"
+                ? t("headUrgent", { n: head1.n })
+                : t("headNone")}
+          </h1>
+          <p className="text-body text-ink-2">
+            {summary}
+            {b.daySummary && <AiMark />}
+          </p>
+          <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-2">
+            <AnalysisCard workspaceId={workspaceId} timeZone={b.timeZone} canRun={canAct} />
+            {canAct && (
+              <Button
+                variant="link"
+                icon={<Plus />}
+                onClick={() => router.push("/fields/new")}
+                className="text-small font-semibold max-sm:hidden"
+              >
+                {t("addField")}
+              </Button>
+            )}
           </div>
-          {canAct && (
-            <Button
-              variant="link"
-              icon={<Plus />}
-              onClick={() => router.push("/fields/new")}
-              className="font-semibold max-sm:hidden"
-            >
-              {t("addField")}
-            </Button>
+          {firstFrost && (
+            <p className="flex w-fit items-center gap-2 rounded-input bg-info-soft px-3 py-2 text-small text-info xl:hidden">
+              <Snowflake aria-hidden className="size-4" strokeWidth={1.7} />
+              {frostText}
+            </p>
           )}
         </header>
-        {/* One Analyze fields button: beside the header on desktop, at the bottom on a phone (design 05). */}
-        <div className="order-last sm:order-none">
-          <AnalysisCard workspaceId={workspaceId} timeZone={b.timeZone} canRun={canAct} />
-        </div>
 
-        {hero ? (
-          <HeroItem
-            chip={
-              <Chip tone="signal" icon={<Clock />}>
-                {t("startHere")}
-                {hero.deadline ? ` · ${due(hero)}` : ""}
-              </Chip>
-            }
-            field={
-              <Link
-                href={`/fields/${hero.fieldId}`}
-                className="flex items-center gap-3 text-small text-ink-2 hover:underline"
-              >
-                <FieldThumb
-                  name={hero.fieldName}
-                  outline={hero.thumb ?? null}
-                  crop={hero.seasons.at(-1)?.crop ?? null}
-                  size={40}
-                />
-                <span className="text-body font-semibold text-ink">{hero.fieldName}</span>
-                {strip(hero.seasons)}
-                {hero.more > 0 && <span>{t("more", { n: hero.more })}</span>}
-              </Link>
-            }
-            why={<FactorRows factors={factors(hero).slice(0, 3)} />}
-            title={hero.text.title[locale]}
-            {...(hero.textSource === "ai" ? { titleMark: <AiMark /> } : {})}
-            numbers={numbers(hero)}
-            confidence={conf(hero)}
-            confidenceHint={
-              <InfoHint label={t("hintLabel")} align="end">
-                {t("hintConf")} {t(`hintTier_${hero.tier}` as "hintTier_A")} {t("hintKeyNumbers")}
-              </InfoHint>
-            }
-            labels={{
-              accept: t("acceptBtn"),
-              snooze: m("snooze"),
-              details: m("details"),
-              ...(canAsk ? { ask: t("askBtn") } : {}),
-            }}
-            detailsHref={`/recommendations/${hero.id}`}
-            onAccept={() => canAct && void act(hero!, "accept")}
-            {...(canAsk ? { onAsk: () => canAct && setSheet(hero!) } : {})}
-            onSnooze={() => canAct && void act(hero!, "snooze")}
-            {...(doneRow(hero.id) ? { done: doneRow(hero.id)! } : {})}
-          />
-        ) : (
-          <p className="rounded-card border border-line bg-surface p-6 text-body text-ink-2">
-            {rows.length === 0 ? t("noItems") : t("noUrgent")}
-          </p>
+        {isOwner && (
+          <section aria-labelledby="owner-wait" className="rounded-hero bg-surface p-5 shadow-hero sm:p-6">
+            <div className="mb-3 flex flex-wrap items-center gap-3">
+              <Gavel aria-hidden className="size-5 text-ink-2" strokeWidth={1.7} />
+              <h2 id="owner-wait" className="text-h2 text-ink">
+                {t("ownerWaitTitle")}{" "}
+                <span className="text-ink-3">{decisions.data ? openDecisions.length : ""}</span>
+              </h2>
+            </div>
+            {openDecisions.length === 0 ? (
+              <p className="text-body text-ink-2">{decisions.data ? t("ownerNone") : ""}</p>
+            ) : (
+              <>
+                <p className="mb-3 text-body text-ink-2">{t("ownerWaitSub")}</p>
+                <ul className="mb-4 flex flex-col gap-2">
+                  {openDecisions.slice(0, 3).map((d) => (
+                    <li key={d.id}>
+                      <Link
+                        href="/decisions"
+                        className="focus-ring block rounded-input bg-surface-2 px-4 py-3 hover:bg-muted"
+                      >
+                        <span className="block text-body font-semibold text-ink">{d.title[locale]}</span>
+                        <span className="block text-small text-ink-2">
+                          {d.fieldName}
+                          {d.deadline ? ` · ${dateShort(d.deadline)}` : ""}
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+                <Button size={56} onClick={() => router.push("/decisions")} className="max-sm:w-full">
+                  {t("ownerReview")}
+                </Button>
+              </>
+            )}
+          </section>
         )}
 
-        {(rows.length > 0 || hero) && (
-          <section className="flex flex-col gap-3">
-            <h2 className="text-h2 text-ink">
-              {m("next_t")} <span className="text-ink-3">{rows.length}</span>
-            </h2>
-            {rows.length === 0 && (
-              <p className="rounded-card border border-line bg-surface p-4 text-small text-ink-2">
-                {t("noWeek")}
-              </p>
+        {todayCount === 0 ? (
+          <p className="rounded-card border border-line bg-surface p-5 text-body text-ink-2">{emptyText}</p>
+        ) : (
+          <section aria-labelledby="today-h" className="flex flex-col gap-4">
+            <div>
+              <h2 id="today-h" className="text-h2 text-ink">
+                {isOwner ? t("ownerFarmTitle") : t("todayTitle")} <span className="text-ink-3">{todayCount}</span>
+              </h2>
+              {isOwner && <p className="text-small text-ink-2">{t("ownerFarmSub")}</p>}
+            </div>
+            {urgentItems.length > 0 && (
+              <div className="flex flex-col gap-3">
+                {groupTitle(t("groupUrgent"), urgentItems.length)}
+                {urgentItems.map((i, n) => cardOf(i, n === 0 && !readOnly))}
+              </div>
             )}
-            {rows.map((i) => (
-              <QueueRow
-                key={i.id}
-                thumb={
-                  <FieldThumb
-                    name={i.fieldName}
-                    outline={i.thumb ?? null}
-                    crop={i.seasons.at(-1)?.crop ?? null}
-                    size={56}
-                    className="size-12"
-                  />
-                }
-                title={i.text.title[locale]}
-                {...(i.textSource === "ai" ? { titleMark: <AiMark /> } : {})}
-                meta={`${i.fieldName}${i.more > 0 ? ` · ${t("more", { n: i.more })}` : ""}`}
-                due={due(i)}
-                dueTone={i.urgency === "urgent" ? "urgent" : "week"}
-                strip={strip(i.seasons)}
-                factors={factors(i)}
-                labels={{
-                  why: m("why_k"),
-                  accept: t("acceptBtn"),
-                  snooze: m("snooze"),
-                  ...(canAsk ? { ask: t("askBtn") } : {}),
-                }}
-                onAccept={() => canAct && void act(i, "accept")}
-                {...(canAsk ? { onAsk: () => canAct && setSheet(i) } : {})}
-                onSnooze={() => canAct && void act(i, "snooze")}
-                {...(doneRow(i.id) ? { done: doneRow(i.id)! } : {})}
-              />
-            ))}
+            {weekItems.length > 0 && (
+              <div className="flex flex-col gap-3">
+                {groupTitle(t("groupWeek"), weekItems.length)}
+                {weekItems.map((i) => cardOf(i, false))}
+              </div>
+            )}
           </section>
         )}
 
         {(b.worthALook?.length ?? 0) > 0 && (
-          <section className="flex flex-col gap-3">
-            <h2 className="text-h2 text-ink">
-              {t("aiWorthTitle")} <span className="text-ink-3">{b.worthALook!.length}</span>
-            </h2>
-            <p className="text-small text-ink-2">{t("aiWorthSub")}</p>
-            {b.worthALook!.map((i) => (
-              <Link
-                key={i.id}
-                href={`/recommendations/${i.id}`}
-                className="focus-ring flex items-center gap-3 rounded-card border border-line bg-surface p-4 hover:bg-muted"
-              >
-                <FieldThumb
-                  name={i.fieldName}
-                  outline={i.thumb ?? null}
-                  crop={i.seasons?.at(-1)?.crop ?? null}
-                  size={40}
-                  className="size-10"
-                />
-                <span className="min-w-0">
-                  <span className="block text-body font-semibold text-ink">
-                    {i.text.title[locale]}
-                    <AiMark />
-                  </span>
-                  <span className="block text-small text-ink-2">{i.text.action[locale]}</span>
-                  <span className="block text-small text-ink-3">
-                    {i.fieldName} · {t("aiWatchChip")}
-                  </span>
+          <details className="group rounded-card border border-line bg-surface">
+            <summary className="focus-ring flex min-h-tap cursor-pointer list-none items-center justify-between gap-3 rounded-card p-4">
+              <span>
+                <span className="block text-h3 text-ink">
+                  {t("aiWorthTitle")} <span className="text-ink-3">{b.worthALook!.length}</span>
                 </span>
-              </Link>
-            ))}
-          </section>
+                <span className="block text-small text-ink-2">{t("lookHint", { n: b.worthALook!.length })}</span>
+              </span>
+              <ChevronDown aria-hidden className="size-5 shrink-0 text-ink-2 transition-transform group-open:rotate-180" />
+            </summary>
+            <div className="flex flex-col gap-2 p-4 pt-0">
+              <p className="text-small text-ink-2">{t("aiWorthSub")}</p>
+              {b.worthALook!.map((i) => (
+                <Link
+                  key={i.id}
+                  href={`/recommendations/${i.id}`}
+                  className="focus-ring flex items-center gap-3 rounded-input bg-surface-2 p-3 hover:bg-muted"
+                >
+                  <FieldThumb
+                    name={i.fieldName}
+                    outline={i.thumb ?? null}
+                    crop={i.seasons?.at(-1)?.crop ?? null}
+                    size={40}
+                    className="size-10"
+                  />
+                  <span className="min-w-0">
+                    <span className="block text-body font-semibold text-ink">
+                      {i.text.title[locale]}
+                      <AiMark />
+                    </span>
+                    <span className="block text-small text-ink-2">{i.text.action[locale]}</span>
+                    <span className="block text-small text-ink-3">{i.fieldName}</span>
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </details>
         )}
 
         {b.allGood.length > 0 && (
-          <section className="flex flex-col gap-3">
-            <h2 className="text-h2 text-ink">
-              {m("fine_t")} <span className="text-ink-3">{b.allGood.length}</span>
+          <section aria-labelledby="fine-h" className="flex flex-col gap-2">
+            <h2 id="fine-h" className="text-small font-semibold text-ink">
+              {t("fineLine", { n: b.allGood.length })}
             </h2>
             <ul className="flex flex-wrap gap-2">
               {b.allGood.map((g) => (
                 <li key={g.fieldId}>
                   <Link
                     href={g.plan ? `/recommendations/${g.plan.id}` : `/fields/${g.fieldId}`}
-                    className="focus-ring flex max-w-full flex-wrap items-center gap-2 rounded-chip border border-line bg-surface px-4 py-2 text-small font-semibold text-ink hover:bg-muted"
+                    title={g.plan ? t("fineHasPlan") : undefined}
+                    className="focus-ring flex items-center gap-2 rounded-chip border border-line bg-surface py-1.5 pr-3 pl-1.5 text-small font-semibold text-ink hover:bg-muted"
                   >
                     <FieldThumb
                       name={g.name}
@@ -419,17 +465,11 @@ export function Brief({
                       className="size-6"
                     />
                     <span className="whitespace-nowrap">{g.name}</span>
-                    <SeasonStrip
-                      size="sm"
-                      seasons={g.seasons.map((x) => ({ crop: x.crop, name: x.crop, year: x.season }))}
-                    />
                     {g.plan && (
-                      <Chip tone="signal" className="max-w-full truncate">
-                        {t("planChip", {
-                          title: g.plan.title[locale],
-                          date: g.plan.deadline ? dateShort(g.plan.deadline) : "—",
-                        })}
-                      </Chip>
+                      <>
+                        <CalendarClock aria-hidden className="size-4 text-ink-2" strokeWidth={1.7} />
+                        <span className="sr-only">{t("fineHasPlan")}</span>
+                      </>
                     )}
                     {g.unknown && <Chip tone="neutral">{t("unknownChip")}</Chip>}
                   </Link>
@@ -439,92 +479,60 @@ export function Brief({
           </section>
         )}
 
-        <p className="flex items-center gap-2 text-small text-ink-3 max-sm:hidden">
-          <ShieldCheck aria-hidden className="size-4" strokeWidth={1.7} />
+        <p className="flex items-start gap-2 text-small text-ink-3">
+          <ShieldCheck aria-hidden className="mt-0.5 size-4 shrink-0" strokeWidth={1.7} />
           {m("neutral")}
         </p>
       </div>
 
-      <aside className="hidden flex-col gap-4 md:flex">
-        <RailCard title={m("rail_day")}>
-          <div className="grid grid-cols-3 gap-2">
-            <p className="rounded-input bg-signal p-3 text-on-signal">
-              <span className="block font-mono text-h2">{b.counts.urgent}</span>
-              <span className="text-small">{m("d1")}</span>
-            </p>
-            <p className="rounded-input bg-week-soft p-3 text-week">
-              <span className="block font-mono text-h2">{b.counts.thisWeek}</span>
-              <span className="text-small">{m("d2")}</span>
-            </p>
-            <p className="rounded-input bg-muted p-3 text-ink">
-              <span className="block font-mono text-h2">{b.rail.today.checked ?? "—"}</span>
-              <span className="text-small">{m("d3")}</span>
-            </p>
-          </div>
-        </RailCard>
-        <RailCard title={m("rail_w")}>
-          <ul className="flex flex-col gap-2">
+      <aside className="hidden flex-col gap-4 xl:flex">
+        <RailCard title={t("railNext")}>
+          <ul className="flex flex-col gap-3">
             {b.rail.weather.map((w) => (
-              <li key={`${w.county}${w.region}`} className="flex justify-between gap-3 text-small text-ink">
-                <span className="flex items-center gap-2">
-                  <span aria-hidden className="inline-flex text-ink-2 [&>svg]:size-4 [&>svg]:stroke-[1.7]">
-                    {condition(w)?.icon}
-                  </span>
-                  {w.county}
-                  {w.region ? `, ${w.region.split("-")[1]}` : ""}
+              <li key={`${w.county}${w.region}`} className="flex items-start gap-2 text-small text-ink">
+                <span aria-hidden className="mt-0.5 inline-flex text-ink-2 [&>svg]:size-4 [&>svg]:stroke-[1.7]">
+                  {condition(w)?.icon}
                 </span>
-                <span className="font-mono text-ink-2">
-                  {w.today
-                    ? `${temp(w.today.tminC)} / ${temp(w.today.tmaxC)}${condition(w) ? ` · ${condition(w)!.text}` : ""}`
-                    : t("noForecast")}
+                <span className="min-w-0">
+                  <span className="block">
+                    {w.county}
+                    {w.region ? `, ${w.region.split("-")[1]}` : ""}
+                  </span>
+                  <span className="block font-mono text-ink-2">
+                    {w.today
+                      ? `${temp(w.today.tminC)} / ${temp(w.today.tmaxC)}${condition(w) ? ` · ${condition(w)!.text}` : ""}`
+                      : t("noForecast")}
+                  </span>
                 </span>
               </li>
             ))}
           </ul>
-          {(() => {
-            const frosts = b.rail.weather
-              .map((w) => w.nextFrost)
-              .filter((x): x is NonNullable<typeof x> => x !== null)
-              .sort((a, z) => a.date.localeCompare(z.date));
-            const first = frosts[0];
-            return (
-              <p className="mt-3 flex items-center gap-2 rounded-input bg-info-soft px-3 py-2 text-small text-info">
-                <Snowflake aria-hidden className="size-4" strokeWidth={1.7} />
-                {first
-                  ? t(first.uncertain ? "frostUncertain" : "frostFrom", { date: dateShort(first.date) })
-                  : t("noFrost")}
-              </p>
-            );
-          })()}
-          <OutlookRailLine workspaceId={workspaceId} />
+          <p className="mt-3 flex items-center gap-2 rounded-input bg-info-soft px-3 py-2 text-small text-info">
+            <Snowflake aria-hidden className="size-4 shrink-0" strokeWidth={1.7} />
+            {frostText}
+          </p>
           {b.rail.weather[0]?.attribution && (
-            <p className="mt-2 text-micro text-ink-3">{b.rail.weather[0].attribution}</p>
+            <p className="mt-2 text-micro text-ink-3 normal-case">{b.rail.weather[0].attribution}</p>
           )}
         </RailCard>
         <TodayWindows rail workspaceId={workspaceId} units={units} />
-        <RailCard title={m("rail_o")}>
-          {b.rail.ownerQuestion ? (
-            <p className="flex gap-2 text-body text-ink">
-              <MessageCircleQuestion aria-hidden className="mt-1 size-4 shrink-0" strokeWidth={1.7} />
-              <span>
-                “{b.rail.ownerQuestion.text}”
-                <span className="block text-small text-ink-2">
-                  {b.rail.ownerQuestion.fieldName} · {dateShort(b.rail.ownerQuestion.at.slice(0, 10))}
-                </span>
+        {!isOwner && b.rail.ownerQuestion && (
+          <RailCard title={m("rail_o")}>
+            <p className="text-body text-ink">
+              “{b.rail.ownerQuestion.text}”
+              <span className="block text-small text-ink-2">
+                {b.rail.ownerQuestion.fieldName} · {dateShort(b.rail.ownerQuestion.at.slice(0, 10))}
               </span>
             </p>
-          ) : (
-            <p className="text-small text-ink-2">{t("noQuestion")}</p>
-          )}
-          {b.rail.ownerQuestion && (
             <Link
               href="/decisions"
               className="focus-ring mt-4 flex min-h-tap items-center justify-center gap-2 rounded-btn bg-muted px-4 text-body font-semibold text-ink hover:brightness-95"
             >
               {t("replyLink")}
             </Link>
-          )}
-        </RailCard>
+          </RailCard>
+        )}
+        <OutlookRailLine workspaceId={workspaceId} />
       </aside>
       <AskOwnerSheet
         preview={

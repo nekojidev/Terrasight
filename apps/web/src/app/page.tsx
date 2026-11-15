@@ -45,6 +45,7 @@ export default async function Home() {
           firstName={me.data.name.split(/\s+/)[0] ?? me.data.name}
           units={ws.data.units}
           canAct
+          isOwner={ws.data.role === "owner"}
           canAsk={ws.data.role !== "owner"}
         />
       )}

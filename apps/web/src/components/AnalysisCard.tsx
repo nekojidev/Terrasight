@@ -90,16 +90,27 @@ export function AnalysisCard({
   const retry = (fieldId: string) => start.mutate([fieldId]);
   const reason = (p: { error: string | null }) => p.error ?? m("an_fail");
 
+  const statusLine = running
+    ? null
+    : !r?.id
+      ? t("anNever")
+      : [
+          when && r.summary ? t("anLast", { when, n: r.summary.total }) : null,
+          r.summary
+            ? t("anDone", {
+                checked: r.summary.checked,
+                total: r.summary.total,
+                n: r.summary.newRecommendations,
+              })
+            : null,
+        ]
+          .filter(Boolean)
+          .join(" · ");
+
   return (
     <section aria-live="polite" className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-small text-ink-2">
-          {r?.id && when && r.summary
-            ? t("anLast", { when, n: r.summary.total })
-            : !r?.id
-              ? t("anNever")
-              : null}
-        </p>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        {statusLine && <p className="min-w-0 text-small text-ink-2">{statusLine}</p>}
         {canRun && (
           <span className="inline-flex items-center gap-2">
             <Button
@@ -111,7 +122,7 @@ export function AnalysisCard({
             >
               {running ? m("analyzing") : m("analyze")}
             </Button>
-            <InfoHint label={t("hintLabel")} align="end">
+            <InfoHint label={t("hintLabel")} align="start">
               {t("hintAnalyze")}
             </InfoHint>
           </span>
@@ -141,32 +152,24 @@ export function AnalysisCard({
           onRetry={retry}
         />
       )}
-      {!running && r?.summary && (
-        <div className="rounded-card border border-line bg-surface p-4">
-          <p className="text-body text-ink">
-            {t("anDone", {
-              checked: r.summary.checked,
-              total: r.summary.total,
-              n: r.summary.newRecommendations,
-            })}
-          </p>
-          {r.summary.problems.map((p) => (
-            <div key={p.fieldId} className="mt-2 flex flex-wrap items-center justify-between gap-3">
-              <p className={`text-small ${p.status === "failed" ? "text-urgent" : "text-week"}`}>
-                {p.status === "stale" && p.dataDate
-                  ? t("anStale", { name: p.name, reason: reason(p), date: date(`${p.dataDate}T12:00:00Z`) })
-                  : t("anFailed", { name: p.name, reason: reason(p) })}
-              </p>
-              {canRun && (
-                <Button variant="outline" size={44} onClick={() => retry(p.fieldId)}>
-                  {t("anRetryField", { name: p.name })}
-                </Button>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-      {canRun && <p className="text-small text-ink-3">{m("an_auto")}</p>}
+      {!running &&
+        r?.summary?.problems.map((p) => (
+          <div
+            key={p.fieldId}
+            className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-line bg-surface p-3"
+          >
+            <p className={`text-small ${p.status === "failed" ? "text-urgent" : "text-week"}`}>
+              {p.status === "stale" && p.dataDate
+                ? t("anStale", { name: p.name, reason: reason(p), date: date(`${p.dataDate}T12:00:00Z`) })
+                : t("anFailed", { name: p.name, reason: reason(p) })}
+            </p>
+            {canRun && (
+              <Button variant="outline" size={44} onClick={() => retry(p.fieldId)}>
+                {t("anRetryField", { name: p.name })}
+              </Button>
+            )}
+          </div>
+        ))}
     </section>
   );
 }
