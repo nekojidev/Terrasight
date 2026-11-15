@@ -9,7 +9,7 @@ import { synthesize, FFMPEG } from "./lib/tts.mjs";
 import { launch, signIn, newTake } from "./lib/take.mjs";
 import { SHOTS, renderPhoneBackdrop, renderPill } from "./lib/shots.mjs";
 import { readFacts, words } from "./lib/graphics2.mjs";
-import { warmTiles } from "./lib/graphics3.mjs";
+import { renderKinetic, KFRAMES } from "./lib/kinetic.mjs";
 import { renderClip, xfadeChain, mixAudio, probe, run, joinClips, makeSfx, mapTime } from "./lib/ff.mjs";
 
 const args = process.argv.slice(2);
@@ -105,13 +105,14 @@ const RECUT = {
     const m = c.marks;
     c.segs = [
       { from: c.clicks[0] + 0.7, to: m.typed - 0.15, ramp: 1.1, zoom: { from: 1.94, to: 1.94, cx: 0.5, cy: 0.077 } },
-      { from: m.answered + 0.1, to: m.highlight, zoom: { from: 1.0, to: 1.08, cx: 0.5, cy: 0.35 } },
-      { from: m.highlight, to: m.chip + 0.7, ramp: 3.2, zoom: { from: 1.08, to: 1.24, cx: 0.5, cy: 0.35 } },
+      { from: m.answered + 0.1, to: m.highlight, zoom: { from: 1.0, to: 1.03, cx: 0.5, cy: 0.35 } },
+      { from: m.highlight, to: m.chip + 0.25, ramp: 3.4, zoom: { from: 1.03, to: 1.07, cx: 0.5, cy: 0.35 } },
     ];
   },
 };
 const DISCLOSURE =
   "Narration: AI-generated voices (Google Gemini TTS). Screen recording of the real application; no AI-generated imagery.";
+const KINETIC_SHOTS = new Set(["climate", "rotation", "proof"]);
 const ONCE = new Set(["addField", "askLive", "ask2", "assistant", "owner"]);
 
 const fmt = (s) => {
@@ -229,6 +230,10 @@ try {
     console.log("record", id, len.toFixed(2) + "s");
     let r;
     try {
+      if (KINETIC_SHOTS.has(id)) {
+        const od = take.d.bind(take);
+        take.d = (f, ...a) => (f === "say" ? Promise.resolve() : od(f, ...a));
+      }
       r = await fn(take, cfg, len, ctxShots);
     } catch (e) {
       await take.finish().catch(() => {});
@@ -347,41 +352,36 @@ for (const g of groups) {
 }
 const silent = path.join(OUT, "video-silent.mp4");
 const seams = xfadeChain(groupClips, groupLens, OV, silent);
-// the NASA overlay of the "add a field" scene, set in the same lime / ink as the in-page pills
-const addScene = STORY.find((x) => x.id === "add");
+// Level 2: kinetic numbers on the spoken word (large type on a lime marker, small label), pop in final form
+const KDIR = path.join(OUT, "kinetic");
+const sceneOf = (id) => STORY.find((x) => x.id === id);
+const KINETICS = [
+  { scene: "add", frac: 0.3, big: `${facts.years} years`, label: "NASA weather" },
+  { scene: "climate", frac: 0.0, big: `${facts.history} seasons`, label: "field history" },
+  { scene: "climate", frac: 0.86, big: `${facts.days} days later`, label: "first frost" },
+  { scene: "rotation", frac: 0.25, big: `+$${facts.gain} per acre`, label: `${facts.seasons} seasons of seeding` },
+  { scene: "proof", frac: 0.62, big: `${facts.missed.length} of ${facts.seasonsChecked} missed`, label: "shown, not hidden" },
+].map((k, i) => {
+  const sc = sceneOf(k.scene);
+  return { ...k, i, at: sc.start + sc.at + k.frac * sc.dur };
+});
 const silentOv = path.join(OUT, "video-ov.mp4");
 {
-  const pill = path.join(OUT, "pill-nasa.png");
-  const bp = await launch();
+  const bk = await launch();
   try {
-    await renderPill(bp, cfg, `${facts.years} years of NASA weather`, pill);
+    for (const k of KINETICS) await renderKinetic(bk, cfg, { big: k.big, label: k.label }, path.join(KDIR, "k" + k.i));
   } finally {
-    await bp.close();
+    await bk.close();
   }
-  const t0 = (addScene.start + 1.1).toFixed(2);
-  const t1 = (addScene.start + addScene.len - 0.1).toFixed(2);
-  run([
-    "-i",
-    silent,
-    "-loop",
-    "1",
-    "-i",
-    pill,
-    "-filter_complex",
-    `[0:v][1:v]overlay=x=96:y=H-h-132:shortest=1:enable='between(t,${t0},${t1})'[v]`,
-    "-map",
-    "[v]",
-    "-c:v",
-    "libx264",
-    "-crf",
-    "16",
-    "-pix_fmt",
-    "yuv420p",
-    "-r",
-    "30",
-    "-an",
-    silentOv,
-  ]);
+  const ins = KINETICS.flatMap((k) => ["-framerate", "30", "-itsoffset", k.at.toFixed(3), "-i", path.join(KDIR, "k" + k.i, "%03d.png")]);
+  let chain = "";
+  let prev = "[0:v]";
+  KINETICS.forEach((k, j) => {
+    const lab = j === KINETICS.length - 1 ? "[v]" : `[v${j}]`;
+    chain += `${prev}[${j + 1}:v]overlay=0:0:eof_action=pass:repeatlast=0${lab};`;
+    prev = lab;
+  });
+  run(["-i", silent, ...ins, "-filter_complex", chain.replace(/;$/, ""), "-map", "[v]", "-c:v", "libx264", "-crf", "16", "-pix_fmt", "yuv420p", "-r", "30", "-an", silentOv]);
 }
 
 // 5. sound: voices (J-cuts), synthesised clicks and whooshes (>= 12 LU under the voice), -16 LUFS
@@ -398,6 +398,9 @@ STORY.forEach((s) =>
     }
   }),
 );
+KINETICS.forEach((k) => sfx.push({ file: sfxFiles.click, at: k.at + 0.04, db: -20 }));
+sfx.push({ file: sfxFiles.whoosh, at: 0.15, db: -12 });
+sfx.push({ file: sfxFiles.whoosh, at: sceneOf("end").start + 0.1, db: -12 });
 const mix = path.join(OUT, "voice-mix.wav");
 const ask = STORY.find((x) => x.id === "ask");
 sfx.push({ file: sfxFiles.whoosh, at: ask.start + 1.45, db: -14 });
