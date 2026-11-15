@@ -10,7 +10,6 @@ import {
   Eye,
   FileText,
   Link2,
-  Mail,
   MessageCircleQuestion,
   Pencil,
   RefreshCw,
@@ -108,7 +107,7 @@ export function ReportsClient({
   const current = month ?? months[0]?.[0] ?? null;
   const shown = months.find(([k]) => k === current)?.[1] ?? [];
   const past = months.filter(([k]) => k !== months[0]?.[0]);
-  const recipients = report.data.recipients ?? [];
+  const recipients = (report.data.recipients ?? []).map((name) => t("rqOwnerLine", { name }));
 
   return (
     <div className="flex min-w-0 flex-col gap-6">
@@ -199,7 +198,7 @@ export function ReportsClient({
                 {t("rqDelivery1")}
               </li>
               <li className="flex gap-2">
-                <Mail aria-hidden className="size-4 shrink-0 translate-y-0.5" strokeWidth={1.7} />
+                <Link2 aria-hidden className="size-4 shrink-0 translate-y-0.5" strokeWidth={1.7} />
                 {t("rqDelivery2")}
               </li>
               <li className="flex gap-2">
@@ -302,7 +301,7 @@ function MonthCard({
           <span className="text-right text-small font-semibold text-ink">
             {t("rqReplies", { n: answered, total: items.length })}
           </span>
-          <span className="h-1.5 overflow-hidden rounded-chip bg-muted" aria-hidden>
+          <span className="h-1.5 overflow-hidden rounded-chip bg-line-strong" aria-hidden>
             <span
               className="block h-full bg-ink"
               style={{ width: `${items.length ? (answered / items.length) * 100 : 0}%` }}
@@ -430,7 +429,7 @@ function Draft({
   }, [workspaceId, item.id]);
   if (text === null) return <Skeleton label={t("loading")} className="ml-12" />;
   return (
-    <div className="ml-12 flex flex-col gap-3 rounded-card border border-line bg-surface-2 p-4">
+    <div className="ml-12 flex flex-col gap-3 rounded-card border border-line-strong bg-surface-2 p-4">
       <p className="flex items-center gap-2 text-small font-semibold text-ink">
         <Sparkles aria-hidden className="size-4" strokeWidth={1.7} />
         {t("rqDraftTitle")}

@@ -8,6 +8,9 @@ import {
   Droplet,
   Layers,
   Pencil,
+  Undo2,
+  Trash2,
+  Satellite,
   Search,
   ShieldCheck,
   Sun,
@@ -31,6 +34,27 @@ interface Preview {
 }
 
 const HA_TO_AC = 2.471054;
+
+/** Spherical polygon area in hectares (equal-area approximation; fine for fields), shown while drawing. */
+function ringAreaHa(ring: LngLat[]): number {
+  if (ring.length < 3) return 0;
+  const R = 6371008.8;
+  const rad = Math.PI / 180;
+  let sum = 0;
+  for (let i = 0; i < ring.length; i++) {
+    const [lon1, lat1] = ring[i]!;
+    const [lon2, lat2] = ring[(i + 1) % ring.length]!;
+    sum += (lon2 - lon1) * rad * (2 + Math.sin(lat1 * rad) + Math.sin(lat2 * rad));
+  }
+  return (Math.abs(sum) * R * R) / 2 / 10_000;
+}
+
+interface Hit {
+  label: string;
+  lon: number;
+  lat: number;
+  bbox: [number, number, number, number] | null;
+}
 
 /** Design 13 (S-02.01): find the place → outline → check, then the gather starts on the field page. */
 export function AddFieldClient({
@@ -56,6 +80,7 @@ export function AddFieldClient({
   const [preview, setPreview] = useState<Preview | null>(null);
   const [irrigated, setIrrigated] = useState<"yes" | "no" | "unknown">("unknown");
   const [message, setMessage] = useState<string | null>(null);
+  const [hits, setHits] = useState<Hit[]>([]);
   const [busy, setBusy] = useState(false);
 
   const step = closed ? 3 : placeFound || ring.length > 0 ? 2 : 1;
@@ -91,21 +116,38 @@ export function AddFieldClient({
     if (coords) {
       mapRef.current?.flyTo(coords[0], coords[1], 14);
       setPlaceFound(true);
+      setHits([]);
       return;
     }
     try {
-      const r = await api<{
-        results: Array<{ lon: number; lat: number; bbox: [number, number, number, number] | null }>;
-      }>(`/api/geocode?q=${encodeURIComponent(query)}`);
-      const hit = r.results[0];
-      if (!hit) return setMessage(a("placeNotFound"));
-      if (hit.bbox) mapRef.current?.fitBounds(hit.bbox);
-      else mapRef.current?.flyTo(hit.lon, hit.lat, 13);
-      setPlaceFound(true);
+      const r = await api<{ results: Hit[] }>(`/api/geocode?q=${encodeURIComponent(query.trim())}`);
+      if (!r.results[0]) {
+        setHits([]);
+        return setMessage(a("placeNotFound"));
+      }
+      goTo(r.results[0]);
+      setHits(r.results.length > 1 ? r.results : []);
       setMessage(null);
     } catch {
       setMessage(a("placeSearchDown"));
     }
+  }
+
+  function goTo(hit: Hit) {
+    if (hit.bbox) mapRef.current?.fitBounds(hit.bbox);
+    else mapRef.current?.flyTo(hit.lon, hit.lat, 13);
+    setPlaceFound(true);
+  }
+
+  function undo() {
+    setRing((r) => r.slice(0, -1));
+    setClosed(false);
+    setDrawing(true);
+  }
+  function clear() {
+    setRing([]);
+    setClosed(false);
+    setDrawing(true);
   }
 
   async function upload(file: File | undefined) {
@@ -139,23 +181,25 @@ export function AddFieldClient({
     }
   }
 
-  const area = preview ? (units === "imperial" ? preview.areaHa * HA_TO_AC : preview.areaHa) : null;
+  const liveHa = preview ? preview.areaHa : ring.length >= 3 ? ringAreaHa(ring) : null;
+  const area = liveHa === null ? null : units === "imperial" ? liveHa * HA_TO_AC : liveHa;
+  const sources = preview?.sources;
+  const has = (id: string) => !sources || sources.includes(id);
   const finds = [
-    { icon: <Sun />, title: t("d1"), sub: t("d1s"), source: "power" },
-    {
-      icon: <Calendar />,
-      title: t("d2"),
-      sub: t("d2s"),
-      source: preview?.sources.includes("cdl") ? "cdl" : "modis",
-    },
+    { icon: <Sun />, title: t("d1"), sub: t("d1s") },
+    sources?.includes("cdl")
+      ? { icon: <Calendar />, title: t("d2"), sub: t("d2s") }
+      : { icon: <Calendar />, title: a("asFindVegT"), sub: a("asFindVegS") },
     {
       icon: <Layers />,
       title: t("d3"),
-      sub: preview?.sources.includes("ssurgo") || !preview ? t("d3s") : "SoilGrids",
-      source: "soil",
+      sub: !sources || sources.includes("ssurgo") ? t("d3s") : a("asFindSoilS"),
     },
-    { icon: <Droplet />, title: t("d4"), sub: t("d4s"), source: "openet" },
-  ].filter((f) => f.source !== "openet" || !preview || preview.sources.includes("openet"));
+    ...(has("openet") && sources ? [{ icon: <Droplet />, title: t("d4"), sub: t("d4s") }] : []),
+    ...(sources?.includes("sentinel2")
+      ? [{ icon: <Satellite />, title: a("asFindS2T"), sub: a("asFindS2S") }]
+      : []),
+  ];
 
   return (
     <div className="flex flex-col gap-6">
@@ -229,16 +273,33 @@ export function AddFieldClient({
                 className="min-h-13 flex-1 bg-transparent text-body text-ink outline-none placeholder:text-ink-3"
               />
             </form>
+            {hits.length > 0 && (
+              <ul
+                aria-label={a("asResults")}
+                className="max-h-56 overflow-y-auto rounded-input bg-surface shadow-sheet"
+              >
+                {hits.map((h) => (
+                  <li key={`${h.lon},${h.lat}`}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        goTo(h);
+                        setHits([]);
+                      }}
+                      className="focus-ring min-h-tap w-full px-4 py-2 text-left text-small text-ink hover:bg-muted"
+                    >
+                      {h.label}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
             <div className="flex w-fit gap-1 rounded-input bg-surface p-1 shadow-sheet">
               <Button
                 size={44}
                 variant={drawing ? "primary" : "ghost"}
                 icon={<Pencil />}
-                onClick={() => {
-                  setRing([]);
-                  setClosed(false);
-                  setDrawing(true);
-                }}
+                onClick={clear}
               >
                 {t("tool_draw")}
               </Button>
@@ -253,6 +314,16 @@ export function AddFieldClient({
                 onChange={(e) => void upload(e.target.files?.[0])}
               />
             </div>
+            {ring.length > 0 && (
+              <div className="flex w-fit gap-1 rounded-input bg-surface p-1 shadow-sheet">
+                <Button size={44} variant="ghost" icon={<Undo2 />} onClick={undo}>
+                  {a("asUndo")}
+                </Button>
+                <Button size={44} variant="ghost" icon={<Trash2 />} onClick={clear}>
+                  {a("asClear")}
+                </Button>
+              </div>
+            )}
           </div>
           {drawing && !closed && (
             <p
@@ -281,7 +352,9 @@ export function AddFieldClient({
           <p className="flex items-baseline gap-3 text-body text-ink-2">
             {t("area")}
             <span className="text-big-number text-ink">
-              {area === null ? "—" : area.toLocaleString(undefined, { maximumFractionDigits: 1 })}
+              {area === null
+                ? "—"
+                : `${preview ? "" : "≈ "}${area.toLocaleString(undefined, { maximumFractionDigits: 1 })}`}
             </span>
             {units === "imperial" ? t("area_u") : "ha"}
           </p>
@@ -329,12 +402,15 @@ export function AddFieldClient({
             </ul>
           </div>
           {preview && (
-            <Chip
-              tone={preview.tier === "A" ? "ok" : preview.tier === "B" ? "info" : "week"}
-              icon={<ShieldCheck />}
-            >
-              {preview.tier === "A" ? t("tier") : t(`tier_${preview.tier}`)}
-            </Chip>
+            <div className="flex flex-col gap-2">
+              <Chip
+                tone={preview.tier === "A" ? "ok" : preview.tier === "B" ? "info" : "week"}
+                icon={<ShieldCheck />}
+              >
+                {preview.tier === "A" ? t("tier") : t(`tier_${preview.tier}`)}
+              </Chip>
+              <p className="text-small text-ink-2">{a(`asTier_${preview.tier}`)}</p>
+            </div>
           )}
           {preview && !preview.hasRotationLibrary && (
             <p className="text-small text-week">{a("noRotationLibrary")}</p>
