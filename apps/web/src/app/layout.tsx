@@ -4,6 +4,7 @@ import { NextIntlClientProvider } from "next-intl";
 import { getLocale } from "next-intl/server";
 import { cookies } from "next/headers";
 import type { CSSProperties, ReactNode } from "react";
+import { SidebarStateProvider, SIDEBAR_COOKIE } from "@/components/SidebarState";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { THEME_BOOT_SCRIPT, THEME_COOKIE, parseThemeMode } from "@/lib/theme";
 import { Providers } from "./providers";
@@ -26,6 +27,7 @@ export const metadata: Metadata = { title: "Terrasight", description: "Morning b
 export default async function RootLayout({ children }: { children: ReactNode }) {
   const locale = await getLocale();
   const mode = parseThemeMode((await cookies()).get(THEME_COOKIE)?.value);
+  const sidebarCollapsed = (await cookies()).get(SIDEBAR_COOKIE)?.value === "1";
   const fonts = {
     "--ts-font": "var(--font-onest), system-ui, -apple-system, 'Segoe UI', sans-serif",
     "--ts-mono": "var(--font-jbmono), ui-monospace, monospace",
@@ -45,7 +47,9 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
         <NextIntlClientProvider>
           <ThemeProvider initial={mode}>
-            <Providers>{children}</Providers>
+            <SidebarStateProvider initial={sidebarCollapsed}>
+              <Providers>{children}</Providers>
+            </SidebarStateProvider>
           </ThemeProvider>
         </NextIntlClientProvider>
       </body>

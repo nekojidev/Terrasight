@@ -7,6 +7,7 @@ import {
   FieldThumb,
   InfoHint,
   QueueRow,
+  Sidebar,
   SeasonLabel,
   SeasonStrip,
   seasonHintText,
@@ -175,5 +176,40 @@ describe("SeasonLabel", () => {
     expect(screen.getByText("Season 2027")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "What is a season?" }));
     expect(screen.getByRole("tooltip").textContent).toBe("Harvest in 2027; winter crops sown in autumn 2026.");
+  });
+});
+
+describe("Sidebar", () => {
+  const items = [
+    { href: "/", label: "Today", icon: <i />, active: true, badge: 3 },
+    { href: "/fields", label: "Fields", icon: <i /> },
+  ];
+  it("collapsed: labels stay for screen readers but are hidden visually; toggle reports state", () => {
+    const onToggle = vi.fn();
+    render(
+      <Sidebar
+        label="Main"
+        brand={<b>Mark</b>}
+        items={items}
+        collapsed
+        onToggle={onToggle}
+        toggleLabel="Expand sidebar"
+      />,
+    );
+    const link = screen.getByRole("link", { name: /Today/ });
+    expect(link.getAttribute("aria-current")).toBe("page");
+    const label = Array.from(link.querySelectorAll("span")).find((n) => n.textContent === "Today")!;
+    expect(label.className).toContain("sr-only");
+    expect(document.querySelector("aside")!.getAttribute("data-collapsed")).toBe("true");
+    const btn = screen.getByRole("button", { name: "Expand sidebar" });
+    expect(btn.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(btn);
+    expect(onToggle).toHaveBeenCalled();
+  });
+  it("expanded: labels are visible", () => {
+    render(<Sidebar label="Main" brand="x" items={items} onToggle={() => {}} toggleLabel="Collapse sidebar" />);
+    const label = screen.getAllByText("Today")[0]!;
+    expect(label.className).not.toContain("sr-only");
+    expect(screen.getByRole("button", { name: "Collapse sidebar" }).getAttribute("aria-expanded")).toBe("true");
   });
 });

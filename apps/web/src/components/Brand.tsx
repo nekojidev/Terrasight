@@ -22,7 +22,7 @@ export function Brand({ inverted, className }: { inverted?: boolean; className?:
         />
         <circle cx="26" cy="9" r="2" fill="var(--ts-surface)" />
       </svg>
-      Terrasight
+      <span className="sb-label">Terrasight</span>
     </span>
   );
 }
