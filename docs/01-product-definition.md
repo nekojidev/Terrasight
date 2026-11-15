@@ -1,8 +1,8 @@
-# Terrasight — Product Definition (v2.7)
+# Terrasight — Product Definition (v2.8)
 
 | | |
 | --- | --- |
-| **Status** | Draft v2.7 — **supersedes v1** (direction change on 2026-11-14) |
+| **Status** | Draft v2.8 — **supersedes v1** (direction change on 2026-11-14) |
 | **Date** | 2026-11-14 |
 | **Stage** | 1 of 3 — Product Definition → RFC → Tech Design |
 | **Context** | NASA Space Apps Challenge 2026, *Field Shift: Adapting Farms with NASA Data* |
@@ -11,6 +11,7 @@
 | **What changed in v2.2** | Competitors & differentiation (EOSDA Crop Monitoring, §7); new requirements: scouting tasks, stable zones, yield range, work log, integrations (§9); non-goals updated: zones are in scope, prescribing rates is not, open imagery only. Full analysis: [`competitor-eos.md`](competitor-eos.md) |
 | **What changed in v2.3** | Rotation horizon is **5 seasons (2026–2030)** instead of 10. The headline is the decision for next season; the 5-season comparison is its evidence; the plan is recomputed every autumn (§5, Rotation horizon) |
 | **What changed in v2.4** | Design review outcomes (v2.4.1: wording aligned across the whole document): urgency rules (§9), confidence on every home card, partial-failure state of **Analyze fields**, first-run onboarding and empty home, notifications, Fields map, rotation call to action, scouting completion and ownership, "Owner report" naming, honest "Coming soon" for integrations; review decisions in §12 (6–10) |
+| **What changed in v2.8** | **AI-proposed rotations (2026-11-15):** besides the rotation library, the assistant (Gemini) proposes 3–5 crop sequences for 2026–2030 from the field's own data (crop history, soil, climate, region, irrigation, crops with verified prices) with a short rationale. Every proposal passes rule checks (only modelled crops with verified prices, no forbidden host repeats, irrigation requirements) and is simulated by the same engine (150 weather runs × 10 price scenarios); **all numbers come from the models, never from the AI**. Shown as "Proposed by the assistant" next to library options |
 | **What changed in v2.7** | **Owner decisions replace the Owner report (2026-11-15):** **Accept** puts advice into the agronomist's own plan and no longer reaches the owner. A separate, deliberate **Ask the owner** (with an optional note, 8 s Undo) is used only for items that need the owner's approval (money, seed, a rotation change). Each becomes a **decision card with a thread**: advice snapshot → agronomist note → owner **Approve / Not now / Ask…** → agronomist reply (draft from the item). The owner's home is "N decisions need you"; report links open the same view without an account. The monthly report and "Accept and add to the report" are gone. Contract: `packages/shared/src/decisions.ts` |
 | **What changed in v2.6** | **No demo and no example data in the product (2026-11-15):** no demo company ("Explore the demo company" removed), no greyed example card on the empty home, no static mock of zones or yield. The field tab "Zones & yield" becomes **Work log** (real events only) until FR-ZN-1 / FR-YF-1 are built on real data (§9) |
 | **What changed in v2.5** | (v2.5.2: rotation library v2, 113 rotations in 24 regions and 34 countries (§8); field-brief numbers that can be computed in November (§9); Chase County, NE → `us-central-high-plains` (§12).) (v2.5.1: region = county in the UI, neutral-data wording, a P0 hero example, dates by UI language, competitor sources pending) Competitor research beyond EOS (§7); the **morning brief** home and in-card Accept / Snooze with Undo (§9); field-page brief, scouting map with a bottom sheet, mobile home and dark theme (§9); the **v4 design system** (§9, Design system); neutrality as a product principle (§10); decisions 11–15 (§12) |
