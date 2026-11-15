@@ -41,6 +41,7 @@ export interface WorkspaceInput {
   timeZone: string;
   units: Units;
   reportLanguage: Language;
+  currency?: "USD" | "UAH";
 }
 
 @Injectable()
@@ -99,6 +100,7 @@ export class WorkspacesService {
           timeZone: input.timeZone,
           units: input.units,
           reportLanguage: input.reportLanguage,
+          ...(input.currency ? { currency: input.currency } : {}),
         },
       });
       await tx.membership.create({ data: { workspaceId: ws.id, userId, role: "owner" } });
@@ -119,7 +121,7 @@ export class WorkspacesService {
       where: { id: workspaceId },
       data: {
         ...(input.name ? { name: input.name.trim() } : {}),
-        ...pick(input, ["timeZone", "units", "reportLanguage"]),
+        ...pick(input, ["timeZone", "units", "reportLanguage", "currency"]),
       },
     });
     await this.prisma.db.auditLog.create({

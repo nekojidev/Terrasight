@@ -2564,6 +2564,165 @@
           }
         },
         {
+          "name": "Crop prices: the company's own list starts empty, in the workspace currency",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"shape\", () => { const r = pm.response.json(); pm.expect([\"USD\", \"UAH\"]).to.include(r.currency); pm.expect(r.rows).to.be.an(\"array\"); pm.expect(r.crops).to.be.an(\"array\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/crop-prices"
+          }
+        },
+        {
+          "name": "Crop prices: a zero price is invalid",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 422\", () => pm.response.to.have.status(422));",
+                  "pm.test(\"problem+json\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"));",
+                  "pm.test(\"type invalid-input\", () => pm.expect(pm.response.json().type).to.include(\"invalid-input\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/crop-prices",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rows\": [\n    {\n      \"crop\": \"corn\",\n      \"pricePerT\": 0,\n      \"variableCostPerHa\": 100\n    }\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "Crop prices: an unknown crop is invalid",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 422\", () => pm.response.to.have.status(422));",
+                  "pm.test(\"problem+json\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"));",
+                  "pm.test(\"type invalid-input\", () => pm.expect(pm.response.json().type).to.include(\"invalid-input\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/crop-prices",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rows\": [\n    {\n      \"crop\": \"banana\",\n      \"pricePerT\": 100,\n      \"variableCostPerHa\": 100\n    }\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "Crop prices: save corn with an expected yield",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"saved\", () => { const r = pm.response.json().rows.find((x) => x.crop === \"corn\"); pm.expect(r.pricePerT).to.eql(180); pm.expect(r.yieldRefTHa).to.eql(8.5); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/crop-prices",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rows\": [\n    {\n      \"crop\": \"corn\",\n      \"pricePerT\": 180,\n      \"variableCostPerHa\": 900,\n      \"yieldRefTHa\": 8.5\n    }\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "Crop prices: remove corn again",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"gone\", () => pm.expect(pm.response.json().rows.some((x) => x.crop === \"corn\")).to.be.false);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/crop-prices",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rows\": [],\n  \"remove\": [\n    \"corn\"\n  ]\n}"
+            }
+          }
+        },
+        {
           "name": "Scenario run with an out-of-range slider is invalid",
           "event": [
             {

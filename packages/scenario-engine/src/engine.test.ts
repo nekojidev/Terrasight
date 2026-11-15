@@ -136,7 +136,7 @@ describe("scenario engine (RFC §8)", () => {
   it("scores against the current rotation and reports drought, 2022, prices and soil", () => {
     expect(r.current.delta).toEqual({ margin: 0, water: 0, soil: 0, drought: 0 });
     for (const s of [r.current, ...r.alternatives]) {
-      expect(s.drought).toBeLessThanOrEqual(s.margin);
+      expect(s.drought!).toBeLessThanOrEqual(s.margin!);
       expect(Number.isFinite(s.if2022.margin)).toBe(true);
       expect(s.if2022.margin).toBeLessThanOrEqual(s.if2022.typical + 1e-6);
       expect(s.marginBySeason).toHaveLength(5);
@@ -236,7 +236,7 @@ describe("rotation yield effects (verified 2026-11-14)", () => {
     const cc = r.alternatives.find((a) => a.id === "continuous-corn")!;
     // 4 of 5 corn seasons follow corn: margin is lower than without the effect would give
     expect(cc.pestPressure[0]!.seasons).toBe(4);
-    expect(cc.marginBySeason[1]!).toBeLessThan(cc.marginBySeason[0]!);
+    expect(cc.marginBySeason![1]!).toBeLessThan(cc.marginBySeason![0]!);
   });
 });
 
@@ -348,7 +348,11 @@ describe("caveats and unverified inputs", () => {
     return r.alternatives[0]!.caveats;
   };
   it("flags adapted crop parameters (UA proxy) on scenarios and yield ranges", () => {
-    const rot: Rotation = { id: "barley-wheat", sequence: ["winter_barley", "winter_wheat"], irrigation: "none" };
+    const rot: Rotation = {
+      id: "barley-wheat",
+      sequence: ["winter_barley", "winter_wheat"],
+      irrigation: "none",
+    };
     const p = { ...prices, winter_barley: { price: 190, variableCost: 450, yieldRef: 5 } };
     const sow = { ...sowing, winter_barley: "10-01" };
     const i = input({ rotations: [rot], prices: p, sowing: sow, irrigated: false, runs: 20 });
@@ -356,13 +360,17 @@ describe("caveats and unverified inputs", () => {
     expect(r.alternatives[0]!.caveats).toContain("unverified-crop-parameters:winter_barley");
     // winter wheat's own p is adapted too (dormancy), so it is flagged as well; corn is not
     expect(r.alternatives[0]!.caveats).toContain("unverified-crop-parameters:winter_wheat");
-    expect(caveatsOf({ runs: 20 }, ["continuous-corn"]).some((c) => c.startsWith("unverified-crop"))).toBe(false);
+    expect(caveatsOf({ runs: 20 }, ["continuous-corn"]).some((c) => c.startsWith("unverified-crop"))).toBe(
+      false,
+    );
     const yr = yieldRange(i, planSeasons(rot.sequence, 0, 2026), weatherRuns(i).slice(0, 10), 0);
     expect(yr!.caveats).toEqual(["unverified-crop-parameters:winter_barley"]);
   });
   it("irrigated results say water cost is inside the budget unless a verified cost is passed", () => {
     expect(caveatsOf({ runs: 20 }, ["corn-soy-wheat"])).toContain("irrigation-cost-in-budget");
-    expect(caveatsOf({ runs: 20, irrigated: false }, ["wheat-fallow"])).not.toContain("irrigation-cost-in-budget");
+    expect(caveatsOf({ runs: 20, irrigated: false }, ["wheat-fallow"])).not.toContain(
+      "irrigation-cost-in-budget",
+    );
     expect(caveatsOf({ runs: 20, irrigationCostPerMm: 0.5 }, ["corn-soy-wheat"])).not.toContain(
       "irrigation-cost-in-budget",
     );
@@ -370,8 +378,8 @@ describe("caveats and unverified inputs", () => {
   it("prices irrigation water per mm when a verified cost is given", () => {
     const free = runScenarios(input({ runs: 30 })).current;
     const paid = runScenarios(input({ runs: 30, irrigationCostPerMm: 1 })).current;
-    expect(paid.margin).toBeLessThan(free.margin);
-    expect(free.margin - paid.margin).toBeCloseTo(free.water, 0);
+    expect(paid.margin!).toBeLessThan(free.margin!);
+    expect(free.margin! - paid.margin!).toBeCloseTo(free.water, 0);
   });
   it("says the repeat penalty is not modelled for unverified repeats", () => {
     const rot: Rotation = { id: "soy-soy", sequence: ["soybean"], irrigation: "optional" };
@@ -384,7 +392,8 @@ describe("caveats and unverified inputs", () => {
 
 describe("unverified rotation effects", () => {
   it("are not applied and are cited", async () => {
-    const { rotationEffect, ROTATION_EFFECTS, repeatPenaltyUnmodelled } = await import("./rotation-effects.js");
+    const { rotationEffect, ROTATION_EFFECTS, repeatPenaltyUnmodelled } =
+      await import("./rotation-effects.js");
     for (const crop of ["soybean", "sunflower", "winter_canola", "spring_canola", "sugar_beet"]) {
       const e = ROTATION_EFFECTS.find((x) => x.crop === crop)!;
       expect(e.verified).toBe(false);
@@ -405,5 +414,70 @@ describe("unverified rotation effects", () => {
     } finally {
       e.verified = false;
     }
+  });
+});
+
+describe("agronomy-only mode (no prices)", () => {
+  const noPrices = (over: Partial<EngineInput> = {}) =>
+    input({
+      agronomyOnly: true,
+      prices: {},
+      yieldRefs: { corn: 13.5, winter_wheat: 5.5, sorghum: 9, soybean: 4.2 },
+      ...over,
+    });
+  const r = runScenarios(noPrices());
+
+  it("runs without prices and reports no money anywhere", () => {
+    expect(r.mode).toBe("agronomy");
+    expect(r.alternatives.length).toBeGreaterThanOrEqual(1);
+    for (const s of [r.current, ...r.alternatives]) {
+      expect(s.margin).toBeNull();
+      expect(s.marginBySeason).toBeNull();
+      expect(s.drought).toBeNull();
+      expect(s.delta.margin).toBeNull();
+      expect(s.priceWins).toBe(0);
+      expect(Number.isFinite(s.water)).toBe(true);
+      expect(Number.isFinite(s.erosion)).toBe(true);
+      expect(s.droughtYield).toBeGreaterThan(0);
+      expect(s.droughtYield).toBeLessThanOrEqual(1.5);
+    }
+    expect(r.current.delta).toEqual({ margin: null, water: 0, soil: 0, drought: 0 });
+  });
+
+  it("water, erosion and drought resilience match the money mode (same simulator, same weather runs)", () => {
+    const money = runScenarios(input());
+    const a = money.alternatives[0]!;
+    const same = [r.current, ...r.alternatives].find((x) => x.id === a.id);
+    // The same rotation gives the same agronomy numbers whether or not prices exist.
+    if (same) {
+      expect(same.water).toBeCloseTo(a.water, 6);
+      expect(same.erosion).toBeCloseTo(a.erosion, 6);
+      expect(same.droughtYield).toBeCloseTo(a.droughtYield, 6);
+    }
+    expect(r.current.water).toBeCloseTo(money.current.water, 6);
+    expect(r.current.carbonChange!).toBeCloseTo(money.current.carbonChange!, 6);
+  });
+
+  it("soil carbon is unknown (null, never guessed) when a crop has no reference yield, with a caveat", () => {
+    const x = runScenarios(noPrices({ yieldRefs: {} }));
+    for (const s of [x.current, ...x.alternatives]) {
+      expect(s.carbonChange).toBeNull();
+      expect(s.caveats).toContain("yield-reference-missing");
+    }
+    expect(Number.isFinite(x.current.erosion)).toBe(true);
+  });
+
+  it("ranks on the non-money metrics only and is deterministic", () => {
+    const ranked = rank([r.current, ...r.alternatives], { margin: 0, water: 1, soil: 0, drought: 0 });
+    const byWater = [...ranked].sort((a, b) => (b.score ?? 0) - (a.score ?? 0))[0]!;
+    const minWater = Math.min(...ranked.map((s) => s.water));
+    expect(byWater.water).toBeCloseTo(minWater, 6);
+    expect(runScenarios(noPrices()).current.droughtYield).toBe(r.current.droughtYield);
+  });
+
+  it("splitRotations can skip the price requirement (modelled crops only)", () => {
+    const s = splitRotations(rotations, {}, false);
+    expect(s.usable).toHaveLength(rotations.length);
+    expect(s.unpriced).toEqual([]);
   });
 });

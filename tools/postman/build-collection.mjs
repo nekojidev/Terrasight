@@ -626,6 +626,34 @@ const collection = {
             `pm.test("saved", () => pm.expect(pm.response.json()).to.include({ season: 2026, crop: "alfalfa" }));`,
           ],
         }),
+        req("Crop prices: the company's own list starts empty, in the workspace currency", "GET", "/api/w/{{ws}}/crop-prices", {
+          tests: [
+            status(200),
+            `pm.test("shape", () => { const r = pm.response.json(); pm.expect(["USD", "UAH"]).to.include(r.currency); pm.expect(r.rows).to.be.an("array"); pm.expect(r.crops).to.be.an("array"); });`,
+          ],
+        }),
+        req("Crop prices: a zero price is invalid", "PUT", "/api/w/{{ws}}/crop-prices", {
+          body: { rows: [{ crop: "corn", pricePerT: 0, variableCostPerHa: 100 }] },
+          tests: problem(422, "invalid-input"),
+        }),
+        req("Crop prices: an unknown crop is invalid", "PUT", "/api/w/{{ws}}/crop-prices", {
+          body: { rows: [{ crop: "banana", pricePerT: 100, variableCostPerHa: 100 }] },
+          tests: problem(422, "invalid-input"),
+        }),
+        req("Crop prices: save corn with an expected yield", "PUT", "/api/w/{{ws}}/crop-prices", {
+          body: { rows: [{ crop: "corn", pricePerT: 180, variableCostPerHa: 900, yieldRefTHa: 8.5 }] },
+          tests: [
+            status(200),
+            `pm.test("saved", () => { const r = pm.response.json().rows.find((x) => x.crop === "corn"); pm.expect(r.pricePerT).to.eql(180); pm.expect(r.yieldRefTHa).to.eql(8.5); });`,
+          ],
+        }),
+        req("Crop prices: remove corn again", "PUT", "/api/w/{{ws}}/crop-prices", {
+          body: { rows: [], remove: ["corn"] },
+          tests: [
+            status(200),
+            `pm.test("gone", () => pm.expect(pm.response.json().rows.some((x) => x.crop === "corn")).to.be.false);`,
+          ],
+        }),
         req(
           "Scenario run with an out-of-range slider is invalid",
           "POST",

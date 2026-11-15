@@ -57,6 +57,16 @@ export interface EngineInput {
   /** Typical sowing date per crop, "MM-DD" (autumn dates belong to the year before harvest). */
   sowing: Record<string, string>;
   prices: Record<string, CropEconomics>;
+  /**
+   * Agronomy-only mode: margin cannot be computed (a crop has no usable price), so no money is simulated or ranked.
+   * Water, soil carbon, erosion, drought resilience (relative yield) and pests are still model results.
+   */
+  agronomyOnly?: boolean;
+  /**
+   * Reference yields (t/ha) of crops that have no full price entry (a verified library yield or the company's own).
+   * Only the soil-carbon residue needs them; a crop without one makes the carbon change unknown (null), never guessed.
+   */
+  yieldRefs?: Record<string, number>;
   /** Carbon in the soil at the start, t C/ha (split 5 % young / 95 % old). */
   soilCarbon: number;
   waterCapMm?: number;
@@ -92,17 +102,25 @@ export interface ScenarioResult {
   source?: "library" | "ai";
   label?: "baseline" | "detected";
   plan: SeasonPlan[];
-  /** Mean gross margin, $/ha/yr, over 5 seasons and all runs (base prices). */
-  margin: number;
-  /** Mean margin per season over runs, for the cumulative chart. */
-  marginBySeason: number[];
+  /** Mean gross margin per ha/yr, over 5 seasons and all runs (base prices), in the company's currency. Null in agronomy-only mode. */
+  margin: number | null;
+  /** Mean margin per season over runs, for the cumulative chart. Null in agronomy-only mode. */
+  marginBySeason: number[] | null;
   /** Mean irrigation, mm/yr. */
   water: number;
-  /** Soil carbon change over the 5 seasons, t C/ha, and the mean relative erosion index. */
-  carbonChange: number;
+  /**
+   * Soil carbon change over the 5 seasons, t C/ha (null when a crop has no reference yield: residues depend on the
+   * yield), and the mean relative erosion index.
+   */
+  carbonChange: number | null;
   erosion: number;
-  /** Mean margin in the worst 10 % of runs (CVaR-10), $/ha/yr. */
-  drought: number;
+  /** Mean margin in the worst 10 % of runs (CVaR-10) per ha/yr. Null in agronomy-only mode. */
+  drought: number | null;
+  /**
+   * Drought resilience without money: mean yield, relative to a typical year on this field (1 = typical), in the worst
+   * 10 % of the weather runs. Always computed.
+   */
+  droughtYield: number;
   /**
    * 2022 repeating in one season: that season's margin with 2022 weather vs the same season with ordinary weather
    * (the base run), for the season where it hurts most. NaN when 2022 is not in the weather history.
@@ -120,8 +138,11 @@ export interface ScenarioResult {
    */
   caveats: string[];
   relaxed: string[];
-  /** Differences from the current rotation (current = 0). */
-  delta: Record<Metric, number>;
+  /**
+   * Differences from the current rotation (current = 0). In agronomy-only mode margin is null and "drought" is the
+   * difference in droughtYield (relative yield), not money.
+   */
+  delta: { margin: number | null; water: number; soil: number; drought: number };
   score?: number;
 }
 
@@ -132,6 +153,8 @@ export interface EngineResult {
   relaxed: string[];
   noLibrary: boolean;
   bestFit: string | null;
+  /** "agronomy" = no margin, no price scenarios; ranked on water, soil, drought resilience only. */
+  mode: "money" | "agronomy";
 }
 
 /** Most AI-proposed options in the result (on top of the 2 library picks). */
@@ -191,6 +214,10 @@ interface RunOutcome {
   carbonChange: number;
   erosion: number;
   capped: boolean;
+  /** Mean yield per season relative to a typical year on this field (1 = typical). */
+  relYield: number[];
+  /** Every crop had a reference yield, so the residue carbon is real. */
+  yieldKnown: boolean;
 }
 
 function sowingDate(input: EngineInput, crop: string, season: number): string {
@@ -217,6 +244,8 @@ function simulateRun(
     carbonChange: 0,
     erosion: 0,
     capped: false,
+    relYield: [],
+    yieldKnown: true,
   };
   let alfalfaYears = 0;
   plan.forEach((p, k) => {
@@ -241,8 +270,11 @@ function simulateRun(
     const parts: Array<{ crop: string; tonnes: number }> = [];
     let cost = 0;
     let residue = 0;
+    const rel: number[] = [];
     for (const c of res.crops) {
       const e = input.prices[c.crop];
+      const yieldRef = e?.yieldRef ?? input.yieldRefs?.[c.crop];
+      if (yieldRef == null) out.yieldKnown = false;
       // Establishment year of a perennial stand yields about half (alfalfa).
       const est = c.crop === "alfalfa" ? (alfalfaYears++ === 0 ? 0.5 : 1) : 1;
       if (c.crop !== "alfalfa") alfalfaYears = 0;
@@ -251,7 +283,8 @@ function simulateRun(
       // Rotation effect when the crop follows itself (corn after corn, sorghum after sorghum, wheat after wheat).
       const previous = k > 0 ? plan[k - 1]!.crops : (input.history ?? []).slice(-1);
       const rot = rotationEffect(c.crop, previous, input.irrigated);
-      const tonnes = ((e?.yieldRef ?? 0) * c.yieldRatio * est * rot) / Math.max(0.2, median);
+      rel.push((c.yieldRatio * rot) / Math.max(0.2, median));
+      const tonnes = ((yieldRef ?? 0) * c.yieldRatio * est * rot) / Math.max(0.2, median);
       parts.push({ crop: c.crop, tonnes });
       cost += e?.variableCost ?? 0;
       residue += tonnes * (CROPS[c.crop]?.residueC ?? 0.3);
@@ -261,6 +294,7 @@ function simulateRun(
       cost += input.prices.fallow?.variableCost ?? 0;
       alfalfaYears = 0;
     }
+    out.relYield.push(rel.length ? mean(rel) : 1);
     out.revenueParts.push(parts);
     out.costs.push(cost);
     out.marginBySeason.push(
@@ -319,6 +353,30 @@ function evaluateRotation(
   const runMargins = outcomes.map((o) => mean(o.marginBySeason));
   const sorted = [...runMargins].sort((a, b) => a - b);
   const worst = sorted.slice(0, Math.max(1, Math.round(sorted.length * 0.1)));
+  const runYields = outcomes.map((o) => mean(o.relYield)).sort((a, b) => a - b);
+  const droughtYield = mean(runYields.slice(0, Math.max(1, Math.round(runYields.length * 0.1))));
+  const carbonKnown = outcomes.every((o) => o.yieldKnown);
+  if (input.agronomyOnly) {
+    const caveats = planCaveats(input, plan, history);
+    if (!carbonKnown) caveats.push("yield-reference-missing");
+    return {
+      id,
+      plan,
+      margin: null,
+      marginBySeason: null,
+      water: mean(outcomes.map((o) => o.irrigation)) / plan.length,
+      carbonChange: carbonKnown ? mean(outcomes.map((o) => o.carbonChange)) : null,
+      erosion: mean(outcomes.map((o) => o.erosion)),
+      drought: null,
+      droughtYield,
+      if2022: { margin: NaN, typical: NaN, season: plan[0]!.season },
+      capped: outcomes.some((o) => o.capped),
+      capLoss: 0,
+      pestPressure: pestPressure(plan, history, input.pestModels),
+      caveats: caveats.sort(),
+      byPrice: [],
+    };
+  }
   // Stress run i puts 2022 into season i of the base run (runs[0]); compare that season with the base run's season i.
   const base = outcomes[0]?.marginBySeason ?? [];
   const drops = stress.map((r, i) => {
@@ -357,6 +415,7 @@ function evaluateRotation(
     carbonChange: mean(outcomes.map((o) => o.carbonChange)),
     erosion: mean(outcomes.map((o) => o.erosion)),
     drought: mean(worst),
+    droughtYield,
     if2022: worstStress
       ? { margin: worstStress.hit, typical: worstStress.typical, season: plan[worstStress.i]!.season }
       : { margin: NaN, typical: NaN, season: plan[0]!.season },
@@ -376,17 +435,25 @@ function scaled(values: number[], higherBetter: boolean): number[] {
   return values.map((v) => (higherBetter ? (v - lo) / (hi - lo) : (hi - v) / (hi - lo)));
 }
 
-/** Soil metric: carbon gain minus erosion, each scaled. */
-function soilValue(s: Pick<ScenarioResult, "carbonChange" | "erosion">, maxErosion: number): number {
-  return s.carbonChange - (maxErosion > 0 ? s.erosion / maxErosion : 0);
+/** Soil metric: carbon gain minus erosion, each scaled. Carbon counts only when it is known for every option. */
+function soilValue(
+  s: Pick<ScenarioResult, "carbonChange" | "erosion">,
+  maxErosion: number,
+  useCarbon: boolean,
+): number {
+  return (useCarbon ? (s.carbonChange ?? 0) : 0) - (maxErosion > 0 ? s.erosion / maxErosion : 0);
 }
+
+/** Drought metric: money (CVaR-10) when margins exist, else the relative yield in the worst runs. */
+const droughtValue = (s: Pick<ScenarioResult, "drought" | "droughtYield">) => s.drought ?? s.droughtYield;
 
 /** Re-ranks scenarios for priority weights (browser-side too, < 50 ms; RFC §7.5). */
 export function rank(scenarios: ScenarioResult[], weights: Weights = EQUAL_WEIGHTS): ScenarioResult[] {
   const maxE = Math.max(...scenarios.map((s) => s.erosion), 0);
+  const useCarbon = scenarios.every((s) => s.carbonChange != null);
   const cols: Record<Metric, number[]> = {
     margin: scaled(
-      scenarios.map((s) => s.margin),
+      scenarios.map((s) => s.margin ?? 0),
       true,
     ),
     water: scaled(
@@ -394,13 +461,10 @@ export function rank(scenarios: ScenarioResult[], weights: Weights = EQUAL_WEIGH
       false,
     ),
     soil: scaled(
-      scenarios.map((s) => soilValue(s, maxE)),
+      scenarios.map((s) => soilValue(s, maxE, useCarbon)),
       true,
     ),
-    drought: scaled(
-      scenarios.map((s) => s.drought),
-      true,
-    ),
+    drought: scaled(scenarios.map(droughtValue), true),
   };
   return scenarios.map((s, i) => ({
     ...s,
@@ -423,28 +487,12 @@ export function pickTwo(ranked: ScenarioResult[]): ScenarioResult[] {
   const first = alts[0];
   if (!first) return [];
   const metrics: Metric[] = ["margin", "water", "soil", "drought"];
-  const better = (s: ScenarioResult, m: Metric) =>
-    m === "water"
-      ? s.water < first.water
-      : m === "soil"
-        ? s.carbonChange - s.erosion > first.carbonChange - first.erosion
-        : s[m] > first[m];
-  const bestAt = (m: Metric) =>
-    alts.reduce(
-      (b, s) =>
-        m === "water"
-          ? s.water < b.water
-            ? s
-            : b
-          : m === "soil"
-            ? s.carbonChange - s.erosion > b.carbonChange - b.erosion
-              ? s
-              : b
-            : s[m] > b[m]
-              ? s
-              : b,
-      first,
-    );
+  const useCarbon = ranked.every((s) => s.carbonChange != null);
+  const soil = (s: ScenarioResult) => (useCarbon ? (s.carbonChange ?? 0) : 0) - s.erosion;
+  const value = (s: ScenarioResult, m: Metric) =>
+    m === "water" ? -s.water : m === "soil" ? soil(s) : m === "margin" ? (s.margin ?? 0) : droughtValue(s);
+  const better = (s: ScenarioResult, m: Metric) => value(s, m) > value(first, m);
+  const bestAt = (m: Metric) => alts.reduce((b, s) => (value(s, m) > value(b, m) ? s : b), first);
   const notBest = metrics.filter((m) => bestAt(m).id !== first.id);
   const second = alts
     .slice(1)
@@ -562,6 +610,7 @@ export function yieldRange(
 export function splitRotations(
   rotations: Rotation[],
   prices: EngineInput["prices"],
+  requirePrices = true,
 ): { usable: Rotation[]; unpriced: string[]; unmodelled: string[] } {
   const unpriced = new Set<string>();
   const unmodelled = new Set<string>();
@@ -572,7 +621,7 @@ export function splitRotations(
       if (!CROPS[c]) {
         unmodelled.add(c);
         ok = false;
-      } else if (!prices[c]) {
+      } else if (requirePrices && !prices[c]) {
         unpriced.add(c);
         ok = false;
       }
@@ -598,7 +647,7 @@ export function runScenarios(engineInput: EngineInput, weights: Weights = EQUAL_
     (y) => (input.weatherByYear.get(y)?.length ?? 0) >= 360,
   );
   const runs = bootstrapRuns(years, rng, input.runs);
-  const stress = years.includes(2022) ? stressRuns(runs[0]!.years) : [];
+  const stress = years.includes(2022) && !input.agronomyOnly ? stressRuns(runs[0]!.years) : [];
   const allCrops = [
     ...new Set(
       input.rotations
@@ -655,6 +704,7 @@ export function runScenarios(engineInput: EngineInput, weights: Weights = EQUAL_
     ),
   );
   const everyone = [cur, ...alts];
+  const useCarbon = everyone.every((e) => e.carbonChange != null);
   const aiIds = new Set(input.rotations.filter((r) => r.source === "ai").map((r) => r.id));
   const finish = (s: (typeof everyone)[number], i: number, kind: ScenarioResult["kind"]): ScenarioResult => {
     const { byPrice: _byPrice, ...rest } = s;
@@ -666,10 +716,13 @@ export function runScenarios(engineInput: EngineInput, weights: Weights = EQUAL_
       priceWins: 0, // set below, among the options actually shown
       relaxed: kind === "alternative" ? relaxed : [],
       delta: {
-        margin: s.margin - cur.margin,
+        margin: s.margin != null && cur.margin != null ? s.margin - cur.margin : null,
         water: s.water - cur.water,
-        soil: s.carbonChange - cur.carbonChange - (s.erosion - cur.erosion),
-        drought: s.drought - cur.drought,
+        soil: (useCarbon ? (s.carbonChange ?? 0) - (cur.carbonChange ?? 0) : 0) - (s.erosion - cur.erosion),
+        drought:
+          s.drought != null && cur.drought != null
+            ? s.drought - cur.drought
+            : s.droughtYield - cur.droughtYield,
       },
     };
   };
@@ -688,10 +741,11 @@ export function runScenarios(engineInput: EngineInput, weights: Weights = EQUAL_
   // Price robustness among the shown options: in how many of the 10 price scenarios each has the highest margin.
   const byPriceOf = new Map(everyone.map((e) => [e.id, e.byPrice]));
   const shown = [current, ...alternatives];
-  prices.forEach((_, p) => {
-    const winner = shown.reduce((b, s) => (byPriceOf.get(s.id)![p]! > byPriceOf.get(b.id)![p]! ? s : b));
-    winner.priceWins++;
-  });
+  if (!input.agronomyOnly)
+    prices.forEach((_, p) => {
+      const winner = shown.reduce((b, s) => (byPriceOf.get(s.id)![p]! > byPriceOf.get(b.id)![p]! ? s : b));
+      winner.priceWins++;
+    });
   const three = shown;
   const best = three.reduce((b, s) => ((s.score ?? 0) > (b.score ?? 0) ? s : b), current);
   return {
@@ -701,10 +755,11 @@ export function runScenarios(engineInput: EngineInput, weights: Weights = EQUAL_
     relaxed,
     noLibrary: input.rotations.length === 0,
     bestFit: best.id,
+    mode: input.agronomyOnly ? "agronomy" : "money",
   };
 }
 
 export { addDays };
 
 /** Bumped whenever the engine or simulator changes results; part of the scenario cache key. */
-export const ENGINE_VERSION = "2026-11-15.4";
+export const ENGINE_VERSION = "2026-11-17.1";

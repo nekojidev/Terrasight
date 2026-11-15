@@ -14,6 +14,7 @@ import {
   type EngineInput,
   type EngineResult,
 } from "@terrasight/scenario-engine";
+import { CROPS } from "@terrasight/simulator";
 import { ENV, type Env } from "../config/config.js";
 import { PrismaService } from "../db/prisma.service.js";
 import type { Prisma } from "../generated/prisma/client.js";
@@ -23,6 +24,7 @@ import { SeasonsService } from "../seasons/seasons.service.js";
 import { AiRotationsService, toRotations, type AiStatus, type Proposal } from "./ai-rotations.service.js";
 import { PoolBusyError, WorkerPool, WorkerTimeoutError } from "./worker-pool.js";
 
+import { priceLabel } from "./price-resolution.js";
 import { pendingView } from "./scenario-pending.js";
 import { ScenarioInputsService, type InputMeta, type Overrides } from "./scenario-inputs.service.js";
 import { ScenarioPlansService } from "./scenario-plans.service.js";
@@ -100,24 +102,36 @@ export class ScenariosService implements OnModuleDestroy {
       full.current.label === "baseline"
         ? bad.length === 0
         : noFarmCrop || [...curAll].some((c) => !bad.includes(c) && c !== "fallow");
-    if (!split.usable.length || !currentOk) {
-      return pendingView(
-        this.lib,
-        split.unpriced.length || bad.some((c) => !full.prices[c]) ? "prices" : "crops",
-        full,
-        meta,
-        missing,
-        split.unmodelled,
-      );
+    let agronomyOnly = false;
+    let candidates = split.usable;
+    if (!candidates.length || !currentOk) {
+      // Margin cannot be computed (a crop has no price): still run water, soil, erosion, drought resilience and pests.
+      // Only crops the simulator has parameters for can take part; nothing monetary is simulated or shown.
+      const modelled = splitRotations(full.rotations, {}, false);
+      const currentModelled =
+        full.current.label === "baseline"
+          ? [...curAll].every((c) => c === "fallow" || CROPS[c])
+          : noFarmCrop || [...curAll].some((c) => c !== "fallow" && CROPS[c]);
+      if (!modelled.usable.length || !currentModelled)
+        return pendingView(this.lib, "crops", full, meta, missing, modelled.unmodelled);
+      agronomyOnly = true;
+      candidates = modelled.usable;
+      split.unmodelled = modelled.unmodelled;
+      full.yieldRefs = {
+        ...full.yieldRefs,
+        ...Object.fromEntries(Object.entries(full.prices).map(([c, e]) => [c, e.yieldRef])),
+      };
+      full.prices = {};
+      full.agronomyOnly = true;
     }
     meta.unmodelled = split.unmodelled;
     // AI proposals join the library candidates and go through the same engine path (numbers come only from the engine).
-    const ai: { status: AiStatus; proposals: Proposal[] } = aiCtx
-      ? await this.ai.propose(aiCtx, aiMode)
-      : { status: "skipped", proposals: [] };
+    // Without prices the assistant proposes nothing (its crop list comes from the priced crops).
+    const ai: { status: AiStatus; proposals: Proposal[] } =
+      aiCtx && !agronomyOnly ? await this.ai.propose(aiCtx, aiMode) : { status: "skipped", proposals: [] };
     const input: EngineInput = {
       ...full,
-      rotations: [...split.usable, ...toRotations(ai.proposals, full.irrigated)],
+      rotations: [...candidates, ...toRotations(ai.proposals, full.irrigated)],
     };
     const hash = createHash("sha256")
       .update(
@@ -262,6 +276,17 @@ export class ScenariosService implements OnModuleDestroy {
       missingPrices,
       unmodelledCrops: meta.unmodelled ?? [],
       pending: null,
+      mode: result.mode ?? "money",
+      currency: meta.currency,
+      priceSources: meta.priceSources,
+      priceLabel: priceLabel(
+        meta.priceSources,
+        [result.current, ...result.alternatives].flatMap((s) => s.plan.flatMap((p) => p.crops)),
+      ),
+      needYield: meta.needYield,
+      yieldHints: meta.yieldHints,
+      /** Modelled crops of the library rotations (and the current one) that have no price yet: the price form lists them. */
+      cropsNeedingPrices: this.cropsNeedingPrices(input, meta, missingPrices),
       currentBasis: meta.currentBasis,
       currentSequence: meta.currentSequence,
       lastSeason: meta.lastSeason,
@@ -283,6 +308,12 @@ export class ScenariosService implements OnModuleDestroy {
       ),
       result: { ...result, alternatives: result.alternatives.map(decorate) },
     };
+  }
+
+  /** Crops the simulator can model that lack a usable price, for the candidate rotations: what the company can enter. */
+  private cropsNeedingPrices(input: EngineInput, meta: InputMeta, missing: string[]): string[] {
+    const wanted = new Set([...missing, ...meta.needYield]);
+    return [...wanted].filter((c) => c !== "fallow" && CROPS[c] && !input.prices[c]).sort();
   }
 
   async onModuleDestroy(): Promise<void> {
@@ -315,6 +346,8 @@ export class ScenariosService implements OnModuleDestroy {
   async upsertRecommendation(workspaceId: string, fieldId: string, runId: string | null): Promise<boolean> {
     const view = await this.run(workspaceId, fieldId, {}, "cached");
     if (view.noLibrary || !("result" in view)) return false;
+    // A crop recommendation needs money: the agronomy-only comparison is shown on the page but never becomes an item.
+    if (view.mode === "agronomy") return false;
     const { result, firstSeason, regionId } = view;
     const all = [result.current, ...result.alternatives];
     const best = all.find((s) => s.id === result.bestFit) ?? result.current;
@@ -342,12 +375,12 @@ export class ScenariosService implements OnModuleDestroy {
     const keyNumbers = [
       { id: "hostSeasonsInPlan", value: `${hostSeasons(result.current)}/5`, weight: 1 },
       { id: "lastCropInRow", value: inRow, unit: "seasons", weight: 0.66 },
-      ...(alt
+      ...(alt && alt.delta.margin != null
         ? [
             {
               id: "marginVsCurrent",
               value: Math.round(alt.delta.margin),
-              unit: "$/ha",
+              unit: view.currency === "USD" ? "$/ha" : `${view.currency}/ha`,
               weight: 0.33,
               option: alt.id,
             },

@@ -13,12 +13,13 @@ import {
   cropColour,
   seasonHintText,
 } from "@terrasight/ui";
-import { Check, Droplet, Leaf, PiggyBank, ShieldCheck, Sparkles, TriangleAlert } from "lucide-react";
+import { Check, Droplet, Leaf, PiggyBank, ShieldCheck, Sparkles, TriangleAlert, Wallet } from "lucide-react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { CaveatNotes } from "@/components/CaveatNotes";
+import { CropPricesEditor } from "@/components/CropPricesEditor";
 import { FieldTabs } from "../Overview";
 
 type Localised = { en: string; uk: string };
@@ -39,7 +40,18 @@ interface RunView {
     id: string;
     name: Localised;
     sequence: Array<string | { main: string; second: string }>;
+    rationale?: Localised | null;
+    risks?: Localised | null;
+    irrigation?: "required" | "optional" | "none";
   }>;
+  /** "agronomy" = no prices: no margin anywhere, ranking by water, soil and drought resilience only. */
+  mode?: "money" | "agronomy";
+  currency?: "USD" | "UAH";
+  /** Whose prices the margins use: the company's, the verified library's, or both. */
+  priceLabel?: "company" | "library" | "mixed" | null;
+  cropsNeedingPrices?: string[];
+  needYield?: string[];
+  yieldHints?: Record<string, { meanTHa: number; oblast: string }>;
   priceAsOf: string;
   /** AI-proposed options: "unavailable" = the assistant could not be reached, only library options are shown. */
   aiStatus?: "ok" | "unavailable" | "skipped";
@@ -174,6 +186,7 @@ export function RotationClient({
   const locale = useLocale() as "en" | "uk";
   const [priority, setPriority] = useState<Metric>("margin");
   const [chosen, setChosen] = useState<string | null>(null);
+  const [showPrices, setShowPrices] = useState(false);
   // Climate sliders and the water cap re-run the simulation (S-06.07); results are cached by inputs hash.
   const [draft, setDraft] = useState({ deltaT: 0, rain: 0, cap: 0 });
   const [overrides, setOverrides] = useState<{ deltaT?: number; precipFactor?: number; waterCapMm?: number }>(
@@ -187,34 +200,41 @@ export function RotationClient({
     placeholderData: (prev) => prev,
   });
 
+  const agro = run.data?.mode === "agronomy";
+  const cur = run.data?.currency ?? "USD";
+  const sym = cur === "UAH" ? "₴" : "$";
   const area = units === "imperial" ? "ac" : "ha";
   const money = (perHa: number) => Math.round(units === "imperial" ? perHa / AC : perHa);
   const water = (mm: number) =>
     units === "imperial" ? `${(mm / 25.4).toFixed(1)} in` : `${Math.round(mm)} mm`;
-  const signedPlain = (v: number) => `${v < 0 ? "−" : ""}$${Math.abs(money(v)).toLocaleString()}`;
-  const signed = (v: number) => `${v >= 0 ? "+" : "−"}$${Math.abs(money(v)).toLocaleString()}`;
+  const signedPlain = (v: number) => `${v < 0 ? "−" : ""}${sym}${Math.abs(money(v)).toLocaleString()}`;
+  const signed = (v: number) => `${v >= 0 ? "+" : "−"}${sym}${Math.abs(money(v)).toLocaleString()}`;
+  /** Without prices the "money" priority does not exist: the picker offers water, soil and drought only. */
+  const priorities = agro ? PRIORITY.filter((p) => p.key !== "margin") : PRIORITY;
+  const effPriority: Metric = agro && priority === "margin" ? "water" : priority;
 
   const scenarios = useMemo(() => {
     if (!run.data?.result) return [];
     const all = [run.data.result.current, ...run.data.result.alternatives];
-    const w = { margin: 0.25, water: 0.25, soil: 0.25, drought: 0.25, [priority]: 3 };
+    const w = { margin: agro ? 0 : 0.25, water: 0.25, soil: 0.25, drought: 0.25, [effPriority]: 3 };
     return rank(all, w as Record<Metric, number>);
-  }, [run.data, priority]);
+  }, [run.data, effPriority, agro]);
   const best = scenarios.reduce<ScenarioResult | null>(
     (b, s) => (!b || (s.score ?? 0) > (b.score ?? 0) ? s : b),
     null,
   );
   const pick = scenarios.find((s) => s.id === chosen) ?? best;
   /** 1–5 dots, relative among the compared options (exact values are in "All numbers"). */
+  const carbonKnown = scenarios.every((x) => x.carbonChange != null);
   const dots = (s: ScenarioResult, m: Metric) => {
     const v = (x: ScenarioResult) =>
       m === "margin"
-        ? x.margin
+        ? (x.margin ?? 0)
         : m === "water"
           ? -x.water
           : m === "soil"
-            ? x.carbonChange - x.erosion / 100
-            : x.drought;
+            ? (carbonKnown ? (x.carbonChange ?? 0) : 0) - x.erosion / 100
+            : (x.drought ?? x.droughtYield);
     const vals = scenarios.map(v);
     const lo = Math.min(...vals);
     const hi = Math.max(...vals);
@@ -266,12 +286,6 @@ export function RotationClient({
           </div>
           <FieldTabs fieldId={fieldId} active={2} />
         </header>
-        {d.pending === "prices" && (
-          <p className="flex items-center gap-2 rounded-card border border-line bg-surface-2 p-4 text-body text-ink">
-            <TriangleAlert aria-hidden className="size-5 shrink-0 text-week" />
-            {d.regionId?.startsWith("ua-") ? t("rotPendPricesUa") : t("rotPendPrices")}
-          </p>
-        )}
         {d.pending === "crops" && (
           <p className="flex items-center gap-2 rounded-card border border-line bg-surface-2 p-4 text-body text-ink">
             <TriangleAlert aria-hidden className="size-5 shrink-0 text-week" />
@@ -282,17 +296,49 @@ export function RotationClient({
         {d.pending !== "crop-history" && d.currentBasis === "estimated" && histForm(true)}
         {d.regionVerify && <p className="text-small text-week">{t("rotVerify")}</p>}
         {d.candidates && d.candidates.length > 0 && (
-          <section className="rounded-card border border-line bg-surface p-6">
-            <h2 className="mb-3 text-h2 text-ink">{t("rotCandidates")}</h2>
-            <ul className="flex flex-col gap-3">
-              {d.candidates.map((c) => (
-                <li key={c.id}>
-                  <p className="text-body font-semibold text-ink">{c.name[locale]}</p>
-                  <p className="text-small text-ink-2">
-                    {c.sequence.map((x) => seqCrops(x).map(cropLabel).join(" + ")).join(" → ")}
-                  </p>
-                </li>
-              ))}
+          <section>
+            <h2 className="text-h2 text-ink">{t("rotCandidates")}</h2>
+            <p className="mb-4 text-small text-ink-2">{t("rotCandSub")}</p>
+            <ul className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {d.candidates.map((c) => {
+                const n = Math.max(1, c.sequence.length);
+                const tiles = Array.from({ length: 5 }, (_, k) => {
+                  const item = c.sequence[k % n]!;
+                  const crops = seqCrops(item);
+                  return { year: d.firstSeason + k, crops };
+                });
+                return (
+                  <li
+                    key={c.id}
+                    className="flex flex-col gap-3 rounded-card border border-line bg-surface p-5"
+                  >
+                    <h3 className="text-body font-semibold text-ink">{c.name[locale]}</h3>
+                    <ul className="flex gap-1.5" aria-label={`${d.firstSeason}–${d.firstSeason + 4}`}>
+                      {tiles.map((x) => (
+                        <li key={x.year} className="flex min-w-0 flex-1 flex-col items-center gap-1">
+                          <span
+                            aria-hidden
+                            className="block h-9 w-full rounded-chip"
+                            style={{ backgroundColor: cropColour(x.crops[0] ?? "fallow") }}
+                          />
+                          <span className="font-mono text-micro text-ink-3">{x.year}</span>
+                          <span className="sr-only">{x.crops.map(cropLabel).join(" + ")}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="flex flex-wrap gap-x-3 text-small text-ink-2">
+                      <span>{t("rotYears", { n: c.sequence.length })}</span>
+                      {c.irrigation === "required" && <span>{t("rotNeedsIrrigation")}</span>}
+                    </p>
+                    {c.rationale?.[locale] && (
+                      <p className="text-small text-ink-2">
+                        <span className="font-semibold text-ink">{t("rotWhyFits")}: </span>
+                        {c.rationale[locale]}
+                      </p>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           </section>
         )}
@@ -303,11 +349,22 @@ export function RotationClient({
   const pros = (s: ScenarioResult): string[] => {
     if (s.kind === "current") return [t("rotProCurrent")];
     const out: string[] = [];
-    if (s.delta.margin > 0) out.push(t("rotProMargin", { delta: signed(s.delta.margin), unit: area }));
+    if (s.delta.margin != null && s.delta.margin > 0)
+      out.push(t("rotProMargin", { delta: signed(s.delta.margin), unit: area }));
     if (s.water < current.water - 5) out.push(t("rotProWater", { amount: water(current.water - s.water) }));
-    if (s.carbonChange > current.carbonChange + 0.05) out.push(t("rotProCarbon"));
+    if (
+      s.carbonChange != null &&
+      current.carbonChange != null &&
+      s.carbonChange > current.carbonChange + 0.05
+    )
+      out.push(t("rotProCarbon"));
     if (s.erosion < current.erosion * 0.9) out.push(t("rotProErosion"));
-    if (s.drought > current.drought)
+    if (agro) {
+      if (s.droughtYield > current.droughtYield + 0.005)
+        out.push(
+          t("rotProDroughtYield", { delta: Math.round((s.droughtYield - current.droughtYield) * 100) }),
+        );
+    } else if (s.drought != null && current.drought != null && s.drought > current.drought)
       out.push(t("rotProDrought", { delta: signed(s.drought - current.drought), unit: area }));
     const pestsNow = current.pestPressure.filter((p) => p.seasons > 0).length;
     if (s.pestPressure.filter((p) => p.seasons > 0).length < pestsNow) out.push(t("rotProPest"));
@@ -316,14 +373,17 @@ export function RotationClient({
   const cons = (s: ScenarioResult): string[] => {
     const out: string[] = [];
     if (s.kind !== "current") {
-      if (s.delta.margin < 0) out.push(t("rotConMargin", { delta: signed(s.delta.margin), unit: area }));
+      if (s.delta.margin != null && s.delta.margin < 0)
+        out.push(t("rotConMargin", { delta: signed(s.delta.margin), unit: area }));
       if (s.water > current.water + 5) out.push(t("rotConWater", { amount: water(s.water - current.water) }));
-      if (s.drought < current.drought) out.push(t("rotConDrought"));
+      if (agro ? s.droughtYield < current.droughtYield - 0.005 : (s.drought ?? 0) < (current.drought ?? 0))
+        out.push(t(agro ? "rotConDroughtYield" : "rotConDrought"));
     }
-    if (s.capped) out.push(t("rotCapped", { loss: Math.abs(money(s.capLoss)), unit: area }));
+    if (s.capped && !agro)
+      out.push(t("rotCapped", { loss: Math.abs(money(s.capLoss)), unit: area, cur: sym }));
     for (const p of s.pestPressure.filter((x) => x.seasons > 0))
       out.push(t("rotPestLine", { pest: p.pest.replace(/_/g, " "), n: p.seasons }));
-    if (s.priceWins < 5) out.push(t("rotConPrice", { n: s.priceWins }));
+    if (!agro && s.priceWins < 5) out.push(t("rotConPrice", { n: s.priceWins }));
     return out;
   };
   const name = (s: ScenarioResult) =>
@@ -340,10 +400,21 @@ export function RotationClient({
   const letters = ["A", "B", "C", "D", "E"];
   const current = run.data.result.current;
   const seasons = Array.from({ length: 5 }, (_, i) => first + i);
+  const metrics = agro ? METRICS.filter((m) => m.key !== "margin") : METRICS;
+  /** Crops the price table lists: the ones missing a price (agronomy mode) or those of the compared options. */
+  const priceCrops = agro
+    ? (run.data.cropsNeedingPrices ?? [])
+    : [
+        ...new Set(
+          [current, ...run.data.result.alternatives].flatMap((s) =>
+            s.plan.flatMap((p) => p.crops).filter((c) => c !== "fallow"),
+          ),
+        ),
+      ];
 
   // Cumulative margin chart (sum of simulated years, no extrapolation).
   const cum = scenarios.map((s) =>
-    s.marginBySeason.reduce<number[]>((acc, m) => [...acc, (acc.at(-1) ?? 0) + money(m)], []),
+    (s.marginBySeason ?? []).reduce<number[]>((acc, m) => [...acc, (acc.at(-1) ?? 0) + money(m)], []),
   );
   const lo = Math.min(0, ...cum.flat());
   const hi = Math.max(1, ...cum.flat());
@@ -351,7 +422,7 @@ export function RotationClient({
   const Y = (v: number) => 210 - ((v - lo) / (hi - lo)) * 190;
   const ticks = [0, 1, 2, 3].map((k) => lo + ((hi - lo) * k) / 3);
   const kfmt = (v: number) =>
-    `${v < 0 ? "−" : ""}$${(Math.abs(v) / 1000).toFixed(Math.abs(v) >= 10000 ? 0 : 1)}k`;
+    `${v < 0 ? "−" : ""}${sym}${(Math.abs(v) / 1000).toFixed(Math.abs(v) >= 10000 ? 0 : 1)}k`;
   // End labels: keep at least 14px apart so they never overlap.
   const endY = (() => {
     const ys = cum.map((c, k) => ({ k, y: Y(c.at(-1) ?? 0) + 4 })).sort((p, q) => p.y - q.y);
@@ -360,7 +431,7 @@ export function RotationClient({
   })();
   // Establishment dip: a weak first year followed by a clearly better one (e.g. alfalfa).
   const dips = scenarios.flatMap((s, k) => {
-    const m = s.marginBySeason;
+    const m = s.marginBySeason ?? [];
     const later = Math.max(...m.slice(1), 0);
     return m.length > 1 && later > 0 && m[0]! < 0.4 * later ? [k] : [];
   });
@@ -374,6 +445,51 @@ export function RotationClient({
         </div>
         <FieldTabs fieldId={fieldId} active={2} />
       </header>
+      {agro && (
+        <section
+          aria-labelledby="agro-status"
+          className="flex flex-col gap-3 rounded-card border border-line bg-surface-2 p-6"
+        >
+          <h2 id="agro-status" className="flex items-center gap-2 text-h2 text-ink">
+            <TriangleAlert aria-hidden className="size-5 shrink-0 text-week" />
+            {t("rotAgroTitle")}
+          </h2>
+          <p className="text-body text-ink">{t("rotAgroWhy")}</p>
+          <p className="text-body text-ink-2">{t("rotAgroDo")}</p>
+          {(run.data.cropsNeedingPrices?.length ?? 0) > 0 && (
+            <p className="text-small text-ink-2">
+              {t("rotAgroMissing", { list: run.data.cropsNeedingPrices!.map(cropLabel).join(", ") })}
+            </p>
+          )}
+          {canSave ? (
+            <div className="flex flex-col gap-4">
+              <div>
+                <Button
+                  icon={<Wallet />}
+                  onClick={() => setShowPrices((v) => !v)}
+                  aria-expanded={showPrices}
+                  variant={showPrices ? "outline" : "primary"}
+                >
+                  {t("rotEnterPrices")}
+                </Button>
+              </div>
+              {showPrices && (
+                <CropPricesEditor
+                  workspaceId={workspaceId}
+                  crops={priceCrops}
+                  needYield={run.data.needYield}
+                  yieldHints={run.data.yieldHints}
+                  onSaved={() => setShowPrices(false)}
+                  onCancel={() => setShowPrices(false)}
+                />
+              )}
+            </div>
+          ) : (
+            <p className="text-small text-ink-2">{t("rotReadOnly")}</p>
+          )}
+        </section>
+      )}
+
       <section className="flex flex-wrap items-center justify-between gap-4 rounded-hero bg-ink p-7 text-surface">
         <div className="flex items-center gap-5">
           <span
@@ -387,7 +503,9 @@ export function RotationClient({
             <p className="font-mono text-small tracking-wide text-signal uppercase dark:text-on-signal">
               {chosen && chosen !== best?.id
                 ? t("rotYourChoice", { season: first })
-                : t("rotRecommended", { season: first })}
+                : agro
+                  ? t("rotRecommendedAgro", { season: first })
+                  : t("rotRecommended", { season: first })}
             </p>
             <p className="text-h1">{t("rotSow", { crop: cropName(firstCrop ?? "fallow") })}</p>
             <p className="text-small text-surface/70">
@@ -413,13 +531,50 @@ export function RotationClient({
         )}
       </section>
 
-      <p className="flex items-center gap-2 rounded-card border border-line bg-surface-2 p-4 text-small text-ink-2">
+      <p className="flex flex-wrap items-center gap-2 rounded-card border border-line bg-surface-2 p-4 text-small text-ink-2">
         <Sparkles aria-hidden className="size-4" strokeWidth={1.7} />
-        {t("rotNote", { n: run.data.result.candidates + 1 })}
+        {agro
+          ? t("rotAgroNote", { n: run.data.result.candidates + 1 })
+          : t("rotNote", { n: run.data.result.candidates + 1 })}
         {run.data.regionVerify && <span className="ml-2 text-week">{t("rotVerify")}</span>}
+        {!agro && run.data.priceLabel && (
+          <Chip tone="neutral">
+            {run.data.priceLabel === "company"
+              ? t("rotAtYour")
+              : run.data.priceLabel === "library"
+                ? t("rotAtLibrary")
+                : t("rotAtMixed")}
+          </Chip>
+        )}
+        {!agro && canSave && (
+          <button
+            type="button"
+            onClick={() => setShowPrices((v) => !v)}
+            aria-expanded={showPrices}
+            className="focus-ring ml-auto inline-flex items-center gap-1 rounded-btn px-2 py-1 font-semibold text-ink underline"
+          >
+            <Wallet aria-hidden className="size-4" />
+            {t("rotYourPrices")}
+          </button>
+        )}
       </p>
+      {!agro && showPrices && canSave && (
+        <section className="rounded-card border border-line bg-surface p-6">
+          <h2 className="mb-3 text-h2 text-ink">{t("cpTitle")}</h2>
+          <CropPricesEditor
+            workspaceId={workspaceId}
+            crops={priceCrops}
+            needYield={run.data.needYield}
+            yieldHints={run.data.yieldHints}
+            onSaved={() => setShowPrices(false)}
+            onCancel={() => setShowPrices(false)}
+          />
+        </section>
+      )}
       <CaveatNotes caveats={pick?.caveats} cropName={cropName} only={["crop", "repeat"]} className="" />
-      {run.data.aiStatus === "unavailable" && <p className="text-small text-ink-2">{t("rotAiUnavailable")}</p>}
+      {run.data.aiStatus === "unavailable" && (
+        <p className="text-small text-ink-2">{t("rotAiUnavailable")}</p>
+      )}
       {run.data.soilBasis === "soilgrids" && <p className="text-small text-ink-2">{t("rotSoilEstimate")}</p>}
       {(run.data.unmodelledCrops?.length ?? 0) > 0 && (
         <p className="text-small text-ink-2">
@@ -436,18 +591,22 @@ export function RotationClient({
       <section>
         <h2 className="text-h2 text-ink">{r("q")}</h2>
         <p className="mb-3 text-small text-ink-2">{r("q_sub")}</p>
-        <div role="radiogroup" aria-label={r("p_group")} className="grid gap-3 sm:grid-cols-4">
-          {PRIORITY.map((p) => (
+        <div
+          role="radiogroup"
+          aria-label={r("p_group")}
+          className={`grid gap-3 ${agro ? "sm:grid-cols-3" : "sm:grid-cols-4"}`}
+        >
+          {priorities.map((p) => (
             <button
               key={p.key}
               type="button"
               role="radio"
-              aria-checked={priority === p.key}
+              aria-checked={effPriority === p.key}
               onClick={() => setPriority(p.key)}
-              className={`focus-ring flex flex-col items-start gap-3 rounded-card border p-4 text-left ${priority === p.key ? "border-ink bg-muted" : "border-line bg-surface"}`}
+              className={`focus-ring flex flex-col items-start gap-3 rounded-card border p-4 text-left ${effPriority === p.key ? "border-ink bg-muted" : "border-line bg-surface"}`}
             >
               <span
-                className={`inline-flex size-10 items-center justify-center rounded-chip [&>svg]:size-5 ${priority === p.key ? "bg-ink text-surface" : "bg-muted text-ink"}`}
+                className={`inline-flex size-10 items-center justify-center rounded-chip [&>svg]:size-5 ${effPriority === p.key ? "bg-ink text-surface" : "bg-muted text-ink"}`}
               >
                 {p.icon}
               </span>
@@ -458,8 +617,11 @@ export function RotationClient({
       </section>
 
       <section>
-        <h2 className="text-h2 text-ink">{r("cmp")}</h2>
-        <p className="mb-4 text-small text-ink-2">{r("cmp_sub")}</p>
+        <h2 className="flex flex-wrap items-center gap-3 text-h2 text-ink">
+          {r("cmp")}
+          {agro && <Chip tone="neutral">{t("rotAgroBadge")}</Chip>}
+        </h2>
+        <p className="mb-4 text-small text-ink-2">{agro ? t("rotAgroSub") : r("cmp_sub")}</p>
         <div className="grid gap-4 lg:grid-cols-3">
           {scenarios.map((s, i) => {
             const isBest = s.id === best?.id;
@@ -503,18 +665,50 @@ export function RotationClient({
                   }))}
                   label={`${first}–${first + 4}`}
                 />
-                <div className="rounded-input bg-surface-2 p-4">
-                  <p className="text-small text-ink-2">{t("rotMargin")}</p>
-                  <p className="font-mono text-big-number text-ink">${money(s.margin).toLocaleString()}</p>
-                  <p className="text-small text-ink-2">{t("rotPer", { unit: area })}</p>
-                  <p
-                    className={`mt-1 text-small font-semibold ${s.delta.margin > 0 ? "text-ok" : s.delta.margin < 0 ? "text-urgent" : "text-ink-2"}`}
-                  >
-                    {s.kind === "current" ? t("rotSame") : t("rotVsNow", { delta: signed(s.delta.margin) })}
-                  </p>
-                </div>
+                {agro ? (
+                  <div className="rounded-input bg-surface-2 p-4">
+                    <p className="text-small text-ink-2">{t("rotAgroDroughtLabel")}</p>
+                    <p className="font-mono text-big-number text-ink">
+                      {t("rotAgroDroughtValue", { pct: Math.round(s.droughtYield * 100) })}
+                    </p>
+                    <p
+                      className={`mt-1 text-small font-semibold ${s.delta.drought > 0.005 ? "text-ok" : s.delta.drought < -0.005 ? "text-urgent" : "text-ink-2"}`}
+                    >
+                      {s.kind === "current"
+                        ? t("rotSame")
+                        : t("rotAgroVsNow", {
+                            delta: `${s.delta.drought >= 0 ? "+" : "−"}${Math.abs(Math.round(s.delta.drought * 100))}`,
+                          })}
+                    </p>
+                    <ul className="mt-3 flex flex-col gap-1 text-small text-ink-2">
+                      <li>{t("rotAgroWater", { amount: water(s.water) })}</li>
+                      <li>
+                        {s.carbonChange != null
+                          ? t("rotAgroSoil", { value: s.carbonChange.toFixed(2) })
+                          : t("rotAgroSoilUnknown")}
+                      </li>
+                      <li>{t("rotAgroErosion", { value: Math.round(s.erosion) })}</li>
+                    </ul>
+                  </div>
+                ) : (
+                  <div className="rounded-input bg-surface-2 p-4">
+                    <p className="text-small text-ink-2">{t("rotMargin")}</p>
+                    <p className="font-mono text-big-number text-ink">
+                      {sym}
+                      {money(s.margin ?? 0).toLocaleString()}
+                    </p>
+                    <p className="text-small text-ink-2">{t("rotPer", { unit: area, cur })}</p>
+                    <p
+                      className={`mt-1 text-small font-semibold ${(s.delta.margin ?? 0) > 0 ? "text-ok" : (s.delta.margin ?? 0) < 0 ? "text-urgent" : "text-ink-2"}`}
+                    >
+                      {s.kind === "current"
+                        ? t("rotSame")
+                        : t("rotVsNow", { delta: signed(s.delta.margin ?? 0) })}
+                    </p>
+                  </div>
+                )}
                 <ul className="flex flex-col gap-2 text-small">
-                  {METRICS.map((m) => (
+                  {metrics.map((m) => (
                     <li key={m.key} className="flex items-center justify-between gap-3">
                       <span className="text-ink-2">
                         {t(m.label)}
@@ -533,13 +727,15 @@ export function RotationClient({
                     </li>
                   ))}
                 </ul>
-                <p className="text-small text-ink-2">
-                  {t("rotPrice", { n: s.priceWins })}{" "}
-                  <InfoHint label={t("hintLabel")}>{t("hintPrices")}</InfoHint>
-                </p>
-                {s.capped && (
+                {!agro && (
+                  <p className="text-small text-ink-2">
+                    {t("rotPrice", { n: s.priceWins })}{" "}
+                    <InfoHint label={t("hintLabel")}>{t("hintPrices")}</InfoHint>
+                  </p>
+                )}
+                {s.capped && !agro && (
                   <p className="text-small text-week">
-                    {t("rotCapped", { loss: Math.abs(money(s.capLoss)), unit: area })}
+                    {t("rotCapped", { loss: Math.abs(money(s.capLoss)), unit: area, cur: sym })}
                   </p>
                 )}
                 <div className="text-small">
@@ -695,127 +891,152 @@ export function RotationClient({
         </div>
       </details>
 
-      <section className="rounded-card border border-line bg-surface p-6">
-        <h2 className="text-h2 text-ink">{t("rotCumTitle")}</h2>
-        <p className="mb-4 text-small text-ink-2">
-          {t("rotCumSub", { unit: area, from: first, to: first + 4 })}
-        </p>
-        <svg viewBox="0 0 720 240" role="img" aria-label={r("money_label")} className="w-full">
-          {ticks.map((v) => (
-            <g key={v}>
-              <line
-                x1="64"
-                x2="564"
-                y1={Y(v)}
-                y2={Y(v)}
-                className="stroke-line"
-                strokeDasharray={v === 0 ? undefined : "3 4"}
-              />
-              <text x="56" y={Y(v) + 4} textAnchor="end" className="fill-ink-2 text-[11px]">
-                {kfmt(v)}
-              </text>
-            </g>
-          ))}
-          <line x1="64" x2="564" y1={Y(0)} y2={Y(0)} className="stroke-ink-3" />
-          {seasons.map((y, i) => (
-            <text key={y} x={X(i)} y="236" textAnchor="middle" className="fill-ink-2 text-[12px]">
-              {y}
-            </text>
-          ))}
-          {cum.map((c, k) => (
-            <g key={k}>
-              <polyline
-                fill="none"
-                strokeWidth={k === scenarios.indexOf(pick!) ? 3.5 : 2}
-                className={k === 0 ? "stroke-ink-2" : k === 1 ? "stroke-ink" : k === 2 ? "stroke-week" : k === 3 ? "stroke-ok" : "stroke-line-strong"}
-                points={c.map((v, i) => `${X(i)},${Y(v)}`).join(" ")}
-              />
-              {c.map((v, i) => (
-                <circle
-                  key={i}
-                  cx={X(i)}
-                  cy={Y(v)}
-                  r="3.5"
-                  className={k === 0 ? "fill-ink-2" : k === 1 ? "fill-ink" : k === 2 ? "fill-week" : k === 3 ? "fill-ok" : "fill-line-strong"}
-                />
-              ))}
-              <text x="572" y={endY[k]} className="fill-ink text-[12px] font-semibold">
-                {letters[k]} ${c.at(-1)?.toLocaleString()}
-              </text>
-            </g>
-          ))}
-          {dips.slice(0, 1).map((k) => (
-            <g key="dip">
-              <circle
-                cx={X(0)}
-                cy={Y(cum[k]![0]!)}
-                r="7"
-                fill="none"
-                strokeWidth="1.5"
-                className="stroke-week"
-              />
-              <text x={X(0) + 12} y={Y(cum[k]![0]!) - 10} className="fill-week text-[11px] font-semibold">
-                {t("rotDipTag")}
-              </text>
-            </g>
-          ))}
-        </svg>
-        {dips.length > 0 && (
-          <p className="mt-2 text-small text-ink-2">
-            {t("rotDip", { letters: dips.map((k) => letters[k]).join(", "), year: first })}
+      {!agro && (
+        <section className="rounded-card border border-line bg-surface p-6">
+          <h2 className="text-h2 text-ink">{t("rotCumTitle")}</h2>
+          <p className="mb-4 text-small text-ink-2">
+            {t("rotCumSub", { unit: area, from: first, to: first + 4, cur })}
           </p>
-        )}
-      </section>
+          <svg viewBox="0 0 720 240" role="img" aria-label={r("money_label")} className="w-full">
+            {ticks.map((v) => (
+              <g key={v}>
+                <line
+                  x1="64"
+                  x2="564"
+                  y1={Y(v)}
+                  y2={Y(v)}
+                  className="stroke-line"
+                  strokeDasharray={v === 0 ? undefined : "3 4"}
+                />
+                <text x="56" y={Y(v) + 4} textAnchor="end" className="fill-ink-2 text-[11px]">
+                  {kfmt(v)}
+                </text>
+              </g>
+            ))}
+            <line x1="64" x2="564" y1={Y(0)} y2={Y(0)} className="stroke-ink-3" />
+            {seasons.map((y, i) => (
+              <text key={y} x={X(i)} y="236" textAnchor="middle" className="fill-ink-2 text-[12px]">
+                {y}
+              </text>
+            ))}
+            {cum.map((c, k) => (
+              <g key={k}>
+                <polyline
+                  fill="none"
+                  strokeWidth={k === scenarios.indexOf(pick!) ? 3.5 : 2}
+                  className={
+                    k === 0
+                      ? "stroke-ink-2"
+                      : k === 1
+                        ? "stroke-ink"
+                        : k === 2
+                          ? "stroke-week"
+                          : k === 3
+                            ? "stroke-ok"
+                            : "stroke-line-strong"
+                  }
+                  points={c.map((v, i) => `${X(i)},${Y(v)}`).join(" ")}
+                />
+                {c.map((v, i) => (
+                  <circle
+                    key={i}
+                    cx={X(i)}
+                    cy={Y(v)}
+                    r="3.5"
+                    className={
+                      k === 0
+                        ? "fill-ink-2"
+                        : k === 1
+                          ? "fill-ink"
+                          : k === 2
+                            ? "fill-week"
+                            : k === 3
+                              ? "fill-ok"
+                              : "fill-line-strong"
+                    }
+                  />
+                ))}
+                <text x="572" y={endY[k]} className="fill-ink text-[12px] font-semibold">
+                  {letters[k]} {sym}
+                  {c.at(-1)?.toLocaleString()}
+                </text>
+              </g>
+            ))}
+            {dips.slice(0, 1).map((k) => (
+              <g key="dip">
+                <circle
+                  cx={X(0)}
+                  cy={Y(cum[k]![0]!)}
+                  r="7"
+                  fill="none"
+                  strokeWidth="1.5"
+                  className="stroke-week"
+                />
+                <text x={X(0) + 12} y={Y(cum[k]![0]!) - 10} className="fill-week text-[11px] font-semibold">
+                  {t("rotDipTag")}
+                </text>
+              </g>
+            ))}
+          </svg>
+          {dips.length > 0 && (
+            <p className="mt-2 text-small text-ink-2">
+              {t("rotDip", { letters: dips.map((k) => letters[k]).join(", "), year: first })}
+            </p>
+          )}
+        </section>
+      )}
 
-      <section className="rounded-card border border-line bg-surface p-6">
-        <h2 className="text-h2 text-ink">{t("rot2022")}</h2>
-        <p className="mb-4 text-small text-ink-2">{t("rot2022Sub")}</p>
-        <CaveatNotes
-          caveats={[...new Set(scenarios.flatMap((s) => s.caveats ?? []))]}
-          cropName={cropName}
-          only={["water"]}
-          className="mb-4"
-        />
-        <div className="grid gap-4 sm:grid-cols-3">
-          {scenarios.map((s, i) => {
-            const pct =
-              Number.isFinite(s.if2022.margin) && Math.abs(s.if2022.typical) > 1
-                ? Math.round(((s.if2022.typical - s.if2022.margin) / Math.abs(s.if2022.typical)) * 100)
-                : null;
-            return (
-              <div key={s.id}>
-                <p className="flex justify-between gap-2 text-small font-semibold text-ink">
-                  <span>
-                    {letters[i]} · {name(s)}
-                  </span>
-                  <span className={pct !== null && pct > 0 ? "text-urgent" : "text-ink-2"}>
-                    {pct === null ? "—" : pct === 0 ? "0%" : `${pct > 0 ? "−" : "+"}${Math.abs(pct)}%`}
-                  </span>
-                </p>
-                {pct !== 0 && (
-                  <span aria-hidden className="mt-2 block h-2.5 overflow-hidden rounded-chip bg-muted">
-                    <span
-                      className={`block h-full ${s.id === pick?.id ? "bg-ink" : "bg-ink-2"}`}
-                      style={{ width: `${pct === null ? 0 : Math.min(100, Math.max(2, pct))}%` }}
-                    />
-                  </span>
-                )}
-                {pct === 0 && <p className="mt-1 text-small text-ink-3">{t("rot2022Covered")}</p>}
-                {pct !== null && pct !== 0 && (
-                  <p className="mt-1 text-small text-ink-3">
-                    {t("rot2022Season", {
-                      season: s.if2022.season,
-                      hit: signedPlain(s.if2022.margin),
-                      typical: signedPlain(s.if2022.typical),
-                      unit: area,
-                    })}
+      {!agro && (
+        <section className="rounded-card border border-line bg-surface p-6">
+          <h2 className="text-h2 text-ink">{t("rot2022")}</h2>
+          <p className="mb-4 text-small text-ink-2">{t("rot2022Sub")}</p>
+          <CaveatNotes
+            caveats={[...new Set(scenarios.flatMap((s) => s.caveats ?? []))]}
+            cropName={cropName}
+            only={["water"]}
+            className="mb-4"
+          />
+          <div className="grid gap-4 sm:grid-cols-3">
+            {scenarios.map((s, i) => {
+              const pct =
+                Number.isFinite(s.if2022.margin) && Math.abs(s.if2022.typical) > 1
+                  ? Math.round(((s.if2022.typical - s.if2022.margin) / Math.abs(s.if2022.typical)) * 100)
+                  : null;
+              return (
+                <div key={s.id}>
+                  <p className="flex justify-between gap-2 text-small font-semibold text-ink">
+                    <span>
+                      {letters[i]} · {name(s)}
+                    </span>
+                    <span className={pct !== null && pct > 0 ? "text-urgent" : "text-ink-2"}>
+                      {pct === null ? "—" : pct === 0 ? "0%" : `${pct > 0 ? "−" : "+"}${Math.abs(pct)}%`}
+                    </span>
                   </p>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </section>
+                  {pct !== 0 && (
+                    <span aria-hidden className="mt-2 block h-2.5 overflow-hidden rounded-chip bg-muted">
+                      <span
+                        className={`block h-full ${s.id === pick?.id ? "bg-ink" : "bg-ink-2"}`}
+                        style={{ width: `${pct === null ? 0 : Math.min(100, Math.max(2, pct))}%` }}
+                      />
+                    </span>
+                  )}
+                  {pct === 0 && <p className="mt-1 text-small text-ink-3">{t("rot2022Covered")}</p>}
+                  {pct !== null && pct !== 0 && (
+                    <p className="mt-1 text-small text-ink-3">
+                      {t("rot2022Season", {
+                        season: s.if2022.season,
+                        hit: signedPlain(s.if2022.margin),
+                        typical: signedPlain(s.if2022.typical),
+                        unit: area,
+                      })}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       <details className="rounded-card border border-line bg-surface p-6">
         <summary className="cursor-pointer text-body font-semibold text-ink">{t("rotTable")}</summary>
@@ -831,22 +1052,37 @@ export function RotationClient({
             </tr>
           </thead>
           <tbody className="font-mono">
-            {[
-              [t("rotMargin"), (s: ScenarioResult) => `$${money(s.margin)}`],
-              [t("rotWater"), (s: ScenarioResult) => water(s.water)],
-              [t("rotSoilC"), (s: ScenarioResult) => s.carbonChange.toFixed(2)],
-              [t("rotErosion"), (s: ScenarioResult) => String(Math.round(s.erosion))],
-              [t("rotDrought"), (s: ScenarioResult) => `$${money(s.drought)}`],
-              [
-                t("rot2022"),
-                (s: ScenarioResult) =>
-                  Number.isFinite(s.if2022.margin)
-                    ? `${signedPlain(s.if2022.margin)} / ${signedPlain(s.if2022.typical)}`
-                    : "—",
-              ],
-              [r("row_price"), (s: ScenarioResult) => `${s.priceWins}/10`],
-              [r("row_score"), (s: ScenarioResult) => (s.score ?? 0).toFixed(2)],
-            ].map(([label, f]) => (
+            {(agro
+              ? [
+                  [t("rotAgroDroughtLabel"), (s: ScenarioResult) => `${Math.round(s.droughtYield * 100)}%`],
+                  [t("rotWater"), (s: ScenarioResult) => water(s.water)],
+                  [
+                    t("rotSoilC"),
+                    (s: ScenarioResult) => (s.carbonChange != null ? s.carbonChange.toFixed(2) : "—"),
+                  ],
+                  [t("rotErosion"), (s: ScenarioResult) => String(Math.round(s.erosion))],
+                  [r("row_score"), (s: ScenarioResult) => (s.score ?? 0).toFixed(2)],
+                ]
+              : [
+                  [t("rotMargin"), (s: ScenarioResult) => `${sym}${money(s.margin ?? 0)}`],
+                  [t("rotWater"), (s: ScenarioResult) => water(s.water)],
+                  [
+                    t("rotSoilC"),
+                    (s: ScenarioResult) => (s.carbonChange != null ? s.carbonChange.toFixed(2) : "—"),
+                  ],
+                  [t("rotErosion"), (s: ScenarioResult) => String(Math.round(s.erosion))],
+                  [t("rotDrought"), (s: ScenarioResult) => `${sym}${money(s.drought ?? 0)}`],
+                  [
+                    t("rot2022"),
+                    (s: ScenarioResult) =>
+                      Number.isFinite(s.if2022.margin)
+                        ? `${signedPlain(s.if2022.margin)} / ${signedPlain(s.if2022.typical)}`
+                        : "—",
+                  ],
+                  [r("row_price"), (s: ScenarioResult) => `${s.priceWins}/10`],
+                  [r("row_score"), (s: ScenarioResult) => (s.score ?? 0).toFixed(2)],
+                ]
+            ).map(([label, f]) => (
               <tr key={label as string} className="border-t border-line">
                 <th className="py-2 text-left font-sans font-normal text-ink-2">{label as string}</th>
                 {scenarios.map((s) => (
@@ -858,7 +1094,17 @@ export function RotationClient({
             ))}
           </tbody>
         </table>
-        <p className="mt-3 text-micro text-ink-3">{t("rotPrices", { asOf: run.data.priceAsOf })}</p>
+        {agro ? (
+          <p className="mt-3 text-micro text-ink-3">{t("rotAgroSoilNote")}</p>
+        ) : (
+          <p className="mt-3 text-micro text-ink-3">
+            {run.data.priceLabel === "company"
+              ? t("rotPricesCompany", { cur })
+              : run.data.priceLabel === "mixed"
+                ? t("rotPricesMixed")
+                : t("rotPrices", { asOf: run.data.priceAsOf })}
+          </p>
+        )}
         <p className="mt-1 text-micro text-ink-3">{t("rotIrrHint")}</p>
       </details>
 

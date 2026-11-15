@@ -17,6 +17,7 @@ export const SCOPED_MODELS = new Set([
   "Conversation",
   "AuditLog",
   "Notification",
+  "WorkspaceCropPrice",
 ]);
 
 /**

@@ -137,6 +137,7 @@ describe("permission matrix (Tech Design §14.1)", () => {
     "scouting.use": "OG",
     "assistant.use": "OG",
     "plans.save": "OG",
+    "cropPrices.manage": "OG",
     "brief.read": "OG",
     "fields.read": "OG",
     "scenarios.explore": "OG",
