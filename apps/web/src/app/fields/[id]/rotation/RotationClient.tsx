@@ -35,7 +35,10 @@ import {
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useId, useMemo, useState } from "react";
-import { api } from "@/lib/api";
+import { YEAR_SET_IDS, type ClimateShift, type DataBasisItem, type YearSetComparison } from "@terrasight/shared";
+import { api, ApiError } from "@/lib/api";
+import { ClimateShiftCard } from "@/components/ClimateShiftCard";
+import { DataBasis } from "@/components/DataBasis";
 import { CaveatNotes } from "@/components/CaveatNotes";
 import { CropPricesEditor } from "@/components/CropPricesEditor";
 import { QueryState } from "@/components/QueryState";
@@ -44,8 +47,16 @@ import { useActionToast } from "@/lib/useActionToast";
 import { FieldTabs } from "../Overview";
 import { LandBanner, LandBlocked, type LandView } from "@/components/LandSuitability";
 import { CumulativeChart } from "./CumulativeChart";
+import { YearSets, heroSentence } from "./YearSets";
 import { RunProgress } from "./RunProgress";
-import { pestKey, priceSourceKind, reliabilityOf, relaxedKey, visibleNotice } from "./rotationView";
+import {
+  findYearSets,
+  pestKey,
+  priceSourceKind,
+  reliabilityOf,
+  relaxedKey,
+  visibleNotice,
+} from "./rotationView";
 
 type Localised = { en: string; uk: string };
 interface RunView {
@@ -84,6 +95,10 @@ interface RunView {
   aiStatus?: "ok" | "unavailable" | "skipped";
   names: Record<string, Localised>;
   cropNames?: Record<string, Localised>;
+  /** What NASA (and other) data fed this run; absent on older runs. */
+  dataBasis?: DataBasisItem[];
+  /** The weather years the run used; absent on older runs: then no year range is shown. */
+  weather?: { yearSet: string; from: number; to: number; count: number; lastDate: string | null };
   result: {
     current: ScenarioResult;
     alternatives: ScenarioResult[];
@@ -265,7 +280,7 @@ export function RotationClient({
   // Land suitability comes with the field (same query as the field page), so the override refreshes both.
   const land = useQuery({
     queryKey: ["field", workspaceId, fieldId, "info"],
-    queryFn: () => api<{ suitability?: LandView | null }>(`/api/w/${workspaceId}/fields/${fieldId}`),
+    queryFn: () => api<{ suitability?: LandView | null; country?: string | null }>(`/api/w/${workspaceId}/fields/${fieldId}`),
   });
 
   // A re-run that fails keeps the old numbers on screen and says so in a toast with Retry.
@@ -276,10 +291,42 @@ export function RotationClient({
     if (failedWithData) fail(runErr, what, () => void refetch());
   }, [failedWithData, errorUpdatedAt, runErr, what, fail, refetch]);
 
+  // Climate shift reads the cached NASA POWER series, not the rotation run: it renders before the run resolves.
+  const climate = useQuery({
+    queryKey: ["field", workspaceId, fieldId, "climate-shift"],
+    queryFn: () => api<ClimateShift>(`/api/w/${workspaceId}/fields/${fieldId}/climate-shift`),
+    refetchInterval: (q) => (q.state.data?.status === "pending" ? 5_000 : false),
+    retry: (count, e) => !(e instanceof ApiError && e.problem.status === 404) && count < 2,
+  });
+
+  // The weather-year comparison starts only after the main run has resolved, and never blocks it.
+  const runReady =
+    run.isSuccess && !run.isPlaceholderData && !run.data.pending && !run.data.noLibrary && !run.data.landUnsuitable;
+  const yearSets = useQuery({
+    queryKey: ["scenarios", workspaceId, fieldId, "year-sets", overrides],
+    queryFn: () =>
+      api<YearSetComparison>(`/api/w/${workspaceId}/fields/${fieldId}/scenario-runs/year-sets`, {
+        body: { overrides },
+      }),
+    enabled: runReady,
+    staleTime: Infinity,
+    retry: (count, e) => !(e instanceof ApiError && e.problem.status === 404) && count < 1,
+  });
+
   const header = <FieldHeader fieldId={fieldId} fieldName={fieldName} thumb={thumb} crop={crop} />;
   return (
     <div className="flex flex-col gap-6">
       {header}
+      <ClimateShiftCard
+        data={climate.data}
+        isLoading={climate.isLoading}
+        isError={climate.isError}
+        onRetry={() => void climate.refetch()}
+        {...(land.data?.country ? { country: land.data.country } : {})}
+        units={units}
+        trustHref={`/fields/${fieldId}/trust`}
+        compact
+      />
       <QueryState
         query={run}
         what={r("run_error_what")}
@@ -297,6 +344,7 @@ export function RotationClient({
             fetching={run.isFetching}
             overrides={overrides}
             setOverrides={setOverrides}
+            yearSets={yearSets}
           />
         )}
       </QueryState>
@@ -315,6 +363,7 @@ function RotationBody({
   fetching,
   overrides,
   setOverrides,
+  yearSets,
 }: {
   data: RunView;
   workspaceId: string;
@@ -326,6 +375,12 @@ function RotationBody({
   fetching: boolean;
   overrides: Overrides;
   setOverrides: (o: Overrides) => void;
+  yearSets: {
+    data: YearSetComparison | undefined;
+    isError: boolean;
+    error: unknown;
+    refetch: () => unknown;
+  };
 }) {
   const t = useTranslations("App");
   const r = useTranslations("Rotation");
@@ -620,7 +675,7 @@ function RotationBody({
     estimatedCurrent: data.currentBasis === "estimated",
   });
   const noteItems: string[] = [
-    agro ? t("rotAgroNote", { n: data.result.candidates + 1 }) : t("rotNote", { n: data.result.candidates + 1 }),
+    r(agro ? "note_agro" : "note_money", { n: data.result.candidates + 1 }),
     ...(agro ? [t("rotAgroSub")] : []),
     ...(agro && notice !== "agro" ? [t("rotAgroWhy")] : []),
     ...(data.regionVerify ? [t("rotVerify")] : []),
@@ -635,6 +690,28 @@ function RotationBody({
       : []),
     t("rotIrrHint"),
   ];
+
+  // Weather years of this run, from the run itself: no fixed range is ever printed.
+  const w = data.weather;
+  const weatherLine = w
+    ? w.lastDate
+      ? r("weather_line", {
+          from: w.from,
+          to: w.to,
+          count: w.count,
+          date: fmt.date(`${w.lastDate.slice(0, 10)}T12:00:00Z`, "full", { timeZone: "UTC" }),
+        })
+      : r("weather_line_nolast", { from: w.from, to: w.to, count: w.count })
+    : null;
+
+  // Sensitivity to the weather years: the label of an option is its letter and name, as in the rest of the page.
+  const optionLabel = (id: string) => {
+    const k = scenarios.findIndex((x) => x.id === id);
+    const s = scenarios[k];
+    return s ? `${letters[k] ?? ""} · ${name(s)}` : (yearSets.data?.names[id]?.[locale] ?? r("crop_unknown"));
+  };
+  const finding = yearSets.data ? findYearSets(yearSets.data, YEAR_SET_IDS, current.id) : null;
+  const heroYs = finding ? heroSentence(finding, r as never, optionLabel) : null;
 
   const saveLabel = save.isSuccess ? t("rotSaved", { season: first }) : t("rotSave", { season: first });
 
@@ -723,7 +800,22 @@ function RotationBody({
           </p>
           <p className="text-caption text-ink-2">{r(agro ? "rel_basis_agro" : "rel_basis_money")}</p>
           {rel !== "high" && <p className="text-caption text-ink-2">{r("rel_check")}</p>}
+          <Link
+            href={`/fields/${fieldId}/trust`}
+            className="focus-ring inline-flex min-h-tap w-fit items-center text-caption text-ink-2 underline"
+          >
+            {r("trust_link")}
+          </Link>
         </div>
+        {weatherLine && <p className="text-caption text-ink-2">{weatherLine}</p>}
+        {heroYs && (
+          <p className="text-body text-ink">
+            {heroYs}{" "}
+            <a href="#year-sets" className="focus-ring inline-flex min-h-tap items-center text-ink-2 underline">
+              {r("ys_hero_link")}
+            </a>
+          </p>
+        )}
         <p className="text-caption text-ink-2">
           {t("rotBannerSub", { from: first, to: first + 4 })}{" "}
           <InfoHint label={t("hintLabel")}>
@@ -752,6 +844,8 @@ function RotationBody({
           <p className="text-body text-ink-2">{r("read_only")}</p>
         )}
       </Surface>
+
+      {data.dataBasis && <DataBasis items={data.dataBasis} trustHref={`/fields/${fieldId}/trust`} compact />}
 
       {/* 2. The options to compare */}
       <section className="flex flex-col gap-4" aria-labelledby="options">
@@ -1104,6 +1198,21 @@ function RotationBody({
           </div>
         </Surface>
       )}
+
+      {/* 4b. Sensitivity to the weather years: its own query, never blocks the page */}
+      <YearSets
+        data={yearSets.data}
+        isError={yearSets.isError}
+        error={yearSets.error}
+        onRetry={() => void yearSets.refetch()}
+        agro={agro}
+        units={units}
+        money={money}
+        unitLabel={unit}
+        label={optionLabel}
+        recommendedId={best?.id ?? null}
+        currentId={current.id}
+      />
 
       {/* 5. Assumptions */}
       <Surface as="section" pad="md">

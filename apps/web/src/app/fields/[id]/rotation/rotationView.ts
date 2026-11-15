@@ -1,4 +1,5 @@
 /** Pure view logic of the rotation screen: which notice shows, how reliable the pick is, where prices come from. */
+import type { YearSetComparison, YearSetId, YearSetRanking } from "@terrasight/shared";
 
 export type Reliability = "high" | "medium" | "low";
 
@@ -77,4 +78,74 @@ export function planStatus(f: {
   if (f.plan) return "saved";
   if (f.recommendation) return "proposed";
   return "none";
+}
+
+/* ------------------------------------------------------------------------------------------------------------------
+ * Sensitivity to the weather years (EP-10, S-10.06, T10). Fixed rules over the comparison data, no AI. Every sentence
+ * is derived from the sets' own rankings, never from the `bestChanges` flag alone, so no change can be stated that the
+ * data does not contain.
+ * ---------------------------------------------------------------------------------------------------------------- */
+
+/** The sets that carry a ranking, in the fixed display order. A set without options counts as missing. */
+export function usableSets(cmp: YearSetComparison, order: readonly YearSetId[]): YearSetRanking[] {
+  const list = Array.isArray(cmp.sets) ? cmp.sets : [];
+  return order.flatMap((id) => {
+    const s = list.find((x) => x.id === id);
+    return s && s.options.length > 0 ? [s] : [];
+  });
+}
+
+/** The rank-1 option of a set, read from the options themselves (falls back to `best`). */
+export function bestOf(s: YearSetRanking): string {
+  return s.options.find((o) => o.rank === 1)?.id ?? s.best;
+}
+
+const orderOf = (s: YearSetRanking): string =>
+  [...s.options]
+    .sort((a, b) => a.rank - b.rank)
+    .map((o) => o.id)
+    .join("|");
+
+export type YearSetFinding =
+  | { kind: "none" }
+  | {
+      kind: "same";
+      /** Same rank order of all options in every set (not only the same winner). */
+      sameOrder: boolean;
+      /** All the sets were calculated. */
+      complete: boolean;
+    }
+  | {
+      kind: "changes";
+      allBest: string;
+      changed: Array<{ set: YearSetId; best: string }>;
+      /** The current rotation won in 1981–2000, not in the last 15 years, and ranks `rank` there. */
+      currentNote: { rank: number } | null;
+      complete: boolean;
+    };
+
+/** What the sets show. Needs "all" (the recommendation's basis) and one more set; otherwise nothing is stated. */
+export function findYearSets(
+  cmp: YearSetComparison,
+  order: readonly YearSetId[],
+  currentId: string,
+): YearSetFinding {
+  const sets = usableSets(cmp, order);
+  const all = sets.find((s) => s.id === "all");
+  if (!all || sets.length < 2) return { kind: "none" };
+  const complete = sets.length === order.length;
+  const allBest = bestOf(all);
+  const changed = sets
+    .filter((s) => s.id !== "all" && bestOf(s) !== allBest)
+    .map((s) => ({ set: s.id, best: bestOf(s) }));
+  if (changed.length === 0)
+    return { kind: "same", sameOrder: sets.every((s) => orderOf(s) === orderOf(all)), complete };
+  const early = sets.find((s) => s.id === "climate-1981-2000");
+  const late = sets.find((s) => s.id === "last-15");
+  const rank = late?.options.find((o) => o.id === currentId)?.rank;
+  const currentNote =
+    early && late && bestOf(early) === currentId && bestOf(late) !== currentId && rank !== undefined
+      ? { rank }
+      : null;
+  return { kind: "changes", allBest, changed, currentNote, complete };
 }
