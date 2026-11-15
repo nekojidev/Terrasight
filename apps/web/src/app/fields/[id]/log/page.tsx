@@ -8,6 +8,7 @@ interface WorkspaceDetail {
   id: string;
   name: string;
   fieldCount: number;
+  timeZone?: string;
   role: Me["workspaces"][number]["role"];
 }
 
@@ -33,7 +34,7 @@ export default async function LogPage({ params }: { params: Promise<{ id: string
       user={{ name: me.data.name, role: ws.data.role }}
       crumb={field.data.name}
     >
-      <LogClient workspaceId={ws.data.id} fieldId={id} fieldName={field.data.name} />
+      <LogClient workspaceId={ws.data.id} fieldId={id} fieldName={field.data.name} timeZone={ws.data.timeZone} />
     </AppShell>
   );
 }

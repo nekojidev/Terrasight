@@ -51,6 +51,8 @@ export function ZonesMap(props: {
   ndvi: NdviImage | null;
   layer: Layer;
   label: string;
+  /** Tap on a zone (or on empty ground: null). */
+  onZone?: (zone: "strong" | "variable" | "weak" | null) => void;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<MLMap | null>(null);
@@ -124,6 +126,13 @@ export function ZonesMap(props: {
         source: "field",
         paint: { "line-color": token("--ts-surface"), "line-width": 2.5 },
       });
+      m.on("click", (e) => {
+        const hit = m.queryRenderedFeatures(e.point, { layers: ["zones-fill"] })[0];
+        const zone = hit?.properties?.zone;
+        latest.current.onZone?.(zone === "strong" || zone === "variable" || zone === "weak" ? zone : null);
+      });
+      m.on("mousemove", "zones-fill", () => (m.getCanvas().style.cursor = "pointer"));
+      m.on("mouseleave", "zones-fill", () => (m.getCanvas().style.cursor = ""));
       sync();
     });
     const observer = new MutationObserver(() => {
@@ -161,7 +170,7 @@ export function ZonesMap(props: {
       ref={container}
       role="application"
       aria-label={props.label}
-      className="h-[460px] w-full overflow-hidden rounded-hero"
+      className="h-[46dvh] min-h-64 w-full overflow-hidden rounded-hero sm:h-[460px]"
     />
   );
 }
