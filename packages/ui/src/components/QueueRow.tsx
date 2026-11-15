@@ -10,6 +10,8 @@ import { FactorRows, type Factor } from "./FactorRows";
 export interface QueueRowProps {
   thumb: ReactNode;
   title: string;
+  /** Small marker after the title (e.g. the "written by the assistant" sparkle). */
+  titleMark?: ReactNode;
   /** "Pivot 14 · Kansas · Finney County". */
   meta: string;
   /** Deadline text in the urgency colour, e.g. "this week". */
@@ -44,7 +46,9 @@ export function QueueRow(p: QueueRowProps) {
       <div className="flex items-center gap-4">
         {p.thumb}
         <div className="min-w-0 flex-1">
-          <h3 className="text-[18px] leading-6 font-semibold text-ink">{p.title}</h3>
+          <h3 className="text-[18px] leading-6 font-semibold text-ink">{p.title}
+            {p.titleMark}
+          </h3>
           <p className="flex flex-wrap items-center gap-x-2 text-small text-ink-2">
             <span>{p.meta}</span>
             <span className={clsx("font-semibold", DUE[p.dueTone ?? "week"])}>{p.due}</span>

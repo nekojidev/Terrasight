@@ -13,6 +13,8 @@ export interface HeroItemProps {
   /** Field badge: thumbnail, name, region, season strip. */
   field: ReactNode;
   title: string;
+  /** Small marker after the title (e.g. the "written by the assistant" sparkle). */
+  titleMark?: ReactNode;
   numbers: BigNumberProps[];
   /** "High confidence · Full data". */
   confidence: string;
@@ -39,7 +41,9 @@ export function HeroItem(p: HeroItemProps) {
         {p.chip}
         {p.field}
       </header>
-      <h2 className="text-h1 sm:text-display mb-5 max-w-[20ch] text-ink sm:mb-8">{p.title}</h2>
+      <h2 className="text-h1 sm:text-display mb-5 max-w-[20ch] text-ink sm:mb-8">{p.title}
+        {p.titleMark}
+      </h2>
       {p.why && <div className="mb-5 rounded-input bg-surface-2 p-4 sm:hidden">{p.why}</div>}
       <div className={clsx("mb-8 grid grid-cols-1 gap-6 sm:grid-cols-3", p.why && "max-sm:hidden")}>
         {p.numbers.slice(0, 3).map((n) => (

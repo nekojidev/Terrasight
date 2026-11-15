@@ -471,30 +471,34 @@ model Recommendation {
   level           RiskLevel
   confidence      Confidence
   tier            Tier
-  deadline        DateTime?  @db.Date
-  irreversible    Boolean    @default(false)
-  planning        Boolean    @default(false)
-  keyNumbers      Json       @default("[]") @map("key_numbers")
-  drivers         Json       @default("[]")
-  evidence        Json       @default("[]")
-  unknowns        Json       @default("[]")
-  modelRef        String?    @map("model_ref")
-  versions        Json       @default("{}")
-  inputSnapshotId String?    @map("input_snapshot_id") @db.Uuid
-  textOverride    Json?      @map("text_override")
-  editedBy        String?    @map("edited_by") @db.Uuid
-  snoozedAt       DateTime?  @map("snoozed_at") @db.Timestamptz(3)
-  snoozedUntil    DateTime?  @map("snoozed_until") @db.Timestamptz(3)
-  acceptedAt      DateTime?  @map("accepted_at") @db.Timestamptz(3)
-  acceptedBy      String?    @map("accepted_by") @db.Uuid
-  committedAt     DateTime?  @map("committed_at") @db.Timestamptz(3)
-  askOwnerAt      DateTime?  @map("ask_owner_at") @db.Timestamptz(3)
-  askOwnerBy      String?    @map("ask_owner_by") @db.Uuid
-  askNote         String?    @map("ask_note")
-  askCommittedAt  DateTime?  @map("ask_committed_at") @db.Timestamptz(3)
-  dismissedAt     DateTime?  @map("dismissed_at") @db.Timestamptz(3)
-  createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt       DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deadline        DateTime?   @db.Date
+  irreversible    Boolean     @default(false)
+  planning        Boolean     @default(false)
+  keyNumbers      Json        @default("[]") @map("key_numbers")
+  drivers         Json        @default("[]")
+  evidence        Json        @default("[]")
+  unknowns        Json        @default("[]")
+  modelRef        String?     @map("model_ref")
+  versions        Json        @default("{}")
+  inputSnapshotId String?     @map("input_snapshot_id") @db.Uuid
+  textOverride    Json?       @map("text_override")
+  /// Assistant-written text {source: "ai" or "template", hash, title, action, why}; the template text stays the fallback (PD v2.11).
+  aiText          Json?       @map("ai_text")
+  /// A "worth scouting" watch-item proposed by the assistant for a pest with no verified model (never Urgent).
+  aiSuggested     Boolean     @default(false) @map("ai_suggested")
+  editedBy        String?     @map("edited_by") @db.Uuid
+  snoozedAt       DateTime?   @map("snoozed_at") @db.Timestamptz(3)
+  snoozedUntil    DateTime?   @map("snoozed_until") @db.Timestamptz(3)
+  acceptedAt      DateTime?   @map("accepted_at") @db.Timestamptz(3)
+  acceptedBy      String?     @map("accepted_by") @db.Uuid
+  committedAt     DateTime?   @map("committed_at") @db.Timestamptz(3)
+  askOwnerAt      DateTime?   @map("ask_owner_at") @db.Timestamptz(3)
+  askOwnerBy      String?     @map("ask_owner_by") @db.Uuid
+  askNote         String?     @map("ask_note")
+  askCommittedAt  DateTime?   @map("ask_committed_at") @db.Timestamptz(3)
+  dismissedAt     DateTime?   @map("dismissed_at") @db.Timestamptz(3)
+  createdAt       DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   workspace     Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   field         Field                 @relation(fields: [fieldId], references: [id], onDelete: Cascade)

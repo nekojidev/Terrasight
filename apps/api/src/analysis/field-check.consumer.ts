@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, type OnModuleInit } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional, type OnModuleInit } from "@nestjs/common";
 import { evaluate, snapshotHash, type EvalInputs, type Level, type RiskResult } from "@terrasight/evaluators";
 import type { Library, PestModel } from "@terrasight/library";
 import type { Envelope } from "@terrasight/shared";
@@ -10,6 +10,7 @@ import { LIBRARY } from "../library/library.module.js";
 import { BROKER, type Broker } from "../messaging/broker.js";
 import { JobConsumer } from "../messaging/consumer.js";
 import { QUEUES } from "../messaging/topology.js";
+import { AiRecommendationsService } from "./ai-recommendations.service.js";
 import { AlertsService } from "./alerts.service.js";
 import { AnalysisService, type FieldCheckJob } from "./analysis.service.js";
 import { EvalInputsService } from "./eval-inputs.service.js";
@@ -38,6 +39,7 @@ export class FieldCheckConsumer extends JobConsumer<FieldCheckJob> implements On
     private readonly inputsService: EvalInputsService,
     private readonly scenarios: ScenariosService,
     private readonly alerts: AlertsService,
+    @Optional() private readonly ai?: AiRecommendationsService,
   ) {
     super(broker, { queue: QUEUES.fieldCheck, prefetch: 4, retries: 0 });
   }
@@ -102,6 +104,8 @@ export class FieldCheckConsumer extends JobConsumer<FieldCheckJob> implements On
     } catch (e) {
       this.logger.warn(`rotation scenarios for ${fieldId} skipped: ${(e as Error).message}`);
     }
+    // AI wording of the results and "worth scouting" watch-items (PD v2.11): one batched call, never fails the check.
+    await this.ai?.enrich(fieldId, built, asOf);
     // Open or snoozed items whose deadline has passed leave the brief (RFC §10.4: Open → Expired).
     await this.prisma.system.recommendation.updateMany({
       where: {

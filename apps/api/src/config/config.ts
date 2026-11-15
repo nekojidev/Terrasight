@@ -30,6 +30,8 @@ export const EnvSchema = z.object({
   GEMINI_MODEL: z.string().default("gemini-3.5-flash-lite"),
   /** AI-proposed rotations (PD v2.8): "1" on, "0" off; unset = on when GEMINI_API_KEY is set. */
   AI_ROTATIONS: z.enum(["0", "1"]).optional(),
+  /** AI-written recommendation texts, watch-items and the day summary (PD v2.11): same rule as AI_ROTATIONS. */
+  AI_RECOMMENDATIONS: z.enum(["0", "1"]).optional(),
   /** Private bucket for scouting photos (Tech Design §11); without it photos go to UPLOADS_DIR (development). */
   S3_BUCKET: z.string().optional(),
   AWS_REGION: z.string().default("us-east-1"),

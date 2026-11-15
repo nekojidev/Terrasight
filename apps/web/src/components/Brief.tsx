@@ -21,6 +21,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { AnalysisCard } from "@/components/AnalysisCard";
+import { AiMark } from "@/components/AiMark";
 import { AskOwnerSheet } from "@/components/AskOwnerSheet";
 import { OutlookRailLine } from "@/components/OutlookRailLine";
 import { TodayWindows } from "@/components/TodayWindows";
@@ -43,6 +44,8 @@ interface Item {
   keyNumbers: Array<{ id: string; value: number | string; unit?: string; weight: number }>;
   evidence: Array<{ source?: string; title?: string | null; kind?: string }>;
   text: { title: Localised; action: Localised; why: Localised };
+  textSource?: "ai" | "template" | "edited";
+  aiSuggested?: boolean;
   urgency: "urgent" | "this_week" | "all_good";
   more: number;
   seasons: Array<{ season: number; crop: string }>;
@@ -51,7 +54,9 @@ interface Item {
 interface Brief {
   date: string;
   timeZone: string;
-  counts: { fields: number; urgent: number; thisWeek: number; allGood: number };
+  counts: { fields: number; urgent: number; thisWeek: number; allGood: number; worthALook?: number };
+  daySummary?: { text: Localised; source: "ai" } | null;
+  worthALook?: Item[];
   hero: Item | null;
   urgent: Item[];
   thisWeek: Item[];
@@ -242,7 +247,10 @@ export function Brief({
               </Chip>
             </p>
             <p className="text-body text-ink-2 max-sm:hidden">
-              {t("daySummary", { urgent: b.counts.urgent, week: b.counts.thisWeek, fine: b.counts.allGood })}
+              {b.daySummary
+                ? b.daySummary.text[locale]
+                : t("daySummary", { urgent: b.counts.urgent, week: b.counts.thisWeek, fine: b.counts.allGood })}
+              {b.daySummary && <AiMark />}
             </p>
           </div>
           {canAct && (
@@ -287,6 +295,7 @@ export function Brief({
             }
             why={<FactorRows factors={factors(hero).slice(0, 3)} />}
             title={hero.text.title[locale]}
+            {...(hero.textSource === "ai" ? { titleMark: <AiMark /> } : {})}
             numbers={numbers(hero)}
             confidence={conf(hero)}
             confidenceHint={
@@ -335,6 +344,7 @@ export function Brief({
                   />
                 }
                 title={i.text.title[locale]}
+                {...(i.textSource === "ai" ? { titleMark: <AiMark /> } : {})}
                 meta={`${i.fieldName}${i.more > 0 ? ` · ${t("more", { n: i.more })}` : ""}`}
                 due={due(i)}
                 dueTone={i.urgency === "urgent" ? "urgent" : "week"}
@@ -351,6 +361,40 @@ export function Brief({
                 onSnooze={() => canAct && void act(i, "snooze")}
                 {...(doneRow(i.id) ? { done: doneRow(i.id)! } : {})}
               />
+            ))}
+          </section>
+        )}
+
+        {(b.worthALook?.length ?? 0) > 0 && (
+          <section className="flex flex-col gap-3">
+            <h2 className="text-h2 text-ink">
+              {t("aiWorthTitle")} <span className="text-ink-3">{b.worthALook!.length}</span>
+            </h2>
+            <p className="text-small text-ink-2">{t("aiWorthSub")}</p>
+            {b.worthALook!.map((i) => (
+              <Link
+                key={i.id}
+                href={`/recommendations/${i.id}`}
+                className="focus-ring flex items-center gap-3 rounded-card border border-line bg-surface p-4 hover:bg-muted"
+              >
+                <FieldThumb
+                  name={i.fieldName}
+                  outline={i.thumb ?? null}
+                  crop={i.seasons?.at(-1)?.crop ?? null}
+                  size={40}
+                  className="size-10"
+                />
+                <span className="min-w-0">
+                  <span className="block text-body font-semibold text-ink">
+                    {i.text.title[locale]}
+                    <AiMark />
+                  </span>
+                  <span className="block text-small text-ink-2">{i.text.action[locale]}</span>
+                  <span className="block text-small text-ink-3">
+                    {i.fieldName} · {t("aiWatchChip")}
+                  </span>
+                </span>
+              </Link>
             ))}
           </section>
         )}

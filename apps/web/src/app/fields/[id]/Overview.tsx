@@ -6,6 +6,7 @@ import { Bug, ChevronRight, CloudRain, Microscope, RefreshCw, Snowflake, Sparkle
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
+import { AiMark } from "@/components/AiMark";
 import { api } from "@/lib/api";
 
 type Localised = { en: string; uk: string };
@@ -18,6 +19,8 @@ interface Risk {
   planning: boolean;
   keyNumbers: Array<{ id: string; value: number | string; unit?: string; weight: number }>;
   text: { title: Localised; action: Localised };
+  textSource?: "ai" | "template" | "edited";
+  aiSuggested?: boolean;
 }
 interface Weather {
   days: Array<{
@@ -205,8 +208,14 @@ export function RisksCard({ risks }: { risks: Risk[] }) {
                   {x.type === "rotation" ? <RefreshCw /> : x.type === "disease" ? <Microscope /> : <Bug />}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-body font-semibold text-ink">{x.text.title[locale]}</span>
-                  <span className="block truncate text-small text-ink-2">{x.text.action[locale]}</span>
+                  <span className="block truncate text-body font-semibold text-ink">
+                    {x.text.title[locale]}
+                    {x.textSource === "ai" && <AiMark />}
+                  </span>
+                  <span className="block truncate text-small text-ink-2">
+                    {x.aiSuggested ? `${t("aiWatchChip")} · ` : ""}
+                    {x.text.action[locale]}
+                  </span>
                 </span>
                 <span aria-hidden className="flex items-end gap-0.5">
                   {[1, 2, 3].map((n) => (

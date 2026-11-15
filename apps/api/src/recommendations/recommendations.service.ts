@@ -86,9 +86,15 @@ export class RecommendationsService {
     rec: Pick<
       Rec,
       "type" | "subject" | "season" | "level" | "planning" | "keyNumbers" | "drivers" | "textOverride"
-    >,
+    > &
+      Partial<Pick<Rec, "aiText">>,
   ): RecText {
-    const base = recommendationText(rec, this.lib);
+    const template = recommendationText(rec, this.lib);
+    const ai = rec.aiText as { source?: string; title?: Localised; action?: Localised; why?: Localised } | null | undefined;
+    const written = ai?.source === "ai" && ai.title && ai.action && ai.why;
+    const base: RecText = written
+      ? { ...template, title: ai.title!, action: ai.action!, why: ai.why!, source: "ai" }
+      : { ...template, source: "template" };
     const o = rec.textOverride as Partial<Record<"title" | "action", Localised>> | null;
     return o
       ? { ...base, ...(o.title ? { title: o.title } : {}), ...(o.action ? { action: o.action } : {}) }
@@ -121,6 +127,10 @@ export class RecommendationsService {
       unknowns: rec.unknowns,
       modelRef: rec.modelRef,
       text: this.text(rec),
+      /** "ai" = written by the assistant from the model results; "template" = the fallback text. */
+      textSource: rec.textOverride !== null ? ("edited" as const) : (this.text(rec).source ?? "template"),
+      /** A watch-item the assistant suggested for a pest with no verified model. */
+      aiSuggested: rec.aiSuggested,
       edited: rec.textOverride !== null,
       snoozedUntil: rec.snoozedUntil,
       acceptedAt: rec.acceptedAt,

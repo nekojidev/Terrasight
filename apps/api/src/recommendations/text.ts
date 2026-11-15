@@ -10,6 +10,8 @@ export interface RecText {
   why: Localised;
   /** Pest and disease cards end with this (RFC §11.5). */
   scout: Localised | null;
+  /** Who wrote title / action / why: the assistant (number-checked) or the template below (the fallback). */
+  source?: "ai" | "template";
 }
 
 interface RecLike {
@@ -31,7 +33,7 @@ const LEVEL: Record<string, Localised> = {
 };
 
 /** "2026-09-05" → "September 5, 2026" / "5 вересня 2026 р."; other values unchanged. */
-function value(v: number | string, lang: Lang): string {
+export function value(v: number | string, lang: Lang): string {
   if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v))
     return new Intl.DateTimeFormat(lang === "uk" ? "uk-UA" : "en-US", {
       timeZone: "UTC",
