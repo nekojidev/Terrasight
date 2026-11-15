@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { NextIntlClientProvider } from "next-intl";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import app from "../../../messages/app.en.json";
+import messages from "../../../../messages/en.json";
 import { SeasonPlanner, type PlannerHistory } from "./SeasonPlanner";
 import { addDays, todayIso } from "./seasonStage";
 
@@ -18,7 +19,7 @@ vi.mock("@/lib/api", () => ({
     return record;
   }),
 }));
-vi.mock("@/components/useReportError", () => ({ useReportError: () => vi.fn() }));
+vi.mock("@/lib/useActionToast", () => ({ useActionToast: () => ({ fail: vi.fn() }) }));
 
 const history: PlannerHistory = {
   cropNames: { wheat_winter: { en: "Winter wheat", uk: "Озима пшениця" } },
@@ -31,7 +32,7 @@ const r = (value: string | null, source: string) => ({ value, source });
 function setup(suitability?: PlannerHistory["suitability"]) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
-    <NextIntlClientProvider locale="en" messages={{ App: app.App }}>
+    <NextIntlClientProvider locale="en" messages={{ App: app.App, Field: messages.Field }}>
       <QueryClientProvider client={client}>
         <SeasonPlanner base="/b" canEdit history={{ ...history, suitability }} workspaceId="w" fieldId="f" />
       </QueryClientProvider>

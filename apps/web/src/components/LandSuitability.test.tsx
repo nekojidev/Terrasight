@@ -21,7 +21,7 @@ vi.mock("@/lib/api", () => ({
     return {};
   }),
 }));
-vi.mock("@/components/useReportError", () => ({ useReportError: () => vi.fn() }));
+vi.mock("@/lib/useActionToast", () => ({ useActionToast: () => ({ fail: vi.fn() }) }));
 vi.mock("next/link", () => ({
   default: ({ href, children }: { href: string; children: ReactNode }) => <a href={href}>{children}</a>,
 }));

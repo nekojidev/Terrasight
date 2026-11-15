@@ -1,11 +1,13 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { InfoHint, seasonHintText } from "@terrasight/ui";
+import { InfoHint, Surface, seasonHintText } from "@terrasight/ui";
 import { useLocale, useTranslations } from "next-intl";
 import { QueryState } from "@/components/QueryState";
 import { CaveatNotes } from "@/components/CaveatNotes";
 import { api } from "@/lib/api";
+import { useFormat } from "@/lib/useFormat";
+import { fieldFormatOptions } from "./fieldFormat";
 
 interface YieldRangeView {
   noLibrary: boolean;
@@ -53,13 +55,17 @@ export function YieldCard({
   workspaceId,
   fieldId,
   units,
+  country,
 }: {
   workspaceId: string;
   fieldId: string;
   units: "metric" | "imperial";
+  country?: string | null;
 }) {
   const t = useTranslations("App");
+  const r = useTranslations("Field");
   const locale = useLocale();
+  const fmtr = useFormat(fieldFormatOptions(country, units));
   const q = useQuery({
     queryKey: ["field", workspaceId, fieldId, "yield-range"],
     queryFn: () => api<YieldRangeView>(`/api/w/${workspaceId}/fields/${fieldId}/yield-range`),
@@ -67,24 +73,22 @@ export function YieldCard({
     staleTime: 5 * 60_000,
   });
   const d = q.data;
-  if (!d) return <QueryState query={q}>{() => null}</QueryState>;
+  if (!d) return <QueryState query={q} what={t("ycTitle")}>{() => null}</QueryState>;
   if (d.noLibrary || !d.range || !d.crop) return null;
   const crop = d.crop;
-  const name = d.cropNames ? (locale === "uk" ? d.cropNames.uk : d.cropNames.en) : crop;
+  const name = d.cropNames ? (locale === "uk" ? d.cropNames.uk : d.cropNames.en) : "—";
   const fmt = (v: number) => {
-    const x = toDisplay(v, crop, units);
-    return new Intl.NumberFormat(locale === "uk" ? "uk-UA" : "en-US", {
-      maximumFractionDigits: x.unit === "bu/ac" ? 0 : 1,
-    }).format(x.value);
+    const x = toDisplay(v, crop, fmtr.units);
+    return fmtr.number(x.value, { maximumFractionDigits: x.unit === "bu/ac" ? 0 : 1 });
   };
   const { p10, p50, p90 } = d.range;
-  const unit = toDisplay(p50, crop, units).unit;
+  const unit = toDisplay(p50, crop, fmtr.units).unit;
   const mid = ((p50 - p10) / Math.max(p90 - p10, 1e-9)) * 100;
   return (
-    <section className="rounded-card border border-line bg-surface p-5" data-testid="yield-card">
+    <Surface as="section" data-testid="yield-card">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-h2 text-ink">{t("ycTitle")}</h2>
-        <span className="text-small text-ink-2">
+        <span className="text-caption text-ink-2">
           {t("ycCropSeason", { crop: name, season: d.season ?? "" })} · {t(`ycSrc_${d.source ?? "plan"}`)}
           {d.season != null && (
             <InfoHint label={t("hintLabel")} align="end" className="ml-2">
@@ -95,14 +99,14 @@ export function YieldCard({
       </div>
       <p className="mt-3 text-ink">
         <span className="text-big-number">{fmt(p50)}</span>{" "}
-        <span className="text-small text-ink-2">{unit}</span>
-        <span className="ml-2 text-small text-ink-2">{t("ycP50")}</span>
+        <span className="text-caption text-ink-2">{unit}</span>
+        <span className="ml-2 text-caption text-ink-2">{r("yc_typ")}</span>
         <InfoHint label={t("hintLabel")} className="ml-2">
-          {t("hintYieldRange")}
+          {r("yc_hint")}
         </InfoHint>
       </p>
       {p90 - p10 < 0.05 ? (
-        <p className="mt-3 text-small text-ink-2">{t("ycStable")}</p>
+        <p className="mt-3 text-caption text-ink-2">{t("ycStable")}</p>
       ) : (
         <>
           <div
@@ -116,23 +120,23 @@ export function YieldCard({
               style={{ left: `calc(${mid}% - 2px)` }}
             />
           </div>
-          <div className="mt-2 flex justify-between text-small text-ink-2">
+          <div className="mt-2 flex justify-between text-caption text-ink-2">
             <span>
-              {t("ycP10")} {fmt(p10)}
+              {r("yc_low")} {fmt(p10)}
             </span>
             <span>
-              {t("ycP90")} {fmt(p90)}
+              {r("yc_high")} {fmt(p90)}
             </span>
           </div>
         </>
       )}
-      <p className="mt-3 text-small text-ink-2">
-        {t("ycBasis", { runs: d.range.runs })}
+      <p className="mt-3 text-caption text-ink-2">
+        {t("ycBasis", { runs: fmtr.number(d.range.runs) })}
         {d.yieldRef != null ? ` · ${t("ycRef", { v: fmt(d.yieldRef), unit })}` : ""}
       </p>
-      <p className="mt-1 text-small text-ink-2">{t("ycNoPest")}</p>
-      <p className="mt-1 text-small text-ink-2">{t("ycIrrHint")}</p>
+      <p className="mt-1 text-caption text-ink-2">{t("ycNoPest")}</p>
+      <p className="mt-1 text-caption text-ink-2">{t("ycIrrHint")}</p>
       <CaveatNotes caveats={d.range.caveats} cropName={() => name} className="mt-1" />
-    </section>
+    </Surface>
   );
 }

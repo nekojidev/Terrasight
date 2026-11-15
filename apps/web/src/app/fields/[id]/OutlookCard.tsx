@@ -1,11 +1,13 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { InfoHint } from "@terrasight/ui";
+import { InfoHint, Surface } from "@terrasight/ui";
 import { CloudRain, Snowflake, Sun, Thermometer } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { QueryState } from "@/components/QueryState";
 import { api } from "@/lib/api";
+import { useFormat } from "@/lib/useFormat";
+import { fieldFormatOptions } from "./fieldFormat";
 
 export interface OutlookTerciles {
   below: number;
@@ -53,17 +55,17 @@ export function monthName(month: string, locale: string): string {
   return name.charAt(0).toUpperCase() + name.slice(1);
 }
 
-const pct = (p: number) => `${Math.round(p * 100)}%`;
-
 /** One stacked bar: share of ensemble members below / near / above normal. Colour is never the only cue: % labels. */
 function TercileBar({
   p,
   colours,
   label,
+  pct,
 }: {
   p: OutlookTerciles;
   colours: [string, string, string];
   label: string;
+  pct: (p: number) => string;
 }) {
   const parts = [p.below, p.near, p.above];
   return (
@@ -73,7 +75,7 @@ function TercileBar({
           <div key={i} className={colours[i]} style={{ width: `${v * 100}%` }} />
         ))}
       </div>
-      <div className="mt-1 flex justify-between font-mono text-micro text-ink-2">
+      <div className="mt-1 flex justify-between font-mono text-caption text-ink-2">
         <span>{pct(p.below)}</span>
         <span>{pct(p.near)}</span>
         <span>{pct(p.above)}</span>
@@ -97,34 +99,33 @@ export function OutlookCard({
   workspaceId,
   fieldId,
   units,
+  country,
 }: {
   workspaceId: string;
   fieldId: string;
   units: "metric" | "imperial";
+  country?: string | null;
 }) {
   const t = useTranslations("App");
   const locale = useLocale();
+  const fmt = useFormat(fieldFormatOptions(country, units));
+  const pct = (p: number) => fmt.percent(p);
   const q = useQuery({
     queryKey: ["field", workspaceId, fieldId, "outlook"],
     queryFn: () => api<FieldOutlookView>(`/api/w/${workspaceId}/fields/${fieldId}/outlook`),
     retry: false,
     staleTime: 60 * 60_000,
   });
-  if (!q.data) return <QueryState query={q}>{() => null}</QueryState>;
+  if (!q.data) return <QueryState query={q} what={t("olTitle")}>{() => null}</QueryState>;
   const o = q.data.outlook;
   if (!o) return null;
-  const date = new Intl.DateTimeFormat(locale === "uk" ? "uk-UA" : "en-US", {
-    day: "numeric",
-    month: "short",
-    timeZone: "UTC",
-  }).format(new Date(`${o.issuedAt}T00:00:00Z`));
-  const deg = (c: number) => (units === "imperial" ? `${Math.round((c * 9) / 5 + 32)} °F` : `${c} °C`);
+  const date = fmt.date(`${o.issuedAt}T00:00:00Z`, "dayMonth", { timeZone: "UTC" });
   return (
-    <section className="rounded-card border border-line bg-surface p-5" data-testid="outlook-card">
+    <Surface as="section" data-testid="outlook-card">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-h2 text-ink">{t("olTitle")}</h2>
-        <span className="text-small text-ink-2">
-          {t("olSource", { n: o.members, date })}
+        <span className="text-caption text-ink-2">
+          {t("olSource", { n: fmt.number(o.members), date })}
           <InfoHint label={t("hintLabel")} align="end" className="ml-2">
             {t("olHint", { from: String(o.climatology.from), to: String(o.climatology.to) })}
           </InfoHint>
@@ -140,6 +141,7 @@ export function OutlookCard({
               {t("olRain")}
             </p>
             <TercileBar
+              pct={pct}
               p={m.precip}
               colours={["bg-week", "bg-line-strong", "bg-info"]}
               label={t("olBarAria", {
@@ -156,6 +158,7 @@ export function OutlookCard({
               {t("olTemp")}
             </p>
             <TercileBar
+              pct={pct}
               p={m.temp}
               colours={["bg-info", "bg-line-strong", "bg-urgent"]}
               label={t("olBarAria", {
@@ -170,7 +173,7 @@ export function OutlookCard({
           </div>
         ))}
       </div>
-      <div className="mt-2 flex justify-between text-micro text-ink-3" aria-hidden>
+      <div className="mt-2 flex justify-between text-caption text-ink-2" aria-hidden>
         <span>{t("olLegendBelow")}</span>
         <span>{t("olLegendNear")}</span>
         <span>{t("olLegendAbove")}</span>
@@ -199,8 +202,8 @@ export function OutlookCard({
         </ul>
       )}
       <p className="mt-3 text-small text-ink-2">
-        {t("olDefs", { frost: deg(0), heat: deg(35) })}
+        {t("olDefs", { frost: fmt.temp(0), heat: fmt.temp(35) })}
       </p>
-    </section>
+    </Surface>
   );
 }

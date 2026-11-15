@@ -1,6 +1,7 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
+import { Button, Chip, Surface, useToast } from "@terrasight/ui";
 import { Plus, Send, Sparkles } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { useRef, useState, type FormEvent } from "react";
@@ -8,6 +9,7 @@ import { useAssistantAsk } from "@/components/AssistantBus";
 import { Chat } from "@/components/Chat";
 import { useActiveConversation } from "@/components/useActiveConversation";
 import { api, ApiError } from "@/lib/api";
+import { useActionToast } from "@/lib/useActionToast";
 
 /**
  * Assistant panel beside a field (design 08, S-05.05): suggestion chips and a question box with the field as context.
@@ -30,12 +32,12 @@ export function FieldAssistant({
   const lang = locale === "uk" ? "uk" : "en";
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { fail } = useActionToast();
+  const toast = useToast();
 
   async function start(question: string) {
     if (!question.trim() || busy) return;
     setBusy(true);
-    setError(null);
     let created: string | null = null;
     try {
       // The chat is tied to the field, so coming back to this page finds it; the first question names it.
@@ -50,7 +52,8 @@ export function FieldAssistant({
       if (created)
         void api(`/api/w/${workspaceId}/conversations/${created}`, { method: "DELETE" }).catch(() => undefined);
       setText(question);
-      setError(e instanceof ApiError && e.problem.status === 429 ? t("aiRateLimited") : t("errGeneric"));
+      if (e instanceof ApiError && e.problem.status === 429) toast.show(t("aiRateLimited"), "error");
+      else fail(e, f("askWhat"), () => void start(question));
     } finally {
       setBusy(false);
     }
@@ -63,21 +66,21 @@ export function FieldAssistant({
   async function newChat() {
     if (busy) return;
     setBusy(true);
-    setError(null);
     try {
       const c = await api<{ id: string }>(`/api/w/${workspaceId}/conversations`, { body: { fieldId } });
       select(c.id);
-    } catch {
-      setError(t("errGeneric"));
+    } catch (e) {
+      fail(e, f("newChatWhat"), () => void newChat());
     } finally {
       setBusy(false);
     }
   }
-  const panel = useRef<HTMLElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
   // "Why so?" on the field card asks through the bus instead of poking at this panel's input.
   useAssistantAsk((question) => {
     if (busy) return false;
-    panel.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    panel.current?.scrollIntoView({ behavior: calm ? "auto" : "smooth", block: "center" });
     if (!id) {
       void start(question);
       return true;
@@ -87,34 +90,39 @@ export function FieldAssistant({
       body: { text: question, context: { fieldId }, lang },
     })
       .then(() => client.invalidateQueries({ queryKey: ["conversation", workspaceId, id] }))
-      .catch(() => setError(t("errGeneric")));
+      .catch((e) => fail(e, f("askWhat")));
     return true;
   });
   const suggestions = [t("faSugg1"), t("faSugg2"), t("faSugg3")];
 
   return (
-    <section ref={panel} className="flex min-h-[560px] flex-col rounded-hero border border-line bg-surface">
-      <header className="flex items-center gap-3 border-b border-line p-4">
+    <div ref={panel}>
+    <Surface
+      as="section"
+      aria-label={f("assistantOpen")}
+      className={`flex flex-col ${id ? "min-h-[420px]" : ""}`}
+      pad="none"
+    >
+      <header className="flex flex-wrap items-center gap-3 border-b border-line p-4">
         <span className="inline-flex size-10 items-center justify-center rounded-btn bg-ink text-surface">
           <Sparkles aria-hidden className="size-5" strokeWidth={1.7} />
         </span>
-        <span className="flex-1">
+        <span className="min-w-0 flex-1">
           <span className="block text-body font-semibold text-ink">{f("ai_name")}</span>
-          <span className="text-small text-ink-2">{t("aiContextField", { name: fieldName })}</span>
+          <span className="text-caption text-ink-2">{t("aiContextField", { name: fieldName })}</span>
         </span>
         {id && (
-          <button
-            type="button"
+          <Button
+            variant="outline"
+            icon={<Plus />}
             onClick={() => void newChat()}
             disabled={busy}
             aria-label={t("aiNewChatFor", { name: fieldName })}
-            className="focus-ring inline-flex min-h-tap items-center gap-1.5 rounded-btn border border-line-strong px-3 text-small font-semibold text-ink hover:bg-muted disabled:opacity-60"
           >
-            <Plus aria-hidden className="size-4" strokeWidth={1.7} />
             {t("aiNewChat")}
-          </button>
+          </Button>
         )}
-        <span className="flex items-center gap-1.5 text-small font-semibold text-ok">
+        <span className="flex items-center gap-1.5 text-caption font-semibold text-ok">
           <span aria-hidden className="size-2 rounded-full bg-ok" />
           Gemini
         </span>
@@ -123,66 +131,42 @@ export function FieldAssistant({
         {loading ? (
           <div aria-busy="true" className="flex-1" />
         ) : id ? (
-          <>
-            <Chat
-              key={id}
-              workspaceId={workspaceId}
-              conversationId={id}
-              context={{ fieldId }}
-              suggestions={suggestions}
-              onMissing={forget}
-              compact
-            />
-            {error && (
-              <p role="alert" className="mt-2 text-small text-urgent">
-                {error}
-              </p>
-            )}
-          </>
+          <Chat
+            key={id}
+            workspaceId={workspaceId}
+            conversationId={id}
+            context={{ fieldId }}
+            suggestions={suggestions}
+            onMissing={forget}
+            compact
+          />
         ) : (
           <>
             <p className="text-body text-ink-2">{t("faIntro")}</p>
-            <div className="mt-4 flex flex-col items-start gap-2">
+            <div className="mt-4 flex flex-wrap gap-2">
               {suggestions.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void start(s)}
-                  className="focus-ring inline-flex items-center gap-2 rounded-chip border border-line bg-surface-2 px-3 py-2 text-small font-semibold text-ink hover:bg-muted disabled:opacity-60"
-                >
-                  <Sparkles aria-hidden className="size-4" strokeWidth={1.7} />
+                <Chip key={s} tone="neutral" icon={<Sparkles />} onClick={() => void start(s)}>
                   {s}
-                </button>
+                </Chip>
               ))}
             </div>
-            {error && (
-              <p role="alert" className="mt-3 text-small text-urgent">
-                {error}
-              </p>
-            )}
-            <form onSubmit={submit} className="mt-auto flex items-center gap-2 pt-6">
+            <form onSubmit={submit} className="mt-4 flex items-center gap-2">
               <input
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 placeholder={t("faPlaceholder", { name: fieldName })}
                 aria-label={t("faPlaceholder", { name: fieldName })}
-                className="min-h-tap min-w-0 flex-1 rounded-input border border-line-strong bg-surface px-4 text-body"
+                className="min-h-tap min-w-0 flex-1 rounded-input border border-line-control bg-surface px-4 text-body"
               />
-              <button
-                type="submit"
-                disabled={busy || !text.trim()}
-                aria-label={f("send")}
-                aria-busy={busy}
-                className="focus-ring inline-flex size-12 items-center justify-center rounded-btn bg-ink text-surface disabled:opacity-50"
-              >
-                <Send aria-hidden className="size-5" strokeWidth={1.7} />
-              </button>
+              <Button type="submit" icon={<Send />} disabled={busy || !text.trim()} aria-busy={busy}>
+                {f("send")}
+              </Button>
             </form>
-            <p className="mt-2 text-micro text-ink-3">{f("disclaimer")}</p>
+            <p className="mt-2 text-caption text-ink-2">{f("disclaimer")}</p>
           </>
         )}
       </div>
-    </section>
+    </Surface>
+    </div>
   );
 }
