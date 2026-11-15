@@ -1,11 +1,14 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, Segmented, SelectField, Skeleton } from "@terrasight/ui";
+import { Button, Segmented, SelectField, Surface, useToast } from "@terrasight/ui";
+import { AlertCircle } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
-import { useState } from "react";
+import { useId, useState } from "react";
+import { QueryState } from "@/components/QueryState";
 import { api } from "@/lib/api";
-import { useReportError } from "@/components/useReportError";
+import { useActionToast } from "@/lib/useActionToast";
+import { useFormat } from "@/lib/useFormat";
 
 type Currency = "USD" | "UAH";
 interface PricesView {
@@ -25,8 +28,53 @@ type Draft = Record<string, { price: string; cost: string; yield: string }>;
 
 const num = (v: string) => Number(v.trim().replace(",", "."));
 const filled = (v: string) => v.trim() !== "";
-const input =
-  "focus-ring block w-full min-h-11 rounded-input border border-line-strong bg-surface px-3 text-body text-ink placeholder:text-ink-3 aria-[invalid=true]:border-urgent";
+const field =
+  "focus-ring block w-full min-h-12 rounded-input border border-line-control bg-surface pl-3 pr-20 text-body text-ink placeholder:text-ink-3 aria-[invalid=true]:border-urgent";
+
+/** Decimal input with its unit shown inside the field (currency per t, per ha, t/ha). */
+function NumberField({
+  label,
+  unit,
+  value,
+  onChange,
+  invalid,
+  describedBy,
+}: {
+  label: string;
+  unit: string;
+  value: string;
+  onChange: (v: string) => void;
+  invalid?: boolean;
+  describedBy?: string;
+}) {
+  const id = useId();
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <label htmlFor={id} className="text-caption font-semibold text-ink">
+        {label}
+      </label>
+      <span className="relative block">
+        <input
+          id={id}
+          type="text"
+          inputMode="decimal"
+          autoComplete="off"
+          className={field}
+          aria-invalid={invalid ? true : undefined}
+          aria-describedby={describedBy}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        />
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-caption text-ink-2"
+        >
+          {unit}
+        </span>
+      </span>
+    </div>
+  );
+}
 
 /**
  * The company's own crop prices (user data): price per t, costs per ha and an optional expected yield for each crop,
@@ -56,21 +104,23 @@ export function CropPricesEditor({
     queryKey: ["crop-prices", workspaceId],
     queryFn: () => api<PricesView>(`/api/w/${workspaceId}/crop-prices`),
   });
-  const t = useTranslations("App");
-  if (q.isPending) return <Skeleton label={t("rotLoading")} />;
-  if (q.isError || !q.data) return <p className="text-body text-urgent">{t("errGeneric")}</p>;
+  const s = useTranslations("Settings");
   return (
-    <Table
-      key={q.data.currency}
-      workspaceId={workspaceId}
-      data={q.data}
-      crops={crops}
-      allowAdd={allowAdd}
-      yieldHints={yieldHints}
-      needYield={needYield}
-      onSaved={onSaved}
-      onCancel={onCancel}
-    />
+    <QueryState query={q} skeletonVariant="rows" what={s("pricesLoadWhat")}>
+      {(data) => (
+        <Table
+          key={data.currency}
+          workspaceId={workspaceId}
+          data={data}
+          crops={crops}
+          allowAdd={allowAdd}
+          yieldHints={yieldHints}
+          needYield={needYield}
+          onSaved={onSaved}
+          onCancel={onCancel}
+        />
+      )}
+    </QueryState>
   );
 }
 
@@ -96,9 +146,12 @@ function Table({
   const t = useTranslations("App");
   const locale = useLocale() as "en" | "uk";
   const qc = useQueryClient();
-  const report = useReportError();
+  const s = useTranslations("Settings");
+  const f = useFormat();
+  const toast = useToast();
+  const action = useActionToast();
   const usable = data.rows.filter((r) => r.usable);
-  const name = (id: string) => data.crops.find((c) => c.id === id)?.[locale] ?? id.replace(/_/g, " ");
+  const name = (id: string) => data.crops.find((c) => c.id === id)?.[locale] ?? s("cropFallback");
   const [list, setList] = useState<string[]>(() => [...new Set([...crops, ...usable.map((r) => r.crop)])]);
   const [draft, setDraft] = useState<Draft>(() =>
     Object.fromEntries(
@@ -113,10 +166,8 @@ function Table({
     ),
   );
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [saved, setSaved] = useState(false);
   const cell = (c: string) => draft[c] ?? { price: "", cost: "", yield: "" };
   const set = (c: string, k: "price" | "cost" | "yield", v: string) => {
-    setSaved(false);
     setDraft({ ...draft, [c]: { ...cell(c), [k]: v } });
   };
   const hadRow = new Set(usable.map((r) => r.crop));
@@ -125,18 +176,18 @@ function Table({
     mutationFn: (value: Currency) =>
       api(`/api/w/${workspaceId}`, { method: "PATCH", body: { currency: value } }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["crop-prices", workspaceId] }),
-    onError: report,
+    onError: (e, value) => action.fail(e, s("currencyChangeFail"), () => currency.mutate(value)),
   });
   const save = useMutation({
     mutationFn: (body: { rows: unknown[]; remove: string[] }) =>
       api(`/api/w/${workspaceId}/crop-prices`, { method: "PUT", body }),
     onSuccess: () => {
-      setSaved(true);
+      toast.show(s("pricesSavedToast"), "info");
       void qc.invalidateQueries({ queryKey: ["crop-prices", workspaceId] });
       void qc.invalidateQueries({ queryKey: ["scenarios", workspaceId] });
       onSaved?.();
     },
-    onError: report,
+    onError: (e, body) => action.fail(e, s("pricesSaveFail"), () => save.mutate(body)),
   });
 
   const submit = () => {
@@ -203,73 +254,63 @@ function Table({
       </div>
       {other > 0 && <p className="text-small text-week">{t("cpOtherCurrency", { n: other })}</p>}
       <p className="text-small text-ink-2">{t("cpHelp")}</p>
+      <p className="text-small text-ink-2">{s("pricesAgronomyOnly")}</p>
 
       {list.length === 0 ? (
         <p className="text-small text-ink-2">{t("cpEmpty")}</p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[640px] text-small">
-            <thead>
-              <tr className="text-left text-ink-2">
-                <th className="py-2 pr-3 font-semibold">{t("cpCrop")}</th>
-                <th className="py-2 pr-3 font-semibold">{t("cpPrice", { cur: data.currency })}</th>
-                <th className="py-2 pr-3 font-semibold">{t("cpCost", { cur: data.currency })}</th>
-                <th className="py-2 font-semibold">{t("cpYield")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {list.map((c) => {
-                const d = cell(c);
-                const hint = yieldHints[c];
-                return (
-                  <tr key={c} className="border-t border-line align-top">
-                    <th scope="row" className="py-2 pr-3 text-left text-body font-semibold text-ink">
-                      {name(c)}
-                      {errors[c] && <p className="text-small font-normal text-urgent">{errors[c]}</p>}
-                    </th>
-                    <td className="py-2 pr-3">
-                      <input
-                        className={input}
-                        inputMode="decimal"
-                        aria-label={`${name(c)}: ${t("cpPrice", { cur: data.currency })}`}
-                        aria-invalid={errors[c] ? true : undefined}
-                        value={d.price}
-                        onChange={(e) => set(c, "price", e.target.value)}
-                      />
-                    </td>
-                    <td className="py-2 pr-3">
-                      <input
-                        className={input}
-                        inputMode="decimal"
-                        aria-label={`${name(c)}: ${t("cpCost", { cur: data.currency })}`}
-                        aria-invalid={errors[c] ? true : undefined}
-                        value={d.cost}
-                        onChange={(e) => set(c, "cost", e.target.value)}
-                      />
-                    </td>
-                    <td className="py-2">
-                      <input
-                        className={input}
-                        inputMode="decimal"
-                        aria-label={`${name(c)}: ${t("cpYield")}`}
-                        value={d.yield}
-                        onChange={(e) => set(c, "yield", e.target.value)}
-                      />
-                      {needYield.includes(c) && !filled(d.yield) && (
-                        <p className="mt-1 text-small text-week">{t("cpYieldNeeded")}</p>
-                      )}
-                      {hint && (
-                        <p className="mt-1 text-small text-ink-3">
-                          {t("cpYieldHint", { v: hint.meanTHa, oblast: hint.oblast })}
-                        </p>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <ul className="flex flex-col gap-3">
+          {list.map((c) => {
+            const d = cell(c);
+            const hint = yieldHints[c];
+            const errId = `err-${c}`;
+            return (
+              <li key={c}>
+                <Surface tone="inset" pad="sm" className="flex flex-col gap-3">
+                  <h3 className="text-body font-semibold text-ink">{name(c)}</h3>
+                  {errors[c] && (
+                    <p id={errId} role="alert" className="flex items-start gap-2 text-small text-urgent">
+                      <AlertCircle aria-hidden className="mt-0.5 size-4 shrink-0" />
+                      <span>{errors[c]}</span>
+                    </p>
+                  )}
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <NumberField
+                      label={t("cpPrice", { cur: data.currency })}
+                      unit={s("priceUnit", { cur: data.currency })}
+                      value={d.price}
+                      onChange={(v) => set(c, "price", v)}
+                      invalid={!!errors[c]}
+                      describedBy={errors[c] ? errId : undefined}
+                    />
+                    <NumberField
+                      label={t("cpCost", { cur: data.currency })}
+                      unit={s("costUnit", { cur: data.currency })}
+                      value={d.cost}
+                      onChange={(v) => set(c, "cost", v)}
+                      invalid={!!errors[c]}
+                      describedBy={errors[c] ? errId : undefined}
+                    />
+                    <NumberField
+                      label={t("cpYield")}
+                      unit="t/ha"
+                      value={d.yield}
+                      onChange={(v) => set(c, "yield", v)}
+                    />
+                  </div>
+                  {needYield.includes(c) && !filled(d.yield) && (
+                    <p className="text-small text-week">{t("cpYieldNeeded")}</p>
+                  )}
+                  {hint && (
+                    <p className="text-small text-ink-2">
+                      {t("cpYieldHint", { v: f.number(hint.meanTHa), oblast: hint.oblast })}
+                    </p>
+                  )}
+                </Surface>
+              </li>
+            );
+          })}
+        </ul>
       )}
 
       {allowAdd && addable.length > 0 && (
@@ -290,11 +331,6 @@ function Table({
           <Button variant="ghost" onClick={onCancel}>
             {t("cpCancel")}
           </Button>
-        )}
-        {saved && !save.isPending && (
-          <span role="status" className="text-small text-ok">
-            {t("cpSaved")}
-          </span>
         )}
       </div>
     </div>

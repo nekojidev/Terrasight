@@ -1,3 +1,4 @@
+import { PageContainer } from "@terrasight/ui";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { AppShell } from "@/components/AppShell";
@@ -32,7 +33,7 @@ export default async function WorkspaceSettingsPage() {
       user={{ name: me.data.name, role: ws.data.role }}
       crumb={t("navSettings")}
     >
-      <div className="flex min-w-0 flex-col">
+      <PageContainer width="narrow" className="flex min-w-0 flex-col">
         <h1 className="mb-4 text-h1 text-ink">{t("navSettings")}</h1>
         <SettingsNav active="workspace" owner />
         <WorkspaceSettingsClient
@@ -44,7 +45,7 @@ export default async function WorkspaceSettingsPage() {
             reportLanguage: active.reportLanguage,
           }}
         />
-      </div>
+      </PageContainer>
     </AppShell>
   );
 }

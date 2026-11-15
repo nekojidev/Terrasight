@@ -1,13 +1,16 @@
 "use client";
 
-import { Button, Segmented, SelectField, TextField } from "@terrasight/ui";
-import { ArrowLeft, ArrowRight, Copy } from "lucide-react";
+import { Button, ProgressBar, Segmented, Surface, TextField, useToast } from "@terrasight/ui";
+import { ArrowRight, Check, Copy } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useMemo, useState, type FormEvent } from "react";
 import { Brand } from "@/components/Brand";
+import { TimeZoneField } from "@/components/TimeZoneField";
 import { api, ApiError, setCookie, WORKSPACE_COOKIE } from "@/lib/api";
-import { zoneLabel } from "@/lib/time-zone";
+import { authErrorKind, isEmail } from "@/lib/auth-errors";
+import { useActionToast } from "@/lib/useActionToast";
+import { useFormat } from "@/lib/useFormat";
 
 interface CreatedWorkspace {
   id: string;
@@ -24,11 +27,10 @@ export function OnboardingWizard() {
   const a = useTranslations("App");
   const locale = useLocale();
   const router = useRouter();
+  const toast = useToast();
+  const action = useActionToast();
+  const f = useFormat();
   const detected = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC", []);
-  const zones = useMemo(() => {
-    const all = typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : [];
-    return Array.from(new Set([detected, ...all, "UTC"]));
-  }, [detected]);
 
   const [step, setStep] = useState<1 | 2>(1);
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
@@ -39,15 +41,12 @@ export function OnboardingWizard() {
   );
   const [reportLanguage, setReportLanguage] = useState<"uk" | "en">(locale === "uk" ? "uk" : "en");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<ApiError | null>(null);
+  const [fields, setFields] = useState<{ name?: string; agname?: string; email?: string }>({});
   const [agronomist, setAgronomist] = useState<CreatedAgronomist | null>(null);
   const [copied, setCopied] = useState(false);
 
-  async function createCompany(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const name = String(new FormData(e.currentTarget).get("name") ?? "");
+  async function createCompany(name: string) {
     setBusy(true);
-    setError(null);
     try {
       const body = { name, timeZone, units, reportLanguage };
       // Coming back from step 2 edits the company created a moment ago instead of creating another.
@@ -59,19 +58,24 @@ export function OnboardingWizard() {
       setCompanyName(name);
       setStep(2);
     } catch (err) {
-      setError(err instanceof ApiError ? err : null);
+      if (err instanceof ApiError && err.code === "invalid-input")
+        setFields({ name: err.field("name") ?? t("errName") });
+      else action.fail(err, t("saveFail"), () => void createCompany(name));
     } finally {
       setBusy(false);
     }
   }
 
-  async function addAgronomist(e: FormEvent<HTMLFormElement>) {
+  function submitCompany(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const form = new FormData(e.currentTarget);
-    const name = String(form.get("agname") ?? "");
-    const email = String(form.get("email") ?? "");
+    const name = String(new FormData(e.currentTarget).get("name") ?? "").trim();
+    if (!name) return setFields({ name: t("errName") });
+    setFields({});
+    void createCompany(name);
+  }
+
+  async function addAgronomist(name: string, email: string) {
     setBusy(true);
-    setError(null);
     try {
       const r = await api<{ userId: string; setupUrl: string; expiresAt: string }>(
         `/api/w/${workspaceId}/members`,
@@ -79,10 +83,26 @@ export function OnboardingWizard() {
       );
       setAgronomist({ name, setupUrl: r.setupUrl, expiresAt: r.expiresAt });
     } catch (err) {
-      setError(err instanceof ApiError ? err : null);
+      const kind = authErrorKind(err);
+      if (kind === "taken") setFields({ email: t("errEmailInUse") });
+      else if (kind === "invalid") setFields({ email: t("errAgEmail") });
+      else action.fail(err, t("inviteFail"), () => void addAgronomist(name, email));
     } finally {
       setBusy(false);
     }
+  }
+
+  function submitAgronomist(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = new FormData(e.currentTarget);
+    const name = String(form.get("agname") ?? "").trim();
+    const email = String(form.get("email") ?? "").trim();
+    const found: typeof fields = {};
+    if (!name) found.agname = t("errAgName");
+    if (!isEmail(email)) found.email = t("errAgEmail");
+    setFields(found);
+    if (Object.keys(found).length) return;
+    void addAgronomist(name, email);
   }
 
   const finish = () => {
@@ -90,35 +110,28 @@ export function OnboardingWizard() {
     router.refresh();
   };
   const setupUrl = agronomist ? `${window.location.origin}${agronomist.setupUrl}` : "";
+  const copy = () =>
+    void navigator.clipboard.writeText(setupUrl).then(
+      () => {
+        setCopied(true);
+        toast.show(t("copied"), "info");
+      },
+      (err) => action.fail(err, t("copy")),
+    );
 
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-[560px] flex-col gap-6 px-4 py-10">
-      <header className="flex items-center justify-between">
+      <header className="flex flex-col gap-4">
         <Brand />
-        <span className="flex items-center gap-3 text-small text-ink-2">
-          {t("step")} {step} {t("of2")}
-          <span aria-hidden className="flex gap-2">
-            <span className="block h-1 w-10 rounded-chip bg-ink" />
-            <span className={`block h-1 w-10 rounded-chip ${step === 2 ? "bg-ink" : "bg-line"}`} />
-          </span>
-        </span>
+        <div className="flex flex-col gap-2">
+          <p className="text-caption font-semibold text-ink-2">{t("stepOf", { n: step })}</p>
+          <ProgressBar value={step} max={2} label={t("progress")} />
+        </div>
       </header>
 
-      <section className="animate-rise rounded-card border border-line bg-surface p-8">
-        {error && (
-          <p role="alert" className="mb-5 rounded-input bg-urgent-soft px-4 py-3 text-body text-urgent">
-            {error.code === "invalid-input"
-              ? a("errInvalid")
-              : error.code === "email-in-use"
-                ? a("teamErrEmailInUse")
-                : error.code === "one-company"
-                  ? a("errOneCompany")
-                  : a("errGeneric")}
-          </p>
-        )}
-
+      <Surface as="section" pad="lg" className="animate-rise sm:p-8">
         {step === 1 ? (
-          <form onSubmit={createCompany} className="flex flex-col gap-6" noValidate>
+          <form onSubmit={submitCompany} className="flex flex-col gap-6" noValidate>
             <div>
               <h1 className="text-h1 text-ink">{t("s1t")}</h1>
               <p className="mt-2 text-body text-ink-2">{t("s1s")}</p>
@@ -130,18 +143,9 @@ export function OnboardingWizard() {
               maxLength={80}
               autoComplete="organization"
               defaultValue={companyName}
-              error={error?.field("name")}
+              error={fields.name}
             />
-            <SelectField
-              label={t("tz")}
-              hint={t("tz_h")}
-              value={timeZone}
-              onChange={(e) => setTimeZone(e.target.value)}
-              options={zones.map((z) => ({
-                value: z,
-                label: z === detected ? `${zoneLabel(z, locale)} — ${a("tzDetected")}` : zoneLabel(z, locale),
-              }))}
-            />
+            <TimeZoneField value={timeZone} onChange={setTimeZone} detected={detected} hint={t("tz_h")} />
             <Segmented
               label={t("units")}
               value={units}
@@ -167,41 +171,39 @@ export function OnboardingWizard() {
               className="w-full justify-center"
               disabled={busy}
               aria-busy={busy}
+              icon={<ArrowRight />}
             >
-              {t("next")} <ArrowRight aria-hidden className="size-5" />
+              {t("next")}
             </Button>
           </form>
         ) : agronomist ? (
           <div className="flex flex-col gap-5">
-            <h1 className="text-h2 text-ink">{a("teamLinkTitle", { name: agronomist.name })}</h1>
+            <h2 className="text-h2 text-ink">{t("linkTitle", { name: agronomist.name })}</h2>
             <p className="text-body text-ink-2">
-              {a("teamLinkOnce", {
-                name: agronomist.name,
-                date: new Date(agronomist.expiresAt).toLocaleDateString(locale),
-              })}
+              {t("linkNote", { name: agronomist.name, date: f.date(agronomist.expiresAt, "full") })}
             </p>
-            <div className="flex gap-2">
-              <input
-                readOnly
-                value={setupUrl}
-                aria-label={a("teamCopyLink")}
-                className="min-h-13 w-full rounded-input border border-line bg-surface-2 px-4 font-mono text-small"
-              />
-              <Button
-                variant="outline"
-                size={52}
-                icon={<Copy />}
-                onClick={() => void navigator.clipboard.writeText(setupUrl).then(() => setCopied(true))}
-              >
-                {copied ? a("teamCopied") : a("teamCopyLink")}
-              </Button>
-            </div>
+            <input
+              readOnly
+              value={setupUrl}
+              aria-label={t("linkLabel")}
+              onFocus={(e) => e.currentTarget.select()}
+              className="focus-ring min-h-13 w-full rounded-input border border-line-control bg-surface-2 px-4 font-mono text-caption text-ink"
+            />
+            <Button
+              variant="outline"
+              size={48}
+              className="w-full justify-center"
+              icon={copied ? <Check /> : <Copy />}
+              onClick={copy}
+            >
+              {copied ? a("teamCopied") : t("copy")}
+            </Button>
             <Button size={56} className="w-full justify-center" onClick={finish}>
               {a("continue")}
             </Button>
           </div>
         ) : (
-          <form onSubmit={addAgronomist} className="flex flex-col gap-6" noValidate>
+          <form onSubmit={submitAgronomist} className="flex flex-col gap-6" noValidate>
             <div>
               <h1 className="text-h1 text-ink">{t("s2t")}</h1>
               <p className="mt-2 text-body text-ink-2">{t("s2s")}</p>
@@ -212,37 +214,45 @@ export function OnboardingWizard() {
               autoComplete="off"
               required
               maxLength={100}
-              error={error?.field("name")}
+              error={fields.agname}
             />
             <TextField
               label={t("email")}
               name="email"
               type="email"
+              inputMode="email"
               autoComplete="off"
               required
-              error={error?.field("email")}
+              error={fields.email}
             />
-            <div className="flex flex-col gap-3 sm:flex-row">
+            <Button
+              type="submit"
+              size={56}
+              className="w-full justify-center"
+              disabled={busy}
+              aria-busy={busy}
+            >
+              {t("invite")}
+            </Button>
+            <div className="flex flex-col items-center gap-1">
+              <Button variant="link" onClick={finish} className="min-h-tap">
+                {t("skipSelf")}
+              </Button>
               <Button
-                type="button"
-                variant="outline"
-                size={56}
-                icon={<ArrowLeft />}
-                onClick={() => setStep(1)}
+                variant="link"
+                className="min-h-tap text-ink-2"
+                onClick={() => {
+                  setFields({});
+                  setStep(1);
+                }}
               >
                 {t("back")}
               </Button>
-              <Button type="button" variant="outline" size={56} className="sm:ml-auto" onClick={finish}>
-                {t("skip")}
-              </Button>
-              <Button type="submit" size={56} disabled={busy} aria-busy={busy}>
-                {t("invite")}
-              </Button>
             </div>
-            <p className="text-small text-ink-3">{t("later")}</p>
+            <p className="text-center text-caption text-ink-2">{t("later")}</p>
           </form>
         )}
-      </section>
+      </Surface>
     </main>
   );
 }

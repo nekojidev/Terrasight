@@ -1,13 +1,14 @@
 "use client";
 
 import { useMutation } from "@tanstack/react-query";
-import { Button, ConfirmDialog, Segmented, TextField } from "@terrasight/ui";
+import { Button, ConfirmDialog, Segmented, Surface, TextField, useToast } from "@terrasight/ui";
 import { LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useState, type FormEvent } from "react";
-import { useErrorText, useReportError } from "@/components/useReportError";
+import { PASSWORD_MIN, PasswordField } from "@/components/PasswordField";
 import { api, ApiError, setCookie } from "@/lib/api";
+import { useActionToast } from "@/lib/useActionToast";
 
 interface Profile {
   name: string;
@@ -15,29 +16,31 @@ interface Profile {
   uiLanguage: "uk" | "en";
 }
 
-/** Account settings: profile (saved on the server), password change, sign out everywhere. */
+const isInvalid = (e: unknown): e is ApiError => e instanceof ApiError && e.problem.status === 422;
+
+/** Account settings: profile (saved on the server), password change, and a danger zone (sign out everywhere). */
 export function AccountClient({ initial }: { initial: Profile }) {
   const t = useTranslations("App");
+  const s = useTranslations("Settings");
+  const l = useTranslations("Login");
   const router = useRouter();
-  const report = useReportError();
-  const errorText = useErrorText();
+  const toast = useToast();
+  const action = useActionToast();
   const [profile, setProfile] = useState({ name: initial.name, uiLanguage: initial.uiLanguage });
-  const [profileSaved, setProfileSaved] = useState(false);
   const [profileError, setProfileError] = useState<ApiError | null>(null);
 
   const saveProfile = useMutation({
-    mutationFn: (body: { name: string; uiLanguage: "uk" | "en" }) => api("/api/me", { method: "PATCH", body }),
-    onMutate: () => {
-      setProfileSaved(false);
-      setProfileError(null);
-    },
+    mutationFn: (body: { name: string; uiLanguage: "uk" | "en" }) =>
+      api("/api/me", { method: "PATCH", body }),
+    onMutate: () => setProfileError(null),
     onSuccess: (_d, body) => {
-      setProfileSaved(true);
+      toast.show(s("profileSaved"), "info");
       // The interface language is read from this cookie; the server copy follows the user across devices.
       setCookie("ts_locale", body.uiLanguage);
       router.refresh();
     },
-    onError: (e) => (e instanceof ApiError && e.problem.status === 422 ? setProfileError(e) : report(e)),
+    onError: (e, body) =>
+      isInvalid(e) ? setProfileError(e) : action.fail(e, s("profileFail"), () => saveProfile.mutate(body)),
   });
   const submitProfile = (e: FormEvent) => {
     e.preventDefault();
@@ -45,31 +48,29 @@ export function AccountClient({ initial }: { initial: Profile }) {
   };
 
   const [pw, setPw] = useState({ current: "", next: "" });
-  const [pwDone, setPwDone] = useState(false);
-  const [pwError, setPwError] = useState<string | null>(null);
+  const [pwErrors, setPwErrors] = useState<{ current?: string; next?: string }>({});
   const changePassword = useMutation({
     mutationFn: () =>
-      api("/api/auth/password", { body: { currentPassword: pw.current, newPassword: pw.next }, noRefresh: false }),
-    onMutate: () => {
-      setPwDone(false);
-      setPwError(null);
-    },
+      api("/api/auth/password", { body: { currentPassword: pw.current, newPassword: pw.next } }),
+    onMutate: () => setPwErrors({}),
     onSuccess: () => {
       setPw({ current: "", next: "" });
-      setPwDone(true);
+      toast.show(s("passwordChangedToast"), "info");
     },
-    onError: (e) =>
-      setPwError(
-        e instanceof ApiError && e.code === "bad-credentials"
-          ? t("accWrongPassword")
-          : e instanceof ApiError && e.problem.status === 422
-            ? t("passHint")
-            : errorText(e),
-      ),
+    onError: (e) => {
+      if (e instanceof ApiError && e.code === "bad-credentials")
+        setPwErrors({ current: t("accWrongPassword") });
+      else if (isInvalid(e)) setPwErrors({ next: l("errPassShort", { n: PASSWORD_MIN }) });
+      else action.fail(e, s("passwordFail"), () => changePassword.mutate());
+    },
   });
   const submitPassword = (e: FormEvent) => {
     e.preventDefault();
-    changePassword.mutate();
+    const found: typeof pwErrors = {};
+    if (!pw.current) found.current = l("errPassEmpty");
+    if (pw.next.length < PASSWORD_MIN) found.next = l("errPassShort", { n: PASSWORD_MIN });
+    setPwErrors(found);
+    if (!Object.keys(found).length) changePassword.mutate();
   };
 
   const [confirmAll, setConfirmAll] = useState(false);
@@ -81,13 +82,13 @@ export function AccountClient({ initial }: { initial: Profile }) {
     },
     onError: (e) => {
       setConfirmAll(false);
-      report(e);
+      action.fail(e, s("signOutFail"), () => signOutAll.mutate());
     },
   });
 
   return (
-    <div className="grid min-w-0 gap-6 lg:grid-cols-2">
-      <section aria-labelledby="acc-profile" className="h-fit rounded-card border border-line bg-surface p-5">
+    <div className="flex min-w-0 flex-col gap-6">
+      <Surface as="section" aria-labelledby="acc-profile">
         <h2 id="acc-profile" className="mb-4 text-h3 text-ink">
           {t("accProfile")}
         </h2>
@@ -113,7 +114,7 @@ export function AccountClient({ initial }: { initial: Profile }) {
               { value: "en", label: "EN" },
             ]}
           />
-          <div className="flex items-center gap-3">
+          <div>
             <Button
               type="submit"
               size={48}
@@ -122,75 +123,59 @@ export function AccountClient({ initial }: { initial: Profile }) {
             >
               {t("save")}
             </Button>
-            {profileSaved && (
-              <span role="status" className="text-small text-ok">
-                {t("saved")}
-              </span>
-            )}
           </div>
         </form>
-      </section>
+      </Surface>
 
-      <div className="flex min-w-0 flex-col gap-6">
-        <section aria-labelledby="acc-pass" className="rounded-card border border-line bg-surface p-5">
-          <h2 id="acc-pass" className="mb-1 text-h3 text-ink">
-            {t("accPassword")}
-          </h2>
-          <p className="mb-4 text-small text-ink-2">{t("accPasswordSub")}</p>
-          <form onSubmit={submitPassword} className="flex flex-col gap-5" noValidate>
-            <TextField
-              label={t("accCurrentPassword")}
-              name="currentPassword"
-              type="password"
-              autoComplete="current-password"
-              required
-              value={pw.current}
-              onChange={(e) => setPw({ ...pw, current: e.target.value })}
-            />
-            <TextField
-              label={t("accNewPassword")}
-              name="newPassword"
-              type="password"
-              autoComplete="new-password"
-              required
-              minLength={10}
-              hint={t("passHint")}
-              value={pw.next}
-              onChange={(e) => setPw({ ...pw, next: e.target.value })}
-            />
-            {pwError && (
-              <p role="alert" className="text-small text-urgent">
-                {pwError}
-              </p>
-            )}
-            <div className="flex items-center gap-3">
-              <Button
-                type="submit"
-                size={48}
-                disabled={changePassword.isPending || !pw.current || pw.next.length < 10}
-                aria-busy={changePassword.isPending}
-              >
-                {t("accChangePassword")}
-              </Button>
-              {pwDone && (
-                <span role="status" className="text-small text-ok">
-                  {t("accPasswordChanged")}
-                </span>
-              )}
-            </div>
-          </form>
-        </section>
+      <Surface as="section" aria-labelledby="acc-pass">
+        <h2 id="acc-pass" className="mb-1 text-h3 text-ink">
+          {t("accPassword")}
+        </h2>
+        <p className="mb-4 text-small text-ink-2">{t("accPasswordSub")}</p>
+        <form onSubmit={submitPassword} className="flex flex-col gap-5" noValidate>
+          <PasswordField
+            label={t("accCurrentPassword")}
+            name="currentPassword"
+            autoComplete="current-password"
+            required
+            value={pw.current}
+            onChange={(e) => setPw({ ...pw, current: e.target.value })}
+            error={pwErrors.current}
+          />
+          <PasswordField
+            label={t("accNewPassword")}
+            name="newPassword"
+            autoComplete="new-password"
+            required
+            rules
+            value={pw.next}
+            onChange={(e) => setPw({ ...pw, next: e.target.value })}
+            error={pwErrors.next}
+          />
+          <div>
+            <Button
+              type="submit"
+              size={48}
+              disabled={changePassword.isPending}
+              aria-busy={changePassword.isPending}
+            >
+              {t("accChangePassword")}
+            </Button>
+          </div>
+        </form>
+      </Surface>
 
-        <section aria-labelledby="acc-sessions" className="rounded-card border border-line bg-surface p-5">
-          <h2 id="acc-sessions" className="mb-1 text-h3 text-ink">
-            {t("accSessions")}
-          </h2>
-          <p className="mb-4 text-small text-ink-2">{t("accSessionsSub")}</p>
-          <Button variant="outline" icon={<LogOut />} onClick={() => setConfirmAll(true)}>
-            {t("accSignOutAll")}
-          </Button>
-        </section>
-      </div>
+      <Surface as="section" aria-labelledby="acc-danger" className="border-urgent">
+        <h2 id="acc-danger" className="mb-1 text-h3 text-urgent">
+          {s("dangerTitle")}
+        </h2>
+        <p className="mb-4 text-small text-ink-2">{s("dangerAccountSub")}</p>
+        <h3 className="text-body font-semibold text-ink">{t("accSessions")}</h3>
+        <p className="mb-3 text-small text-ink-2">{t("accSessionsSub")}</p>
+        <Button variant="outline" icon={<LogOut />} onClick={() => setConfirmAll(true)}>
+          {t("accSignOutAll")}
+        </Button>
+      </Surface>
 
       <ConfirmDialog
         open={confirmAll}

@@ -29,7 +29,7 @@ export default async function LoginPage() {
             ].map(([icon, label]) => (
               <li
                 key={String(label)}
-                className="inline-flex min-h-9 items-center gap-2 rounded-chip bg-surface/10 px-4 text-small font-semibold [&_svg]:size-4 [&_svg]:text-signal dark:[&_svg]:text-on-signal"
+                className="inline-flex min-h-11 items-center gap-2 rounded-chip bg-surface/10 px-4 text-small font-semibold [&_svg]:size-4 [&_svg]:text-signal dark:[&_svg]:text-on-signal"
               >
                 {icon}
                 {label}
@@ -43,7 +43,8 @@ export default async function LoginPage() {
           <Brand className="lg:invisible" />
           <LanguageSwitch />
         </div>
-        <div className="flex flex-1 items-center justify-center py-10">
+        <p className="mt-8 text-body font-semibold text-ink lg:hidden">{t("tag")}</p>
+        <div className="flex flex-1 items-center justify-center py-8 lg:py-10">
           <Suspense>
             <LoginForm />
           </Suspense>
