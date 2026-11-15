@@ -1,6 +1,7 @@
 "use client";
 
 import { BottomSheet } from "@terrasight/ui";
+import { ShieldCheck } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 
@@ -11,6 +12,13 @@ export interface AskPreview {
   /** Already formatted ("by 12 April", "this week"), or empty. */
   deadline?: string;
   numbers: Array<{ label: string; value: string }>;
+  /**
+   * The drafted message ("Hello! Field: title. Action"). When given, the textarea starts with it and the agronomist
+   * can edit it before sending; the preview then shows only the deadline and numbers.
+   */
+  message?: string;
+  /** Shown under the message when it contains numbers that were checked against the models. */
+  verified?: string;
 }
 
 /**
@@ -27,10 +35,17 @@ export function AskOwnerSheet({
   onClose: () => void;
 }) {
   const t = useTranslations("App");
+  const r = useTranslations("Rec");
   const [note, setNote] = useState("");
+  const draft = preview?.message;
   useEffect(() => {
-    if (preview) setNote("");
-  }, [preview]);
+    if (preview) setNote(preview.message ?? "");
+  }, [preview !== null, draft]);
+  /** An untouched draft is not a note: the owner already sees the title and action. */
+  const send = () => {
+    const v = note.trim();
+    onSend(draft !== undefined && v === draft.trim() ? "" : v);
+  };
   return (
     <BottomSheet
       open={preview !== null}
@@ -38,37 +53,56 @@ export function AskOwnerSheet({
       primaryLabel={t("askSend")}
       cancelLabel={t("bsCancel")}
       onClose={onClose}
-      onPrimary={() => onSend(note.trim())}
+      onPrimary={send}
     >
       {preview && (
         <div className="flex flex-col gap-3">
           <p className="text-small text-ink-2">{t("askSub")}</p>
-          <div className="flex flex-col gap-1 rounded-input bg-surface-2 p-4">
-            <p className="text-small text-ink-2">
-              {preview.fieldName}
-              {preview.deadline ? ` · ${preview.deadline}` : ""}
-            </p>
-            <p className="text-body font-semibold text-ink">{preview.title}</p>
-            <p className="text-body text-ink">{preview.action}</p>
-            {preview.numbers.length > 0 && (
-              <ul className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-small text-ink-2">
+          {draft === undefined ? (
+            <div className="flex flex-col gap-1 rounded-input bg-surface-2 p-4">
+              <p className="text-small text-ink-2">
+                {preview.fieldName}
+                {preview.deadline ? ` · ${preview.deadline}` : ""}
+              </p>
+              <p className="text-body font-semibold text-ink">{preview.title}</p>
+              <p className="text-body text-ink">{preview.action}</p>
+              {preview.numbers.length > 0 && (
+                <ul className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-small text-ink-2">
+                  {preview.numbers.map((n) => (
+                    <li key={n.label}>
+                      <span className="font-mono font-semibold text-ink">{n.value}</span> {n.label}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ) : (
+            (preview.deadline || preview.numbers.length > 0) && (
+              <ul className="flex flex-wrap gap-x-4 gap-y-1 text-small text-ink-2">
+                {preview.deadline && <li className="font-mono font-semibold text-ink">{preview.deadline}</li>}
                 {preview.numbers.map((n) => (
                   <li key={n.label}>
                     <span className="font-mono font-semibold text-ink">{n.value}</span> {n.label}
                   </li>
                 ))}
               </ul>
-            )}
-          </div>
+            )
+          )}
           <label className="flex flex-col gap-1 text-small text-ink-2">
-            {t("askNote")}
+            {draft === undefined ? t("askNote") : r("ask_msg_label")}
             <textarea
               value={note}
               onChange={(e) => setNote(e.target.value)}
               maxLength={1000}
-              className="focus-ring min-h-20 rounded-input border border-line-strong bg-surface p-3 text-body text-ink"
+              className="focus-ring min-h-28 rounded-input border border-line-strong bg-surface p-3 text-body text-ink"
             />
           </label>
+          {preview.verified && (
+            <p className="flex items-center gap-1.5 text-small font-semibold text-ink-2">
+              <ShieldCheck aria-hidden className="size-4" strokeWidth={1.7} />
+              {preview.verified}
+            </p>
+          )}
         </div>
       )}
     </BottomSheet>

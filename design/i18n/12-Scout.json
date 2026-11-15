@@ -36,10 +36,11 @@
   "queued": "Збережено на цьому телефоні. Буде надіслано, коли з'явиться мережа.",
   "prev": "Попередня",
   "photo": "Додати фото",
-  "result": "Підсумок огляду",
+  "result": "Результат",
   "share": "рослин з попелицями",
   "send": "Надіслати агроному",
-  "loop": "Результат уточнить модель ризику для цього поля. Що робити далі, вирішить агроном — назв препаратів Terrasight не дає."
+  "loop": "Збережено в цій рекомендації. Що робити далі, вирішить агроном — назв препаратів Terrasight не дає.",
+  "map_show": "Показати карту"
  },
  "en": {
   "lang_group": "Interface language",
@@ -78,9 +79,10 @@
   "queued": "Saved on this phone. It will be sent when the network returns.",
   "prev": "Previous",
   "photo": "Add a photo",
-  "result": "Check summary",
+  "result": "Result",
   "share": "of plants with aphids",
   "send": "Send to the agronomist",
-  "loop": "Your result refines this field's risk model. The agronomist decides what's next — Terrasight never names products."
+  "loop": "Saved to this recommendation. The agronomist decides what's next — Terrasight never names products.",
+  "map_show": "Show the map"
  }
 }

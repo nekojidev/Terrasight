@@ -1,15 +1,14 @@
 "use client";
 
 import { OwnerAnswer } from "./OwnerAnswer";
+import { OwnerDecision } from "./OwnerDecision";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Button,
   Chip,
   cropColour,
-  Disclosure,
   DoneRow,
   FactorRows,
-  InfoHint,
   Kicker,
   Menu,
   Surface,
@@ -21,13 +20,19 @@ import {
   Bug,
   Calendar,
   Check,
-  Eye,
-  MessageCircleQuestion,
+  CircleAlert,
+  CircleCheck,
+  CloudSun,
   Clock,
+  Droplets,
+  MessageCircleQuestion,
+  Microscope,
   Pencil,
   RefreshCw,
+  Repeat2,
   ShieldCheck,
   Sparkles,
+  Sprout,
   ThumbsDown,
   TriangleAlert,
 } from "lucide-react";
@@ -39,6 +44,9 @@ import { useEffect, useRef, useState } from "react";
 import type { AskOwnerBody, DataBasisItem } from "@terrasight/shared";
 import { AskOwnerSheet } from "@/components/AskOwnerSheet";
 import { DataBasis } from "@/components/DataBasis";
+import { Evidence } from "@/components/Evidence";
+import { SuggestionChips } from "@/components/SuggestionChips";
+import { TrustLine } from "@/components/TrustLine";
 import { api } from "@/lib/api";
 import { useActionToast } from "@/lib/useActionToast";
 import { useFormat } from "@/lib/useFormat";
@@ -99,82 +107,6 @@ export interface RecView {
     note: Localised | null;
     hostCrops: string[];
   } | null;
-}
-
-function Step({
-  n,
-  title,
-  stamp,
-  children,
-}: {
-  n: number;
-  title: string;
-  /** Quiet data-source stamp under the step ("POWER · 14 Nov"). */
-  stamp?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <li className="relative">
-      <span className="absolute top-0 -left-[38px] inline-flex size-7 items-center justify-center rounded-chip bg-ink text-small font-semibold text-surface">
-        {n}
-      </span>
-      <h4 className="text-[18px] leading-7 font-semibold text-ink">{title}</h4>
-      <div className="mt-1">{children}</div>
-      {stamp && <p className="mt-2 text-caption text-ink-3">{stamp}</p>}
-    </li>
-  );
-}
-
-/** Semicircle risk gauge (design 09): green → amber → red, the needle on the level; grey when unknown. */
-function Gauge({ level, label }: { level: RecView["level"]; label: string }) {
-  const angle = { none: -80, low: -55, moderate: 0, high: 55, unknown: 0 }[level];
-  const arc = (from: number, to: number) => {
-    const p = (a: number) => {
-      const r = ((a - 90) * Math.PI) / 180;
-      return `${90 + 70 * Math.cos(r)} ${90 + 70 * Math.sin(r)}`;
-    };
-    return `M ${p(from)} A 70 70 0 0 1 ${p(to)}`;
-  };
-  const unknown = level === "unknown";
-  return (
-    <svg viewBox="0 0 180 100" role="img" aria-label={label} className="h-[100px] w-[180px]">
-      <path
-        d={arc(-88, -32)}
-        className={unknown ? "stroke-line-strong" : "stroke-ok"}
-        strokeWidth="14"
-        fill="none"
-        strokeLinecap="round"
-      />
-      <path
-        d={arc(-26, 26)}
-        className={unknown ? "stroke-line-strong" : "stroke-week"}
-        strokeWidth="14"
-        fill="none"
-        strokeLinecap="round"
-      />
-      <path
-        d={arc(32, 88)}
-        className={unknown ? "stroke-line-strong" : "stroke-urgent"}
-        strokeWidth="14"
-        fill="none"
-        strokeLinecap="round"
-      />
-      {!unknown && (
-        <g transform={`rotate(${angle} 90 90)`}>
-          <line
-            x1="90"
-            y1="90"
-            x2="90"
-            y2="38"
-            className="stroke-ink"
-            strokeWidth="5"
-            strokeLinecap="round"
-          />
-        </g>
-      )}
-      <circle cx="90" cy="90" r="7" className="fill-ink" />
-    </svg>
-  );
 }
 
 /** 910 + "MMDD" → "September 10"; days / seasons / m / NDVI read as plain values. */
@@ -287,6 +219,35 @@ function HeatChart({
   );
 }
 
+function Step({
+  n,
+  title,
+  stamp,
+  children,
+}: {
+  n: number;
+  title: string;
+  /** Quiet data-source stamp under the step ("POWER · 14 Nov"). */
+  stamp?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <li className="flex gap-3">
+      <span
+        aria-hidden
+        className="inline-flex size-7 shrink-0 items-center justify-center rounded-chip bg-ink text-small font-semibold text-surface"
+      >
+        {n}
+      </span>
+      <div className="min-w-0 flex-1">
+        <h4 className="text-[18px] leading-7 font-semibold text-ink">{title}</h4>
+        <div className="mt-1">{children}</div>
+        {stamp && <p className="mt-2 text-caption text-ink-3">{stamp}</p>}
+      </div>
+    </li>
+  );
+}
+
 const LEVEL_TONE = {
   high: "text-urgent",
   moderate: "text-week",
@@ -294,13 +255,31 @@ const LEVEL_TONE = {
   none: "text-ok",
   unknown: "text-ink-2",
 } as const;
+const LEVEL_ICON = {
+  high: TriangleAlert,
+  moderate: CircleAlert,
+  low: CircleCheck,
+  none: CircleCheck,
+  unknown: CircleAlert,
+} as const;
+const TYPE_ICON = {
+  pest: Bug,
+  disease: Microscope,
+  rotation: Repeat2,
+  irrigation: Droplets,
+  sowing: Sprout,
+  weather: CloudSun,
+} as const;
 
-/** Recommendation detail (design 09, S-04.06): why, what we don't know, citations, owner message; lifecycle actions. */
+const shortDataset = (d: string) => d.replace("USDA Cropland Data Layer", "USDA CDL").replace(/ \(.*\)/, "");
+
+/** Recommendation detail (design 09, v6): the decision and the one big risk first, all proof in one Evidence block. */
 export function RecommendationClient({
   workspaceId,
   timeZone,
   canAct,
   canAsk = true,
+  country,
   initial,
 }: {
   workspaceId: string;
@@ -308,15 +287,16 @@ export function RecommendationClient({
   canAct: boolean;
   /** False for Owners: they never see "Ask the owner" (PD v2.9). */
   canAsk?: boolean;
+  /** The field's ISO country: picks units and money wording. */
+  country?: string;
   initial: RecView;
 }) {
   const t = useTranslations("App");
   const r9 = useTranslations("Rec");
   const m = useTranslations("Main");
-  const f = useTranslations("Field");
   const locale = useLocale() as "en" | "uk";
   const thresholdValue = useThresholdValue();
-  const fmt = useFormat();
+  const fmt = useFormat({ country });
   const client = useQueryClient();
   const key = ["recommendation", workspaceId, initial.id];
   const rec = useQuery({
@@ -351,6 +331,7 @@ export function RecommendationClient({
   }
   const r = rec.data;
   const base = `/api/w/${workspaceId}/recommendations/${r.id}`;
+  const ownerView = !canAct;
 
   const date = (iso: string) => fmt.date(`${iso}T12:00:00Z`, "dayMonth", { timeZone: "UTC" });
   const when = (iso: string) => fmt.date(iso, "dateTime", { timeZone });
@@ -363,6 +344,8 @@ export function RecommendationClient({
   const inputs = evidence.filter((e) => e.kind !== "citation");
   const citations = evidence.filter((e) => e.kind === "citation");
   const unknowns = r.unknowns ?? [];
+  const isRotation = r.type === "rotation";
+  const noRisk = Boolean(r.aiSuggested) || (r.level === "unknown" && !isRotation);
   const short = (src?: string) => (src ? src.split(" (")[0]!.split(";")[0]! : undefined);
   /** Short source chip: "POWER · 2026-11-14", "CDL 2023–2026". */
   const chip = (e?: RecView["evidence"][number]) => {
@@ -372,8 +355,11 @@ export function RecommendationClient({
     if (/Crop history/i.test(s)) {
       const names = (r.dataBasis ?? [])
         .filter((i) => i.supports.some((x) => x === "crop-history" || x === "crop-estimate"))
-        .map((i) => i.dataset.replace("USDA Cropland Data Layer", "USDA CDL").replace(/ \(.*\)/, ""));
-      return `${names.join(" + ") || t("rcHistorySrc")} ${e.from?.slice(0, 4) ?? ""}–${e.to?.slice(0, 4) ?? ""}`;
+        .map((i) => shortDataset(i.dataset));
+      const from = e.from?.slice(0, 4);
+      const to = e.to?.slice(0, 4);
+      const years = from && to ? (from === to ? from : `${from}–${to}`) : (from ?? to ?? "");
+      return `${names.join(" + ") || t("rcHistorySrc")} ${years}`.trim();
     }
     if (/Sentinel/i.test(s)) return `Sentinel-2${e.to ? ` · ${isoOrText(e.to)}` : ""}`;
     if (/Open-Meteo/i.test(s)) return "Open-Meteo";
@@ -391,18 +377,26 @@ export function RecommendationClient({
   const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const crops = r.recentCrops ?? [];
   const hostSeasons = crops.filter((c) => r.pest?.hostCrops.includes(c.crop)).length;
+  /** The stamp comes from what really fed the factor; nothing is stamped when no source is known. */
   const sourceFor = (id: string) => {
+    if (id === "marginVsCurrent") return r9("stamp_rotation_model");
     const re = /^(hostSeasons|lastCrop)/.test(id)
       ? /Crop history/i
       : /^(degree|autumn|daysSinceEmergence|frost|daysUntilFrost)/.test(id)
         ? /POWER|Open-Meteo/
         : null;
-    return chip((re && inputs.find((e) => re.test(e.source ?? ""))) || inputs[0]);
+    if (re) {
+      const hit = inputs.find((e) => re.test(e.source ?? ""));
+      if (hit) return chip(hit);
+    }
+    return isRotation ? undefined : chip(inputs[0]);
   };
   const factors: Factor[] = (r.keyNumbers ?? []).map((k) => {
     const num = typeof k.value === "number" ? k.value : Number(k.value);
     const source = sourceFor(k.id);
     const tail = source ? { source } : {};
+    if (k.id === "marginVsCurrent" && Number.isFinite(num))
+      return { label: r9("margin_vs_current", { v: fmt.moneyPerArea(num, "USD") }), weight: k.weight, ...tail };
     if (
       t.has(`knS_${k.id}`) &&
       k.value !== "" &&
@@ -422,6 +416,37 @@ export function RecommendationClient({
     };
   });
   const heat = inputs.find((e) => (e.series?.length ?? 0) > 1);
+  // The crop strip already says what grew; a second crop-history step would repeat it.
+  const stepInputs = crops.length > 0 ? inputs.filter((e) => stepTitle(e) !== r9("step_crops")) : inputs;
+  const stepCount = (crops.length > 0 ? 1 : 0) + stepInputs.length + (r.pest ? 1 : 0);
+
+  // Trust line + Evidence summary come from what really fed the item.
+  const basis = r.dataBasis ?? [];
+  const sourceNames = [
+    ...new Set(
+      (basis.length ? basis.map((i) => shortDataset(i.dataset)) : inputs.map((e) => chip(e)?.split(" · ")[0]))
+        .filter((x): x is string => Boolean(x)),
+    ),
+  ];
+  const lastData =
+    [...basis.map((i) => i.lastDate), ...inputs.map((e) => (e.to && ISO_RE.test(e.to) ? e.to : null))]
+      .filter((x): x is string => Boolean(x))
+      .sort()
+      .at(-1) ?? null;
+  const verified = (r.keyNumbers ?? []).length > 0 && !r.aiSuggested;
+  const summary = [
+    stepCount > 0 ? r9("ev_checks", { n: stepCount }) : null,
+    sourceNames.length ? sourceNames.slice(0, 2).join(", ") : null,
+    verified ? r9("ev_verified") : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  // A one-year period would read "Seasons 2025–2025"; show no period rather than a wrong one.
+  const basisItems: DataBasisItem[] = basis.map((i) =>
+    i.from && i.to && i.from.slice(0, 4) === i.to.slice(0, 4) && i.from.endsWith("-01-01") && i.to.endsWith("-12-31")
+      ? { ...i, from: null, to: null }
+      : i,
+  );
 
   async function act(action: "accept" | "snooze" | "dismiss" | "undo" | "ask-owner", note?: string) {
     const body: AskOwnerBody = action === "ask-owner" && note ? { note } : {};
@@ -471,8 +496,12 @@ export function RecommendationClient({
     setEditing(true);
     setTimeout(() => editRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
   }
+  function openEvidence() {
+    history.replaceState(null, "", `${location.pathname}${location.search}`);
+    location.hash = "evidence";
+  }
 
-  const askedOwner = asked || Boolean(r.askedOwnerAt);
+  const askedOwner = canAsk && (asked || Boolean(r.askedOwnerAt));
   const status = askedOwner
     ? t("recStatus_asked")
     : r.status === "accepted" || r.status === "in_report"
@@ -494,7 +523,7 @@ export function RecommendationClient({
   const live = open || r.status === "accepted" || r.status === "in_report";
   const menuItems: MenuItem[] = [];
   if (open) menuItems.push({ id: "snooze", label: m("snooze"), icon: <Clock />, onSelect: () => void act("snooze") });
-  if (r.planning || r.type === "rotation")
+  if (r.planning && !isRotation)
     menuItems.push({
       id: "compare",
       label: r9("compare"),
@@ -512,125 +541,214 @@ export function RecommendationClient({
     });
   const canAskNow = canAct && canAsk && live && !askedOwner && !r.undoUntil;
 
-  return (
-    <div className="grid gap-8 xl:grid-cols-[1fr_380px]">
-      <div className="flex min-w-0 flex-col gap-6">
-        <nav aria-label={t("breadcrumb")} className="flex w-fit items-center gap-2 text-body text-ink-2">
-          <Link href="/" className="flex items-center gap-1 hover:text-ink">
-            <ArrowLeft aria-hidden className="size-4" />
-            {r9("back")}
-          </Link>
-          <span aria-hidden>/</span>
-          <span aria-current="page" className="text-ink">
-            {r9("crumb")}
-          </span>
-        </nav>
-        <div className="flex flex-wrap gap-2">
-          {r.deadline && (
-            <Chip tone={r.planning ? "info" : r.irreversible ? "urgent" : "week"} icon={<Calendar />}>
-              {r.planning ? t("duePlan", { date: date(r.deadline) }) : t("dueBy", { date: date(r.deadline) })}
-            </Chip>
-          )}
-          <Chip tone="neutral" icon={<Bug />}>
-            {t(`type_${r.type}`)}
-          </Chip>
-          {r.edited && <Chip tone="neutral">{t("recEdited")}</Chip>}
-          {r.aiSuggested && <Chip tone="neutral" icon={<Sparkles />}>{t("aiWatchChip")}</Chip>}
-        </div>
-        <div>
-          <h1 className="text-h1 text-ink">
-            {r.text.title[locale]}
-            {r.textSource === "ai" && <AiMark />}
-          </h1>
-          {r.aiSuggested && <p className="mt-2 text-small text-ink-2">{t("aiWorthPageNote")}</p>}
-          <p className="mt-2 text-body text-ink-2">
-            {r.fieldName} · {t("recSeason", { season: r.season })}
-          </p>
-        </div>
+  const TypeIcon = TYPE_ICON[r.type];
+  const RiskIcon = LEVEL_ICON[r.level];
+  const margin = (r.keyNumbers ?? []).find((k) => k.id === "marginVsCurrent");
+  const marginNum = margin ? Number(margin.value) : NaN;
+  const scoutLine = canAct && r.text.scout && (r.type === "pest" || r.type === "disease");
+  const questions = [
+    { id: "why", text: r9("q_why") },
+    { id: "wait", text: r9("q_wait") },
+    { id: "look", text: r9("q_look") },
+  ];
+  const askAssistant = (q?: string) =>
+    `/assistant?${q ? `ask=${encodeURIComponent(q)}&` : ""}field=${r.fieldId}&rec=${r.id}`;
 
-        <Surface as="section" pad="lg" className="flex flex-col gap-5">
-          <Gauge level={r.level} label={`${r9("risk")}: ${t(`recLevel_${r.level}`)}`} />
-          <dl className="flex flex-wrap gap-8">
-            <div>
-              <dt className="text-caption text-ink-2">{r9("risk")}</dt>
-              <dd className={`text-h2 ${LEVEL_TONE[r.level]}`}>{t(`recLevel_${r.level}`)}</dd>
-            </div>
-            <div>
-              <dt className="text-caption text-ink-2">
-                {r9("conf")} <InfoHint label={t("hintLabel")}>{t("hintConf")}</InfoHint>
-              </dt>
-              <dd className="text-h2 text-ink">{t(`conf_${r.confidence}`)}</dd>
-            </div>
-            <div>
-              <dt className="text-caption text-ink-2">
-                {r9("data")}{" "}
-                <InfoHint label={t("hintLabel")}>{t(`hintTier_${r.tier}` as "hintTier_A")}</InfoHint>
-              </dt>
-              <dd className="text-h2 text-ink">{f(`tier_${r.tier}`)}</dd>
-            </div>
-          </dl>
-          <div>
-            <Kicker as="h2" className="mb-2">
-              {r9("do_t")}
-            </Kicker>
-            <p className="text-[20px] leading-8 font-semibold text-ink">{r.text.action[locale]}</p>
-          </div>
-          {status && (
-            <p role="status" className="flex items-center gap-2 text-body text-ink-2">
-              <Check aria-hidden className="size-4 shrink-0" strokeWidth={1.7} />
-              {status}
+  return (
+    <div className="mx-auto flex w-full max-w-[820px] min-w-0 flex-col gap-6">
+      <nav aria-label={t("breadcrumb")} className="flex w-fit items-center gap-2 text-body text-ink-2">
+        <Link href="/" className="flex min-h-tap items-center gap-1 hover:text-ink">
+          <ArrowLeft aria-hidden className="size-4" />
+          {r9("back")}
+        </Link>
+        <span aria-hidden>/</span>
+        <span aria-current="page" className="text-ink">
+          {r9("crumb")}
+        </span>
+      </nav>
+
+      <div>
+        <Kicker className="flex flex-wrap items-center gap-x-2">
+          <TypeIcon aria-hidden className="size-4" strokeWidth={1.7} />
+          {t(`type_${r.type}`)} · {r.fieldName} · {t("recSeason", { season: r.season })}
+          {r.edited && <Chip tone="neutral">{t("recEdited")}</Chip>}
+        </Kicker>
+        <h1 className="mt-2 text-h1 text-ink">{r.text.title[locale]}</h1>
+      </div>
+
+      <Surface as="section" pad="lg" className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          {!isRotation && !noRisk && (
+            <p className={`flex items-center gap-2 text-h1 ${LEVEL_TONE[r.level]}`} data-testid="risk">
+              <RiskIcon aria-hidden className="size-8 shrink-0" strokeWidth={1.7} />
+              {r9("risk")}: {t(`recLevel_${r.level}`)}
             </p>
           )}
-          {askedOwner && canAsk && !r.undoUntil && <OwnerAnswer workspaceId={workspaceId} recommendationId={r.id} />}
-          {r.undoUntil ? (
-            <DoneRow
-              label={askedOwner ? t("askDone") : r.status === "accepted" ? t("accDone") : m("snz_done")}
-              undoLabel={r9("undo")}
-              undoUntil={r.undoUntil}
-              onUndo={() => void act("undo")}
-            />
-          ) : (
-            canAct &&
-            live && (
-              <div className="flex flex-wrap items-center gap-2">
-                {open && (
-                  <Button icon={<Check />} onClick={() => void act("accept")}>
-                    {t("acceptBtn")}
-                  </Button>
-                )}
-                {canAskNow && (
-                  <Button
-                    variant={open ? "outline" : "primary"}
-                    icon={<MessageCircleQuestion />}
-                    onClick={() => setAsking(true)}
-                  >
-                    {t("askBtn")}
-                  </Button>
-                )}
-                <Menu label={r9("more")} items={menuItems} className="ml-auto" />
-              </div>
-            )
+          {isRotation && Number.isFinite(marginNum) && marginNum > 0 && (
+            <p className="text-h2 text-ink">{r9("better_than_today", { v: fmt.moneyPerArea(marginNum, "USD") })}</p>
           )}
-        </Surface>
+          {r.deadline && (
+            <Chip tone={r.planning ? "info" : r.irreversible ? "urgent" : "week"} icon={<Calendar />}>
+              {r9("decide_by", { date: date(r.deadline) })}
+            </Chip>
+          )}
+        </div>
+        {noRisk && (
+          <p className="flex items-center gap-2 text-body text-ink-2">
+            <Sparkles aria-hidden className="size-4 shrink-0" strokeWidth={1.7} />
+            {r9("ai_idea")}
+          </p>
+        )}
 
-        <Surface as="section" pad="lg">
-         <Disclosure summary={<span className="text-h2">{r9("why_t")}</span>}>
-          <div className="flex flex-col gap-5 pt-4">
+        <div>
+          <Kicker as="h2" className="mb-2">
+            {r9("do_t")}
+          </Kicker>
+          {editing && canAct ? (
+            <form
+              ref={editRef}
+              onSubmit={(e) => {
+                e.preventDefault();
+                void saveText(draft);
+              }}
+              className="flex flex-col gap-3"
+            >
+              <label className="flex flex-col gap-1 text-caption text-ink-2">
+                {r9("edit_label")}
+                <textarea
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  required
+                  maxLength={2000}
+                  className="focus-ring min-h-28 rounded-input border border-line-strong bg-surface p-3 text-body text-ink"
+                />
+              </label>
+              <div className="flex gap-2">
+                <Button type="submit">{t("recSaveText")}</Button>
+                <Button variant="ghost" onClick={() => setEditing(false)}>
+                  {t("recCancel")}
+                </Button>
+              </div>
+            </form>
+          ) : (
+            <p className="text-[20px] leading-8 font-semibold text-ink">
+              {r.text.action[locale]}
+              {r.textSource === "ai" && <AiMark />}
+            </p>
+          )}
+        </div>
+
+        {scoutLine && (
+          <div className="flex flex-col items-start gap-2">
+            <p className="text-body text-ink-2">
+              <span className="font-semibold text-ink">{t("rcOptScout")}: </span>
+              {r.text.scout![locale]}
+            </p>
+            <Button variant="outline" icon={<Bug />} onClick={() => void startCheck()}>
+              {t("scStart")}
+            </Button>
+          </div>
+        )}
+
+        {status && !ownerView && (
+          <p role="status" className="flex items-center gap-2 text-body text-ink-2">
+            <Check aria-hidden className="size-4 shrink-0" strokeWidth={1.7} />
+            {status}
+          </p>
+        )}
+        {askedOwner && !r.undoUntil && <OwnerAnswer workspaceId={workspaceId} recommendationId={r.id} />}
+        {r.undoUntil ? (
+          <DoneRow
+            label={askedOwner ? t("askDone") : r.status === "accepted" ? t("accDone") : m("snz_done")}
+            undoLabel={r9("undo")}
+            undoUntil={r.undoUntil}
+            onUndo={() => void act("undo")}
+          />
+        ) : (
+          canAct &&
+          live && (
+            <div className="flex flex-wrap items-center gap-2 max-sm:sticky max-sm:bottom-[calc(var(--ts-tabbar)+0.5rem)] max-sm:z-10 max-sm:-mx-2 max-sm:rounded-card max-sm:bg-surface max-sm:p-2 max-sm:shadow-hero">
+              {open && (
+                <Button icon={<Check />} onClick={() => void act("accept")} className="max-sm:flex-1">
+                  {t("acceptBtn")}
+                </Button>
+              )}
+              {canAskNow && (
+                <Button
+                  variant={open ? "outline" : "primary"}
+                  icon={<MessageCircleQuestion />}
+                  onClick={() => setAsking(true)}
+                  className="max-sm:flex-1"
+                >
+                  {t("askBtn")}
+                </Button>
+              )}
+              <Menu label={r9("more")} items={menuItems} className="ml-auto" />
+            </div>
+          )
+        )}
+        {ownerView && <OwnerDecision workspaceId={workspaceId} recommendationId={r.id} />}
+
+        {!noRisk && (
+          <TrustLine
+            reliability={r.confidence}
+            dataLevel={r.tier}
+            sources={sourceNames}
+            lastDate={lastData}
+            compact={ownerView}
+            onClick={openEvidence}
+          />
+        )}
+      </Surface>
+
+      {canAct && (
+        <div className="flex flex-col gap-2">
+          <Link
+            href={askAssistant()}
+            className="focus-ring inline-flex min-h-tap w-fit items-center gap-2 rounded-btn text-body font-semibold text-ink underline underline-offset-4"
+          >
+            <Sparkles aria-hidden className="size-4" strokeWidth={1.7} />
+            {r9("ask_assistant_why")}
+          </Link>
+          <SuggestionChips questions={questions} onAsk={(q) => router.push(askAssistant(q.text))} />
+        </div>
+      )}
+
+      {isRotation && (
+        <Link
+          href={`/fields/${r.fieldId}/rotation`}
+          className="focus-ring flex items-start gap-3 rounded-card border border-line bg-surface p-4 hover:bg-muted"
+        >
+          <RefreshCw aria-hidden className="mt-0.5 size-5 shrink-0 text-ink-2" strokeWidth={1.7} />
+          <span>
+            <span className="block text-body font-semibold text-ink">{r9("compare_t")}</span>
+            <span className="block text-small text-ink-2">{r9("compare_sub")}</span>
+          </span>
+        </Link>
+      )}
+
+      <Evidence summary={summary}>
+        <div className="flex flex-col gap-6 pt-2">
           {factors.length > 0 && (
             <div className="rounded-input bg-surface-2 p-4">
-              <h3 className="mb-2 text-body font-semibold text-ink">{t("recWhyFactors")}</h3>
+              <h3 className="mb-2 text-body font-semibold text-ink">
+                {r.type === "pest" || r.type === "disease" ? r9("drivers_t") : r9("decides_t")}
+              </h3>
               <FactorRows factors={factors} />
             </div>
           )}
           <div>
-            <h3 className="mb-2 text-body font-semibold text-ink">{t("recSteps")}</h3>
-            <p className="mb-4 text-body text-ink">{r.text.why[locale]}</p>
-            <ol className="relative flex flex-col gap-6 border-l border-line pl-6">
+            <h3 className="mb-2 text-body font-semibold text-ink">{r9("why_t")}</h3>
+            <p className="mb-4 text-body text-ink">
+              {r.text.why[locale]}
+              {r.textSource === "ai" && <AiMark />}
+            </p>
+            <ol className="flex flex-col gap-6">
               {crops.length > 0 && (
                 <Step n={1} title={t("rcStepCrops")}>
                   {r.pest && (
                     <p className="text-body text-ink-2">
-                      {t("rcStepCropsSub", { n: hostSeasons, total: crops.length })}
+                      {r9("crops_sub", { n: hostSeasons, total: crops.length })}
                     </p>
                   )}
                   <div className="mt-3 flex flex-wrap gap-2">
@@ -642,9 +760,7 @@ export function RecommendationClient({
                           title={c.name[locale]}
                         />
                         <span className="text-small font-semibold text-ink">{c.season}</span>
-                        <span className="text-center text-small leading-tight text-ink-2">
-                          {c.name[locale]}
-                        </span>
+                        <span className="text-center text-small leading-tight text-ink-2">{c.name[locale]}</span>
                       </div>
                     ))}
                     {r.planning && (
@@ -657,7 +773,7 @@ export function RecommendationClient({
                   </div>
                   <p className="mt-2 text-caption text-ink-3">
                     {[
-                      ...(r.dataBasis ?? [])
+                      ...basis
                         .filter((i) => i.supports.some((s) => s === "crop-history" || s === "crop-estimate"))
                         .map((i) => i.dataset),
                       t("rcHistorySrc"),
@@ -665,13 +781,8 @@ export function RecommendationClient({
                   </p>
                 </Step>
               )}
-              {inputs.map((e, i) => (
-                <Step
-                  key={i}
-                  n={i + 1 + (crops.length > 0 ? 1 : 0)}
-                  title={stepTitle(e)}
-                  stamp={chip(e)}
-                >
+              {stepInputs.map((e, i) => (
+                <Step key={i} n={i + 1 + (crops.length > 0 ? 1 : 0)} title={stepTitle(e)} stamp={chip(e)}>
                   <p className="text-body text-ink-2">
                     {[
                       e.from ? `${isoOrText(e.from)}${e.to ? ` → ${isoOrText(e.to)}` : ""}` : null,
@@ -717,13 +828,20 @@ export function RecommendationClient({
                 </Step>
               ))}
               {r.pest && (
-                <Step n={inputs.length + 1 + (crops.length > 0 ? 1 : 0)} title={t("rcStepWhen")}>
+                <Step n={stepInputs.length + 1 + (crops.length > 0 ? 1 : 0)} title={t("rcStepWhen")}>
                   <p className="text-body text-ink">{r.pest.season[locale]}</p>
                   <p className="mt-1 text-body text-ink-2">{r.pest.damage[locale]}</p>
                 </Step>
               )}
             </ol>
           </div>
+          {r.pest && (
+            <div>
+              <h3 className="mb-2 text-body font-semibold text-ink">{r9("ev_when_risk")}</h3>
+              <p className="text-body text-ink-2">{r.pest.riskWhen[locale]}</p>
+              {r.pest.note && <p className="mt-1 text-caption text-ink-3">{r.pest.note[locale]}</p>}
+            </div>
+          )}
           <div>
             <h3 className="mb-2 text-body font-semibold text-ink">{t("recUnknown")}</h3>
             {unknowns.length ? (
@@ -736,148 +854,44 @@ export function RecommendationClient({
               <p className="text-small text-ink-2">{t("recNothingUnknown")}</p>
             )}
           </div>
+          <DataBasis items={basisItems} trustHref={`/fields/${r.fieldId}/trust`} compact />
+          <div className="flex flex-col gap-3">
+            <h3 className="text-body font-semibold text-ink">{r9("src_thr_t")}</h3>
+            {citations.length > 0 && (
+              <ul className="flex flex-col gap-3 text-caption text-ink-2">
+                {citations.map((c) => (
+                  <li key={c.threshold}>
+                    <span className="block text-ink">
+                      {t.has(`thr_${c.threshold}`)
+                        ? t(`thr_${c.threshold}`)
+                        : c.threshold?.replace(/([A-Z])/g, " $1").toLowerCase()}
+                      : <span className="font-mono font-semibold">{thresholdValue(c.value, c.unit)}</span>
+                    </span>
+                    <span className="block">
+                      {c.url ? (
+                        <a href={c.url} target="_blank" rel="noreferrer" className="underline underline-offset-2">
+                          {c.title}
+                        </a>
+                      ) : (
+                        c.title
+                      )}
+                      {c.publisher && ` · ${c.publisher}`}
+                      {c.type === "calibration" && ` · ${t("recCalibration")}`}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {r.pest && <p className="text-caption text-ink-2">{r9("src_library")}</p>}
+            <p className="text-caption text-ink-3">{t("rcNoProducts")}</p>
+            <p className="flex items-center gap-1.5 text-caption text-ink-3">
+              <ShieldCheck aria-hidden className="size-3.5" strokeWidth={1.7} />
+              {m("neutral")}
+            </p>
           </div>
-         </Disclosure>
-        </Surface>
+        </div>
+      </Evidence>
 
-        <section className="flex flex-col gap-3">
-          <h2 className="text-h2 text-ink">{t("rcOptions")}</h2>
-          <div className="grid gap-4 md:grid-cols-3">
-            <article className="flex flex-col gap-3 rounded-card border-2 border-ink bg-surface p-5">
-              <div className="flex items-center gap-2">
-                <Sparkles aria-hidden className="size-5 text-ink" strokeWidth={1.7} />
-                <Chip tone="neutral">{t("rcOptRec")}</Chip>
-              </div>
-              <h3 className="text-body font-bold text-ink">{r.text.title[locale]}</h3>
-              <p className="text-small text-ink-2">{r.text.action[locale]}</p>
-            </article>
-            {r.text.scout && (
-              <article className="flex flex-col gap-3 rounded-card border border-line bg-surface p-5">
-                <Eye aria-hidden className="size-5 text-ink-2" strokeWidth={1.7} />
-                <h3 className="text-body font-semibold text-ink">{t("rcOptScout")}</h3>
-                <p className="text-small text-ink-2">{r.text.scout[locale]}</p>
-              </article>
-            )}
-            {r.type === "rotation" && (
-              <>
-                <article className="flex flex-col gap-3 rounded-card border border-line bg-surface p-5">
-                  <RefreshCw aria-hidden className="size-5 text-ink-2" strokeWidth={1.7} />
-                  <h3 className="text-body font-semibold text-ink">{t("rcOptCompare")}</h3>
-                  <p className="text-small text-ink-2">{t("rcOptCompareSub")}</p>
-                </article>
-                <article className="flex flex-col gap-3 rounded-card border border-line bg-surface p-5">
-                  <Eye aria-hidden className="size-5 text-ink-2" strokeWidth={1.7} />
-                  <h3 className="text-body font-semibold text-ink">{t("rcOptKeep")}</h3>
-                  <p className="text-small text-ink-2">{t("rcOptKeepSub")}</p>
-                </article>
-              </>
-            )}
-            {r.pest && (
-              <article className="flex flex-col gap-3 rounded-card border border-line bg-surface p-5">
-                <TriangleAlert aria-hidden className="size-5 text-ink-2" strokeWidth={1.7} />
-                <h3 className="text-body font-semibold text-ink">{t("rcOptRisk")}</h3>
-                <p className="text-small text-ink-2">{r.pest.riskWhen[locale]}</p>
-                {r.pest.note && <p className="text-caption text-ink-3">{r.pest.note[locale]}</p>}
-              </article>
-            )}
-          </div>
-          <p className="text-small text-ink-3">{t("rcNoProducts")}</p>
-        </section>
-      </div>
-
-      <aside className="flex flex-col gap-4">
-        {canAct && (r.type === "pest" || r.type === "disease") && (
-          <Button icon={<Bug />} onClick={() => void startCheck()} className="justify-center">
-            {t("scStart")}
-          </Button>
-        )}
-        {canAct && (
-          <Link
-            href={`/assistant?rec=${r.id}&field=${r.fieldId}`}
-            className="focus-ring flex items-center justify-center gap-2 rounded-btn border border-line-strong bg-surface px-4 py-3 text-body font-semibold text-ink hover:bg-muted"
-          >
-            <Sparkles aria-hidden className="size-4" strokeWidth={1.7} />
-            {f("bf_ask")}
-          </Link>
-        )}
-        <section className="rounded-card border border-line bg-surface p-5">
-          <h2 className="text-body font-semibold text-ink">{t("recMsgTitle")}</h2>
-          <p className="mt-3 rounded-input bg-surface-2 p-4 text-body text-ink">{message}</p>
-          <p className="mt-3 flex items-center gap-1.5 text-small font-semibold text-ok">
-            <ShieldCheck aria-hidden className="size-4" strokeWidth={1.7} />
-            {r9("msg_ok")}
-          </p>
-          {canAct && editing && (
-            <form
-              ref={editRef}
-              onSubmit={(e) => {
-                e.preventDefault();
-                void saveText(draft);
-              }}
-              className="mt-3 flex flex-col gap-3"
-            >
-              <label className="flex flex-col gap-1 text-caption text-ink-2">
-                {r9("edit_label")}
-                <textarea
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  required
-                  maxLength={2000}
-                  className="focus-ring min-h-28 rounded-input border border-line-strong bg-surface p-3 text-body text-ink"
-                />
-              </label>
-              <div className="flex gap-2">
-                <Button type="submit">{t("recSaveText")}</Button>
-                <Button variant="ghost" onClick={() => setEditing(false)}>
-                  {t("recCancel")}
-                </Button>
-              </div>
-            </form>
-          )}
-        </section>
-        <DataBasis items={r.dataBasis ?? []} trustHref={`/fields/${r.fieldId}/trust`} />
-        <Surface as="section">
-          <Disclosure summary={r9("src_thr_t")}>
-            <div className="flex flex-col gap-4 pt-3">
-              {citations.length > 0 && (
-                <ul className="flex flex-col gap-3 text-caption text-ink-2">
-                  {citations.map((c) => (
-                    <li key={c.threshold}>
-                      <span className="block text-ink">
-                        {t.has(`thr_${c.threshold}`)
-                          ? t(`thr_${c.threshold}`)
-                          : c.threshold?.replace(/([A-Z])/g, " $1").toLowerCase()}
-                        : <span className="font-mono font-semibold">{thresholdValue(c.value, c.unit)}</span>
-                      </span>
-                      <span className="block">
-                        {c.url ? (
-                          <a
-                            href={c.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="underline underline-offset-2"
-                          >
-                            {c.title}
-                          </a>
-                        ) : (
-                          c.title
-                        )}
-                        {c.publisher && ` · ${c.publisher}`}
-                        {c.type === "calibration" && ` · ${t("recCalibration")}`}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {r.pest && <p className="text-caption text-ink-2">{r9("src_library")}</p>}
-              <p className="flex items-center gap-1.5 text-caption text-ink-3">
-                <ShieldCheck aria-hidden className="size-3.5" strokeWidth={1.7} />
-                {m("neutral")}
-              </p>
-            </div>
-          </Disclosure>
-        </Surface>
-      </aside>
       <AskOwnerSheet
         preview={
           asking && canAsk
@@ -886,6 +900,8 @@ export function RecommendationClient({
                 title: r.text.title[locale],
                 action: r.text.action[locale],
                 deadline: r.deadline ? date(r.deadline) : "",
+                message,
+                ...(verified && /\d/.test(message) ? { verified: r9("msg_ok") } : {}),
                 numbers: r.keyNumbers.slice(0, 3).map((k) => ({
                   label: label(k.id),
                   value: `${isoOrText(String(k.value))}${k.unit && k.unit !== "seasons" ? ` ${k.unit}` : ""}`,

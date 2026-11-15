@@ -30,6 +30,8 @@ export async function RecommendationPageBody({ id, canonical }: { id: string; ca
   if (!ws.ok) redirect("/");
   if (!rec.ok) notFound();
   if (!canonical) redirect(`/fields/${rec.data.fieldId}/recommendations/${id}`);
+  // The field's country picks units and money wording. Best effort.
+  const field = await serverGet<{ country?: string | null }>(`/api/w/${active.id}/fields/${rec.data.fieldId}`);
   const t = await getTranslations("Rec");
   return (
     <AppShell
@@ -42,6 +44,7 @@ export async function RecommendationPageBody({ id, canonical }: { id: string; ca
         timeZone={ws.data.timeZone}
         canAct={canDoFieldWork(ws.data.role)}
         canAsk={ws.data.role !== "owner"}
+        {...(field.ok && field.data.country ? { country: field.data.country } : {})}
         initial={rec.data}
       />
     </AppShell>

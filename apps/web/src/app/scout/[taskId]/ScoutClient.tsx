@@ -8,6 +8,7 @@ import {
   ChevronLeft,
   ChevronRight,
   LocateFixed,
+  Map as MapIcon,
   Minus,
   Plus,
   Send,
@@ -74,6 +75,7 @@ export function ScoutClient({
   const [confirmZero, setConfirmZero] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [showMap, setShowMap] = useState(false);
   const file = useRef<HTMLInputElement>(null);
   const [queued, setQueued] = useState(false);
   const online = useOnline();
@@ -227,16 +229,20 @@ export function ScoutClient({
           {task.fieldName} · {pestName}
         </p>
       </section>
-      <ScoutMap
-        outline={task.outline}
-        points={task.points}
-        counts={counts}
-        at={at}
-        onSelect={go}
-        user={here}
-        label={t("scMapLabel")}
-      />
-      <div className="flex items-center justify-between gap-3 px-4 py-2 text-caption text-ink-2">
+      {task.status === "open" && (
+        <ScoutMap
+          outline={task.outline}
+          points={task.points}
+          counts={counts}
+          at={at}
+          onSelect={go}
+          user={here}
+          label={t("scMapLabel")}
+        />
+      )}
+      <div
+        className={`flex items-center justify-between gap-3 px-4 py-2 text-caption text-ink-2 ${task.status === "sent" ? "hidden" : ""}`}
+      >
         {here && nextPoint ? (
           <span aria-live="polite">
             {t("scDistance", { n: nextPoint.i + 1, d: fmt.distance(distance(here, nextPoint.p)) })}
@@ -254,14 +260,38 @@ export function ScoutClient({
       </div>
 
       {task.status === "sent" ? (
-        <Surface as="section" className="animate-rise mx-4 mb-6">
-          <h2 className="text-h2 text-ink">{s("result")}</h2>
-          <p className="mt-2 text-big-number text-ink">{fmt.percent((task.resultPct ?? 0) / 100)}</p>
-          <p className="text-caption text-ink-2">
-            {t("scSent", { date: task.sentAt ? fmt.date(task.sentAt, "dayMonth") : "—", pct: task.resultPct ?? 0 })}
-          </p>
-          <p className="mt-3 text-caption text-ink-2">{s("loop")}</p>
-        </Surface>
+        <>
+          <Surface as="section" className="animate-rise mx-4 mt-2 mb-3">
+            <h2 className="text-h2 text-ink">{s("result")}</h2>
+            <p className="mt-2 text-big-number text-ink">{fmt.percent((task.resultPct ?? 0) / 100)}</p>
+            <p className="text-caption text-ink-2">
+              {t("scSent", { date: task.sentAt ? fmt.date(task.sentAt, "dayMonth") : "—", pct: task.resultPct ?? 0 })}
+            </p>
+            <p className="mt-3 text-caption text-ink-2">{s("loop")}</p>
+          </Surface>
+          <div className="mx-4 mb-6">
+            <button
+              type="button"
+              aria-expanded={showMap}
+              onClick={() => setShowMap((v) => !v)}
+              className="focus-ring flex min-h-tap items-center gap-2 text-body font-semibold text-ink underline underline-offset-4"
+            >
+              <MapIcon aria-hidden className="size-4" strokeWidth={1.7} />
+              {s("map_show")}
+            </button>
+            {showMap && (
+              <ScoutMap
+                outline={task.outline}
+                points={task.points}
+                counts={counts}
+                at={at}
+                onSelect={go}
+                user={null}
+                label={t("scMapLabel")}
+              />
+            )}
+          </div>
+        </>
       ) : (
         <>
           <Surface as="section" tone="inset" pad="sm" aria-label={s("summary")} className="mx-4 mb-3">
