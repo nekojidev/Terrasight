@@ -30,6 +30,7 @@ import { useState, type FormEvent } from "react";
 import { api } from "@/lib/api";
 import { useWorkspaceEvents } from "@/lib/events";
 import { FieldAssistant } from "@/components/FieldAssistant";
+import { TodayWindows } from "@/components/TodayWindows";
 import { YieldCard } from "./YieldCard";
 import { OutlookCard } from "./OutlookCard";
 import { GatherFocus, isFirstBuild } from "./GatherFocus";
@@ -199,7 +200,9 @@ export function FieldClient({
           outline={field.data.thumb ?? null}
           canEdit={canEdit}
           onRetry={(source) =>
-            void api(`${base}/gather/sources/${source}/retry`, { method: "POST" }).then(() => gather.refetch())
+            void api(`${base}/gather/sources/${source}/retry`, { method: "POST" }).then(() =>
+              gather.refetch(),
+            )
           }
         />
         <div
@@ -207,55 +210,55 @@ export function FieldClient({
           aria-hidden={building || undefined}
           className={`flex min-w-0 flex-col gap-6 transition-opacity duration-rise ease-ts ${building ? "pointer-events-none select-none opacity-40" : ""}`}
         >
+          {history.data && (
+            <FieldBrief
+              fieldId={id}
+              risks={risks.data ?? []}
+              seasons={history.data.seasons}
+              cropName={(c) => cropLabel(history.data!.cropNames, locale, c)}
+            />
+          )}
+          {history.data && (
+            <StatCards
+              history={history.data}
+              record={record.data ?? null}
+              plan={planInfo}
+              cropName={(c) => cropLabel(history.data!.cropNames, locale, c)}
+            />
+          )}
+          <YieldCard workspaceId={workspaceId} fieldId={id} units={units} />
+          <RisksCard risks={risks.data ?? []} />
+          <WeatherCard workspaceId={workspaceId} fieldId={id} units={units} />
+          <OutlookCard workspaceId={workspaceId} fieldId={id} units={units} />
+          <TodayWindows workspaceId={workspaceId} fieldId={id} units={units} />
+          {history.data && <HistoryCard history={history.data} fieldId={id} />}
 
-        {history.data && (
-          <FieldBrief
-            fieldId={id}
-            risks={risks.data ?? []}
-            seasons={history.data.seasons}
-            cropName={(c) => cropLabel(history.data!.cropNames, locale, c)}
-          />
-        )}
-        {history.data && (
-          <StatCards
-            history={history.data}
-            record={record.data ?? null}
-            plan={planInfo}
-            cropName={(c) => cropLabel(history.data!.cropNames, locale, c)}
-          />
-        )}
-        <YieldCard workspaceId={workspaceId} fieldId={id} units={units} />
-        <RisksCard risks={risks.data ?? []} />
-        <WeatherCard workspaceId={workspaceId} fieldId={id} units={units} />
-        <OutlookCard workspaceId={workspaceId} fieldId={id} units={units} />
-        {history.data && <HistoryCard history={history.data} fieldId={id} />}
-
-        {gather.data && !building && (
-          <GatherPanel
-            status={gather.data}
-            base={base}
-            canEdit={canEdit}
-            onRetried={() => void gather.refetch()}
-          />
-        )}
-        {history.data && (
-          <IrrigationCard
-            history={history.data}
-            field={field.data}
-            base={base}
-            canEdit={canEdit}
-            workspaceId={workspaceId}
-          />
-        )}
-        {history.data && (
-          <SeasonCard
-            base={base}
-            canEdit={canEdit}
-            cropNames={history.data.cropNames}
-            workspaceId={workspaceId}
-            fieldId={id}
-          />
-        )}
+          {gather.data && !building && (
+            <GatherPanel
+              status={gather.data}
+              base={base}
+              canEdit={canEdit}
+              onRetried={() => void gather.refetch()}
+            />
+          )}
+          {history.data && (
+            <IrrigationCard
+              history={history.data}
+              field={field.data}
+              base={base}
+              canEdit={canEdit}
+              workspaceId={workspaceId}
+            />
+          )}
+          {history.data && (
+            <SeasonCard
+              base={base}
+              canEdit={canEdit}
+              cropNames={history.data.cropNames}
+              workspaceId={workspaceId}
+              fieldId={id}
+            />
+          )}
         </div>
       </div>
       {canEdit && (
@@ -509,7 +512,9 @@ function HistoryCard({ history, fieldId }: { history: History; fieldId: string }
         </>
       )}
       {hasEstimate && <p className="mt-3 text-small text-ink-2">{t("historyEstimateHint")}</p>}
-      {hasUnknown && slots.length > 0 && <p className="mt-1 text-small text-ink-2">{t("historyUnknownHint")}</p>}
+      {hasUnknown && slots.length > 0 && (
+        <p className="mt-1 text-small text-ink-2">{t("historyUnknownHint")}</p>
+      )}
       {history.currentRotation && history.currentRotation.label !== "none" && (
         <p className="mt-3 text-small text-ink-2">
           {t("currentRotation")}: {history.currentRotation.rotationId ?? t("detectedFromHistory")} ·{" "}

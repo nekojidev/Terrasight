@@ -23,6 +23,7 @@ import { useState } from "react";
 import { AnalysisCard } from "@/components/AnalysisCard";
 import { AskOwnerSheet } from "@/components/AskOwnerSheet";
 import { OutlookRailLine } from "@/components/OutlookRailLine";
+import { TodayWindows } from "@/components/TodayWindows";
 import { api } from "@/lib/api";
 import { useWorkspaceEvents } from "@/lib/events";
 import type { AskOwnerBody } from "@terrasight/shared";
@@ -456,6 +457,7 @@ export function Brief({
             <p className="mt-2 text-micro text-ink-3">{b.rail.weather[0].attribution}</p>
           )}
         </RailCard>
+        <TodayWindows rail workspaceId={workspaceId} units={units} />
         <RailCard title={m("rail_o")}>
           {b.rail.ownerQuestion ? (
             <p className="flex gap-2 text-body text-ink">

@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { forecastCell, nextFrostDay, nwsForecast, openMeteoForecast } from "./forecast.js";
+import {
+  forecastCell,
+  localHour,
+  nextFrostDay,
+  nwsForecast,
+  openMeteoForecast,
+  openMeteoHourly,
+} from "./forecast.js";
 
 const json = (body: unknown) =>
   new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
@@ -99,5 +106,32 @@ describe("NWS", () => {
     expect(f.days[0]).toMatchObject({ date: "2026-11-14", tmaxC: 10, tminC: null, forecastDay: 1 });
     expect(f.days[1]).toMatchObject({ date: "2026-11-15", tmaxC: 5, tminC: -2.2, forecastDay: 2 });
     expect(nextFrostDay(f)?.date).toBe("2026-11-15");
+  });
+});
+
+describe("Open-Meteo hourly", () => {
+  it("asks for the work-window variables in m/s and maps the series", async () => {
+    let url = "";
+    const body = {
+      utc_offset_seconds: -21600,
+      hourly: {
+        time: ["2026-11-14T00:00", "2026-11-14T01:00"],
+        temperature_2m: [5, 4],
+        relative_humidity_2m: [70, 75],
+        precipitation: [0, 0.4],
+        wind_speed_10m: [3, 2],
+        wind_gusts_10m: [6, null],
+        soil_temperature_6cm: [8, 8],
+      },
+    };
+    const f = await openMeteoHourly(
+      { lat: 38.1, lon: -101.1 },
+      ctx((u) => ((url = u), json(body))),
+    );
+    expect(url).toContain("wind_speed_unit=ms");
+    expect(url).toContain("soil_temperature_6cm");
+    expect(url).toContain("timezone=auto");
+    expect(f.hours[1]).toMatchObject({ precipMm: 0.4, gustMs: null, soilTemp6cmC: 8, soilMoisture: null });
+    expect(localHour(new Date("2026-11-14T08:30:00Z"), f.utcOffsetSeconds)).toBe("2026-11-14T02:00");
   });
 });

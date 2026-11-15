@@ -1,5 +1,12 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
-import { forecastCell, nwsForecast, openMeteoForecast, type Forecast } from "@terrasight/sources";
+import {
+  forecastCell,
+  nwsForecast,
+  openMeteoForecast,
+  openMeteoHourly,
+  type Forecast,
+  type HourlyForecast,
+} from "@terrasight/sources";
 import { RateLimitService } from "../auth/rate-limit.js";
 import { ENV, type Env } from "../config/config.js";
 import { PrismaService } from "../db/prisma.service.js";
@@ -88,6 +95,42 @@ export class ForecastService {
         failures,
       };
     return null;
+  }
+
+  /**
+   * Hourly forecast for work windows, cached per 0.1° cell like the daily one (6 h). Open-Meteo only (NWS has no
+   * hourly set we use); on failure the last cached hours are returned as `stale`, else null.
+   */
+  async getHourly(
+    lat: number,
+    lon: number,
+    today: string,
+  ): Promise<{ forecast: HourlyForecast; origin: "live" | "cache" | "stale"; ageHours: number } | null> {
+    const cell = forecastCell(lat, lon);
+    const key = `forecast-hourly:${cell.key}`;
+    const row = await this.prisma.system.sourceCache.findUnique({ where: { key } });
+    const age = row ? Date.now() - row.fetchedAt.getTime() : Infinity;
+    const cached = row?.payload as unknown as HourlyForecast | undefined;
+    if (cached && age < FRESH_MS) return { forecast: cached, origin: "cache", ageHours: Math.round(age / 3600_000) };
+    try {
+      while (!(await this.limits.take("source:forecast:Open-Meteo", BUCKET)))
+        await new Promise((r) => setTimeout(r, 200));
+      const forecast = await openMeteoHourly(cell, this.ctx(today), this.env.OPEN_METEO_API_KEY);
+      const data = {
+        source: "forecast",
+        params: { cell: cell.key, provider: forecast.provider, hourly: true } as Prisma.InputJsonValue,
+        payload: forecast as unknown as Prisma.InputJsonValue,
+        dataDate: new Date(`${today}T00:00:00Z`),
+        origin: "live",
+        fetchedAt: new Date(),
+        expiresAt: new Date(Date.now() + FRESH_MS),
+      };
+      await this.prisma.system.sourceCache.upsert({ where: { key }, create: { key, ...data }, update: data });
+      return { forecast, origin: "live", ageHours: 0 };
+    } catch (e) {
+      this.log.warn(`hourly forecast ${cell.key} failed: ${(e as Error).message}`);
+      return cached ? { forecast: cached, origin: "stale", ageHours: Math.round(age / 3600_000) } : null;
+    }
   }
 
   private ctx(today: string) {
