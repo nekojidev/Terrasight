@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Req, UseGuards } from "@nestjs/common";
 import { z } from "zod";
 import { AuthGuard, Requires, WorkspaceGuard, type AuthedRequest, UUID } from "../auth/current-user.js";
+import { COST_BUCKETS, RateLimitService } from "../auth/rate-limit.js";
 import { ProblemException } from "../http/problem.js";
 import { ZodPipe } from "../http/zod.js";
 import { isTimeZone, WorkspacesService } from "./workspaces.service.js";
@@ -28,10 +29,17 @@ const RoleBody = z.object({ role: z.enum(["owner", "agronomist"]) });
 @Controller()
 @UseGuards(AuthGuard)
 export class WorkspacesController {
-  constructor(private readonly workspaces: WorkspacesService) {}
+  constructor(
+    private readonly workspaces: WorkspacesService,
+    private readonly limits: RateLimitService,
+  ) {}
 
   @Post("workspaces")
-  create(@Body(new ZodPipe(WorkspaceBody)) body: z.infer<typeof WorkspaceBody>, @Req() req: AuthedRequest) {
+  async create(
+    @Body(new ZodPipe(WorkspaceBody)) body: z.infer<typeof WorkspaceBody>,
+    @Req() req: AuthedRequest,
+  ) {
+    await this.limits.enforce(`ws:create:${req.user!.id}`, COST_BUCKETS.workspaceCreate);
     return this.workspaces.create(req.user!.id, body);
   }
 

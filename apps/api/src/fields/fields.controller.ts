@@ -14,6 +14,7 @@ import {
 } from "@nestjs/common";
 import { z } from "zod";
 import { AuthGuard, Requires, UUID, WorkspaceGuard, type AuthedRequest } from "../auth/current-user.js";
+import { COST_BUCKETS, RateLimitService } from "../auth/rate-limit.js";
 import { GatherService } from "../gather/gather.service.js";
 import { HistoryService } from "../history/history.service.js";
 import { ProblemException } from "../http/problem.js";
@@ -66,6 +67,7 @@ export class FieldsController {
     private readonly gather: GatherService,
     private readonly history: HistoryService,
     private readonly seasons: SeasonsService,
+    private readonly limits: RateLimitService,
   ) {}
 
   @Get()
@@ -77,13 +79,15 @@ export class FieldsController {
   @Post("preview")
   @HttpCode(200)
   @Requires("fields.write")
-  preview(@Body(new ZodPipe(PreviewBody)) body: z.infer<typeof PreviewBody>) {
+  async preview(@Body(new ZodPipe(PreviewBody)) body: z.infer<typeof PreviewBody>, @Req() req: AuthedRequest) {
+    await this.limits.enforce(`fields:preview:${req.user!.id}`, COST_BUCKETS.fieldPreview);
     return this.fields.preview(body.geometry);
   }
 
   @Post()
   @Requires("fields.write")
-  create(@Body(new ZodPipe(CreateBody)) body: z.infer<typeof CreateBody>, @Req() req: AuthedRequest) {
+  async create(@Body(new ZodPipe(CreateBody)) body: z.infer<typeof CreateBody>, @Req() req: AuthedRequest) {
+    await this.limits.enforce(`fields:create:${req.user!.id}`, COST_BUCKETS.fieldCreate);
     return this.fields.create(req.workspaceId!, req.user!.id, body);
   }
 

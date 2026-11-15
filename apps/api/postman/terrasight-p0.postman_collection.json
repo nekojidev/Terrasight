@@ -38,16 +38,15 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
-                  "pm.test(\"access + refresh cookies are httpOnly\", () => {",
-                  "  const set = pm.response.headers.filter((h) => h.key.toLowerCase() === \"set-cookie\").map((h) => h.value).join(\"\\n\");",
-                  "  pm.expect(set).to.match(/ts_at=[^;]+;.*HttpOnly/i);",
-                  "  pm.expect(set).to.match(/ts_rt=[^;]+;.*Path=\\/api\\/auth.*HttpOnly/i);",
-                  "  pm.expect(set).to.match(/SameSite=Lax/i);",
+                  "pm.test(\"status 202\", () => pm.response.to.have.status(202));",
+                  "pm.test(\"uniform answer, no session\", () => {",
+                  "  pm.expect(pm.response.json()).to.eql({ status: \"verification-sent\" });",
+                  "  const set = pm.response.headers.filter((h) => h.key.toLowerCase() === \"set-cookie\");",
+                  "  pm.expect(set).to.have.length(0);",
                   "});",
-                  "pm.test(\"returns the user without workspaces\", () => {",
-                  "  const b = pm.response.json(); pm.expect(b.email).to.eql(pm.collectionVariables.get(\"ownerEmail\"));",
-                  "  pm.expect(b.workspaces).to.eql([]); pm.expect(b).to.not.have.property(\"passwordHash\");",
+                  "pm.test(\"API security headers\", () => {",
+                  "  pm.expect(pm.response.headers.get(\"X-Content-Type-Options\")).to.eql(\"nosniff\");",
+                  "  pm.expect(pm.response.headers.get(\"Content-Security-Policy\")).to.include(\"frame-ancestors 'none'\");",
                   "});"
                 ]
               }
@@ -69,6 +68,126 @@
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"{{ownerEmail}}\",\n  \"password\": \"correct horse battery\",\n  \"name\": \"Olena Koval\",\n  \"uiLanguage\": \"uk\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Read the verification email (test hook)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "const l = pm.response.json().link; pm.test(\"verify link\", () => pm.expect(l).to.match(/\\/verify\\/[\\w-]{43}$/));",
+                  "pm.collectionVariables.set(\"ownerVerifyToken\", l.split(\"/\").pop());"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              }
+            ],
+            "url": "{{baseUrl}}/api/test/outbox?to={{ownerEmail}}"
+          }
+        },
+        {
+          "name": "Verify the email",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"verified\", () => pm.expect(pm.response.json().verified).to.eql(true));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/verify/{{ownerVerifyToken}}"
+          }
+        },
+        {
+          "name": "A verification link works once",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 410\", () => pm.response.to.have.status(410));",
+                  "pm.test(\"problem+json\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"));",
+                  "pm.test(\"type verify-link-invalid\", () => pm.expect(pm.response.json().type).to.include(\"verify-link-invalid\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/verify/{{ownerVerifyToken}}"
+          }
+        },
+        {
+          "name": "Sign in before the first workspace",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"access + refresh cookies are httpOnly\", () => {",
+                  "  const set = pm.response.headers.filter((h) => h.key.toLowerCase() === \"set-cookie\").map((h) => h.value).join(\"\\n\");",
+                  "  pm.expect(set).to.match(/ts_at=[^;]+;.*HttpOnly/i);",
+                  "  pm.expect(set).to.match(/ts_rt=[^;]+;.*Path=\\/api\\/auth.*HttpOnly/i);",
+                  "  pm.expect(set).to.match(/SameSite=Lax/i);",
+                  "});",
+                  "pm.test(\"returns the verified user without workspaces\", () => {",
+                  "  const b = pm.response.json(); pm.expect(b.email).to.eql(pm.collectionVariables.get(\"ownerEmail\"));",
+                  "  pm.expect(b.emailVerified).to.eql(true);",
+                  "  pm.expect(b.workspaces).to.eql([]); pm.expect(b).to.not.have.property(\"passwordHash\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{ownerEmail}}\",\n  \"password\": \"correct horse battery\"\n}"
             }
           }
         },
@@ -103,16 +222,15 @@
           }
         },
         {
-          "name": "Same email cannot sign up twice",
+          "name": "Signing up again with the same email answers the same (no account enumeration)",
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"status 409\", () => pm.response.to.have.status(409));",
-                  "pm.test(\"problem+json\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"));",
-                  "pm.test(\"type email-taken\", () => pm.expect(pm.response.json().type).to.include(\"email-taken\"));"
+                  "pm.test(\"status 202\", () => pm.response.to.have.status(202));",
+                  "pm.test(\"same body as a new address\", () => pm.expect(pm.response.json()).to.eql({ status: \"verification-sent\" }));"
                 ]
               }
             }
@@ -660,7 +778,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));"
+                  "pm.test(\"status 202\", () => pm.response.to.have.status(202));"
                 ]
               }
             }
@@ -682,6 +800,113 @@
               "mode": "raw",
               "raw": "{\n  \"email\": \"{{agronomistEmail}}\",\n  \"password\": \"agronomist long password\",\n  \"name\": \"John Miller\"\n}"
             }
+          }
+        },
+        {
+          "name": "The invitation needs a verified email",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{agronomistEmail}}\",\n  \"password\": \"agronomist long password\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Accepting before verifying is refused",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"problem+json\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"));",
+                  "pm.test(\"type email-unverified\", () => pm.expect(pm.response.json().type).to.include(\"email-unverified\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              }
+            ],
+            "url": "{{baseUrl}}/api/invitations/{{inviteToken}}/accept"
+          }
+        },
+        {
+          "name": "Read the agronomist's verification email (test hook)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"agroVerifyToken\", pm.response.json().link.split(\"/\").pop());"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              }
+            ],
+            "url": "{{baseUrl}}/api/test/outbox?to={{agronomistEmail}}"
+          }
+        },
+        {
+          "name": "Verify the agronomist's email",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/verify/{{agroVerifyToken}}"
           }
         },
         {
@@ -2770,7 +2995,8 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
-                  "const l = pm.response.json(); pm.collectionVariables.set(\"linkToken\", l.token); pm.collectionVariables.set(\"linkId\", l.id); pm.test(\"token shown once\", () => pm.expect(l.token.length).to.be.above(30));"
+                  "const l = pm.response.json(); pm.collectionVariables.set(\"linkToken\", l.token); pm.collectionVariables.set(\"linkId\", l.id); pm.test(\"token shown once\", () => pm.expect(l.token.length).to.be.above(30));",
+                  "pm.test(\"expires in 60 days by default\", () => pm.expect(new Date(l.expiresAt) - Date.now()).to.be.within(59.9 * 864e5, 60.1 * 864e5));"
                 ]
               }
             }
@@ -2973,6 +3199,327 @@
               }
             ],
             "url": "{{baseUrl}}/api/w/{{ws}}/fields/{{fieldId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Password reset and report-link defaults (S-01.05)",
+      "item": [
+        {
+          "name": "Sign up a user who will forget the password",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 202\", () => pm.response.to.have.status(202));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/signup",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"forgetful-{{run}}@example.com\",\n  \"password\": \"first long password\",\n  \"name\": \"Forgetful\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Forgot password for an unknown address answers the same",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 202\", () => pm.response.to.have.status(202));",
+                  "pm.test(\"uniform\", () => pm.expect(pm.response.json()).to.eql({ status: \"reset-sent\" }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/forgot",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"nobody-{{run}}@example.com\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Forgot password for a known address answers the same",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 202\", () => pm.response.to.have.status(202));",
+                  "pm.test(\"uniform\", () => pm.expect(pm.response.json()).to.eql({ status: \"reset-sent\" }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/forgot",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"forgetful-{{run}}@example.com\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Read the reset email (test hook)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "const l = pm.response.json().link; pm.test(\"reset link\", () => pm.expect(l).to.match(/\\/reset\\/[\\w-]{43}$/));",
+                  "pm.collectionVariables.set(\"resetToken\", l.split(\"/\").pop());"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              }
+            ],
+            "url": "{{baseUrl}}/api/test/outbox?to=forgetful-{{run}}@example.com"
+          }
+        },
+        {
+          "name": "A short new password is invalid",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 422\", () => pm.response.to.have.status(422));",
+                  "pm.test(\"problem+json\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"));",
+                  "pm.test(\"type invalid-input\", () => pm.expect(pm.response.json().type).to.include(\"invalid-input\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/reset/{{resetToken}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"password\": \"short\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Reset the password",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 204\", () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/reset/{{resetToken}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"password\": \"second long password\"\n}"
+            }
+          }
+        },
+        {
+          "name": "A reset link works once",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 410\", () => pm.response.to.have.status(410));",
+                  "pm.test(\"problem+json\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"));",
+                  "pm.test(\"type reset-link-invalid\", () => pm.expect(pm.response.json().type).to.include(\"reset-link-invalid\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/reset/{{resetToken}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"password\": \"third long password\"\n}"
+            }
+          }
+        },
+        {
+          "name": "The old password no longer works",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"problem+json\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"));",
+                  "pm.test(\"type bad-credentials\", () => pm.expect(pm.response.json().type).to.include(\"bad-credentials\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"forgetful-{{run}}@example.com\",\n  \"password\": \"first long password\"\n}"
+            }
+          }
+        },
+        {
+          "name": "The new password works",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"reset verified the email\", () => pm.expect(pm.response.json().emailVerified).to.eql(true));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"forgetful-{{run}}@example.com\",\n  \"password\": \"second long password\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Resend verification for a verified account is a no-op",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"already verified\", () => pm.expect(pm.response.json().alreadyVerified).to.eql(true));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/resend-verification"
           }
         }
       ]

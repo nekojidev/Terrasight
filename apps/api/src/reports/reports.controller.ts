@@ -14,6 +14,7 @@ import {
 import { z } from "zod";
 import { AuthGuard, Requires, UUID, WorkspaceGuard, type AuthedRequest } from "../auth/current-user.js";
 import { RateLimitService } from "../auth/rate-limit.js";
+import { hashToken } from "../auth/tokens.js";
 import { ProblemException } from "../http/problem.js";
 import { ZodPipe } from "../http/zod.js";
 import { DecisionsService } from "./decisions.service.js";
@@ -30,6 +31,8 @@ const LinkBody = z.object({
   expiresAt: z.string().datetime().nullable().optional(),
 });
 const LINK_BUCKET = { capacity: 30, refillPerSec: 0.5 };
+const TOKEN_BUCKET = { capacity: 60, refillPerSec: 1 };
+const ANSWER_BUCKET = { capacity: 10, refillPerSec: 1 / 30 };
 
 function uuid(id: string): string {
   if (!UUID.test(id)) throw new ProblemException(404, "not-found");
@@ -118,9 +121,15 @@ export class ReportLinkController {
     private readonly limits: RateLimitService,
   ) {}
 
-  private async guard(token: string, ip: string) {
+  private async guard(token: string, ip: string, answering = false) {
     if (!(await this.limits.take(`reportlink:${ip}`, LINK_BUCKET)))
       throw new ProblemException(429, "rate-limited", "Too many requests");
+    // Per link, whoever holds it: a leaked or shared link can't be used to flood answers.
+    const id = hashToken(token).slice(0, 16);
+    if (!(await this.limits.take(`reportlink:tok:${id}`, TOKEN_BUCKET)))
+      throw new ProblemException(429, "rate-limited", "Too many requests");
+    if (answering && !(await this.limits.take(`reportlink:ans:${id}`, ANSWER_BUCKET)))
+      throw new ProblemException(429, "rate-limited", "Too many answers; try again later");
     return this.reports.byToken(token);
   }
 
@@ -138,7 +147,7 @@ export class ReportLinkController {
     @Body(new ZodPipe(AnswerBody)) body: z.infer<typeof AnswerBody>,
     @Ip() ip: string,
   ) {
-    const link = await this.guard(token, ip);
+    const link = await this.guard(token, ip, true);
     return this.decisions.answer(link.workspaceId, uuid(id), body, { link: true });
   }
 }

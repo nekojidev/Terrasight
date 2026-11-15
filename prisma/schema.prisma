@@ -156,6 +156,12 @@ model User {
   name           String
   uiLanguage     Language  @default(en) @map("ui_language")
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  // Email verification (24 h link) and password reset (1 h, single use); only token hashes are stored.
+  emailVerifiedAt DateTime? @map("email_verified_at") @db.Timestamptz(3)
+  verifyTokenHash String?   @unique @map("verify_token_hash")
+  verifyExpiresAt DateTime? @map("verify_expires_at") @db.Timestamptz(3)
+  resetTokenHash  String?   @unique @map("reset_token_hash")
+  resetExpiresAt  DateTime? @map("reset_expires_at") @db.Timestamptz(3)
 
   memberships   Membership[]
   refreshTokens RefreshToken[]

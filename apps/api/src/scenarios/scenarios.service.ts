@@ -694,6 +694,14 @@ export class ScenariosService {
     });
     if (!field) throw new ProblemException(404, "not-found");
     if (!this.lib.rotations.crops[body.crop]) throw new ProblemException(422, "unknown-crop", "Unknown crop");
+    if (body.scenarioRunId) {
+      // A client-supplied run must belong to this field (the field is already scoped to the workspace above).
+      const run = await this.prisma.system.scenarioRun.findFirst({
+        where: { id: body.scenarioRunId, fieldId },
+        select: { id: true },
+      });
+      if (!run) throw new ProblemException(422, "unknown-scenario-run", "Unknown scenario run for this field");
+    }
     const data = {
       crop: body.crop,
       rotationId: body.rotationId ?? null,

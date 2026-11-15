@@ -1,7 +1,8 @@
-import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
-import { createReadStream, createWriteStream, mkdirSync, statSync } from "node:fs";
+import { createHmac, hkdfSync, randomUUID, timingSafeEqual } from "node:crypto";
+import { createReadStream, createWriteStream, mkdirSync } from "node:fs";
+import { rm } from "node:fs/promises";
 import { join } from "node:path";
-import { pipeline } from "node:stream/promises";
+import { once } from "node:events";
 import type { Readable } from "node:stream";
 import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
@@ -28,7 +29,6 @@ export const W_POINTS: Array<[number, number]> = [
 ];
 export const PLANTS_PER_POINT = 20;
 const PHOTO_TYPES = new Set(["image/jpeg", "image/png", "image/heic"]);
-const PHOTO_MAX_BYTES = 10 * 1024 * 1024;
 const URL_TTL_S = 600;
 
 /** Scouting tasks (RFC §10.7, Tech Design §11): W-route, photos, send, result as evidence. */
@@ -36,6 +36,8 @@ const URL_TTL_S = 600;
 export class ScoutingService {
   private readonly log = new Logger(ScoutingService.name);
   private readonly s3: S3Client | null;
+  /** Signs local photo URLs. Separate from the JWT key: HKDF(JWT_SECRET, label) unless PHOTO_SIGNING_KEY is set. */
+  private readonly signingKey: Buffer;
 
   constructor(
     @Inject(ENV) private readonly env: Env,
@@ -45,6 +47,9 @@ export class ScoutingService {
     private readonly analysis: AnalysisService,
   ) {
     this.s3 = env.S3_BUCKET ? new S3Client({ region: env.AWS_REGION }) : null;
+    this.signingKey = env.PHOTO_SIGNING_KEY
+      ? Buffer.from(env.PHOTO_SIGNING_KEY)
+      : Buffer.from(hkdfSync("sha256", env.JWT_SECRET, "", "terrasight/scouting-photo-url/v1", 32));
   }
 
   /**
@@ -157,7 +162,7 @@ export class ScoutingService {
   // ---------- photos ----------
 
   private sign(photoId: string, op: "put" | "get", exp: number): string {
-    return createHmac("sha256", this.env.JWT_SECRET).update(`${photoId}:${op}:${exp}`).digest("base64url");
+    return createHmac("sha256", this.signingKey).update(`${photoId}:${op}:${exp}`).digest("base64url");
   }
 
   verify(photoId: string, op: "put" | "get", exp: number, sig: string): boolean {
@@ -200,8 +205,18 @@ export class ScoutingService {
       );
     if (!PHOTO_TYPES.has(body.contentType))
       throw new ProblemException(422, "photo-type", "Photos must be JPEG, PNG or HEIC");
-    if (body.bytes > PHOTO_MAX_BYTES || body.bytes <= 0)
-      throw new ProblemException(422, "photo-size", "Photos can be up to 10 MB");
+    if (body.bytes > this.env.PHOTO_MAX_BYTES || body.bytes <= 0)
+      throw new ProblemException(
+        422,
+        "photo-size",
+        `Photos can be up to ${Math.floor(this.env.PHOTO_MAX_BYTES / 1024 / 1024)} MB`,
+      );
+    const [onTask, onPoint] = await Promise.all([
+      this.prisma.system.scoutingPhoto.count({ where: { taskId } }),
+      this.prisma.system.scoutingPhoto.count({ where: { taskId, pointIdx: body.pointIdx } }),
+    ]);
+    if (onTask >= this.env.PHOTO_MAX_PER_TASK || onPoint >= this.env.PHOTO_MAX_PER_POINT)
+      throw new ProblemException(422, "photo-limit", "This check has the maximum number of photos");
     const id = randomUUID();
     const key = `scouting/${workspaceId}/${taskId}/${id}`;
     await this.prisma.system.scoutingPhoto.create({
@@ -241,9 +256,25 @@ export class ScoutingService {
     if (!photo) throw new ProblemException(404, "not-found");
     const path = join(this.env.UPLOADS_DIR, photo.s3Key);
     mkdirSync(join(path, ".."), { recursive: true });
-    await pipeline(stream, createWriteStream(path));
-    if (statSync(path).size > PHOTO_MAX_BYTES)
-      throw new ProblemException(422, "photo-size", "Photos can be up to 10 MB");
+    const max = Math.min(this.env.PHOTO_MAX_BYTES, photo.bytes);
+    // The declared size is the budget: a client can't presign 1 KB and upload more.
+    const out = createWriteStream(path);
+    let size = 0;
+    try {
+      // destroyOnReturn:false keeps the connection usable so the 413 can still be sent.
+      for await (const chunk of stream.iterator({ destroyOnReturn: false })) {
+        const buf = chunk as Buffer;
+        size += buf.length;
+        if (size > max) throw new ProblemException(413, "photo-size", "The photo is larger than declared");
+        if (!out.write(buf)) await once(out, "drain");
+      }
+      out.end();
+      await once(out, "finish");
+    } catch (e) {
+      out.destroy();
+      await rm(path, { force: true });
+      throw e;
+    }
   }
 
   async getLocal(photoId: string) {

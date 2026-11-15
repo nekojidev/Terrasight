@@ -1,6 +1,7 @@
 "use client";
 
 import { Button, TextField } from "@terrasight/ui";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useState, type FormEvent } from "react";
@@ -19,6 +20,7 @@ export function LoginForm() {
   const [mode, setMode] = useState<Mode>(params.get("mode") === "signup" ? "signup" : "signin");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
+  const [sentTo, setSentTo] = useState<string | null>(null);
 
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -36,6 +38,10 @@ export function LoginForm() {
           },
           noRefresh: true,
         });
+        // The answer is the same for new and existing addresses and opens no session: check the mailbox, then sign in.
+        setSentTo(String(form.get("email")));
+        setBusy(false);
+        return;
       } else {
         await api("/api/auth/login", {
           body: { email: form.get("email"), password: form.get("password") },
@@ -62,6 +68,25 @@ export function LoginForm() {
             : error
               ? a("errGeneric")
               : null;
+
+  if (sentTo)
+    return (
+      <div role="status" className="flex w-full max-w-[560px] flex-col gap-5">
+        <h1 className="text-h1 text-ink">{a("checkEmailTitle")}</h1>
+        <p className="text-body text-ink-2">{a("checkEmailBody", { email: sentTo })}</p>
+        <Button
+          type="button"
+          size={56}
+          className="mt-2 w-full justify-center"
+          onClick={() => {
+            setSentTo(null);
+            setMode("signin");
+          }}
+        >
+          {a("signIn")}
+        </Button>
+      </div>
+    );
 
   return (
     <form onSubmit={submit} noValidate className="flex w-full max-w-[560px] flex-col gap-5">
@@ -100,7 +125,11 @@ export function LoginForm() {
         hint={mode === "signup" ? a("passHint") : undefined}
         error={error?.field("password")}
       />
-      {/* "Forgot password?" from design 01 is not offered: password reset is out of scope for v2. */}
+      {mode === "signin" && (
+        <Link href="/forgot" className="focus-ring -mt-2 self-start text-body font-semibold text-ink-2">
+          {a("forgotLink")}
+        </Link>
+      )}
       <Button type="submit" size={56} className="mt-2 w-full justify-center" disabled={busy} aria-busy={busy}>
         {mode === "signin" ? t("go") : a("createAccount")}
       </Button>

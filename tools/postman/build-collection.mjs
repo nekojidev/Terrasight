@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 // Builds the P0 API contract collection (Tech Design §14, §16; hackathon: P0 endpoints only, §1.1).
 //   node tools/postman/build-collection.mjs  →  apps/api/postman/terrasight-p0.postman_collection.json
+// The API under test needs AUTH_TEST_HOOKS=1 (never in production; the API refuses that) and no SMTP_URL: sign-up now
+// sends a verification email, which the run reads through GET /api/test/outbox (the dev outbox), so verification is
+// really exercised instead of being bypassed. Raise AUTH_RATE_BURST for the many sign-ins of one run.
 // Run: postman collection run apps/api/postman/terrasight-p0.postman_collection.json --env-var baseUrl=http://localhost:4000
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -77,15 +80,44 @@ const collection = {
             uiLanguage: "uk",
           },
           tests: [
-            status(201),
+            status(202),
+            `pm.test("uniform answer, no session", () => {`,
+            `  pm.expect(pm.response.json()).to.eql({ status: "verification-sent" });`,
+            `  const set = pm.response.headers.filter((h) => h.key.toLowerCase() === "set-cookie");`,
+            `  pm.expect(set).to.have.length(0);`,
+            `});`,
+            `pm.test("API security headers", () => {`,
+            `  pm.expect(pm.response.headers.get("X-Content-Type-Options")).to.eql("nosniff");`,
+            `  pm.expect(pm.response.headers.get("Content-Security-Policy")).to.include("frame-ancestors 'none'");`,
+            `});`,
+          ],
+        }),
+        req("Read the verification email (test hook)", "GET", "/api/test/outbox?to={{ownerEmail}}", {
+          tests: [
+            status(200),
+            `const l = pm.response.json().link; pm.test("verify link", () => pm.expect(l).to.match(/\\/verify\\/[\\w-]{43}$/));`,
+            `pm.collectionVariables.set("ownerVerifyToken", l.split("/").pop());`,
+          ],
+        }),
+        req("Verify the email", "POST", "/api/auth/verify/{{ownerVerifyToken}}", {
+          tests: [status(200), `pm.test("verified", () => pm.expect(pm.response.json().verified).to.eql(true));`],
+        }),
+        req("A verification link works once", "POST", "/api/auth/verify/{{ownerVerifyToken}}", {
+          tests: problem(410, "verify-link-invalid"),
+        }),
+        req("Sign in before the first workspace", "POST", "/api/auth/login", {
+          body: { email: "{{ownerEmail}}", password: "correct horse battery" },
+          tests: [
+            status(200),
             `pm.test("access + refresh cookies are httpOnly", () => {`,
             `  const set = pm.response.headers.filter((h) => h.key.toLowerCase() === "set-cookie").map((h) => h.value).join("\\n");`,
             `  pm.expect(set).to.match(/ts_at=[^;]+;.*HttpOnly/i);`,
             `  pm.expect(set).to.match(/ts_rt=[^;]+;.*Path=\\/api\\/auth.*HttpOnly/i);`,
             `  pm.expect(set).to.match(/SameSite=Lax/i);`,
             `});`,
-            `pm.test("returns the user without workspaces", () => {`,
+            `pm.test("returns the verified user without workspaces", () => {`,
             `  const b = pm.response.json(); pm.expect(b.email).to.eql(pm.collectionVariables.get("ownerEmail"));`,
+            `  pm.expect(b.emailVerified).to.eql(true);`,
             `  pm.expect(b.workspaces).to.eql([]); pm.expect(b).to.not.have.property("passwordHash");`,
             `});`,
           ],
@@ -95,9 +127,12 @@ const collection = {
           body: { name: "x", timeZone: "UTC", units: "metric", reportLanguage: "en" },
           tests: problem(403, "csrf"),
         }),
-        req("Same email cannot sign up twice", "POST", "/api/auth/signup", {
+        req("Signing up again with the same email answers the same (no account enumeration)", "POST", "/api/auth/signup", {
           body: { email: "{{ownerEmail}}", password: "another long password", name: "X" },
-          tests: problem(409, "email-taken"),
+          tests: [
+            status(202),
+            `pm.test("same body as a new address", () => pm.expect(pm.response.json()).to.eql({ status: "verification-sent" }));`,
+          ],
         }),
         req("Short password is invalid", "POST", "/api/auth/signup", {
           body: { email: "short-{{run}}@example.com", password: "123", name: "X" },
@@ -196,8 +231,19 @@ const collection = {
         req("Signed out: me is 401", "GET", "/api/me", { tests: problem(401) }),
         req("Sign up the invited agronomist", "POST", "/api/auth/signup", {
           body: { email: "{{agronomistEmail}}", password: "agronomist long password", name: "John Miller" },
-          tests: [status(201)],
+          tests: [status(202)],
         }),
+        req("The invitation needs a verified email", "POST", "/api/auth/login", {
+          body: { email: "{{agronomistEmail}}", password: "agronomist long password" },
+          tests: [status(200)],
+        }),
+        req("Accepting before verifying is refused", "POST", "/api/invitations/{{inviteToken}}/accept", {
+          tests: problem(403, "email-unverified"),
+        }),
+        req("Read the agronomist's verification email (test hook)", "GET", "/api/test/outbox?to={{agronomistEmail}}", {
+          tests: [status(200), `pm.collectionVariables.set("agroVerifyToken", pm.response.json().link.split("/").pop());`],
+        }),
+        req("Verify the agronomist's email", "POST", "/api/auth/verify/{{agroVerifyToken}}", { tests: [status(200)] }),
         req("Accept the invitation", "POST", "/api/invitations/{{inviteToken}}/accept", {
           tests: [
             status(200),
@@ -670,6 +716,7 @@ const collection = {
           tests: [
             status(201),
             `const l = pm.response.json(); pm.collectionVariables.set("linkToken", l.token); pm.collectionVariables.set("linkId", l.id); pm.test("token shown once", () => pm.expect(l.token.length).to.be.above(30));`,
+            `pm.test("expires in 60 days by default", () => pm.expect(new Date(l.expiresAt) - Date.now()).to.be.within(59.9 * 864e5, 60.1 * 864e5));`,
           ],
         }),
         req("The decisions through the link, in its language", "GET", "/api/r/{{linkToken}}", {
@@ -689,6 +736,54 @@ const collection = {
         req("A revoked link stops working at once", "GET", "/api/r/{{linkToken}}", { tests: problem(404) }),
         req("Archive the field", "DELETE", "/api/w/{{ws}}/fields/{{fieldId}}", { tests: [status(204)] }),
         req("An archived field is gone", "GET", "/api/w/{{ws}}/fields/{{fieldId}}", { tests: problem(404) }),
+      ],
+    },
+    {
+      // Last: these requests sign in as another user and replace the cookie jar's session.
+      name: "Password reset and report-link defaults (S-01.05)",
+      item: [
+        req("Sign up a user who will forget the password", "POST", "/api/auth/signup", {
+          body: { email: "forgetful-{{run}}@example.com", password: "first long password", name: "Forgetful" },
+          tests: [status(202)],
+        }),
+        req("Forgot password for an unknown address answers the same", "POST", "/api/auth/forgot", {
+          body: { email: "nobody-{{run}}@example.com" },
+          tests: [status(202), `pm.test("uniform", () => pm.expect(pm.response.json()).to.eql({ status: "reset-sent" }));`],
+        }),
+        req("Forgot password for a known address answers the same", "POST", "/api/auth/forgot", {
+          body: { email: "forgetful-{{run}}@example.com" },
+          tests: [status(202), `pm.test("uniform", () => pm.expect(pm.response.json()).to.eql({ status: "reset-sent" }));`],
+        }),
+        req("Read the reset email (test hook)", "GET", "/api/test/outbox?to=forgetful-{{run}}@example.com", {
+          tests: [
+            status(200),
+            `const l = pm.response.json().link; pm.test("reset link", () => pm.expect(l).to.match(/\\/reset\\/[\\w-]{43}$/));`,
+            `pm.collectionVariables.set("resetToken", l.split("/").pop());`,
+          ],
+        }),
+        req("A short new password is invalid", "POST", "/api/auth/reset/{{resetToken}}", {
+          body: { password: "short" },
+          tests: problem(422, "invalid-input"),
+        }),
+        req("Reset the password", "POST", "/api/auth/reset/{{resetToken}}", {
+          body: { password: "second long password" },
+          tests: [status(204)],
+        }),
+        req("A reset link works once", "POST", "/api/auth/reset/{{resetToken}}", {
+          body: { password: "third long password" },
+          tests: problem(410, "reset-link-invalid"),
+        }),
+        req("The old password no longer works", "POST", "/api/auth/login", {
+          body: { email: "forgetful-{{run}}@example.com", password: "first long password" },
+          tests: problem(401, "bad-credentials"),
+        }),
+        req("The new password works", "POST", "/api/auth/login", {
+          body: { email: "forgetful-{{run}}@example.com", password: "second long password" },
+          tests: [status(200), `pm.test("reset verified the email", () => pm.expect(pm.response.json().emailVerified).to.eql(true));`],
+        }),
+        req("Resend verification for a verified account is a no-op", "POST", "/api/auth/resend-verification", {
+          tests: [status(200), `pm.test("already verified", () => pm.expect(pm.response.json().alreadyVerified).to.eql(true));`],
+        }),
       ],
     },
   ],

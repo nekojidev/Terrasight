@@ -1,4 +1,5 @@
 import { Injectable } from "@nestjs/common";
+import { ProblemException } from "../http/problem.js";
 import { RedisService } from "../redis/redis.service.js";
 
 export interface BucketSpec {
@@ -50,6 +51,12 @@ export class RateLimitService {
   private readonly memory = new MemoryBuckets();
   constructor(private readonly redis: RedisService) {}
 
+  /** Takes a token or answers 429 (per-user cost limits on expensive endpoints). */
+  async enforce(key: string, spec: BucketSpec): Promise<void> {
+    if (!(await this.take(key, spec)))
+      throw new ProblemException(429, "rate-limited", "Too many requests; try again in a moment");
+  }
+
   async take(key: string, spec: BucketSpec): Promise<boolean> {
     if (this.redis.available && this.redis.client) {
       try {
@@ -78,3 +85,19 @@ export const AUTH_BUCKET: BucketSpec = {
   capacity: Math.max(1, Number(process.env.AUTH_RATE_BURST) || 10),
   refillPerSec: 1 / 6,
 };
+
+/** Emails sent to one address (sign-up, reset, resend): a burst of 6, then one per 5 minutes. Over it, emails are skipped silently. */
+export const MAIL_BUCKET: BucketSpec = { capacity: 6, refillPerSec: 1 / 300 };
+/** "Forgot password" per IP + email, and the resend endpoint per user. */
+export const FORGOT_BUCKET: BucketSpec = { capacity: 6, refillPerSec: 1 / 120 };
+export const RESEND_BUCKET: BucketSpec = { capacity: 6, refillPerSec: 1 / 60 };
+
+/** Per-user cost limits for expensive endpoints (burst, then steady rate). Capacities are halved without Redis. */
+export const COST_BUCKETS = {
+  workspaceCreate: { capacity: 6, refillPerSec: 1 / 600 },
+  fieldPreview: { capacity: 30, refillPerSec: 0.5 },
+  fieldCreate: { capacity: 20, refillPerSec: 1 / 6 },
+  analysisRun: { capacity: 10, refillPerSec: 1 / 30 },
+  scenarioRun: { capacity: 20, refillPerSec: 1 / 12 },
+  zonesBuild: { capacity: 10, refillPerSec: 1 / 30 },
+} satisfies Record<string, BucketSpec>;

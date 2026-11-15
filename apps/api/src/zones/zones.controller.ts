@@ -2,6 +2,7 @@ import { Body, Controller, Get, HttpCode, Param, Post, Req, Res, StreamableFile,
 import type { Response } from "express";
 import { z } from "zod";
 import { AuthGuard, Requires, UUID, WorkspaceGuard, type AuthedRequest } from "../auth/current-user.js";
+import { COST_BUCKETS, RateLimitService } from "../auth/rate-limit.js";
 import { ProblemException } from "../http/problem.js";
 import { ZodPipe } from "../http/zod.js";
 import { ZonesService } from "./zones.service.js";
@@ -24,12 +25,16 @@ function fieldId(id: string): string {
 @Controller("w/:ws/fields/:id")
 @UseGuards(AuthGuard, WorkspaceGuard)
 export class ZonesController {
-  constructor(private readonly zones: ZonesService) {}
+  constructor(
+    private readonly zones: ZonesService,
+    private readonly limits: RateLimitService,
+  ) {}
 
   @Post("zones/build")
   @HttpCode(202)
   @Requires("fields.write")
-  build(@Param("id") id: string, @Req() req: AuthedRequest) {
+  async build(@Param("id") id: string, @Req() req: AuthedRequest) {
+    await this.limits.enforce(`zones:${req.user!.id}`, COST_BUCKETS.zonesBuild);
     return this.zones.build(req.workspaceId!, fieldId(id));
   }
 
