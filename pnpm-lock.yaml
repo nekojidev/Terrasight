@@ -265,6 +265,9 @@ importers:
 
   packages/scenario-engine:
     dependencies:
+      '@terrasight/shared':
+        specifier: workspace:*
+        version: link:../shared
       '@terrasight/simulator':
         specifier: workspace:*
         version: link:../simulator

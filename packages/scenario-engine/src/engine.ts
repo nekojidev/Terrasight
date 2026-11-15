@@ -13,6 +13,7 @@ import {
 import { priceScenarios } from "./prices.js";
 import { repeatPenaltyUnmodelled, rotationEffect } from "./rotation-effects.js";
 import { Pcg32, seedFrom } from "./random.js";
+import type { YearSetId } from "@terrasight/shared";
 import { bootstrapRuns, SEASONS, stressRuns, type WeatherRun } from "./weather-runs.js";
 
 /** A library rotation (data/rotations.json v2) as the engine needs it. */
@@ -80,6 +81,12 @@ export interface EngineInput {
   history?: string[];
   runs?: number;
   /**
+   * Weather years of the bootstrap (EP-10, S-10.05). Absent or "all" = every complete year, exactly as before.
+   * Calibration and the precipitation filter always use all years; only the bootstrap draws from the set.
+   * "trend-2030": the last-15 years with `shift` combined into deltaT / precipFactor (the API computes the shift).
+   */
+  yearSet?: { id: YearSetId; shift?: { deltaT: number; precipFactor: number } };
+  /**
    * Pumping cost, $ per ha per mm of irrigation. Pass it only when it is verified (prices.json irrigationCostPerMm);
    * without it the water cost is only inside the per-hectare budget and every irrigated result carries a caveat.
    */
@@ -126,6 +133,11 @@ export interface ScenarioResult {
    * (the base run), for the season where it hurts most. NaN when 2022 is not in the weather history.
    */
   if2022: { margin: number; typical: number; season: number };
+  /**
+   * "If 2022 repeats" per season: 2022 weather placed in season i (the hit season's margin) and the base run's margin
+   * of that season (the base is the first bootstrap run). null when 2022 is not in the history or in agronomy-only mode.
+   */
+  if2022BySeason: Array<{ margin: number; typical: number } | null>;
   /** In how many of the 10 price scenarios this option has the highest mean margin. */
   priceWins: number;
   capped: boolean;
@@ -155,6 +167,30 @@ export interface EngineResult {
   bestFit: string | null;
   /** "agronomy" = no margin, no price scenarios; ranked on water, soil, drought resilience only. */
   mode: "money" | "agronomy";
+  /** The weather years the bootstrap drew from (EP-10). */
+  weather: { yearSet: YearSetId; from: number; to: number; count: number };
+}
+
+export const MIN_SET_YEARS = 10;
+const LAST_YEARS = 15;
+
+/** A year set has fewer than 10 complete seasons (EP-10, S-10.05). */
+export class YearSetTooSmallError extends Error {
+  constructor(
+    readonly yearSet: YearSetId,
+    readonly count: number,
+  ) {
+    super(`year set "${yearSet}" has ${count} complete seasons; at least ${MIN_SET_YEARS} are needed`);
+    this.name = "YearSetTooSmallError";
+  }
+}
+
+/** Harvest years of a year set, ascending. `all` returns every year given. Pure. */
+export function yearsOfSet(allYears: number[], id: YearSetId = "all"): number[] {
+  const sorted = [...allYears].sort((a, b) => a - b);
+  if (id === "climate-1981-2000") return sorted.filter((y) => y <= 2000);
+  if (id === "last-15" || id === "trend-2030") return sorted.slice(-LAST_YEARS);
+  return sorted;
 }
 
 /** Most AI-proposed options in the result (on top of the 2 library picks). */
@@ -370,6 +406,7 @@ function evaluateRotation(
       drought: null,
       droughtYield,
       if2022: { margin: NaN, typical: NaN, season: plan[0]!.season },
+      if2022BySeason: plan.map(() => null),
       capped: outcomes.some((o) => o.capped),
       capLoss: 0,
       pestPressure: pestPressure(plan, history, input.pestModels),
@@ -382,6 +419,11 @@ function evaluateRotation(
   const drops = stress.map((r, i) => {
     const hit = simulateRun(input, plan, r, input.waterCapMm).marginBySeason[i]!;
     return { i, hit, typical: base[i]!, drop: base[i]! - hit };
+  });
+  // Per season (the base is the first bootstrap run): the hit season's margin and the base margin of that season.
+  const if2022BySeason: ScenarioResult["if2022BySeason"] = plan.map((_, k) => {
+    const d = drops[k];
+    return d ? { margin: d.hit, typical: d.typical } : null;
   });
   const worstStress = drops.length ? drops.reduce((w, d) => (d.drop > w.drop ? d : w)) : null;
   // Price step: re-price the same yields under each of the 10 scenarios.
@@ -419,6 +461,7 @@ function evaluateRotation(
     if2022: worstStress
       ? { margin: worstStress.hit, typical: worstStress.typical, season: plan[worstStress.i]!.season }
       : { margin: NaN, typical: NaN, season: plan[0]!.season },
+    if2022BySeason,
     capped,
     capLoss,
     pestPressure: pestPressure(plan, history, input.pestModels),
@@ -500,28 +543,28 @@ export function pickTwo(ranked: ScenarioResult[]): ScenarioResult[] {
   return second ? [first, second] : [first];
 }
 
+/** One crop alone in one real weather year, start depletion 0 (the calibration season). */
+function calibrationRatio(input: EngineInput, crop: string, year: number, capMm?: number): number {
+  return (
+    simulateSeason(
+      {
+        site: input.site,
+        crops: [{ crop, sowing: sowingDate(input, crop, year) }],
+        irrigated: input.irrigated,
+        ...(capMm !== undefined ? { waterCapMm: capMm } : {}),
+        startDepletionMm: 0,
+      },
+      input.weatherByYear.get(year) ?? [],
+    ).crops[0]?.yieldRatio ?? 1
+  );
+}
+
 /** Quick FAO-56 pass (RFC §8.1): each crop alone in every weather year → median yield ratio for the calibration. */
 function calibrate(input: EngineInput, years: number[], crops: string[]): Record<string, number> {
   const calibration: Record<string, number> = {};
   for (const crop of crops) {
     if (!CROPS[crop]) continue;
-    const ratios = years
-      .map((y) => {
-        const days = input.weatherByYear.get(y) ?? [];
-        const sow = sowingDate(input, crop, y);
-        return (
-          simulateSeason(
-            {
-              site: input.site,
-              crops: [{ crop, sowing: sow }],
-              irrigated: input.irrigated,
-              startDepletionMm: 0,
-            },
-            days,
-          ).crops[0]?.yieldRatio ?? 1
-        );
-      })
-      .sort((a, b) => a - b);
+    const ratios = years.map((y) => calibrationRatio(input, crop, y)).sort((a, b) => a - b);
     calibration[crop] = ratios[Math.floor(ratios.length / 2)] ?? 1;
   }
   return calibration;
@@ -530,12 +573,36 @@ function calibrate(input: EngineInput, years: number[], crops: string[]): Record
 const completeYears = (input: EngineInput) =>
   [...input.weatherByYear.keys()].filter((y) => (input.weatherByYear.get(y)?.length ?? 0) >= 360);
 
+/** Seed text: unchanged for "all" (same numbers as before year sets); the set id is appended otherwise. */
+function seedText(input: EngineInput): string {
+  const base = `${input.fieldKey}|${input.firstSeason}|${input.irrigated}|${input.waterCapMm ?? ""}|${input.deltaT ?? 0}|${input.precipFactor ?? 1}`;
+  const id = input.yearSet?.id;
+  return id && id !== "all" ? `${base}|${id}` : base;
+}
+
+/** The years the bootstrap draws from; a set under 10 seasons is refused (not for "all"). */
+function bootstrapYears(input: EngineInput): number[] {
+  const id = input.yearSet?.id ?? "all";
+  const set = yearsOfSet(completeYears(input), id);
+  if (id !== "all" && set.length < MIN_SET_YEARS) throw new YearSetTooSmallError(id, set.length);
+  return set;
+}
+
+/** Input with the year set's weather shift combined into the global sliders (trend-2030). */
+function withSetShift(input: EngineInput): EngineInput {
+  const shift = input.yearSet?.id === "trend-2030" ? input.yearSet.shift : undefined;
+  if (!shift) return input;
+  return {
+    ...input,
+    deltaT: (input.deltaT ?? 0) + shift.deltaT,
+    precipFactor: (input.precipFactor ?? 1) * shift.precipFactor,
+  };
+}
+
 /** The block-bootstrap weather runs of the D5 pipeline (same seed as runScenarios, so the same 150 runs). */
 export function weatherRuns(input: EngineInput): WeatherRun[] {
-  const seed = seedFrom(
-    `${input.fieldKey}|${input.firstSeason}|${input.irrigated}|${input.waterCapMm ?? ""}|${input.deltaT ?? 0}|${input.precipFactor ?? 1}`,
-  );
-  return bootstrapRuns(completeYears(input), new Pcg32(seed), input.runs);
+  const seed = seedFrom(seedText(input));
+  return bootstrapRuns(bootstrapYears(input), new Pcg32(seed), input.runs);
 }
 
 export interface YieldRange {
@@ -639,14 +706,13 @@ export function unevaluableCrops(sequence: Rotation["sequence"], prices: EngineI
 /** The D5 pipeline (RFC §8): filters (with relaxation) → Monte Carlo → price step → score → 2 different alternatives. */
 export function runScenarios(engineInput: EngineInput, weights: Weights = EQUAL_WEIGHTS): EngineResult {
   let input = engineInput;
-  const seed = seedFrom(
-    `${input.fieldKey}|${input.firstSeason}|${input.irrigated}|${input.waterCapMm ?? ""}|${input.deltaT ?? 0}|${input.precipFactor ?? 1}`,
-  );
+  const seed = seedFrom(seedText(input));
   const rng = new Pcg32(seed);
   const years = [...input.weatherByYear.keys()].filter(
     (y) => (input.weatherByYear.get(y)?.length ?? 0) >= 360,
   );
-  const runs = bootstrapRuns(years, rng, input.runs);
+  const setYears = bootstrapYears(input);
+  const runs = bootstrapRuns(setYears, rng, input.runs);
   const stress = years.includes(2022) && !input.agronomyOnly ? stressRuns(runs[0]!.years) : [];
   const allCrops = [
     ...new Set(
@@ -680,7 +746,7 @@ export function runScenarios(engineInput: EngineInput, weights: Weights = EQUAL_
   }
 
   // Quick FAO-56 pass (RFC §8.1): each crop alone in every weather year → median yield ratio for the calibration.
-  input = { ...input, calibration: calibrate(input, years, allCrops) };
+  input = { ...withSetShift(input), calibration: calibrate(input, years, allCrops) };
 
   const currentPlan = planSeasons(input.current.sequence, input.current.position, input.firstSeason);
   const cur = evaluateRotation(
@@ -756,10 +822,122 @@ export function runScenarios(engineInput: EngineInput, weights: Weights = EQUAL_
     noLibrary: input.rotations.length === 0,
     bestFit: best.id,
     mode: input.agronomyOnly ? "agronomy" : "money",
+    weather: {
+      yearSet: input.yearSet?.id ?? "all",
+      from: setYears[0]!,
+      to: setYears[setYears.length - 1]!,
+      count: setYears.length,
+    },
   };
+}
+
+/** Plan of `count` consecutive seasons from `first` (retrospective: the plan's seasons are the real years). */
+function plannedFrom(seq: Rotation["sequence"], position: number, first: number, count: number): SeasonPlan[] {
+  return Array.from({ length: count }, (_, k) => ({
+    season: first + k,
+    crops: labelOf(seq[(position + k) % seq.length]!),
+  }));
+}
+
+export interface HindcastSeason {
+  year: number;
+  crop: string;
+  /** Raw FAO-33 yield ratio of the crop alone in that year's real weather (no rotation effect, no calibration). */
+  yieldRatio: number | null;
+  /** yieldRatio / the crop's calibration median on this field (1 = a typical year). */
+  relative: number | null;
+  caveats: string[];
+}
+
+/** Calibration median per crop on ALL complete years (or the one already on the input). */
+function medians(input: EngineInput, crops: string[]): Record<string, number> {
+  const missing = crops.filter((c) => input.calibration?.[c] == null);
+  return missing.length
+    ? { ...calibrate(input, completeYears(input), missing), ...input.calibration }
+    : (input.calibration ?? {});
+}
+
+/**
+ * Hindcast (S-10.08, T11): each given harvest year simulated alone with that year's real weather, for the crop grown
+ * that year. Start depletion 0 as in calibration; the water cap applies as in the engine; the global deltaT /
+ * precipFactor sliders and year sets do not (real weather). No tuning, no smoothing.
+ */
+export function hindcastSeasons(
+  input: EngineInput,
+  plan: Array<{ year: number; crop: string }>,
+): HindcastSeason[] {
+  const cal = medians(
+    input,
+    plan.map((p) => p.crop).filter((c) => CROPS[c]),
+  );
+  return plan.map(({ year, crop }) => {
+    const params = CROPS[crop];
+    if (!params)
+      return { year, crop, yieldRatio: null, relative: null, caveats: [`no-simulator-parameters:${crop}`] };
+    const caveats: string[] = [];
+    if (params.adapted) caveats.push(`unverified-crop-parameters:${crop}`);
+    if ((input.weatherByYear.get(year)?.length ?? 0) < 360) {
+      return { year, crop, yieldRatio: null, relative: null, caveats: [...caveats, `no-weather:${year}`] };
+    }
+    const yieldRatio = calibrationRatio(input, crop, year, input.waterCapMm);
+    return { year, crop, yieldRatio, relative: yieldRatio / (cal[crop] ?? 1), caveats };
+  });
+}
+
+export interface RetrospectiveScenario {
+  id: string;
+  sequence: Rotation["sequence"];
+  /** 0-based index in the sequence of the first simulated season. */
+  position: number;
+}
+
+export interface RetrospectiveResult {
+  id: string;
+  plan: SeasonPlan[];
+  /** Margin per hectare per season (today's prices and costs), or the mean relative yield in agronomy-only mode. */
+  bySeason: number[];
+  /** Sum of bySeason. */
+  total: number;
+  unit: "margin" | "relative-yield";
+  caveats: string[];
+}
+
+/**
+ * Retrospective (S-10.10): each rotation over the REAL weather of the given consecutive harvest years: one
+ * deterministic run, base prices, soil water carried from season to season. Uses the engine's season code (simulateRun).
+ * Throws when a year has no complete weather.
+ */
+export function retrospective(
+  engineInput: EngineInput,
+  options: { seasons: number[]; scenarios: RetrospectiveScenario[] },
+): RetrospectiveResult[] {
+  const { seasons, scenarios } = options;
+  if (!seasons.length) return [];
+  seasons.forEach((y, k) => {
+    if (k > 0 && y !== seasons[k - 1]! + 1) throw new Error("retrospective seasons must be consecutive years");
+    if ((engineInput.weatherByYear.get(y)?.length ?? 0) < 360) throw new Error(`no complete weather for ${y}`);
+  });
+  const { deltaT: _d, precipFactor: _p, ...rest } = engineInput;
+  const crops = [...new Set(scenarios.flatMap((s) => s.sequence.flatMap(cropsOf)))];
+  const input: EngineInput = { ...rest, calibration: medians(engineInput, crops.filter((c) => CROPS[c])) };
+  const run: WeatherRun = { years: seasons, kind: "bootstrap" };
+  return scenarios.map((s) => {
+    const plan = plannedFrom(s.sequence, s.position, seasons[0]!, seasons.length);
+    const out = simulateRun(input, plan, run, input.waterCapMm);
+    const agronomy = !!input.agronomyOnly;
+    const bySeason = agronomy ? out.relYield : out.marginBySeason;
+    return {
+      id: s.id,
+      plan,
+      bySeason,
+      total: bySeason.reduce((a, b) => a + b, 0),
+      unit: agronomy ? "relative-yield" : "margin",
+      caveats: planCaveats(input, plan, input.history ?? []),
+    };
+  });
 }
 
 export { addDays };
 
 /** Bumped whenever the engine or simulator changes results; part of the scenario cache key. */
-export const ENGINE_VERSION = "2026-11-17.1";
+export const ENGINE_VERSION = "2026-11-18.1";
