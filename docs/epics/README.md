@@ -16,10 +16,11 @@ Backlog for the build described in [`../03-tech-design.md`](../03-tech-design.md
 | EP-07 | [Scouting](EP-07-scouting.md) | W-route task on a phone, photos, Send, result as evidence | 5 | 18 |
 | EP-08 | [Owner report](EP-08-owner-report.md) | Report items, report link, one-tap answers, reply drafts | 6 | 20 |
 | EP-09 | [Demo readiness](EP-09-demo-readiness.md) *(enabler)* | Demo host, fixtures, seed, E2E, performance, demo script, laptop fallback | 6 | 18 |
-| | **Total** | | **68** | **282** |
+| EP-10 | [Field Shift: climate evidence](EP-10-field-shift.md) | Climate shift, ranking by weather year set, hindcast with real error, NASA basis, farm stress test, public page, 3-minute demo script (PD v2.13) | 17 | 80 |
+| | **Total** | | **85** | **362** |
 | — | [Later (P1 / P2)](later.md) | Zones & yield, offline scouting, notifications, dark theme, replay, work log, integrations; hackathon simplifications to undo (L-18–L-22) | — | — |
 
-EP-00 starts first and runs alongside EP-01. Two cross-order dependencies: the rotation item in the brief (S-03.08) and the field brief (S-04.07) need the scenario engine (S-06.03), so S-06.01–S-06.03 start in parallel with EP-03; the demo company copy (S-01.06) needs the seed (S-09.03). EP-09 runs in the last hours but its fixtures story (S-09.02) should start as soon as the source adapters exist.
+EP-00 starts first and runs alongside EP-01. Two cross-order dependencies: the rotation item in the brief (S-03.08) and the field brief (S-04.07) need the scenario engine (S-06.03), so S-06.01–S-06.03 start in parallel with EP-03; the demo company copy (S-01.06) needs the seed (S-09.03). *Superseded by PD v2.6: there is no demo company and no seed data; S-01.06 and S-09.03 are kept here as history only and are not built.* EP-10 builds on S-02.03, S-06.02, S-06.03 and S-06.04 and comes before the demo is rehearsed (its script story S-10.17 replaces the 8-step script of S-09.05). EP-09 runs in the last hours but its fixtures story (S-09.02) should start as soon as the source adapters exist.
 
 ## Conventions
 

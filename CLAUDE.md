@@ -7,10 +7,11 @@ Built for NASA Space Apps Challenge 2026, challenge _"Field Shift: Adapting Farm
 
 We build this project in three documented stages. Each one builds on the stage before it:
 
-1. **Product Definition** — `docs/01-product-definition.md` — what we build and why ✅ v2.12 (AI assistant for agronomists; two roles Owner / Agronomist, one user = one company, no invitations; no demo or example data in the product; AI-proposed rotations and AI-written recommendations; competitors in `docs/competitor-eos.md`), open questions resolved
+1. **Product Definition** — `docs/01-product-definition.md` — what we build and why ✅ v2.13 (AI assistant for agronomists; two roles Owner / Agronomist, one user = one company, no invitations; no demo or example data in the product; AI-proposed rotations and AI-written recommendations; competitors in `docs/competitor-eos.md`), open questions resolved
 2. **RFC** — `docs/02-rfc.md` — proposed solution, alternatives, trade-offs, decisions ⏳ v2.2 draft in review (open questions in §19)
    - **Design** — `design/` (v4 "Morning brief", 17 screens) ✅ handed off; **v5** (review `docs/design-review-v5.md`, implemented in code: 5-item navigation, field tabs, state and motion system, `useFormat`) ✅; see "Design" below
 3. **Tech Design** — `docs/03-tech-design.md` — architecture, data model, API, modules, testing, deploy ✅ v1.1 agreed (decision log kept current to 2026-11-15); backlog in `docs/epics/`
+   - **EP-10 Field Shift** — `docs/epics/EP-10-field-shift.md` ⏳ approved 2026-11-15, in progress
 
 Build: epic by epic in P0-path order (`docs/epics/README.md`). EP-00 … EP-08 ✅ (S-04.05/S-04.08 are P1), EP-09 ✅ except the public host (files in `infra/prod/`, runbook `docs/runbook-demo-host.md`; the team deploys). No demo company or example data in the product (v2.6). Built beyond the epics: stable zones with rate-map export (GeoJSON / Shapefile / ISOXML), work windows, work log, owner decisions with report links, Ukraine parity sources (SoilGrids, WaPOR, Esri land cover, Ukrstat yields), AI-proposed rotations, AI-written recommendations.
 Scripts that exist: `apps/api/scripts/record-fixtures.mjs <workspace-id>` (real recorded responses → `fixtures/`), `load-boundaries.mjs`, `check-region-points.mjs`; `tools/build_rotations_v2.py`, `tools/i18n-build.mjs`, `tools/golden/run.mjs`, `tools/postman/build-collection.mjs`, `tools/sources/smoke.mjs`. (`seed-demo.mjs` was removed with the demo company.) E2E: `apps/e2e` (Cypress; nightly + manual workflow `.github/workflows/e2e.yml`); demo script: `docs/demo-script.md`.
@@ -47,8 +48,8 @@ Design source: `design/README.md` (screens, components, behaviour), `design/toke
 ## Key domain facts
 
 - Data sources:
-  - NASA: POWER (weather, from 1981), MODIS NDVI (from 2000), SMAP, GPM
-  - USDA: CDL (crop per year, US, 2008+), SSURGO (soil), NASS / AMS (yields, prices)
+  - NASA: POWER (weather, from 1981), MODIS NDVI (from 2000); GPM IMERG planned in EP-10 as a rainfall check; SMAP is not used
+  - USDA: CDL (crop per year, US, 2008+), SSURGO (soil), NASS county yields planned in EP-10 (key required); prices are values typed in from NASS reports
   - Other: OpenET (water use), SoilGrids and Sentinel-2 (global)
 - Data tiers:
   - A "Full data" = US

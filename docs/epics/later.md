@@ -11,7 +11,7 @@ Not in the P0 path. Each item names what must already exist so it can be added w
 | L-05 | Scouting result changes the risk level (observed beats modelled) | P1 | No | PD FR-SC-3, RFC §10.7 | 09 Rec | Needs verified `scoutAction` thresholds per pest |
 | L-06 | Notifications bell (owner questions, new Urgent items, finished checks) | P2 | Design only | RFC §15.4 | top bar | In-app only; no email or push in v2 |
 | L-07 | Dark theme | P2 | Design only | PD decision 14 | 06 MainMobileDark | Tokens already in `design/tokens.css` |
-| L-08 | Replay "as of" a past date, archived forecasts, backtesting | P2 | No | RFC §10.6 | banner | Evaluators already take `asOf` |
+| L-08 | Replay "as of" a past date, archived forecasts, backtesting | P2 | No | RFC §10.6 | banner | Evaluators already take `asOf`. **Backtesting is promoted into EP-10** (S-10.08 hindcast, S-10.09 trust page; PD v2.13); the "as of" replay mode and archived forecasts stay P2 |
 | L-09 | Work log per field | P1 | Mock in design | PD FR-LOG-1 | 11 Zones | Merge assistant runs, owner replies, agronomist entries |
 | L-10 | Rate-map export (Shapefile, later ISOXML), rates entered by the agronomist | P2 | No | PD FR-ZN-3 | — | Never suggests rates |
 | L-11 | John Deere Operations Center import | P2 | "Coming soon" | PD FR-INT-1 | 11 Zones | Shown only as "Coming soon" |
