@@ -1,9 +1,10 @@
 "use client";
 
 import { useToast } from "@terrasight/ui";
-import { Clock, WifiOff } from "lucide-react";
+import { Clock } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
+import { NoticeStack } from "@/components/NoticeStack";
 import { useFormat } from "@/lib/useFormat";
 import { useOnline } from "@/lib/offline";
 
@@ -49,14 +50,17 @@ export function OfflineBanner() {
     }
   }, [online, toast, t]);
   if (online) return null;
+  // One-notice rule: the offline state is a single notice in the shared stack.
   return (
-    <div role="status" className="animate-fade flex items-start gap-3 border-b border-line bg-week-soft px-4 py-3 sm:px-8">
-      <WifiOff aria-hidden className="mt-0.5 size-5 shrink-0 text-week" strokeWidth={1.7} />
-      <p className="text-caption text-ink sm:text-body">
-        {savedAt
-          ? t("offlineStatus", { time: fmt.date(savedAt, "time") })
-          : t("offlineStatusNoTime")}
-      </p>
-    </div>
+    <NoticeStack
+      className="px-4 py-2 sm:px-8"
+      notices={[
+        {
+          id: "offline",
+          tone: "week",
+          title: savedAt ? t("offlineStatus", { time: fmt.date(savedAt, "time") }) : t("offlineStatusNoTime"),
+        },
+      ]}
+    />
   );
 }

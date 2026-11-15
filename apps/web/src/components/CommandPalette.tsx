@@ -6,7 +6,7 @@ import { CornerDownLeft, FileText, Map, MapPin, MessageSquare, Play, RefreshCw, 
 import { usePathname, useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import { useAssistantBus } from "@/components/AssistantBus";
+import { useOpenAsk } from "@/lib/ask";
 import { api } from "@/lib/api";
 import {
   buildItems,
@@ -15,6 +15,7 @@ import {
   pushRecent,
   readRecent,
   type PaletteField,
+  type PaletteMode,
   type PaletteGroup,
   type PaletteItem,
   type PalettePage,
@@ -62,7 +63,8 @@ export function CommandPalette({
   const lang = locale === "uk" ? "uk" : "en";
   const router = useRouter();
   const path = usePathname();
-  const bus = useAssistantBus();
+  const openAsk = useOpenAsk();
+  const [mode, setMode] = useState<PaletteMode>("ask");
   const toast = useToast();
   const uid = useId();
   const listId = `${uid}-list`;
@@ -129,14 +131,16 @@ export function CommandPalette({
         pages,
         recent,
         suggestions: [t("aiSugg1"), t("paletteSugg2"), t("aiSugg3")],
+        mode,
       }),
-    [query, fields, pages, recent, t],
+    [query, fields, pages, recent, t, mode],
   );
 
   // Open: clean state, remember where focus was, lock page scroll; close: give focus back.
   useEffect(() => {
     if (!open) return;
     setQuery("");
+    setMode("ask");
     setActive(0);
     setRecentIds(readRecent(workspaceId));
     const previous = document.activeElement as HTMLElement | null;
@@ -148,7 +152,7 @@ export function CommandPalette({
       previous?.focus?.();
     };
   }, [open, workspaceId]);
-  useEffect(() => setActive(0), [query]);
+  useEffect(() => setActive(0), [query, mode]);
   useEffect(() => {
     if (open) document.getElementById(`${uid}-opt-${active}`)?.scrollIntoView?.({ block: "nearest" });
   }, [active, open, uid, items.length]);
@@ -157,12 +161,8 @@ export function CommandPalette({
 
   function ask(text: string) {
     onClose();
-    // On a field page the panel beside the field takes the question; elsewhere the assistant page does.
-    if (bus.ask(text)) return;
-    const params = new URLSearchParams({ q: text });
-    const fieldId = fieldIdFromPath(path);
-    if (fieldId) params.set("field", fieldId);
-    router.push(`/assistant?${params}`);
+    // The question goes to the composer of the assistant page, not sent; on a field page that field stays the context.
+    openAsk(text, { fieldId: fieldIdFromPath(path) });
   }
   async function analyze() {
     try {
@@ -210,10 +210,10 @@ export function CommandPalette({
   }
 
   const groupLabel: Record<PaletteGroup, string> = {
-    ask: "",
+    ask: t("paletteGroupAsk"),
     recent: t("paletteRecent"),
     suggest: t("paletteSuggested"),
-    fields: t("paletteFields"),
+    fields: t("paletteAllFields"),
     pages: t("palettePages"),
   };
   // Consecutive items of one group share a heading.
@@ -240,7 +240,11 @@ export function CommandPalette({
         className="absolute inset-0 flex flex-col bg-surface sm:inset-x-auto sm:top-[10vh] sm:left-1/2 sm:max-h-[min(640px,76vh)] sm:w-[640px] sm:max-w-[calc(100vw-32px)] sm:-translate-x-1/2 sm:rounded-card sm:shadow-sheet"
       >
         <div className="flex items-center gap-3 border-b border-line px-4">
-          <Search aria-hidden className="size-5 shrink-0 text-ink-3" strokeWidth={1.7} />
+          {mode === "ask" ? (
+            <Sparkles aria-hidden className="size-5 shrink-0 text-ink" strokeWidth={1.7} />
+          ) : (
+            <Search aria-hidden className="size-5 shrink-0 text-ink-3" strokeWidth={1.7} />
+          )}
           <input
             ref={input}
             type="text"
@@ -250,7 +254,7 @@ export function CommandPalette({
             aria-autocomplete="list"
             aria-activedescendant={items.length ? `${uid}-opt-${active}` : undefined}
             aria-label={t("paletteInput")}
-            placeholder={t("searchPh")}
+            placeholder={mode === "ask" ? t("searchPh") : t("paletteFindPh")}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             maxLength={2000}
@@ -266,6 +270,22 @@ export function CommandPalette({
           >
             <X aria-hidden className="size-5" strokeWidth={1.7} />
           </button>
+        </div>
+        <div role="group" aria-label={t("paletteModes")} className="flex gap-2 px-4 pt-2">
+          {(["ask", "go"] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              aria-pressed={mode === m}
+              onClick={() => {
+                setMode(m);
+                input.current?.focus();
+              }}
+              className={`focus-ring min-h-tap rounded-btn px-3 text-body font-semibold ${mode === m ? "bg-muted text-ink" : "text-ink-2"}`}
+            >
+              {m === "ask" ? t("paletteModeAsk") : t("paletteModeGo")}
+            </button>
+          ))}
         </div>
         <div id={listId} role="listbox" aria-label={t("paletteTitle")} className="min-h-0 flex-1 overflow-y-auto p-2">
           {rows.map(({ item, index, heading }) => {

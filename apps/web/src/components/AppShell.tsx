@@ -121,7 +121,7 @@ export function AppShell({
   ];
   const tabs: NavItem[] =
     user.role === "owner"
-      ? [nav.today, nav.fields, nav.assistant, nav.decisions]
+      ? [{ ...nav.decisions, label: a("navDecisions") }, nav.today, nav.fields, nav.assistant]
       : [nav.today, nav.fields, nav.plan, nav.assistant];
   const planInMore = user.role === "owner";
   const moreActive = settingsActive || (planInMore && nav.plan.active) || path.startsWith("/work-windows");
@@ -176,7 +176,9 @@ export function AppShell({
                 {initials(workspace.name)}
               </span>
               <span className="sb-label min-w-0">
-                <span className="block truncate text-body font-semibold text-ink">{workspace.name}</span>
+                <span className="block truncate text-body font-semibold text-ink" title={workspace.name}>
+                  {workspace.name}
+                </span>
                 <span className="block text-small text-ink-2">
                   {a("coFields", { n: workspace.fieldCount })}
                 </span>
@@ -191,8 +193,12 @@ export function AppShell({
                 {initials(user.name)}
               </span>
               <span className="sb-label min-w-0 flex-1">
-                <span className="block truncate text-body font-semibold text-ink">{user.name}</span>
-                <span className="block text-small text-ink-2">{a(`role_${user.role}`)}</span>
+                <span className="block truncate text-body font-semibold text-ink" title={user.name}>
+                  {user.name}
+                </span>
+                <span className="block truncate text-small text-ink-2" title={a(`role_${user.role}`)}>
+                  {a(`role_${user.role}`)}
+                </span>
               </span>
               <ThemeToggle />
               <Button variant="icon" label={a("signOut")} icon={<LogOut />} onClick={() => void signOut()} />
@@ -205,6 +211,7 @@ export function AppShell({
           crumb={crumb}
           searchLabel={a("searchPh")}
           searchHint={searchHint}
+          askShort={a("askShort")}
           onSearch={() => setPaletteOpen(true)}
           languageGroupLabel={t("lang_group")}
           languages={[
@@ -213,7 +220,6 @@ export function AppShell({
           ]}
           extra={
             <>
-              <ThemeToggle className="lg:hidden" />
               <NotificationsBell workspaceId={workspace.id} />
             </>
           }
@@ -231,7 +237,7 @@ export function AppShell({
         open={paletteOpen}
         onClose={() => setPaletteOpen(false)}
       />
-      {/* Phones and tablets: Today · Fields · Assistant · Decisions · More. */}
+      {/* Phones and tablets: (Decisions for the Owner) · Today · Fields · Assistant · More. */}
       <div className="lg:hidden">
         <BottomTabs
           label={t("nav_label")}
