@@ -1,11 +1,13 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, Chip, SeasonLabel, SelectField, TextField } from "@terrasight/ui";
+import { Button, Chip, SeasonLabel, SelectField, Skeleton, Surface, TextField } from "@terrasight/ui";
 import { useLocale, useTranslations } from "next-intl";
 import { useState, type ReactNode } from "react";
 import { api } from "@/lib/api";
-import { useReportError } from "@/components/useReportError";
+import { useActionToast } from "@/lib/useActionToast";
+import { useFormat } from "@/lib/useFormat";
+import { fieldFormatOptions } from "./fieldFormat";
 import { LandBanner, LandBlocked, type LandView } from "@/components/LandSuitability";
 import {
   deriveStage,
@@ -86,15 +88,6 @@ export interface PlannerHistory {
 
 const TILLAGE: Tillage[] = ["conventional", "reduced", "no_till"];
 
-/** "10 Oct" / "10 жовт." for an ISO date, in the viewer's language. */
-export function shortDate(iso: string, locale: string): string {
-  return new Date(`${iso}T00:00:00Z`).toLocaleDateString(locale, {
-    day: "numeric",
-    month: "short",
-    timeZone: "UTC",
-  });
-}
-
 /**
  * This season, by stage (design 08): Planned (pick the crop, plan the sowing), Sown (sowing confirmed, emergence
  * expected), Emerged. One next step at a time. Untouched recommendations are saved with their origin (regional /
@@ -106,12 +99,16 @@ export function SeasonPlanner({
   history,
   workspaceId,
   fieldId,
+  country,
+  units = "metric",
 }: {
   base: string;
   canEdit: boolean;
   history: PlannerHistory;
   workspaceId: string;
   fieldId: string;
+  country?: string | null;
+  units?: "metric" | "imperial";
 }) {
   const record = useQuery({
     queryKey: ["field", workspaceId, fieldId, "season"],
@@ -127,6 +124,8 @@ export function SeasonPlanner({
       record={record.data}
       workspaceId={workspaceId}
       fieldId={fieldId}
+      country={country}
+      units={units}
     />
   );
 }
@@ -163,6 +162,8 @@ function PlannerForm({
   record,
   workspaceId,
   fieldId,
+  country,
+  units,
 }: {
   base: string;
   canEdit: boolean;
@@ -170,11 +171,15 @@ function PlannerForm({
   record: SeasonRecord;
   workspaceId: string;
   fieldId: string;
+  country: string | null | undefined;
+  units: "metric" | "imperial";
 }) {
   const t = useTranslations("App");
+  const f = useTranslations("Field");
   const locale = useLocale();
+  const fmt = useFormat(fieldFormatOptions(country, units));
   const client = useQueryClient();
-  const report = useReportError();
+  const { fail } = useActionToast();
   const [today] = useState(() => todayIso());
   const [saved, setSaved] = useState(false);
   const [editing, setEditing] = useState<Editing>(null);
@@ -190,7 +195,7 @@ function PlannerForm({
     const n = history.cropNames[id];
     return n ? (locale === "uk" ? n.uk : n.en) : id;
   };
-  const d = (iso: string) => shortDate(iso, locale);
+  const d = (iso: string) => fmt.date(`${iso}T00:00:00Z`, "dayMonth", { timeZone: "UTC" });
 
   const stage = deriveStage(record);
   const planning = stage === "planned";
@@ -256,7 +261,7 @@ function PlannerForm({
   const expected = sug?.emergence?.date ?? null;
 
   const save = useMutation({
-    onError: report,
+    onError: (e, body) => fail(e, f("spSaveWhat"), () => save.mutate(body)),
     mutationFn: (body: Body) =>
       api<SeasonRecord>(`${base}/season-records/${record.season}`, { method: "PUT", body }),
     onSuccess: (r) => {
@@ -376,14 +381,14 @@ function PlannerForm({
   // Unsuitable land (not overridden): the crop choice is off and the reasons take its place, with the override.
   if (land?.blocked && planning)
     return (
-      <section className="flex flex-col gap-3 rounded-card border border-line bg-surface p-5">
+      <Surface as="section" className="flex flex-col gap-3">
         <h2 className="text-h2 text-ink">{title}</h2>
         <LandBlocked workspaceId={workspaceId} fieldId={fieldId} suitability={land} canEdit={canEdit} compact />
-      </section>
+      </Surface>
     );
 
   return (
-    <section className="rounded-card border border-line bg-surface p-5">
+    <Surface as="section">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-h2 text-ink">{title}</h2>
         {stageChip}
@@ -428,7 +433,7 @@ function PlannerForm({
               <Why>{t("spCropWhy")}</Why>
             </div>
 
-            {crop && suggest.isPending && <p className="text-small text-ink-2">{t("spLoading")}</p>}
+            {crop && suggest.isPending && <Skeleton variant="text" rows={2} label={t("spLoading")} className="max-w-md" />}
             {crop && suggest.isError && !sug && <p className="text-small text-week">{t("spSuggestFailed")}</p>}
 
             {sw && (
@@ -522,9 +527,10 @@ function PlannerForm({
             )}
 
             {canEdit && !markingSown && (
-              <div className="flex flex-wrap items-center gap-3">
+              <div className="flex flex-col-reverse gap-3 sm:flex-row sm:flex-wrap sm:items-center">
                 <Button
                   type="button"
+                  className="w-full justify-center sm:w-auto"
                   disabled={!crop}
                   onClick={() => {
                     setSownDraft(markSownDefault(sowing, today));
@@ -536,6 +542,7 @@ function PlannerForm({
                 <Button
                   type="button"
                   variant="outline"
+                  className="w-full justify-center sm:w-auto"
                   onClick={() => run(planBody())}
                   disabled={save.isPending || !crop}
                   aria-busy={save.isPending}
@@ -663,9 +670,14 @@ function PlannerForm({
                       <span className="text-h3 text-ink">{expected ? `≈ ${d(expected)}` : "—"}</span>
                       {expected && <Chip tone="week">{t("spEstimate")}</Chip>}
                     </span>
-                    <span className="text-small text-ink-2">
-                      {emergenceMethod ?? (suggest.isPending ? t("spLoading") : t("spNoEmergence"))}
-                    </span>
+                    <div className="text-small text-ink-2">
+                      {emergenceMethod ??
+                        (suggest.isPending ? (
+                          <Skeleton variant="text" rows={1} label={t("spLoading")} className="max-w-xs" />
+                        ) : (
+                          t("spNoEmergence")
+                        ))}
+                    </div>
                     {canEdit && !showPrompt && (
                       <Button
                         type="button"
@@ -710,7 +722,7 @@ function PlannerForm({
           </>
         )}
       </div>
-    </section>
+    </Surface>
   );
 }
 
@@ -823,21 +835,11 @@ function Banner({
                 : t("spAltSoon", { crop: name(a.crop), from: d(a.window.from) })) +
               (a.season !== season ? t("spAltForSeason", { season: a.season }) : "");
             return onPick && a.season === season ? (
-              <button
-                key={`${a.crop}-${a.season}`}
-                type="button"
-                onClick={() => onPick(a.crop)}
-                className="focus-ring rounded-chip bg-surface px-3 py-1 text-small font-semibold text-ink hover:bg-surface-2"
-              >
+              <Chip key={`${a.crop}-${a.season}`} onClick={() => onPick(a.crop)}>
                 {label}
-              </button>
+              </Chip>
             ) : (
-              <span
-                key={`${a.crop}-${a.season}`}
-                className="rounded-chip bg-surface px-3 py-1 font-semibold text-ink"
-              >
-                {label}
-              </span>
+              <Chip key={`${a.crop}-${a.season}`}>{label}</Chip>
             );
           })}
         </div>

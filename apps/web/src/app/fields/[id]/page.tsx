@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import { Suspense } from "react";
 import { AppShell } from "@/components/AppShell";
 import { SessionRefresher } from "@/components/SessionRefresher";
 import { activeWorkspace, serverGet, type Me } from "@/lib/server-api";
@@ -12,7 +13,7 @@ interface WorkspaceDetail {
   role: Me["workspaces"][number]["role"];
 }
 
-/** Design 08, EP-02 part: header, data gathering, 18-season history, irrigation, this season's record. */
+/** Design 08 (v5): header and tabs Overview · Season · Plan · Data & history; the tab lives in `?tab=`. */
 export default async function FieldPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const me = await serverGet<Me>("/api/me");
@@ -35,7 +36,9 @@ export default async function FieldPage({ params }: { params: Promise<{ id: stri
       user={{ name: me.data.name, role: ws.data.role }}
       crumb={field.data.name}
     >
-      <FieldClient workspaceId={ws.data.id} units={ws.data.units} canEdit initial={field.data} />
+      <Suspense>
+        <FieldClient workspaceId={ws.data.id} units={ws.data.units} canEdit initial={field.data} />
+      </Suspense>
     </AppShell>
   );
 }

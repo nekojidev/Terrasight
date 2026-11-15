@@ -1,12 +1,13 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Button, Chip } from "@terrasight/ui";
+import { Button, Chip, Surface } from "@terrasight/ui";
 import { CircleAlert, MapPinned, ShieldAlert, ShieldCheck, TriangleAlert, Undo2 } from "lucide-react";
 import Link from "next/link";
-import { useLocale, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import { api } from "@/lib/api";
-import { useReportError } from "@/components/useReportError";
+import { useActionToast } from "@/lib/useActionToast";
+import { useFormat } from "@/lib/useFormat";
 
 export type LandStatus = "suitable" | "limited" | "unsuitable" | "unknown";
 
@@ -71,7 +72,8 @@ export function LandChip({
 /** Sets or removes the agronomist's "still cropland" override and refreshes everything that depends on it. */
 export function useSuitabilityOverride(workspaceId: string, fieldId: string) {
   const qc = useQueryClient();
-  const report = useReportError();
+  const { fail } = useActionToast();
+  const t = useTranslations("App");
   const base = `/api/w/${workspaceId}/fields/${fieldId}/suitability-override`;
   const done = () => {
     void qc.invalidateQueries({ queryKey: ["field", workspaceId, fieldId] });
@@ -80,8 +82,16 @@ export function useSuitabilityOverride(workspaceId: string, fieldId: string) {
     void qc.invalidateQueries({ queryKey: ["fields", workspaceId] });
     void qc.invalidateQueries({ queryKey: ["brief", workspaceId] });
   };
-  const set = useMutation({ mutationFn: () => api(base, { method: "PUT" }), onSuccess: done, onError: report });
-  const clear = useMutation({ mutationFn: () => api(base, { method: "DELETE" }), onSuccess: done, onError: report });
+  const set = useMutation({
+    mutationFn: () => api(base, { method: "PUT" }),
+    onSuccess: done,
+    onError: (e) => fail(e, t("landTitle"), () => set.mutate()),
+  });
+  const clear = useMutation({
+    mutationFn: () => api(base, { method: "DELETE" }),
+    onSuccess: done,
+    onError: (e) => fail(e, t("landTitle"), () => clear.mutate()),
+  });
   return { set, clear, busy: set.isPending || clear.isPending };
 }
 
@@ -120,24 +130,24 @@ export function LandSuitabilityCard({
   fieldId,
   suitability,
   canEdit,
+  country,
 }: {
   workspaceId: string;
   fieldId: string;
   suitability: LandView | null | undefined;
   canEdit: boolean;
+  country?: string | null;
 }) {
   const a = useTranslations("App");
   const t = a as unknown as Translate;
-  const locale = useLocale();
+  const fmt = useFormat(country ? { country } : {});
   const ov = useSuitabilityOverride(workspaceId, fieldId);
   if (!suitability) return null;
   const { status, override } = suitability;
   const tone = override && status === "unsuitable" ? "week" : TONE[status];
-  const date = override
-    ? new Intl.DateTimeFormat(locale === "uk" ? "uk-UA" : "en-US", { dateStyle: "medium" }).format(new Date(override.at))
-    : "";
+  const date = override ? fmt.date(override.at, "full") : "";
   return (
-    <section aria-labelledby="land-title" className="flex flex-col gap-3 rounded-card border border-line bg-surface p-5">
+    <Surface as="section" aria-labelledby="land-title" className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 id="land-title" className="flex items-center gap-2 text-h2 text-ink">
           <MapPinned aria-hidden className="size-5 text-ink-2" strokeWidth={1.7} />
@@ -170,7 +180,7 @@ export function LandSuitabilityCard({
           {t("landOverrideClear")}
         </Button>
       )}
-    </section>
+    </Surface>
   );
 }
 
@@ -187,7 +197,7 @@ export function LandBanner({
   const t = a as unknown as Translate;
   if (suitability?.status !== "limited") return null;
   return (
-    <div role="status" className="flex flex-col gap-2 rounded-card border border-line bg-week-soft p-4">
+    <Surface role="status" pad="sm" className="flex flex-col gap-2 bg-week-soft!">
       <p className="flex items-start gap-2 text-body font-semibold text-week">
         <TriangleAlert aria-hidden className="mt-0.5 size-5 shrink-0" />
         {t("landBanner")}
@@ -198,7 +208,7 @@ export function LandBanner({
           {t("landBannerLink")}
         </Link>
       )}
-    </div>
+    </Surface>
   );
 }
 
@@ -220,7 +230,7 @@ export function LandBlocked({
   const t = a as unknown as Translate;
   const ov = useSuitabilityOverride(workspaceId, fieldId);
   return (
-    <section role="status" className="flex flex-col gap-3 rounded-card border border-line bg-surface-2 p-6">
+    <Surface as="section" tone="inset" pad="lg" role="status" className="flex flex-col gap-3">
       <h2 className="flex items-center gap-2 text-h2 text-ink">
         <ShieldAlert aria-hidden className="size-5 shrink-0 text-urgent" />
         {compact ? t("landBlockedShort") : t("landBlockedTitle")}
@@ -232,9 +242,9 @@ export function LandBlocked({
           {t("landOverrideBtn")}
         </Button>
       ) : (
-        <p className="text-small text-ink-2">{t("landBlockedReadOnly")}</p>
+        <p className="text-caption text-ink-2">{t("landBlockedReadOnly")}</p>
       )}
-    </section>
+    </Surface>
   );
 }
 

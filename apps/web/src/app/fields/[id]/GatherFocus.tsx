@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, FieldThumb } from "@terrasight/ui";
+import { Button, FieldThumb, Kicker, ProgressBar, Surface } from "@terrasight/ui";
 import { AlertTriangle, Check, Circle, Loader2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -66,7 +66,7 @@ function fmt(s: number): string {
   return `${Math.floor(n / 60)}:${String(n % 60).padStart(2, "0")}`;
 }
 
-const ICON: Record<GatherTaskStatus, ReactNode> = {
+export const ICON: Record<GatherTaskStatus, ReactNode> = {
   queued: <Circle aria-hidden className="size-4 text-ink-3" />,
   running: <Loader2 aria-hidden className="size-4 text-ink motion-safe:animate-spin" />,
   done: <Check aria-hidden className="size-4 text-ok" />,
@@ -76,9 +76,9 @@ const ICON: Record<GatherTaskStatus, ReactNode> = {
 };
 
 /**
- * Hero panel for the first history build ("Building this field's history"): overall progress, per-source steps,
- * elapsed time and an ETA. After the build it shows a short success state, then disappears.
- * `building` is true while the first build runs; the caller dims the rest of the page meanwhile.
+ * The v5 long-operation pattern for the first history build: steps per source (icon and word), elapsed time, the
+ * typical duration and "safe to leave". After the build it shows a short success state, then disappears.
+ * `building` is true while the first build runs; the caller shows layout-shaped skeletons meanwhile.
  */
 export function GatherFocus({
   status,
@@ -96,6 +96,7 @@ export function GatherFocus({
   onRetry: (source: string) => void;
 }) {
   const t = useTranslations("App");
+  const r = useTranslations("Field");
   const [elapsed, setElapsed] = useState(0);
   const [success, setSuccess] = useState(false);
   const was = useRef(false);
@@ -125,46 +126,40 @@ export function GatherFocus({
   const problems = status.sources.filter((s) => s.status === "failed" || s.status === "partial");
   if (!building) {
     return (
-      <section
+      <Surface
+        as="section"
         role="status"
         aria-live="polite"
-        className="flex items-center gap-3 rounded-card border border-line bg-ok-soft p-5 motion-safe:animate-rise"
+        className="animate-rise flex items-center gap-3 bg-ok-soft!"
       >
         <Check aria-hidden className="size-5 text-ok" />
         <p className="text-body text-ink">{problems.length ? t("gfDoneProblems") : t("gfDone")}</p>
-      </section>
+      </Surface>
     );
   }
 
-  const pct = Math.max(0.04, progressFraction(status));
   const finished = status.sources.filter((s) => !isOpen(s.status)).length;
   const eta = etaSeconds(status, elapsed);
   const etaText = eta === null ? t("gfFinishing") : eta > 5 ? t("gfEta", { time: fmt(eta) }) : t("gfLonger");
   const steps = t("gfStepsOf", { n: finished, total: status.sources.length });
   return (
-    <section aria-busy="true" className="rounded-card border border-line bg-surface p-5 shadow-hero">
+    <Surface as="section" tone="hero" aria-busy="true">
       <div className="flex items-center gap-4">
         <FieldThumb name={fieldName} outline={outline} crop={null} size={64} />
         <div className="min-w-0 flex-1">
+          <Kicker>{r("gf_stepsLabel")}</Kicker>
           <h2 className="text-h2 text-ink">{t("gfTitle")}</h2>
           <p className="text-body text-ink-2">{t("gfSub", { name: fieldName })}</p>
         </div>
       </div>
-      <div
-        role="progressbar"
-        aria-label={t("gfTitle")}
-        aria-valuemin={0}
-        aria-valuemax={status.sources.length}
-        aria-valuenow={finished}
-        aria-valuetext={steps}
-        className="mt-4 h-2 overflow-hidden rounded-chip bg-muted"
-      >
-        <span
-          className="block h-full origin-left bg-ink transition-transform duration-bar ease-ts"
-          style={{ transform: `scaleX(${pct})` }}
-        />
-      </div>
-      <p className="mt-2 flex flex-wrap justify-between gap-2 font-mono text-small text-ink-2">
+      <ProgressBar
+        className="mt-4 h-2"
+        label={t("gfTitle")}
+        value={Math.max(finished, 0.25)}
+        max={Math.max(1, status.sources.length)}
+        tone="ink"
+      />
+      <p className="mt-2 flex flex-wrap justify-between gap-2 font-mono text-caption text-ink-2">
         <span role="status" aria-live="polite">
           {steps}
         </span>
@@ -172,7 +167,7 @@ export function GatherFocus({
           {t("gfElapsed", { time: fmt(elapsed) })} · {etaText}
         </span>
       </p>
-      <ul className="mt-3 flex flex-col divide-y divide-line">
+      <ul aria-label={r("gf_stepsLabel")} className="mt-3 flex flex-col divide-y divide-line">
         {status.sources.map((s) => {
           const key = STEP_KEY[s.source];
           const bad = s.status === "failed" || s.status === "partial";
@@ -181,11 +176,11 @@ export function GatherFocus({
               {ICON[s.status]}
               <span className="flex-1">
                 <span className="block text-body text-ink">{key ? t(`gf_${key}`) : s.label}</span>
-                <span className="block text-small text-ink-2">
+                <span className="block text-caption text-ink-2">
                   {bad ? (s.reason ?? t(`st_${s.status}`)) : key ? t(`gf_${key}_d`) : ""}
                 </span>
               </span>
-              <span className="font-mono text-small text-ink-2">{t(`st_${s.status}`)}</span>
+              <span className="text-caption font-semibold text-ink-2">{t(`st_${s.status}`)}</span>
               {canEdit && bad && (
                 <Button size={44} variant="outline" onClick={() => onRetry(s.source)}>
                   {t("retry")}
@@ -195,7 +190,7 @@ export function GatherFocus({
           );
         })}
       </ul>
-      <p className="mt-3 text-small text-ink-3">{t("gfHint")}</p>
-    </section>
+      <p className="mt-3 text-caption text-ink-2">{r("gf_usual")}</p>
+    </Surface>
   );
 }
