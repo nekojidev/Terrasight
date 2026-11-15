@@ -70,7 +70,7 @@ Copy `.env.example` to `.env` for runs outside Docker. In production, secrets li
 | `GEMINI_API_KEY`, `GEMINI_MODEL` | unset, `gemini-3.5-flash-lite` | Assistant and AI-written texts; without a key the assistant says "unavailable" |
 | `AI_ROTATIONS`, `AI_RECOMMENDATIONS` | on when a key is set | `0` / `1` to switch AI-proposed rotations and AI-written recommendations |
 | `OPEN_METEO_API_KEY` | unset | Commercial Open-Meteo key (the free endpoint is non-commercial) |
-| `OPENET_API_KEY`, `EARTHDATA_TOKEN`, `CDSE_CLIENT_ID`, `CDSE_CLIENT_SECRET` | unset | Source credentials; sources report "not configured" without them |
+| `OPENET_API_KEY`, `NASS_API_KEY`, `EARTHDATA_TOKEN`, `CDSE_CLIENT_ID`, `CDSE_CLIENT_SECRET` | unset | Source credentials; sources report "not configured" without them |
 | `S3_BUCKET`, `AWS_REGION` | unset, `us-east-1` | Scouting photos (else `UPLOADS_DIR`) and backups |
 | `DATA_DIR`, `UPLOADS_DIR`, `FIXTURES_DIR` | `data/`, `uploads/`, `fixtures/` | Library data, local uploads, recorded fixtures |
 | `PLAN_FIRST_SEASON` | `2026` | First season of the 5-season horizon |
