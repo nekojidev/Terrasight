@@ -37,7 +37,7 @@ const H = 280;
 const TOP = 34;
 const BOTTOM = 40;
 const LEFT = 60;
-const RIGHT_PAD = 190;
+const RIGHT_PAD = 16;
 const STEP = 38;
 
 function MarkerShape({ kind, x, y, className }: { kind: Marker; x: number; y: number; className: string }) {
@@ -48,7 +48,7 @@ function MarkerShape({ kind, x, y, className }: { kind: Marker; x: number; y: nu
 }
 
 /**
- * Model against actual, year by year: up to three lines told apart by marker shape, dash pattern and an end label.
+ * Model against actual, year by year: up to three lines told apart by marker shape and dash pattern, named in a legend row under the chart (no labels on the plot, so nothing overlaps).
  * Nulls leave gaps. A zero line, labelled bands for named years, rings for missed years. At narrow widths the chart
  * keeps its size (text stays 12 px) and scrolls sideways; the Table view lists every number.
  */
@@ -92,22 +92,6 @@ export function ModelVsActualChart({
     });
     if (cur.length) out.push(cur);
     return out;
-  };
-
-  // End labels sit at the last value of each series and stay 16 px apart.
-  const endY = (() => {
-    const ys = shown
-      .map((s, k) => {
-        const last = [...s.values].reverse().find((v) => v !== null) ?? 0;
-        return { k, y: Y(last) + 4 };
-      })
-      .sort((p, q) => p.y - q.y);
-    for (let n = 1; n < ys.length; n++) ys[n]!.y = Math.max(ys[n]!.y, ys[n - 1]!.y + 16);
-    return Object.fromEntries(ys.map((e) => [e.k, e.y]));
-  })();
-  const lastIdx = (s: ModelVsActualSeries) => {
-    for (let i = s.values.length - 1; i >= 0; i--) if (s.values[i] !== null) return i;
-    return -1;
   };
 
   const missed = missYears.filter((y) => yearIdx(y) >= 0);
@@ -186,11 +170,6 @@ export function ModelVsActualChart({
                       <MarkerShape key={i} kind={MARKERS[k]!} x={X(i)} y={Y(v)} className={FILL[k]!} />
                     ),
                   )}
-                  {lastIdx(s) >= 0 && (
-                    <text x={X(lastIdx(s)) + 14} y={endY[k]} className="fill-ink text-[12px] font-semibold">
-                      {s.label} {num(s.values[lastIdx(s)]!)}
-                    </text>
-                  )}
                 </g>
               ))}
               {missed.map((y) => {
@@ -212,9 +191,9 @@ export function ModelVsActualChart({
               })}
             </svg>
           </div>
-          <p className="text-caption text-ink-2">{t("mc_scroll")}</p>
+          <p className="text-caption text-ink-2 sm:hidden">{t("mc_scroll")}</p>
           {missed.length > 0 && <p className="text-caption text-ink">{t("mc_miss_note", { years: missed.join(", ") })}</p>}
-          <ul aria-label={t("mc_legend")} className="flex flex-col gap-1 text-caption text-ink-2">
+          <ul aria-label={t("mc_legend")} className="flex flex-wrap gap-x-5 gap-y-1 text-caption text-ink-2">
             {shown.map((s, k) => (
               <li key={s.id} className="flex items-center gap-2">
                 <svg width="34" height="14" aria-hidden className="shrink-0">
