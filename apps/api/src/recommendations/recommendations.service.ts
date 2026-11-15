@@ -11,6 +11,7 @@ import { OutboxService } from "../messaging/outbox.service.js";
 import { QUEUES } from "../messaging/topology.js";
 import { NotificationsService } from "../notifications/notifications.service.js";
 import { planDecisionAsked } from "../notifications/plan.js";
+import { buildDataBasis, type BasisEvidence } from "./data-basis.js";
 import { recommendationText, type Localised, type RecText } from "./text.js";
 
 /** The Undo window for Accept and Snooze, enforced on the server (RFC §10.4). */
@@ -170,6 +171,7 @@ export class RecommendationsService {
     const pest = this.lib.pests.pests.find((p) => p.id === rec.subject);
     return {
       ...this.view(rec),
+      dataBasis: await this.dataBasis(rec),
       recentCrops: crops
         .reverse()
         .map((c) => ({ season: c.season, crop: c.mainCrop, name: name(c.mainCrop) })),
@@ -183,6 +185,47 @@ export class RecommendationsService {
           }
         : null,
     };
+  }
+
+  /** The datasets that really fed this item (S-10.12): its evidence, input snapshot and the field's gather tasks. */
+  private async dataBasis(rec: Rec) {
+    const snap = rec.inputSnapshotId
+      ? await this.prisma.system.inputSnapshot.findUnique({
+          where: { id: rec.inputSnapshotId },
+          select: { payload: true },
+        })
+      : null;
+    const payload = (snap?.payload ?? {}) as {
+      powerDataDate?: string | null;
+      inputs?: {
+        crops?: Array<{ season: number; source: string; isOverride: boolean }>;
+        weather?: Array<{ date: string; origin: "power" | "observed" | "forecast" }>;
+        ndvi?: Array<{ date: string }>;
+      };
+    };
+    let crops = payload.inputs?.crops;
+    if (!crops) {
+      const rows = await this.prisma.db.cropSeason.findMany({
+        where: { fieldId: rec.fieldId },
+        select: { season: true, source: true, isOverride: true },
+      });
+      crops = rows.map((c) => ({ season: c.season, source: String(c.source), isOverride: c.isOverride }));
+    }
+    const tasks = await this.prisma.system.gatherTask.findMany({
+      where: { job: { fieldId: rec.fieldId }, dataDate: { not: null }, source: { in: ["power", "modis", "cdl"] } },
+      orderBy: { dataDate: "desc" },
+      select: { source: true, dataDate: true },
+    });
+    const gathered: Record<string, string | null> = {};
+    for (const t of tasks) gathered[t.source] ??= t.dataDate ? t.dataDate.toISOString().slice(0, 10) : null;
+    return buildDataBasis({
+      evidence: (Array.isArray(rec.evidence) ? rec.evidence : []) as unknown as BasisEvidence[],
+      crops,
+      weather: payload.inputs?.weather ?? [],
+      ndviDates: (payload.inputs?.ndvi ?? []).map((o) => o.date),
+      powerDataDate: payload.powerDataDate ?? null,
+      gathered,
+    });
   }
 
   /** Accept: the item goes into the agronomist's own plan; it never reaches the owner (that is `askOwner`). */

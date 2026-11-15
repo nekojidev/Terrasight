@@ -259,7 +259,15 @@ export class ToolExecutor {
         const current = SeasonsService.currentSeason(new Date());
         return last ? Array.from({ length: Math.max(0, current - last - 1) }, (_, i) => last + 1 + i) : [];
       })(),
-      source: "USDA CDL / MODIS NDVI, NASA POWER",
+      // The sources that really fed this history (same rule as the field page).
+      source:
+        [
+          h.seasons.some((s) => s.source === "cdl" && !s.isOverride) ? "USDA CDL" : null,
+          h.seasons.some((s) => s.source === "ndvi" && !s.isOverride) ? "MODIS NDVI" : null,
+          stats.length > 0 ? "NASA POWER" : null,
+        ]
+          .filter(Boolean)
+          .join(", ") || "none",
     };
   }
 

@@ -718,6 +718,15 @@ const collection = {
           "/api/w/{{ws}}/recommendations/00000000-0000-4000-8000-000000000000/scouting-tasks",
           { body: {}, tests: problem(404) },
         ),
+        req("A recommendation view carries its data basis (S-10.12)", "GET", "/api/w/{{ws}}/recommendations/{{recId}}", {
+          prerequest: [
+            "if (!pm.collectionVariables.get('recId')) pm.collectionVariables.set('recId', '00000000-0000-4000-8000-000000000000');",
+          ],
+          tests: [
+            // A fresh workspace has no recommendation yet (404); once a check has run, the view must carry dataBasis.
+            `pm.test("dataBasis is an array when the item exists", () => { if (pm.response.code === 404) return; pm.response.to.have.status(200); pm.expect(pm.response.json().dataBasis).to.be.an("array"); });`,
+          ],
+        }),
         req(
           "Unknown scouting task is not found",
           "GET",

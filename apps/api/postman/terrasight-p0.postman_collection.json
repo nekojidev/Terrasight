@@ -2902,6 +2902,39 @@
           }
         },
         {
+          "name": "A recommendation view carries its data basis (S-10.12)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get('recId')) pm.collectionVariables.set('recId', '00000000-0000-4000-8000-000000000000');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"dataBasis is an array when the item exists\", () => { if (pm.response.code === 404) return; pm.response.to.have.status(200); pm.expect(pm.response.json().dataBasis).to.be.an(\"array\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/recommendations/{{recId}}"
+          }
+        },
+        {
           "name": "Unknown scouting task is not found",
           "event": [
             {

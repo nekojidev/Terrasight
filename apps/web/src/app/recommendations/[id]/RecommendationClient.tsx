@@ -36,8 +36,9 @@ import { useRouter } from "next/navigation";
 import { AiMark } from "@/components/AiMark";
 import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
-import type { AskOwnerBody } from "@terrasight/shared";
+import type { AskOwnerBody, DataBasisItem } from "@terrasight/shared";
 import { AskOwnerSheet } from "@/components/AskOwnerSheet";
+import { DataBasis } from "@/components/DataBasis";
 import { api } from "@/lib/api";
 import { useActionToast } from "@/lib/useActionToast";
 import { useFormat } from "@/lib/useFormat";
@@ -89,6 +90,8 @@ export interface RecView {
   decisionPending?: boolean;
   /** Detail only: the field's last crops before this season and the pest's library facts. */
   recentCrops?: Array<{ season: number; crop: string; name: Localised }>;
+  /** Datasets that really fed this item (S-10.12). */
+  dataBasis?: DataBasisItem[];
   pest?: {
     season: Localised;
     damage: Localised;
@@ -366,7 +369,12 @@ export function RecommendationClient({
     const s = e?.source;
     if (!s) return undefined;
     if (/POWER/.test(s)) return `NASA POWER${e.to ? ` · ${isoOrText(e.to)}` : ""}`;
-    if (/Crop history/i.test(s)) return `USDA CDL ${e.from?.slice(0, 4) ?? ""}–${e.to?.slice(0, 4) ?? ""}`;
+    if (/Crop history/i.test(s)) {
+      const names = (r.dataBasis ?? [])
+        .filter((i) => i.supports.some((x) => x === "crop-history" || x === "crop-estimate"))
+        .map((i) => i.dataset.replace("USDA Cropland Data Layer", "USDA CDL").replace(/ \(.*\)/, ""));
+      return `${names.join(" + ") || t("rcHistorySrc")} ${e.from?.slice(0, 4) ?? ""}–${e.to?.slice(0, 4) ?? ""}`;
+    }
     if (/Sentinel/i.test(s)) return `Sentinel-2${e.to ? ` · ${isoOrText(e.to)}` : ""}`;
     if (/Open-Meteo/i.test(s)) return "Open-Meteo";
     return short(s)?.slice(0, 28);
@@ -647,7 +655,14 @@ export function RecommendationClient({
                       </div>
                     )}
                   </div>
-                  <p className="mt-2 text-caption text-ink-3">USDA Cropland Data Layer · {t("rcHistorySrc")}</p>
+                  <p className="mt-2 text-caption text-ink-3">
+                    {[
+                      ...(r.dataBasis ?? [])
+                        .filter((i) => i.supports.some((s) => s === "crop-history" || s === "crop-estimate"))
+                        .map((i) => i.dataset),
+                      t("rcHistorySrc"),
+                    ].join(" · ")}
+                  </p>
                 </Step>
               )}
               {inputs.map((e, i) => (
@@ -820,6 +835,7 @@ export function RecommendationClient({
             </form>
           )}
         </section>
+        <DataBasis items={r.dataBasis ?? []} trustHref={`/fields/${r.fieldId}/trust`} />
         <Surface as="section">
           <Disclosure summary={r9("src_thr_t")}>
             <div className="flex flex-col gap-4 pt-3">
@@ -853,13 +869,7 @@ export function RecommendationClient({
                   ))}
                 </ul>
               )}
-              <ul className="list-disc pl-5 text-caption text-ink-2">
-                {[...new Set(inputs.map((e) => e.source).filter(Boolean))].map((s) => (
-                  <li key={s}>{s}</li>
-                ))}
-                {crops.length > 0 && <li>USDA Cropland Data Layer</li>}
-                {r.pest && <li>{r9("src_library")}</li>}
-              </ul>
+              {r.pest && <p className="text-caption text-ink-2">{r9("src_library")}</p>}
               <p className="flex items-center gap-1.5 text-caption text-ink-3">
                 <ShieldCheck aria-hidden className="size-3.5" strokeWidth={1.7} />
                 {m("neutral")}
