@@ -31,6 +31,7 @@ import { api } from "@/lib/api";
 import { useWorkspaceEvents } from "@/lib/events";
 import { FieldAssistant } from "@/components/FieldAssistant";
 import { YieldCard } from "./YieldCard";
+import { OutlookCard } from "./OutlookCard";
 import { GatherFocus, isFirstBuild } from "./GatherFocus";
 import { FieldBrief, FieldTabs, RisksCard, WeatherCard, type Risk } from "./Overview";
 
@@ -226,6 +227,7 @@ export function FieldClient({
         <YieldCard workspaceId={workspaceId} fieldId={id} units={units} />
         <RisksCard risks={risks.data ?? []} />
         <WeatherCard workspaceId={workspaceId} fieldId={id} units={units} />
+        <OutlookCard workspaceId={workspaceId} fieldId={id} units={units} />
         {history.data && <HistoryCard history={history.data} fieldId={id} />}
 
         {gather.data && !building && (

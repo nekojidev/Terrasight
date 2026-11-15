@@ -34,6 +34,7 @@ export {
   type Forecast,
   type ForecastDay,
 } from "./forecast.js";
+export { openMeteoSeasonal, parseSeasonal, type SeasonalEnsemble } from "./seasonal.js";
 
 import { cdl } from "./cdl.js";
 import { dem } from "./dem.js";
