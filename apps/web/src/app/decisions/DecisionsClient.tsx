@@ -147,7 +147,15 @@ export function DecisionsClient({
               <p className="text-small text-ink-2">{t("decNoRecipients")}</p>
             )}
             <p className="mt-3 text-small text-ink-2">{t("decWhoSub")}</p>
-            {manage && <Invite workspaceId={workspaceId} />}
+            {manage && (
+              <Link
+                href="/settings/team"
+                className="focus-ring mt-4 inline-flex min-h-tap items-center gap-2 text-body font-semibold text-ink underline"
+              >
+                <UserPlus aria-hidden className="size-4" />
+                {t("teamManage")}
+              </Link>
+            )}
           </section>
           {manage && <Links workspaceId={workspaceId} />}
         </aside>
@@ -190,59 +198,6 @@ function Dialog({
       </div>
       <div className="max-h-[75vh] overflow-y-auto p-5">{children}</div>
     </dialog>
-  );
-}
-
-function Invite({ workspaceId }: { workspaceId: string }) {
-  const t = useTranslations("App");
-  const [email, setEmail] = useState("");
-  const [url, setUrl] = useState<string | null>(null);
-  const [failed, setFailed] = useState(false);
-  if (url)
-    return (
-      <div className="mt-4 flex flex-col gap-2 rounded-input bg-surface-2 p-3">
-        <code className="text-micro break-all text-ink">{url}</code>
-        <Button variant="ghost" icon={<Copy />} onClick={() => void navigator.clipboard.writeText(url)}>
-          {t("rpCopy")}
-        </Button>
-      </div>
-    );
-  return (
-    <form
-      className="mt-4 flex flex-col gap-2"
-      onSubmit={async (e) => {
-        e.preventDefault();
-        setFailed(false);
-        try {
-          const inv = await api<{ token: string }>(`/api/w/${workspaceId}/invitations`, {
-            body: { email, role: "viewer" },
-          });
-          setUrl(`${window.location.origin}/invite/${inv.token}`);
-        } catch {
-          setFailed(true);
-        }
-      }}
-    >
-      <div className="flex gap-2">
-        <input
-          type="email"
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          aria-label={t("rqInvite")}
-          placeholder="owner@company.com"
-          className="focus-ring min-h-tap min-w-0 flex-1 rounded-input border border-line-strong bg-surface px-3 text-body"
-        />
-        <Button type="submit" variant="outline" icon={<UserPlus />}>
-          {t("rqInvite")}
-        </Button>
-      </div>
-      {failed && (
-        <p role="alert" className="text-small text-urgent">
-          {t("errGeneric")}
-        </p>
-      )}
-    </form>
   );
 }
 

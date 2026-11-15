@@ -5,7 +5,7 @@ import { PrismaService } from "../db/prisma.service.js";
 import type { Language } from "../generated/prisma/enums.js";
 import { ProblemException } from "../http/problem.js";
 import { RefreshTokens, type RefreshRow, type RefreshStore } from "./refresh.js";
-import { signAccess } from "./tokens.js";
+import { hashToken, signAccess } from "./tokens.js";
 
 export interface Session {
   userId: string;
@@ -89,9 +89,49 @@ export class AuthService {
       where: { email },
       select: { id: true, passwordHash: true },
     });
+    // A user who hasn't set a password yet fails like a wrong password (no hint that the account exists).
     const ok = await argon2.verify(user?.passwordHash ?? (await getDummyHash()), password).catch(() => false);
-    if (!user || !ok) throw new ProblemException(401, "bad-credentials", "Email or password is wrong");
+    if (!user?.passwordHash || !ok)
+      throw new ProblemException(401, "bad-credentials", "Email or password is wrong");
     return this.session(user.id);
+  }
+
+  /** The one-time "set your password" link (PD v2.9): sets the password, consumes the token, signs the user in. */
+  async completeSetup(token: string, password: string): Promise<Session> {
+    const tokenHash = hashToken(token);
+    const user = await this.prisma.system.user.findUnique({
+      where: { setupTokenHash: tokenHash },
+      select: { id: true, setupExpiresAt: true },
+    });
+    if (!user || !user.setupExpiresAt || user.setupExpiresAt <= new Date())
+      throw new ProblemException(410, "setup-link-invalid", "This link has expired or was already used");
+    const passwordHash = await argon2.hash(password, { type: argon2.argon2id });
+    // Claim atomically so two concurrent uses of one link can't both succeed.
+    const claimed = await this.prisma.system.user.updateMany({
+      where: { id: user.id, setupTokenHash: tokenHash, setupExpiresAt: { gt: new Date() } },
+      data: { passwordHash, setupTokenHash: null, setupExpiresAt: null },
+    });
+    if (claimed.count !== 1)
+      throw new ProblemException(410, "setup-link-invalid", "This link has expired or was already used");
+    const memberships = await this.prisma.system.membership.findMany({
+      where: { userId: user.id },
+      select: { workspaceId: true },
+    });
+    await this.prisma.system.auditLog.createMany({
+      data: memberships.map((m) => ({ workspaceId: m.workspaceId, userId: user.id, action: "user.setup" })),
+    });
+    return this.session(user.id);
+  }
+
+  /** What a setup link is for, shown on the page before the password is chosen (no account details leak beyond the name). */
+  async setupInfo(token: string) {
+    const user = await this.prisma.system.user.findUnique({
+      where: { setupTokenHash: hashToken(token) },
+      select: { name: true, email: true, setupExpiresAt: true },
+    });
+    if (!user || !user.setupExpiresAt || user.setupExpiresAt <= new Date())
+      throw new ProblemException(410, "setup-link-invalid", "This link has expired or was already used");
+    return { name: user.name, email: user.email };
   }
 
   async rotate(refreshToken: string | undefined): Promise<Session> {

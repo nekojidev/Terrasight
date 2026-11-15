@@ -116,7 +116,7 @@ describe("permission matrix (Tech Design §14.1)", () => {
     "fields.read": "OAG.",
     "scenarios.explore": "OAGV",
     "report.read": "OAGV",
-    "report.answer": "OAGV",
+    "report.answer": "O..V",
     "workspace.read": "OAGV",
   };
 

@@ -1,7 +1,9 @@
 "use client";
 
 import { BottomTabs, Sidebar, TopBar, type NavItem } from "@terrasight/ui";
-import { FileText, Home, LogOut, Map, RefreshCw, Sparkles } from "lucide-react";
+import { FileText, Home, LogOut, Map, RefreshCw, Sparkles, Users } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import type { DecisionList } from "@terrasight/shared";
 import { usePathname, useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
@@ -51,12 +53,37 @@ export function AppShell({
   const path = usePathname();
   const { collapsed, toggle } = useSidebarState();
 
+  // Owners (and Viewers) answer decisions: the nav shows how many need them (PD v2.9).
+  const answers = user.role === "owner" || user.role === "viewer";
+  const open = useQuery({
+    queryKey: ["decisions", workspace.id, "all"],
+    queryFn: () => api<DecisionList>(`/api/w/${workspace.id}/decisions?state=all`),
+    enabled: answers,
+  });
+  const needYou = answers ? (open.data?.counts.waiting ?? 0) : 0;
+
   const items: NavItem[] = [
     { href: "/", label: t("n_today"), icon: <Home />, active: path === "/" },
     { href: "/fields", label: t("n_fields"), icon: <Map />, active: path.startsWith("/fields") },
     { href: "/rotation", label: t("n_rot"), icon: <RefreshCw />, active: path.startsWith("/rotation") },
     { href: "/assistant", label: t("n_ai"), icon: <Sparkles />, active: path.startsWith("/assistant") },
-    { href: "/decisions", label: a("navDecisions"), icon: <FileText />, active: path.startsWith("/decisions") },
+    {
+      href: "/decisions",
+      label: needYou > 0 ? a("navDecisionsNeed") : a("navDecisions"),
+      icon: <FileText />,
+      active: path.startsWith("/decisions"),
+      ...(needYou > 0 ? { badge: needYou } : {}),
+    },
+    ...(user.role === "owner" || user.role === "admin"
+      ? [
+          {
+            href: "/settings/team",
+            label: a("navTeam"),
+            icon: <Users />,
+            active: path.startsWith("/settings/team"),
+          },
+        ]
+      : []),
   ];
 
   const setLocale = (l: "uk" | "en") => {

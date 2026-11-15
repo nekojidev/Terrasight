@@ -30,15 +30,13 @@ describe("notification producers (RFC §15.4)", () => {
     ).toHaveLength(3);
   });
 
-  it("an asked decision notifies the Viewers only", () => {
+  it("an asked decision notifies the Owners and Viewers only", () => {
     const d = planDecisionAsked(members, { decisionId: "d", recommendationId: "r", fieldName: "Pivot 12" });
-    expect(d).toEqual([
-      {
-        userId: "v",
-        kind: "decision_asked",
-        payload: { decisionId: "d", recommendationId: "r", fieldName: "Pivot 12" },
-      },
-    ]);
+    expect(d.map((x) => x.userId).sort()).toEqual(["o", "v"]);
+    expect(d[0]).toMatchObject({
+      kind: "decision_asked",
+      payload: { decisionId: "d", recommendationId: "r", fieldName: "Pivot 12" },
+    });
   });
 
   it("only Urgent new recommendations notify", () => {

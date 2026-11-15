@@ -86,11 +86,14 @@ export function Brief({
   firstName,
   units,
   canAct,
+  canAsk = true,
 }: {
   workspaceId: string;
   firstName: string;
   units: "metric" | "imperial";
   canAct: boolean;
+  /** False for Owners: they never see "Ask the owner" (PD v2.9). */
+  canAsk?: boolean;
 }) {
   const t = useTranslations("App");
   const m = useTranslations("Main");
@@ -289,10 +292,15 @@ export function Brief({
                 {t("hintConf")} {t(`hintTier_${hero.tier}` as "hintTier_A")} {t("hintKeyNumbers")}
               </InfoHint>
             }
-            labels={{ accept: t("acceptBtn"), snooze: m("snooze"), details: m("details"), ask: t("askBtn") }}
+            labels={{
+              accept: t("acceptBtn"),
+              snooze: m("snooze"),
+              details: m("details"),
+              ...(canAsk ? { ask: t("askBtn") } : {}),
+            }}
             detailsHref={`/recommendations/${hero.id}`}
             onAccept={() => canAct && void act(hero!, "accept")}
-            onAsk={() => canAct && setSheet(hero!)}
+            {...(canAsk ? { onAsk: () => canAct && setSheet(hero!) } : {})}
             onSnooze={() => canAct && void act(hero!, "snooze")}
             {...(doneRow(hero.id) ? { done: doneRow(hero.id)! } : {})}
           />
@@ -330,9 +338,14 @@ export function Brief({
                 dueTone={i.urgency === "urgent" ? "urgent" : "week"}
                 strip={strip(i.seasons)}
                 factors={factors(i)}
-                labels={{ why: m("why_k"), accept: t("acceptBtn"), snooze: m("snooze"), ask: t("askBtn") }}
+                labels={{
+                  why: m("why_k"),
+                  accept: t("acceptBtn"),
+                  snooze: m("snooze"),
+                  ...(canAsk ? { ask: t("askBtn") } : {}),
+                }}
                 onAccept={() => canAct && void act(i, "accept")}
-                onAsk={() => canAct && setSheet(i)}
+                {...(canAsk ? { onAsk: () => canAct && setSheet(i) } : {})}
                 onSnooze={() => canAct && void act(i, "snooze")}
                 {...(doneRow(i.id) ? { done: doneRow(i.id)! } : {})}
               />

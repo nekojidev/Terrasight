@@ -13,7 +13,7 @@ interface WorkspaceDetail {
   role: Me["workspaces"][number]["role"];
 }
 
-/** Owner decisions (PD v2.7): the owner / manager (Viewer) answers; staff ask and reply. `?field=` filters (staff). */
+/** Owner decisions (PD v2.7): the owner and the manager (Viewer) answer; staff ask and reply. `?field=` filters (staff). */
 export default async function DecisionsPage({ searchParams }: { searchParams: Promise<{ field?: string }> }) {
   const sp = await searchParams;
   const me = await serverGet<Me>("/api/me");
@@ -32,7 +32,7 @@ export default async function DecisionsPage({ searchParams }: { searchParams: Pr
       user={{ name: me.data.name, role: ws.data.role }}
       crumb={t("navDecisions")}
     >
-      {ws.data.role === "viewer" ? (
+      {ws.data.role === "viewer" || ws.data.role === "owner" ? (
         <OwnerDecisionsClient workspaceId={ws.data.id} />
       ) : (
         <DecisionsClient workspaceId={ws.data.id} role={ws.data.role} fieldId={sp.field ?? null} />
