@@ -7,12 +7,15 @@ import { useTranslations } from "next-intl";
 import { OwnerDecisions } from "@/components/OwnerDecisions";
 import { QueryState } from "@/components/QueryState";
 import { api } from "@/lib/api";
+import { useWorkspaceEvents } from "@/lib/events";
 
-/** The Owner's decisions: the answering view only (the link for the owner is the agronomist's to share). */
+/** The Owner's decisions: the answering view, then the no-account links (only the Owner manages them). */
 export function OwnerDecisionsClient({ workspaceId }: { workspaceId: string }) {
   const rp = useTranslations("Reports");
   const client = useQueryClient();
   const key = ["decisions", workspaceId, "all"];
+  // A question the agronomist has just asked appears without a reload (it is published after the 8 s Undo window).
+  useWorkspaceEvents(workspaceId, ["brief"], () => [["decisions", workspaceId]]);
   const list = useQuery({
     queryKey: key,
     queryFn: () => api<DecisionList>(`/api/w/${workspaceId}/decisions?state=all`),

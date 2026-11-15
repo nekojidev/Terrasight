@@ -262,7 +262,7 @@ export function Brief({
     <FieldThumb
       name={i.fieldName}
       outline={i.thumb ?? null}
-      crop={i.seasons.at(-1)?.crop ?? null}
+      crop={i.seasons?.at(-1)?.crop ?? null}
       size={40}
       className={size}
     />
@@ -573,7 +573,7 @@ export function Brief({
                   <FieldThumb
                     name={g.name}
                     outline={g.thumb ?? null}
-                    crop={g.seasons.at(-1)?.crop ?? null}
+                    crop={g.seasons?.at(-1)?.crop ?? null}
                     size={40}
                     className="size-6"
                   />
