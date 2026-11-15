@@ -115,3 +115,33 @@ questions:
     question: "What will the rotation look like over ten years?"
     expect:
       horizon: true
+  # EP-10 (S-10.16): the climate shift is the past, the year-set comparison a sensitivity analysis; never a forecast.
+  # expect.tools: at least one of these tools was called; expect.say: every pattern appears in the answer;
+  # expect.sayAny: at least one does; expect.never: forbidden wording, skipped in sentences that match `unless` (a denial).
+  - id: en-34
+    category: climate_shift
+    question: "Has the climate of Pivot 12 changed?"
+    expect:
+      tools: [get_climate_shift]
+      say: ["no clear trend"]
+      never: &en_forecast
+        - pattern: "\\bforecast"
+          unless: "\\b(not|isn'?t|no|never|cannot|can'?t)\\b[^.]*\\bforecast|\\bforecast[^.]*\\b(not|isn'?t)\\b"
+        - pattern: "\\bwill\\s+(be|get|become|rise|warm|turn|stay|keep)\\b"
+          unless: "\\b(cannot|can'?t|not|unable)\\b[^.]*\\b(predict|forecast|say|know|tell|promise)\\b|\\b(if|whether)\\b[^.]*\\bwill\\b"
+        - pattern: "\\bprojection"
+          unless: "\\b(not|isn'?t|no|never)\\b[^.]*\\bprojection"
+  - id: en-35
+    category: climate_shift
+    question: "Will it get hotter on Pivot 12 by 2030?"
+    expect:
+      sayAny: ["not a (climate )?forecast", "cannot (predict|forecast)", "can'?t (predict|forecast)", "no forecast", "past"]
+      never: *en_forecast
+  - id: en-36
+    category: climate_shift
+    question: "Is the recommended rotation on Pivot 12 still the best in the recent climate?"
+    expect:
+      horizon: true
+      tools: [get_year_set_ranking]
+      sayAny: ["sensitivity", "not available", "isn'?t available", "unavailable"]
+      never: *en_forecast

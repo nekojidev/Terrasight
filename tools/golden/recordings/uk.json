@@ -1,6 +1,6 @@
 {
   "lang": "uk",
-  "recordedAt": "2026-11-14T21:03:42.119Z",
+  "recordedAt": "2026-11-15T11:17:03.268Z",
   "answers": [
     {
       "id": "uk-01",
@@ -91,7 +91,10 @@
               }
             ],
             "planning": true,
-            "unknowns": ["crop for 2026 not known yet", "crop for 2027 not chosen yet"],
+            "unknowns": [
+              "crop for 2026 not known yet",
+              "crop for 2027 not chosen yet"
+            ],
             "confidence": "medium",
             "keyNumbers": [
               {
@@ -136,7 +139,11 @@
                 "source": "unknown"
               },
               "season": 2027,
-              "missing": ["crop", "sowing date", "emergence date"],
+              "missing": [
+                "crop",
+                "sowing date",
+                "emergence date"
+              ],
               "tillage": {
                 "value": null,
                 "source": "unknown"
@@ -292,7 +299,9 @@
               }
             ],
             "stressYears": [],
-            "notYetMapped": [2026],
+            "notYetMapped": [
+              2026
+            ],
             "stressYearCount": 0
           }
         }
@@ -436,7 +445,10 @@
               }
             ],
             "planning": true,
-            "unknowns": ["crop for 2026 not known yet", "crop for 2027 not chosen yet"],
+            "unknowns": [
+              "crop for 2026 not known yet",
+              "crop for 2027 not chosen yet"
+            ],
             "confidence": "medium",
             "keyNumbers": [
               {
@@ -547,7 +559,10 @@
               }
             ],
             "planning": true,
-            "unknowns": ["crop for 2026 not known yet", "crop for 2027 not chosen yet"],
+            "unknowns": [
+              "crop for 2026 not known yet",
+              "crop for 2027 not chosen yet"
+            ],
             "confidence": "medium",
             "keyNumbers": [
               {
@@ -656,7 +671,10 @@
               }
             ],
             "planning": true,
-            "unknowns": ["crop for 2026 not known yet", "crop for 2027 not chosen yet"],
+            "unknowns": [
+              "crop for 2026 not known yet",
+              "crop for 2027 not chosen yet"
+            ],
             "confidence": "medium",
             "keyNumbers": [
               {
@@ -715,7 +733,11 @@
                 "source": "unknown"
               },
               "season": 2027,
-              "missing": ["crop", "sowing date", "emergence date"],
+              "missing": [
+                "crop",
+                "sowing date",
+                "emergence date"
+              ],
               "tillage": {
                 "value": null,
                 "source": "unknown"
@@ -813,7 +835,10 @@
               }
             ],
             "planning": true,
-            "unknowns": ["crop for 2026 not known yet", "crop for 2027 not chosen yet"],
+            "unknowns": [
+              "crop for 2026 not known yet",
+              "crop for 2027 not chosen yet"
+            ],
             "confidence": "medium",
             "keyNumbers": [
               {
@@ -1034,10 +1059,14 @@
             "stressYears": [
               {
                 "season": 2022,
-                "reasons": ["dry"]
+                "reasons": [
+                  "dry"
+                ]
               }
             ],
-            "notYetMapped": [2026],
+            "notYetMapped": [
+              2026
+            ],
             "stressYearCount": 1
           }
         },
@@ -1067,7 +1096,11 @@
                 "source": "unknown"
               },
               "season": 2027,
-              "missing": ["crop", "sowing date", "emergence date"],
+              "missing": [
+                "crop",
+                "sowing date",
+                "emergence date"
+              ],
               "tillage": {
                 "value": null,
                 "source": "unknown"
@@ -1300,10 +1333,14 @@
             "stressYears": [
               {
                 "season": 2022,
-                "reasons": ["dry"]
+                "reasons": [
+                  "dry"
+                ]
               }
             ],
-            "notYetMapped": [2026],
+            "notYetMapped": [
+              2026
+            ],
             "stressYearCount": 1
           }
         },
@@ -1882,26 +1919,39 @@
             "stressYears": [
               {
                 "season": 2008,
-                "reasons": ["low_ndvi"]
+                "reasons": [
+                  "low_ndvi"
+                ]
               },
               {
                 "season": 2009,
-                "reasons": ["low_ndvi"]
+                "reasons": [
+                  "low_ndvi"
+                ]
               },
               {
                 "season": 2011,
-                "reasons": ["hot"]
+                "reasons": [
+                  "hot"
+                ]
               },
               {
                 "season": 2012,
-                "reasons": ["dry", "hot"]
+                "reasons": [
+                  "dry",
+                  "hot"
+                ]
               },
               {
                 "season": 2022,
-                "reasons": ["dry"]
+                "reasons": [
+                  "dry"
+                ]
               }
             ],
-            "notYetMapped": [2026],
+            "notYetMapped": [
+              2026
+            ],
             "stressYearCount": 5
           }
         }
@@ -1945,7 +1995,11 @@
                 "source": "unknown"
               },
               "season": 2027,
-              "missing": ["crop", "sowing date", "emergence date"],
+              "missing": [
+                "crop",
+                "sowing date",
+                "emergence date"
+              ],
               "tillage": {
                 "value": null,
                 "source": "unknown"
@@ -2092,10 +2146,14 @@
             "stressYears": [
               {
                 "season": 2022,
-                "reasons": ["dry"]
+                "reasons": [
+                  "dry"
+                ]
               }
             ],
-            "notYetMapped": [2026],
+            "notYetMapped": [
+              2026
+            ],
             "stressYearCount": 1
           }
         },
@@ -2312,10 +2370,14 @@
             "stressYears": [
               {
                 "season": 2022,
-                "reasons": ["dry"]
+                "reasons": [
+                  "dry"
+                ]
               }
             ],
-            "notYetMapped": [2026],
+            "notYetMapped": [
+              2026
+            ],
             "stressYearCount": 1
           }
         },
@@ -2345,7 +2407,11 @@
                 "source": "unknown"
               },
               "season": 2027,
-              "missing": ["crop", "sowing date", "emergence date"],
+              "missing": [
+                "crop",
+                "sowing date",
+                "emergence date"
+              ],
               "tillage": {
                 "value": null,
                 "source": "unknown"
@@ -2667,10 +2733,14 @@
             "stressYears": [
               {
                 "season": 2022,
-                "reasons": ["dry"]
+                "reasons": [
+                  "dry"
+                ]
               }
             ],
-            "notYetMapped": [2026],
+            "notYetMapped": [
+              2026
+            ],
             "stressYearCount": 1
           }
         },
@@ -3284,7 +3354,11 @@
                 "source": "unknown"
               },
               "season": 2027,
-              "missing": ["crop", "sowing date", "emergence date"],
+              "missing": [
+                "crop",
+                "sowing date",
+                "emergence date"
+              ],
               "tillage": {
                 "value": null,
                 "source": "unknown"
@@ -3874,26 +3948,39 @@
             "stressYears": [
               {
                 "season": 2008,
-                "reasons": ["low_ndvi"]
+                "reasons": [
+                  "low_ndvi"
+                ]
               },
               {
                 "season": 2009,
-                "reasons": ["low_ndvi"]
+                "reasons": [
+                  "low_ndvi"
+                ]
               },
               {
                 "season": 2011,
-                "reasons": ["hot"]
+                "reasons": [
+                  "hot"
+                ]
               },
               {
                 "season": 2012,
-                "reasons": ["dry", "hot"]
+                "reasons": [
+                  "dry",
+                  "hot"
+                ]
               },
               {
                 "season": 2022,
-                "reasons": ["dry"]
+                "reasons": [
+                  "dry"
+                ]
               }
             ],
-            "notYetMapped": [2026],
+            "notYetMapped": [
+              2026
+            ],
             "stressYearCount": 5
           }
         },
@@ -3915,7 +4002,9 @@
             "whatIf": {
               "level": "low",
               "deadline": "2027-04-25",
-              "unknowns": ["crop for 2026 not known yet"],
+              "unknowns": [
+                "crop for 2026 not known yet"
+              ],
               "confidence": "medium",
               "keyNumbers": [
                 {
@@ -3935,7 +4024,10 @@
             "current": {
               "level": "moderate",
               "deadline": "2027-04-25",
-              "unknowns": ["crop for 2026 not known yet", "crop for 2027 not chosen yet"],
+              "unknowns": [
+                "crop for 2026 not known yet",
+                "crop for 2027 not chosen yet"
+              ],
               "confidence": "medium",
               "keyNumbers": [
                 {
@@ -4009,7 +4101,10 @@
               }
             ],
             "planning": true,
-            "unknowns": ["crop for 2026 not known yet", "crop for 2027 not chosen yet"],
+            "unknowns": [
+              "crop for 2026 not known yet",
+              "crop for 2027 not chosen yet"
+            ],
             "confidence": "medium",
             "keyNumbers": [
               {
@@ -4068,7 +4163,11 @@
                 "source": "unknown"
               },
               "season": 2027,
-              "missing": ["crop", "sowing date", "emergence date"],
+              "missing": [
+                "crop",
+                "sowing date",
+                "emergence date"
+              ],
               "tillage": {
                 "value": null,
                 "source": "unknown"
@@ -4326,10 +4425,14 @@
             "stressYears": [
               {
                 "season": 2022,
-                "reasons": ["dry"]
+                "reasons": [
+                  "dry"
+                ]
               }
             ],
-            "notYetMapped": [2026],
+            "notYetMapped": [
+              2026
+            ],
             "stressYearCount": 1
           }
         },
@@ -4411,7 +4514,10 @@
               }
             ],
             "planning": true,
-            "unknowns": ["crop for 2026 not known yet", "crop for 2027 not chosen yet"],
+            "unknowns": [
+              "crop for 2026 not known yet",
+              "crop for 2027 not chosen yet"
+            ],
             "confidence": "medium",
             "keyNumbers": [
               {
@@ -4448,7 +4554,9 @@
             "whatIf": {
               "level": "high",
               "deadline": "2027-04-25",
-              "unknowns": ["crop for 2026 not known yet"],
+              "unknowns": [
+                "crop for 2026 not known yet"
+              ],
               "confidence": "medium",
               "keyNumbers": [
                 {
@@ -4468,7 +4576,10 @@
             "current": {
               "level": "moderate",
               "deadline": "2027-04-25",
-              "unknowns": ["crop for 2026 not known yet", "crop for 2027 not chosen yet"],
+              "unknowns": [
+                "crop for 2026 not known yet",
+                "crop for 2027 not chosen yet"
+              ],
               "confidence": "medium",
               "keyNumbers": [
                 {
@@ -4496,7 +4607,10 @@
             "id": "western_corn_rootworm",
             "kind": "insect",
             "name": "Західний кукурудзяний жук",
-            "crops": ["corn", "silage_corn"],
+            "crops": [
+              "corn",
+              "silage_corn"
+            ],
             "scout": "Під час виходу личинок викопайте й відмийте коріння; з початку цвітіння рахуйте жуків на клейких пастках.",
             "damage": "Личинки об'їдають коріння, і рослини вилягають; жуки обгризають приймочки й погіршують запилення.",
             "season": "Личинки: кінець весни — початок літа; жуки: середина–кінець літа",
@@ -4553,7 +4667,11 @@
                 "source": "unknown"
               },
               "season": 2027,
-              "missing": ["crop", "sowing date", "emergence date"],
+              "missing": [
+                "crop",
+                "sowing date",
+                "emergence date"
+              ],
               "tillage": {
                 "value": null,
                 "source": "unknown"
@@ -4625,7 +4743,9 @@
             "whatIf": {
               "level": "low",
               "deadline": "2027-04-25",
-              "unknowns": ["crop for 2026 not known yet"],
+              "unknowns": [
+                "crop for 2026 not known yet"
+              ],
               "confidence": "medium",
               "keyNumbers": [
                 {
@@ -4645,7 +4765,10 @@
             "current": {
               "level": "moderate",
               "deadline": "2027-04-25",
-              "unknowns": ["crop for 2026 not known yet", "crop for 2027 not chosen yet"],
+              "unknowns": [
+                "crop for 2026 not known yet",
+                "crop for 2027 not chosen yet"
+              ],
               "confidence": "medium",
               "keyNumbers": [
                 {
@@ -4673,7 +4796,10 @@
             "id": "western_corn_rootworm",
             "kind": "insect",
             "name": "Західний кукурудзяний жук",
-            "crops": ["corn", "silage_corn"],
+            "crops": [
+              "corn",
+              "silage_corn"
+            ],
             "scout": "Під час виходу личинок викопайте й відмийте коріння; з початку цвітіння рахуйте жуків на клейких пастках.",
             "damage": "Личинки об'їдають коріння, і рослини вилягають; жуки обгризають приймочки й погіршують запилення.",
             "season": "Личинки: кінець весни — початок літа; жуки: середина–кінець літа",
@@ -5209,7 +5335,10 @@
             "id": "western_corn_rootworm",
             "kind": "insect",
             "name": "Західний кукурудзяний жук",
-            "crops": ["corn", "silage_corn"],
+            "crops": [
+              "corn",
+              "silage_corn"
+            ],
             "scout": "Під час виходу личинок викопайте й відмийте коріння; з початку цвітіння рахуйте жуків на клейких пастках.",
             "damage": "Личинки об'їдають коріння, і рослини вилягають; жуки обгризають приймочки й погіршують запилення.",
             "season": "Личинки: кінець весни — початок літа; жуки: середина–кінець літа",
@@ -5249,12 +5378,20 @@
             "id": "wheat_streak_mosaic",
             "kind": "virus",
             "name": "Вірус смугастої мозаїки пшениці",
-            "crops": ["winter_wheat", "spring_wheat"],
+            "crops": [
+              "winter_wheat",
+              "spring_wheat"
+            ],
             "scout": "До сівби перевірте, чи є зелена падалиця пшениці на полі й поряд.",
             "damage": "Жовті смуги й сильна карликовість; можна втратити ціле поле.",
             "season": "Зараження восени від падалиці пшениці; симптоми навесні",
             "prevent": "Знищіть падалицю щонайменше за два тижні до сівби; не сійте рано; стійкі сорти.",
-            "regions": ["us-southern-plains", "us-northern-plains", "ua-steppe", "eu-central"],
+            "regions": [
+              "us-southern-plains",
+              "us-northern-plains",
+              "ua-steppe",
+              "eu-central"
+            ],
             "riskWhen": "Падалиця пшениці поряд із новими посівами (часто після граду перед збиранням); рання сівба; тепла осінь.",
             "hasVerifiedModel": true
           }
@@ -5376,7 +5513,11 @@
                 "source": "unknown"
               },
               "season": 2027,
-              "missing": ["crop", "sowing date", "emergence date"],
+              "missing": [
+                "crop",
+                "sowing date",
+                "emergence date"
+              ],
               "tillage": {
                 "value": null,
                 "source": "unknown"
@@ -5634,10 +5775,14 @@
             "stressYears": [
               {
                 "season": 2022,
-                "reasons": ["dry"]
+                "reasons": [
+                  "dry"
+                ]
               }
             ],
-            "notYetMapped": [2026],
+            "notYetMapped": [
+              2026
+            ],
             "stressYearCount": 1
           }
         }
@@ -5658,6 +5803,373 @@
       "numbersChecked": 6,
       "tools": [],
       "ms": 3063
+    },
+    {
+      "id": "uk-34",
+      "category": "climate_shift",
+      "question": "Чи змінився клімат на F1?",
+      "expect": {
+        "tools": [
+          "get_climate_shift"
+        ],
+        "say": [
+          "чіткого тренду немає|немає чіткого тренду|не має чіткого тренду"
+        ],
+        "never": [
+          {
+            "pattern": "прогноз",
+            "unless": "(?<!\\p{L})не\\s+(є\\s+)?(\\S+\\s+)?прогноз|прогноз\\S*\\s+(\\S+\\s+)?не(?!\\p{L})|не\\s+можна\\s+прогнозувати|(?<!\\p{L})без\\s+прогноз"
+          },
+          {
+            "pattern": "(?<!\\p{L})(буде|стане|будуть|стануть|зросте|потепліє)(?!\\p{L})"
+          },
+          {
+            "pattern": "проєкці|проекці",
+            "unless": "(?<!\\p{L})не(?!\\p{L})[^.]*проє?кці"
+          }
+        ]
+      },
+      "answer": "За даними NASA POWER (числа належать до сітки близько 55 км, тому сусідні поля їх поділяють), на F1 температура вегетаційного сезону зросла на 0.71 °C, а сума активних температур збільшилася на 114 градусо-днів. Перший осінній мороз змістився на 8 днів. Водночас для опадів вегетаційного сезону та найдовшого сухого періоду чіткого тренду немає. Нагадуємо, що це описує минуле за період 1981–2025 років і не є прогнозом.",
+      "error": null,
+      "checked": true,
+      "fallback": false,
+      "numbersChecked": 6,
+      "tools": [
+        {
+          "tool": "get_climate_shift",
+          "args": {
+            "field": "F1"
+          },
+          "result": {
+            "field": "F1",
+            "periods": {
+              "baselineFrom": 1981,
+              "baselineTo": 2000,
+              "recentFrom": 2006,
+              "recentTo": 2025
+            },
+            "growingSeason": {
+              "from": "04-15",
+              "to": "10-15"
+            },
+            "crop": null,
+            "floweringWindow": {
+              "from": "06-01",
+              "to": "08-31",
+              "threshold": {
+                "value": 35,
+                "unit": "°C"
+              },
+              "thresholdVerified": false,
+              "genericWindow": true
+            },
+            "metrics": [
+              {
+                "title": "Температура вегетаційного сезону",
+                "baseline": {
+                  "value": 21.51,
+                  "unit": "°C"
+                },
+                "recent": {
+                  "value": 22.22,
+                  "unit": "°C"
+                },
+                "change": {
+                  "value": 0.71,
+                  "unit": "°C"
+                },
+                "slopePerDecade": null,
+                "trend": "clear_trend"
+              },
+              {
+                "title": "Сума активних температур (GDD)",
+                "baseline": {
+                  "value": 2133,
+                  "unit": "degree-days"
+                },
+                "recent": {
+                  "value": 2247,
+                  "unit": "degree-days"
+                },
+                "change": {
+                  "value": 114,
+                  "unit": "degree-days"
+                },
+                "slopePerDecade": null,
+                "trend": "clear_trend"
+              },
+              {
+                "title": "Перший осінній мороз",
+                "baseline": null,
+                "recent": null,
+                "change": {
+                  "value": 8,
+                  "unit": "days"
+                },
+                "slopePerDecade": null,
+                "trend": "clear_trend"
+              },
+              {
+                "title": "Опади вегетаційного сезону",
+                "baseline": {
+                  "value": 375,
+                  "unit": "mm"
+                },
+                "recent": {
+                  "value": 363,
+                  "unit": "mm"
+                },
+                "change": {
+                  "value": -12,
+                  "unit": "mm"
+                },
+                "slopePerDecade": null,
+                "trend": "no_clear_trend"
+              },
+              {
+                "title": "Найдовший сухий період",
+                "baseline": {
+                  "value": 17.6,
+                  "unit": "days"
+                },
+                "recent": {
+                  "value": 18,
+                  "unit": "days"
+                },
+                "change": {
+                  "value": 0.4,
+                  "unit": "days"
+                },
+                "slopePerDecade": null,
+                "trend": "no_clear_trend"
+              }
+            ],
+            "skippedYears": [],
+            "source": {
+              "dataset": "NASA POWER",
+              "from": "1981-01-01",
+              "lastDate": "2026-11-12",
+              "resolution": {
+                "value": 55,
+                "unit": "km"
+              },
+              "note": "NASA POWER numbers belong to a grid cell of about 55 km; neighbouring fields in the same cell share them."
+            },
+            "gpmCheck": null,
+            "note": "This describes the past (1981–2025), not a forecast. A metric with trend \"no_clear_trend\" shows no clear trend and must not be described as a change."
+          }
+        }
+      ],
+      "ms": 0
+    },
+    {
+      "id": "uk-36",
+      "category": "climate_shift",
+      "question": "Чи рекомендована сівозміна на F1 досі найкраща в нещодавньому кліматі?",
+      "expect": {
+        "horizon": true,
+        "tools": [
+          "get_year_set_ranking"
+        ],
+        "sayAny": [
+          "чутливост",
+          "недоступн",
+          "немає"
+        ],
+        "never": [
+          {
+            "pattern": "прогноз",
+            "unless": "(?<!\\p{L})не\\s+(є\\s+)?(\\S+\\s+)?прогноз|прогноз\\S*\\s+(\\S+\\s+)?не(?!\\p{L})|не\\s+можна\\s+прогнозувати|(?<!\\p{L})без\\s+прогноз"
+          },
+          {
+            "pattern": "(?<!\\p{L})(буде|стане|будуть|стануть|зросте|потепліє)(?!\\p{L})"
+          },
+          {
+            "pattern": "проєкці|проекці",
+            "unless": "(?<!\\p{L})не(?!\\p{L})[^.]*проє?кці"
+          }
+        ]
+      },
+      "answer": "Аналіз чутливості ранжування сівозміни до погодних років для поля F1 наразі недоступний.",
+      "error": null,
+      "checked": true,
+      "fallback": false,
+      "numbersChecked": 0,
+      "tools": [
+        {
+          "tool": "get_year_set_ranking",
+          "args": {
+            "field": "F1"
+          },
+          "result": {
+            "field": "F1",
+            "status": "not_available",
+            "note": "The comparison across weather years is not available for this field yet; say so and do not estimate it."
+          }
+        }
+      ],
+      "ms": 0
+    },
+    {
+      "id": "uk-35",
+      "category": "climate_shift",
+      "question": "Чи стане на F1 спекотніше до 2030 року?",
+      "expect": {
+        "sayAny": [
+          "не є прогноз",
+          "не прогноз",
+          "не можу прогнозувати",
+          "не можна прогнозувати",
+          "минул",
+          "ряд",
+          "спостереж"
+        ],
+        "never": [
+          {
+            "pattern": "прогноз",
+            "unless": "(?<!\\p{L})не\\s+(є\\s+)?(\\S+\\s+)?прогноз|прогноз\\S*\\s+(\\S+\\s+)?не(?!\\p{L})|не\\s+можна\\s+прогнозувати|(?<!\\p{L})без\\s+прогноз"
+          },
+          {
+            "pattern": "(?<!\\p{L})(буде|стане|будуть|стануть|зросте|потепліє)(?!\\p{L})"
+          },
+          {
+            "pattern": "проєкці|проекці",
+            "unless": "(?<!\\p{L})не(?!\\p{L})[^.]*проє?кці"
+          }
+        ]
+      },
+      "answer": "Зсув клімату описує минуле за даними NASA POWER з 1981 року по 2025 рік, а не прогноз на майбутнє, і ці цифри належать до сітки площею близько 55 км, тому сусідні поля мають однакові значення. У минулому температура вегетаційного сезону на F1 зросла на 0.71 °C (від базових 21.51 °C до недавніх 22.22 °C), а сума активних температур збільшилася на 114 градус-днів (від 2133 до 2247).",
+      "error": null,
+      "checked": true,
+      "fallback": false,
+      "numbersChecked": 9,
+      "tools": [
+        {
+          "tool": "get_climate_shift",
+          "args": {
+            "field": "F1"
+          },
+          "result": {
+            "field": "F1",
+            "periods": {
+              "baselineFrom": 1981,
+              "baselineTo": 2000,
+              "recentFrom": 2006,
+              "recentTo": 2025
+            },
+            "growingSeason": {
+              "from": "04-15",
+              "to": "10-15"
+            },
+            "crop": null,
+            "floweringWindow": {
+              "from": "06-01",
+              "to": "08-31",
+              "threshold": {
+                "value": 35,
+                "unit": "°C"
+              },
+              "thresholdVerified": false,
+              "genericWindow": true
+            },
+            "metrics": [
+              {
+                "title": "Температура вегетаційного сезону",
+                "baseline": {
+                  "value": 21.51,
+                  "unit": "°C"
+                },
+                "recent": {
+                  "value": 22.22,
+                  "unit": "°C"
+                },
+                "change": {
+                  "value": 0.71,
+                  "unit": "°C"
+                },
+                "slopePerDecade": null,
+                "trend": "clear_trend"
+              },
+              {
+                "title": "Сума активних температур (GDD)",
+                "baseline": {
+                  "value": 2133,
+                  "unit": "degree-days"
+                },
+                "recent": {
+                  "value": 2247,
+                  "unit": "degree-days"
+                },
+                "change": {
+                  "value": 114,
+                  "unit": "degree-days"
+                },
+                "slopePerDecade": null,
+                "trend": "clear_trend"
+              },
+              {
+                "title": "Перший осінній мороз",
+                "baseline": null,
+                "recent": null,
+                "change": {
+                  "value": 8,
+                  "unit": "days"
+                },
+                "slopePerDecade": null,
+                "trend": "clear_trend"
+              },
+              {
+                "title": "Опади вегетаційного сезону",
+                "baseline": {
+                  "value": 375,
+                  "unit": "mm"
+                },
+                "recent": {
+                  "value": 363,
+                  "unit": "mm"
+                },
+                "change": {
+                  "value": -12,
+                  "unit": "mm"
+                },
+                "slopePerDecade": null,
+                "trend": "no_clear_trend"
+              },
+              {
+                "title": "Найдовший сухий період",
+                "baseline": {
+                  "value": 17.6,
+                  "unit": "days"
+                },
+                "recent": {
+                  "value": 18,
+                  "unit": "days"
+                },
+                "change": {
+                  "value": 0.4,
+                  "unit": "days"
+                },
+                "slopePerDecade": null,
+                "trend": "no_clear_trend"
+              }
+            ],
+            "skippedYears": [],
+            "source": {
+              "dataset": "NASA POWER",
+              "from": "1981-01-01",
+              "lastDate": "2026-11-12",
+              "resolution": {
+                "value": 55,
+                "unit": "km"
+              },
+              "note": "NASA POWER numbers belong to a grid cell of about 55 km; neighbouring fields in the same cell share them."
+            },
+            "gpmCheck": null,
+            "note": "This describes the past (1981–2025), not a forecast. A metric with trend \"no_clear_trend\" shows no clear trend and must not be described as a change."
+          }
+        }
+      ],
+      "ms": 0
     }
   ]
 }

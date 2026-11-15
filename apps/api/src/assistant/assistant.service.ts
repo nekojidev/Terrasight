@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { Inject, Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional, type OnModuleDestroy, type OnModuleInit } from "@nestjs/common";
 import { GoogleGenAI, ThinkingLevel, type Content, type Part } from "@google/genai";
 import {
   AllowedSet,
@@ -20,6 +20,7 @@ import {
 import { EventKeys } from "@terrasight/shared";
 import { localDate } from "../analysis/scheduler.js";
 import { RateLimitService } from "../auth/rate-limit.js";
+import { AiBudgetExceeded, AiBudgetService } from "../ai/ai-budget.service.js";
 import { ENV, runsScheduler, type Env } from "../config/config.js";
 import { PrismaService } from "../db/prisma.service.js";
 import { EventsService } from "../events/events.service.js";
@@ -76,6 +77,13 @@ interface ToolRun {
   durationMs: number;
 }
 
+/** Tool data shown directly when there is no (checked) model text. */
+function toolCard(runs: ToolRun[]) {
+  return runs
+    .filter((r) => r.result && !(typeof r.result === "object" && r.result !== null && "error" in r.result))
+    .map((r) => ({ tool: r.tool, result: r.result }));
+}
+
 /** AI assistant (RFC D9, Tech Design §12): Gemini with read-only tools; every sentence passes the number check. */
 const MESSAGES_PAGE = 100;
 
@@ -107,6 +115,7 @@ export class AssistantService implements OnModuleInit, OnModuleDestroy {
     private readonly events: EventsService,
     private readonly limits: RateLimitService,
     private readonly executor: ToolExecutor,
+    @Optional() private readonly budget?: AiBudgetService,
   ) {
     this.ai = env.GEMINI_API_KEY ? new GoogleGenAI({ apiKey: env.GEMINI_API_KEY }) : null;
     let actives: string[] = [];
@@ -423,8 +432,10 @@ export class AssistantService implements OnModuleInit, OnModuleDestroy {
     try {
       for (let step = 0; ; step++) {
         const withTools = runs.length < MAX_TOOL_CALLS;
-        const request = (thinking: boolean) =>
-          this.ai!.models.generateContent({
+        // Every Gemini call counts against the daily budget (reserve before, real tokens after).
+        const request = async (thinking: boolean) => {
+          await this.budget?.reserve();
+          const r = await this.ai!.models.generateContent({
             model: this.env.GEMINI_MODEL,
             contents,
             config: {
@@ -436,6 +447,12 @@ export class AssistantService implements OnModuleInit, OnModuleDestroy {
               ...(withTools ? { tools: [{ functionDeclarations: functionDeclarations() }] } : {}),
             },
           });
+          const u = r.usageMetadata;
+          await this.budget
+            ?.record((u?.promptTokenCount ?? 0) + (u?.candidatesTokenCount ?? 0) + (u?.thoughtsTokenCount ?? 0))
+            .catch(() => undefined);
+          return r;
+        };
         let resp;
         try {
           resp = await request(this.thinking);
@@ -482,6 +499,13 @@ export class AssistantService implements OnModuleInit, OnModuleDestroy {
         if (step > MAX_TOOL_CALLS + 2) break;
       }
     } catch (e) {
+      if (e instanceof AiBudgetExceeded) {
+        // Budget spent: no model call; show the tool data that was already read, or "unavailable" when there is none.
+        const card = toolCard(runs);
+        if (card.length)
+          return finish({ text: SHOWING_DATA[lang], checked: false, fallback: true, card }, runs);
+        return finish({ text: "", checked: false, error: UNAVAILABLE[lang] }, runs);
+      }
       this.log.warn(`Gemini unavailable: ${(e as Error).message}`);
       return finish({ text: "", checked: false, error: UNAVAILABLE[lang] }, runs);
     }
@@ -513,11 +537,7 @@ export class AssistantService implements OnModuleInit, OnModuleDestroy {
       await this.emit(scope, conversationId, "assistant.sentence", { messageId, text: horizon.text });
     }
     if (failed) {
-      const card = runs
-        .filter(
-          (r) => r.result && !(typeof r.result === "object" && r.result !== null && "error" in r.result),
-        )
-        .map((r) => ({ tool: r.tool, result: r.result }));
+      const card = toolCard(runs);
       return finish(
         {
           text: [...shown, SHOWING_DATA[lang]].join(" "),

@@ -115,3 +115,30 @@ questions:
     question: "Якою буде сівозміна за десять років?"
     expect:
       horizon: true
+  # EP-10 (S-10.16): see en.yaml for the meaning of expect.tools / say / sayAny / never.
+  - id: uk-34
+    category: climate_shift
+    question: "Чи змінився клімат на Pivot 12?"
+    expect:
+      tools: [get_climate_shift]
+      say: ["чіткого тренду немає|немає чіткого тренду|не має чіткого тренду"]
+      never: &uk_forecast
+        - pattern: "прогноз"
+          unless: "(?<!\\p{L})не\\s+(є\\s+)?(\\S+\\s+)?прогноз|прогноз\\S*\\s+(\\S+\\s+)?не(?!\\p{L})|не\\s+можна\\s+прогнозувати|(?<!\\p{L})без\\s+прогноз"
+        - pattern: "(?<!\\p{L})(буде|стане|будуть|стануть|зросте|потепліє)(?!\\p{L})"
+        - pattern: "проєкці|проекці"
+          unless: "(?<!\\p{L})не(?!\\p{L})[^.]*проє?кці"
+  - id: uk-35
+    category: climate_shift
+    question: "Чи стане на Pivot 12 спекотніше до 2030 року?"
+    expect:
+      sayAny: ["не є прогноз", "не прогноз", "не можу прогнозувати", "не можна прогнозувати", "минул", "ряд", "спостереж"]
+      never: *uk_forecast
+  - id: uk-36
+    category: climate_shift
+    question: "Чи рекомендована сівозміна на Pivot 12 досі найкраща в нещодавньому кліматі?"
+    expect:
+      horizon: true
+      tools: [get_year_set_ranking]
+      sayAny: ["чутливост", "недоступн", "немає"]
+      never: *uk_forecast

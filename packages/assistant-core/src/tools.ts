@@ -92,6 +92,16 @@ export const TOOLS = {
       "Library entry for a pest or disease in the user's language: crops, season, damage, risk factors, how to scout and prevention (never products or doses).",
     args: z.object({ pest: z.string() }),
   },
+  get_climate_shift: {
+    description:
+      "How the climate of one field changed in the NASA POWER record (1981 to the last data date): two periods, and for each metric (season temperature, hot days in flowering, season rainfall, longest dry spell, growing degree days, frost dates, frost-free days) the baseline, the recent value, the change, the slope per decade and whether the trend is significant. Use it for questions such as 'has the climate here changed?' or 'is it getting warmer / drier?'. It describes the PAST, never a forecast. A metric that is not significant has no clear trend.",
+    args: z.object({ field: FieldRef }),
+  },
+  get_year_set_ranking: {
+    description:
+      "How the ranking of the rotation options for one field changes with the weather years used: all years, the early climate (1981–2000), the last 15 years, and the recent trend extended to 2030. Use it for 'is the recommended rotation still the best in the recent climate?'. It is a sensitivity analysis of the ranking to the years used, NOT a forecast or a projection. May answer 'not available'.",
+    args: z.object({ field: FieldRef }),
+  },
 } as const;
 
 export type ToolName = keyof typeof TOOLS;
@@ -141,6 +151,8 @@ export function progressText(name: ToolName, args: Record<string, unknown>, lang
     run_risk_model: `Running the risk model for${f}…`,
     compare: "Comparing the numbers…",
     get_pest_info: "Reading the pest library…",
+    get_climate_shift: `Reading the climate record of${f}…`,
+    get_year_set_ranking: `Comparing the rotation ranking across weather years for${f}…`,
   };
   const uk: Record<ToolName, string> = {
     list_fields: "Переглядаю поля…",
@@ -154,6 +166,8 @@ export function progressText(name: ToolName, args: Record<string, unknown>, lang
     run_risk_model: `Запускаю модель ризику для${f}…`,
     compare: "Порівнюю числа…",
     get_pest_info: "Читаю бібліотеку шкідників…",
+    get_climate_shift: `Читаю кліматичний ряд${f}…`,
+    get_year_set_ranking: `Порівнюю рейтинг сівозмін за роками погоди для${f}…`,
   };
   return (lang === "uk" ? uk : en)[name];
 }
@@ -167,6 +181,9 @@ export function systemPrompt(lang: "en" | "uk", today: string): string {
     "Talk about risk, never diagnosis. Pest and disease answers end with 'scout to confirm' and how to scout.",
     "Never name crop-protection products, active ingredients or doses, and give no legal advice.",
     "Say when data is estimated or missing. The rotation horizon is always 5 seasons (2026–2030), never 10 years.",
+    "The climate shift describes the past (the NASA POWER record, 1981 to the last data date); it is not a forecast. Never say the climate 'will' become warmer, drier or anything else, and never promise a future value. A metric whose trend is not significant is described as 'no clear trend', never as a change, even if its baseline and recent values differ.",
+    "The year-set ranking is a sensitivity analysis of the rotation ranking to the weather years used; call it that, never a forecast or a projection. The plan horizon stays '5 seasons, 2026–2030'.",
+    "NASA POWER numbers belong to a grid cell of about 55 km, so neighbouring fields share them; say so when you quote climate numbers.",
     "Keep answers short: 2–5 sentences, plain words. Write dates as they appear in the tool result.",
     lang === "uk"
       ? "Пиши природною українською, як агроном агроному: не залишай англійських слів у дужках і перекладай терміни інструментів (dryland — богарне, irrigated — зрошуване). Поле називай лише його позначенням (F1)."

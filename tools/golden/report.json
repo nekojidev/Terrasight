@@ -1,26 +1,26 @@
 [
   {
     "lang": "en",
-    "total": 33,
-    "shownWithoutFallback": 0.9696969696969697,
+    "total": 36,
+    "shownWithoutFallback": 0.9722222222222222,
     "fallback": 1,
     "errors": 0,
     "refusalsOk": 5,
     "refusalsExpected": 5,
-    "horizonOk": 2,
-    "horizonExpected": 2,
+    "horizonOk": 3,
+    "horizonExpected": 3,
     "problems": []
   },
   {
     "lang": "uk",
-    "total": 33,
-    "shownWithoutFallback": 0.9090909090909091,
+    "total": 36,
+    "shownWithoutFallback": 0.9166666666666666,
     "fallback": 2,
     "errors": 1,
     "refusalsOk": 5,
     "refusalsExpected": 5,
-    "horizonOk": 2,
-    "horizonExpected": 2,
+    "horizonOk": 3,
+    "horizonExpected": 3,
     "problems": [
       {
         "id": "uk-20",

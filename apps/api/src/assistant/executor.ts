@@ -1,4 +1,4 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Optional } from "@nestjs/common";
 import { parseArgs, type ToolArgs, type ToolName } from "@terrasight/assistant-core";
 import { classifyUrgency, evaluate } from "@terrasight/evaluators";
 import type { Library } from "@terrasight/library";
@@ -6,6 +6,7 @@ import type { DailyWeather as PowerSeries } from "@terrasight/sources";
 import { EvalInputsService } from "../analysis/eval-inputs.service.js";
 import { ForecastService } from "../analysis/forecast.service.js";
 import { localDate } from "../analysis/scheduler.js";
+import { ClimateService } from "../climate/climate.service.js";
 import { BriefService } from "../brief/brief.service.js";
 import { PrismaService } from "../db/prisma.service.js";
 import { GeoService } from "../geo/geo.service.js";
@@ -14,6 +15,8 @@ import { LIBRARY } from "../library/library.module.js";
 import { RecommendationsService } from "../recommendations/recommendations.service.js";
 import { SeasonsService } from "../seasons/seasons.service.js";
 import { SourcesService } from "../sources/sources.service.js";
+import { climateShiftResult, yearSetResult } from "./climate-tools.js";
+import { YEAR_SET_COMPARISON_PROVIDER, type YearSetComparisonProvider } from "./year-set-provider.js";
 
 /** Session scope: taken from the request, never from the model's arguments (RFC §12.3). */
 export interface Scope {
@@ -44,6 +47,8 @@ export class ToolExecutor {
     private readonly sources: SourcesService,
     private readonly geo: GeoService,
     private readonly inputs: EvalInputsService,
+    private readonly climate: ClimateService,
+    @Optional() @Inject(YEAR_SET_COMPARISON_PROVIDER) private readonly yearSets?: YearSetComparisonProvider,
   ) {}
 
   /** alias ↔ field id and name for the workspace (names only go to the UI to restore aliases). */
@@ -110,6 +115,21 @@ export class ToolExecutor {
         return this.compare(a as ToolArgs<"compare">);
       case "get_pest_info":
         return this.pestInfo(scope, a as ToolArgs<"get_pest_info">);
+      case "get_climate_shift": {
+        const f = await this.field(scope, (a as ToolArgs<"get_climate_shift">).field);
+        return climateShiftResult(f.alias, await this.climate.forField(scope.workspaceId, f.id), scope.lang);
+      }
+      case "get_year_set_ranking": {
+        const f = await this.field(scope, (a as ToolArgs<"get_year_set_ranking">).field);
+        const c = await this.yearSets?.compare(scope.workspaceId, f.id);
+        return c
+          ? yearSetResult(f.alias, c, scope.lang)
+          : {
+              field: f.alias,
+              status: "not_available",
+              note: "The comparison across weather years is not available for this field yet; say so and do not estimate it.",
+            };
+      }
     }
   }
 

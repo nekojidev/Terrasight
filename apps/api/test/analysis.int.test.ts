@@ -506,6 +506,7 @@ describe("assistant tool scope (S-05.01)", () => {
       sources,
       geo,
       unused,
+      unused,
     );
     const scopeA = { workspaceId: a.ws, userId: "u", role: "agronomist", lang: "en" as const };
     const summary = (await tools.run("get_field_summary", { field: "F1" }, scopeA)) as {
