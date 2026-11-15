@@ -1,0 +1,10 @@
+# Gitleaks config: the default rules plus a narrow allowlist for the dummy JWT secret of the integration tests.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Dummy JWT secret used only by the Testcontainers integration tests"
+condition = "AND"
+paths = ['''^apps/api/test/.*\.int\.test\.ts$''']
+regexes = ['''integration-test-secret-[0-9a-z]+''']
+regexTarget = "line"
