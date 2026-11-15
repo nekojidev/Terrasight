@@ -6,7 +6,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { fetchCountyYields, stripKey } from "@terrasight/sources";
+import { fetchCountyYields, fetchStateYields, stripKey } from "@terrasight/sources";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 const out = join(process.env.FIXTURES_DIR ?? join(root, "fixtures"), "nass");
@@ -35,5 +35,25 @@ for (const c of counties) {
     }
     writeFileSync(join(out, `${c.state}-${c.fips}-${crop}.json`), `${JSON.stringify(r, null, 1)}\n`);
     console.log(c.state, c.fips, crop, r.area, r.rows.length, "rows");
+  }
+}
+
+// State-level series (S-10.08): the fallback when a county has fewer than 8 published values for a crop.
+for (const state of [...new Set(counties.map((c) => c.state))]) {
+  for (const crop of crops) {
+    const r = await fetchStateYields(
+      { stateAlpha: state, crop, fromYear: 1981, toYear: new Date().getUTCFullYear() },
+      { apiKey: process.env.NASS_API_KEY },
+    );
+    if (!r.connected || !r.ok) {
+      console.log(state, "state", crop, "skipped:", stripKey(r.reason, process.env.NASS_API_KEY));
+      continue;
+    }
+    if (r.rows.length === 0) {
+      console.log(state, "state", crop, "no data");
+      continue;
+    }
+    writeFileSync(join(out, `${state}-state-${crop}.json`), `${JSON.stringify(r, null, 1)}\n`);
+    console.log(state, "state", crop, r.area, r.rows.length, "rows");
   }
 }

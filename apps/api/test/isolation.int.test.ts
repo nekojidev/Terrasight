@@ -376,6 +376,19 @@ describe("workspace isolation (IDOR)", () => {
     }
   });
 
+  it("trust report (S-10.08): B's field under A's URL is 404 and leaks nothing; A's own field without history is pending", async () => {
+    const get = (ws: string, id: string) =>
+      request(app.getHttpServer()).get(`/api/w/${ws}/fields/${id}/trust`).set("Cookie", A.cookie);
+    const foreign = await get(A.ws, B.field);
+    expect(foreign.status).toBe(404);
+    for (const m of MARKERS()) expect(foreign.text).not.toContain(m);
+    expect((await get(B.ws, B.field)).status).toBe(404);
+    const own = await get(A.ws, A.field);
+    expect(own.status).toBe(200);
+    expect(own.body).toMatchObject({ status: "pending", fieldId: A.field, years: [], retrospective: null });
+    expect((await get(A.ws, "not-a-uuid")).status).toBe(404);
+  });
+
   it("plan save with a foreign scenarioRunId is refused (own field, B's run)", async () => {
     const url = `/api/w/${A.ws}/fields/${A.field}/plans/2027`;
     const res = await call({ method: "put", path: url }, url, A.cookie);

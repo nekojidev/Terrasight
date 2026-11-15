@@ -1,0 +1,879 @@
+{
+ "connected": true,
+ "ok": true,
+ "crop": "winter_wheat",
+ "area": "Kansas",
+ "stateAlpha": "KS",
+ "countyFips": null,
+ "rows": [
+  {
+   "year": 1981,
+   "practice": "all",
+   "tPerHa": 1.681,
+   "raw": "25",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1981,
+   "practice": "irrigated",
+   "tPerHa": 1.97,
+   "raw": "29.3",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1981,
+   "practice": "non-irrigated",
+   "tPerHa": 1.661,
+   "raw": "24.7",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1982,
+   "practice": "all",
+   "tPerHa": 2.354,
+   "raw": "35",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1982,
+   "practice": "irrigated",
+   "tPerHa": 3.342,
+   "raw": "49.7",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1982,
+   "practice": "non-irrigated",
+   "tPerHa": 2.287,
+   "raw": "34",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1983,
+   "practice": "all",
+   "tPerHa": 2.791,
+   "raw": "41.5",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1983,
+   "practice": "irrigated",
+   "tPerHa": 3.719,
+   "raw": "55.3",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1983,
+   "practice": "non-irrigated",
+   "tPerHa": 2.73,
+   "raw": "40.6",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1984,
+   "practice": "all",
+   "tPerHa": 2.589,
+   "raw": "38.5",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1984,
+   "practice": "irrigated",
+   "tPerHa": 3.732,
+   "raw": "55.5",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1984,
+   "practice": "non-irrigated",
+   "tPerHa": 2.495,
+   "raw": "37.1",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1985,
+   "practice": "all",
+   "tPerHa": 2.556,
+   "raw": "38",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1985,
+   "practice": "irrigated",
+   "tPerHa": 3.537,
+   "raw": "52.6",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1985,
+   "practice": "non-irrigated",
+   "tPerHa": 2.475,
+   "raw": "36.8",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1986,
+   "practice": "all",
+   "tPerHa": 2.219,
+   "raw": "33",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1986,
+   "practice": "irrigated",
+   "tPerHa": 3.416,
+   "raw": "50.8",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1986,
+   "practice": "non-irrigated",
+   "tPerHa": 2.125,
+   "raw": "31.6",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1987,
+   "practice": "all",
+   "tPerHa": 2.488,
+   "raw": "37",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1987,
+   "practice": "irrigated",
+   "tPerHa": 3.215,
+   "raw": "47.8",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1987,
+   "practice": "non-irrigated",
+   "tPerHa": 2.434,
+   "raw": "36.2",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1988,
+   "practice": "all",
+   "tPerHa": 2.287,
+   "raw": "34",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1988,
+   "practice": "irrigated",
+   "tPerHa": 3.228,
+   "raw": "48",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1988,
+   "practice": "non-irrigated",
+   "tPerHa": 2.219,
+   "raw": "33",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1989,
+   "practice": "all",
+   "tPerHa": 1.614,
+   "raw": "24",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1989,
+   "practice": "irrigated",
+   "tPerHa": 2.878,
+   "raw": "42.8",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1989,
+   "practice": "non-irrigated",
+   "tPerHa": 1.506,
+   "raw": "22.4",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1990,
+   "practice": "all",
+   "tPerHa": 2.69,
+   "raw": "40",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1990,
+   "practice": "irrigated",
+   "tPerHa": 3.618,
+   "raw": "53.8",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1990,
+   "practice": "non-irrigated",
+   "tPerHa": 2.623,
+   "raw": "39",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1991,
+   "practice": "all",
+   "tPerHa": 2.219,
+   "raw": "33",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1991,
+   "practice": "irrigated",
+   "tPerHa": 3.403,
+   "raw": "50.6",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1991,
+   "practice": "non-irrigated",
+   "tPerHa": 2.132,
+   "raw": "31.7",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1992,
+   "practice": "all",
+   "tPerHa": 2.287,
+   "raw": "34",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1992,
+   "practice": "irrigated",
+   "tPerHa": 3.611,
+   "raw": "53.7",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1992,
+   "practice": "non-irrigated",
+   "tPerHa": 2.186,
+   "raw": "32.5",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1993,
+   "practice": "all",
+   "tPerHa": 2.354,
+   "raw": "35",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1993,
+   "practice": "irrigated",
+   "tPerHa": 3.517,
+   "raw": "52.3",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1993,
+   "practice": "non-irrigated",
+   "tPerHa": 2.273,
+   "raw": "33.8",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1994,
+   "practice": "all",
+   "tPerHa": 2.556,
+   "raw": "38",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1994,
+   "practice": "irrigated",
+   "tPerHa": 3.228,
+   "raw": "48",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1994,
+   "practice": "non-irrigated",
+   "tPerHa": 2.515,
+   "raw": "37.4",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1995,
+   "practice": "all",
+   "tPerHa": 1.749,
+   "raw": "26",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1995,
+   "practice": "irrigated",
+   "tPerHa": 2.085,
+   "raw": "31",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1995,
+   "practice": "non-irrigated",
+   "tPerHa": 1.749,
+   "raw": "26",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1996,
+   "practice": "all",
+   "tPerHa": 1.95,
+   "raw": "29",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1996,
+   "practice": "irrigated",
+   "tPerHa": 2.556,
+   "raw": "38",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1996,
+   "practice": "non-irrigated",
+   "tPerHa": 1.883,
+   "raw": "28",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1997,
+   "practice": "all",
+   "tPerHa": 3.094,
+   "raw": "46",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1997,
+   "practice": "irrigated",
+   "tPerHa": 3.363,
+   "raw": "50",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1997,
+   "practice": "non-irrigated",
+   "tPerHa": 3.094,
+   "raw": "46",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1998,
+   "practice": "all",
+   "tPerHa": 3.295,
+   "raw": "49",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1998,
+   "practice": "irrigated",
+   "tPerHa": 4.035,
+   "raw": "60",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1998,
+   "practice": "non-irrigated",
+   "tPerHa": 3.228,
+   "raw": "48",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1999,
+   "practice": "all",
+   "tPerHa": 3.161,
+   "raw": "47",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1999,
+   "practice": "irrigated",
+   "tPerHa": 4.17,
+   "raw": "62",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 1999,
+   "practice": "non-irrigated",
+   "tPerHa": 3.094,
+   "raw": "46",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2000,
+   "practice": "all",
+   "tPerHa": 2.488,
+   "raw": "37",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2000,
+   "practice": "irrigated",
+   "tPerHa": 3.026,
+   "raw": "45",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2000,
+   "practice": "non-irrigated",
+   "tPerHa": 2.488,
+   "raw": "37",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2001,
+   "practice": "all",
+   "tPerHa": 2.69,
+   "raw": "40",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2001,
+   "practice": "irrigated",
+   "tPerHa": 3.497,
+   "raw": "52",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2001,
+   "practice": "non-irrigated",
+   "tPerHa": 2.623,
+   "raw": "39",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2002,
+   "practice": "all",
+   "tPerHa": 2.219,
+   "raw": "33",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2002,
+   "practice": "irrigated",
+   "tPerHa": 2.757,
+   "raw": "41",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2002,
+   "practice": "non-irrigated",
+   "tPerHa": 2.219,
+   "raw": "33",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2003,
+   "practice": "all",
+   "tPerHa": 3.228,
+   "raw": "48",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2003,
+   "practice": "irrigated",
+   "tPerHa": 3.766,
+   "raw": "56",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2003,
+   "practice": "non-irrigated",
+   "tPerHa": 3.228,
+   "raw": "48",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2004,
+   "practice": "all",
+   "tPerHa": 2.488,
+   "raw": "37",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2004,
+   "practice": "irrigated",
+   "tPerHa": 3.026,
+   "raw": "45",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2004,
+   "practice": "non-irrigated",
+   "tPerHa": 2.421,
+   "raw": "36",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2005,
+   "practice": "all",
+   "tPerHa": 2.69,
+   "raw": "40",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2005,
+   "practice": "irrigated",
+   "tPerHa": 3.564,
+   "raw": "53",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2005,
+   "practice": "non-irrigated",
+   "tPerHa": 2.623,
+   "raw": "39",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2006,
+   "practice": "all",
+   "tPerHa": 2.152,
+   "raw": "32",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2006,
+   "practice": "irrigated",
+   "tPerHa": 2.623,
+   "raw": "39",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2006,
+   "practice": "non-irrigated",
+   "tPerHa": 2.152,
+   "raw": "32",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2007,
+   "practice": "all",
+   "tPerHa": 2.219,
+   "raw": "33",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2007,
+   "practice": "irrigated",
+   "tPerHa": 3.564,
+   "raw": "53",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2007,
+   "practice": "non-irrigated",
+   "tPerHa": 2.085,
+   "raw": "31",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2008,
+   "practice": "all",
+   "tPerHa": 2.69,
+   "raw": "40",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2008,
+   "practice": "irrigated",
+   "tPerHa": 3.329,
+   "raw": "49.5",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2008,
+   "practice": "non-irrigated",
+   "tPerHa": 2.623,
+   "raw": "39",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2009,
+   "practice": "all",
+   "tPerHa": 2.825,
+   "raw": "42",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2009,
+   "practice": "irrigated",
+   "tPerHa": 3.43,
+   "raw": "51",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2009,
+   "practice": "non-irrigated",
+   "tPerHa": 2.791,
+   "raw": "41.5",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2010,
+   "practice": "all",
+   "tPerHa": 3.026,
+   "raw": "45",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2010,
+   "practice": "irrigated",
+   "tPerHa": 3.867,
+   "raw": "57.5",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2010,
+   "practice": "non-irrigated",
+   "tPerHa": 2.972,
+   "raw": "44.2",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2011,
+   "practice": "all",
+   "tPerHa": 2.354,
+   "raw": "35",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2011,
+   "practice": "irrigated",
+   "tPerHa": 3.194,
+   "raw": "47.5",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2011,
+   "practice": "non-irrigated",
+   "tPerHa": 2.287,
+   "raw": "34",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2012,
+   "practice": "all",
+   "tPerHa": 2.825,
+   "raw": "42",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2012,
+   "practice": "irrigated",
+   "tPerHa": 3.8,
+   "raw": "56.5",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2012,
+   "practice": "non-irrigated",
+   "tPerHa": 2.757,
+   "raw": "41",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2013,
+   "practice": "all",
+   "tPerHa": 2.556,
+   "raw": "38",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2013,
+   "practice": "irrigated",
+   "tPerHa": 2.851,
+   "raw": "42.4",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2013,
+   "practice": "non-irrigated",
+   "tPerHa": 2.535,
+   "raw": "37.7",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2014,
+   "practice": "all",
+   "tPerHa": 1.883,
+   "raw": "28",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2014,
+   "practice": "irrigated",
+   "tPerHa": 3.806,
+   "raw": "56.6",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2014,
+   "practice": "non-irrigated",
+   "tPerHa": 1.755,
+   "raw": "26.1",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2015,
+   "practice": "all",
+   "tPerHa": 2.488,
+   "raw": "37",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2015,
+   "practice": "irrigated",
+   "tPerHa": 4.116,
+   "raw": "61.2",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2015,
+   "practice": "non-irrigated",
+   "tPerHa": 2.367,
+   "raw": "35.2",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2016,
+   "practice": "all",
+   "tPerHa": 3.833,
+   "raw": "57",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2016,
+   "practice": "irrigated",
+   "tPerHa": 5.158,
+   "raw": "76.7",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2016,
+   "practice": "non-irrigated",
+   "tPerHa": 3.746,
+   "raw": "55.7",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2017,
+   "practice": "all",
+   "tPerHa": 3.228,
+   "raw": "48",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2017,
+   "practice": "irrigated",
+   "tPerHa": 4.008,
+   "raw": "59.6",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2017,
+   "practice": "non-irrigated",
+   "tPerHa": 3.174,
+   "raw": "47.2",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2018,
+   "practice": "all",
+   "tPerHa": 2.556,
+   "raw": "38",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2018,
+   "practice": "irrigated",
+   "tPerHa": 3.867,
+   "raw": "57.5",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2018,
+   "practice": "non-irrigated",
+   "tPerHa": 2.482,
+   "raw": "36.9",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2019,
+   "practice": "all",
+   "tPerHa": 3.497,
+   "raw": "52",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2019,
+   "practice": "irrigated",
+   "tPerHa": 4.566,
+   "raw": "67.9",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2019,
+   "practice": "non-irrigated",
+   "tPerHa": 3.437,
+   "raw": "51.1",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2020,
+   "practice": "all",
+   "tPerHa": 3.026,
+   "raw": "45",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2021,
+   "practice": "all",
+   "tPerHa": 3.497,
+   "raw": "52",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2022,
+   "practice": "all",
+   "tPerHa": 2.488,
+   "raw": "37",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2023,
+   "practice": "all",
+   "tPerHa": 2.354,
+   "raw": "35",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2024,
+   "practice": "all",
+   "tPerHa": 2.892,
+   "raw": "43",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2025,
+   "practice": "all",
+   "tPerHa": 3.43,
+   "raw": "51",
+   "unit": "BU / ACRE"
+  },
+  {
+   "year": 2026,
+   "practice": "all",
+   "tPerHa": 2.287,
+   "raw": "34",
+   "unit": "BU / ACRE"
+  }
+ ],
+ "fetchedAt": "2026-11-15T11:05:40.335Z"
+}

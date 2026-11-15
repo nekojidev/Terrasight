@@ -1968,6 +1968,31 @@
           }
         },
         {
+          "name": "Trust report: the model against what happened (pending until the history is built)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "const t = pm.response.json(); pm.test(\"shape\", () => { pm.expect([\"pending\", \"ready\", \"unavailable\"]).to.include(t.status); pm.expect(t.fieldId).to.eql(pm.collectionVariables.get(\"fieldId\")); pm.expect(t.years).to.be.an(\"array\"); pm.expect(t.notModelled).to.be.an(\"array\"); pm.expect(t.actual.kind).to.be.oneOf([\"nass\", \"derzhstat\", \"none\"]); if (t.status === \"ready\") { t.years.forEach((y) => { pm.expect(y.miss).to.be.a(\"boolean\"); if (!y.miss) pm.expect(y.reason).to.eql(null); }); if (t.retrospective) pm.expect(t.retrospective.priceBasis).to.eql(\"today\"); } });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/fields/{{fieldId}}/trust"
+          }
+        },
+        {
           "name": "An agronomist marks the land as cropland (override stores who and when)",
           "event": [
             {

@@ -147,3 +147,33 @@ describe("cache key", () => {
     expect(stripKey("oops ABC", "ABC")).toBe("oops ***");
   });
 });
+
+describe("state-level series (S-10.08)", () => {
+  it("names the state, keeps only the final annual value (no in-season forecasts) and the practices", () => {
+    const r = parseCountyYields(
+      [
+        rec({ county_name: "", state_name: "KANSAS", reference_period_desc: "YEAR", Value: "115" }),
+        rec({ county_name: "", state_name: "KANSAS", reference_period_desc: "YEAR - AUG FORECAST", Value: "123" }),
+        rec({ county_name: "", state_name: "KANSAS", reference_period_desc: "YEAR", prodn_practice_desc: "IRRIGATED", Value: "180" }),
+      ],
+      "corn",
+      "KS",
+      null,
+      "2026-01-01T00:00:00.000Z",
+      true,
+    );
+    expect(r).toMatchObject({ ok: true, area: "Kansas", countyFips: null });
+    if (!("rows" in r)) throw new Error("rows");
+    expect(r.rows.map((x) => [x.practice, x.raw])).toEqual([
+      ["all", "115"],
+      ["irrigated", "180"],
+    ]);
+  });
+  it("the recorded state fixtures have one value per year and practice", () => {
+    for (const s of ["KS", "NE", "CO"]) {
+      const f = JSON.parse(readFileSync(new URL(`../../../fixtures/nass/${s}-state-corn.json`, import.meta.url), "utf8"));
+      const keys = f.rows.map((x: { year: number; practice: string }) => `${x.year}:${x.practice}`);
+      expect(new Set(keys).size).toBe(keys.length);
+    }
+  });
+});

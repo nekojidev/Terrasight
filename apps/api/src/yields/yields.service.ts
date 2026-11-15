@@ -4,9 +4,11 @@ import { join } from "node:path";
 import { Inject, Injectable } from "@nestjs/common";
 import {
   fetchCountyYields,
+  fetchStateYields,
   NASS_ATTRIBUTION,
   NASS_CROPS,
   nassCacheKey,
+  nassStateCacheKey,
   stripKey,
   type CountyYield,
   type NassResult,
@@ -38,6 +40,11 @@ export type FieldCountyYields =
       kind: "county";
       area: string;
       crops: Record<string, CountyYieldPoint[]>;
+      /**
+       * The state's series of the same crops and practices (agg_level STATE), for the hindcast when a county has too
+       * few published values (S-10.08). Empty when none could be had.
+       */
+      state: { area: string; crops: Record<string, CountyYieldPoint[]> };
       /** Crops of the history for which Quick Stats has no county series or no published value. */
       missing: string[];
       /** Oldest fetch among the series. */
@@ -86,11 +93,20 @@ export class CountyYieldsService {
     const key = this.env.NASS_API_KEY;
     const crops: Record<string, CountyYieldPoint[]> = {};
     const origin: Record<string, Origin> = {};
+    const stateCrops: Record<string, CountyYieldPoint[]> = {};
+    let stateArea: string = r.state_code;
     const missing: string[] = [];
     const errors: string[] = [];
     const fetched: string[] = [];
     let area = `${r.name ?? r.geoid} County, ${r.state_code}`;
     for (const crop of wanted) {
+      const st = await this.stateSeries(r.state_code, crop, key);
+      if (st.error) errors.push(st.error);
+      if (st.result) {
+        stateArea = st.result.area;
+        const pts = st.result.rows.filter((x): x is CountyYield & { tPerHa: number } => x.tPerHa !== null);
+        if (pts.length) stateCrops[crop] = pts.map((x) => ({ year: x.year, tPerHa: x.tPerHa, practice: x.practice }));
+      }
       const got = await this.series(r.state_code, r.geoid, crop, key);
       if (got.error) errors.push(got.error);
       if (!got.result) {
@@ -104,7 +120,7 @@ export class CountyYieldsService {
       if (points.length === 0) missing.push(crop);
       else crops[crop] = points.map((x) => ({ year: x.year, tPerHa: x.tPerHa, practice: x.practice }));
     }
-    if (!key && Object.keys(crops).length === 0) {
+    if (!key && Object.keys(crops).length === 0 && Object.keys(stateCrops).length === 0) {
       return { connected: false, reason: "USDA NASS API key is not configured" };
     }
     return {
@@ -112,6 +128,7 @@ export class CountyYieldsService {
       kind: "county",
       area,
       crops,
+      state: { area: stateArea, crops: stateCrops },
       missing,
       fetchedAt: fetched.sort()[0] ?? new Date().toISOString(),
       origin,
@@ -166,6 +183,48 @@ export class CountyYieldsService {
     if (fixture) return { result: fixture, origin: "fixture", error };
     if (cached) return { result: cached, origin: "stale", error };
     return { result: null, origin: "live", error };
+  }
+
+  /** State-level series: same order as `series` (cache, live, fixture, stale). Never throws. */
+  private async stateSeries(
+    stateAlpha: string,
+    crop: string,
+    apiKey: string | undefined,
+  ): Promise<{ result: Ok | null; error?: string }> {
+    const key = createHash("sha256").update(nassStateCacheKey({ stateAlpha, crop })).digest("hex");
+    const row = await this.prisma.system.sourceCache.findUnique({ where: { key } });
+    const cached = row?.payload ? (row.payload as unknown as Ok) : null;
+    if (cached && row?.expiresAt && row.expiresAt > new Date()) return { result: cached };
+    let error: string | undefined;
+    if (apiKey) {
+      try {
+        const res = await this.breaker.run(
+          "nass",
+          () =>
+            fetchStateYields({ stateAlpha, crop }, { apiKey, signal: AbortSignal.timeout(TIMEOUT_MS), fetch }),
+          (x) => x.connected && !x.ok,
+        );
+        if (res.connected && res.ok) {
+          const data = {
+            source: "nass",
+            params: { stateAlpha, crop, level: "state" } as Prisma.InputJsonValue,
+            payload: res as unknown as Prisma.InputJsonValue,
+            dataDate: null,
+            origin: "live",
+            fetchedAt: new Date(),
+            expiresAt: new Date(Date.now() + YIELDS_FRESH_DAYS * 864e5),
+          };
+          await this.prisma.system.sourceCache.upsert({ where: { key }, create: { key, ...data }, update: data });
+          return { result: res };
+        }
+        if (res.connected && !res.ok) error = `NASS ${res.reason}`;
+      } catch (e) {
+        error = `NASS ${stripKey((e as Error).message, apiKey)}`;
+      }
+    }
+    const path = join(this.env.FIXTURES_DIR, "nass", `${stateAlpha}-state-${crop}.json`);
+    if (existsSync(path)) return { result: JSON.parse(readFileSync(path, "utf8")) as Ok, error };
+    return { result: cached, error };
   }
 
   /** Recorded real response (fixtures/nass/<STATE>-<fips>-<crop>.json). */
