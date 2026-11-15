@@ -22,6 +22,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { AnalysisCard } from "@/components/AnalysisCard";
 import { AskOwnerSheet } from "@/components/AskOwnerSheet";
+import { OutlookRailLine } from "@/components/OutlookRailLine";
 import { api } from "@/lib/api";
 import { useWorkspaceEvents } from "@/lib/events";
 import type { AskOwnerBody } from "@terrasight/shared";
@@ -437,6 +438,7 @@ export function Brief({
               </p>
             );
           })()}
+          <OutlookRailLine workspaceId={workspaceId} />
           {b.rail.weather[0]?.attribution && (
             <p className="mt-2 text-micro text-ink-3">{b.rail.weather[0].attribution}</p>
           )}

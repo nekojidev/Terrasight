@@ -7,13 +7,15 @@ import { AnalysisService } from "./analysis.service.js";
 import { EvalInputsService } from "./eval-inputs.service.js";
 import { FieldCheckConsumer } from "./field-check.consumer.js";
 import { ForecastService } from "./forecast.service.js";
+import { OutlookController } from "./outlook.controller.js";
+import { OutlookService } from "./outlook.service.js";
 import { AnalysisScheduler } from "./scheduler.js";
 
 /** EP-03: forecast, analysis runs (06:00 and manual), field checks and evaluators. */
 @Module({
   imports: [FieldsModule, ScenariosModule],
-  controllers: [AnalysisController],
-  providers: [AlertsService, ForecastService, AnalysisService, AnalysisScheduler, FieldCheckConsumer, EvalInputsService],
+  controllers: [AnalysisController, OutlookController],
+  providers: [AlertsService, ForecastService, OutlookService, AnalysisService, AnalysisScheduler, FieldCheckConsumer, EvalInputsService],
   exports: [ForecastService, AnalysisService, EvalInputsService],
 })
 export class AnalysisModule {}
