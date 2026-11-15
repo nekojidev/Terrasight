@@ -31,7 +31,7 @@ export class GeocodeController {
     if (!(await this.limits.take("geocode:nominatim", { capacity: 1, refillPerSec: 1 }))) {
       throw new ProblemException(429, "rate-limited", "Searching too fast; try again in a second");
     }
-    const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&q=${encodeURIComponent(query)}`;
+    const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&accept-language=uk,en&q=${encodeURIComponent(query)}`;
     const res = await fetch(url, {
       headers: { "User-Agent": USER_AGENT, Accept: "application/json" },
       signal: AbortSignal.timeout(10_000),
