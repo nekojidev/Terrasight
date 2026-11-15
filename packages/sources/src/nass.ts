@@ -134,6 +134,11 @@ export function nassCacheKey(q: Pick<NassQuery, "stateAlpha" | "countyName" | "c
   return `nass:yield:v1:${q.stateAlpha.toUpperCase()}:${where}:${q.crop}`;
 }
 
+/** Cache key for a state-level series (EP-10 S-10.08); contains no key, no date. */
+export function nassStateCacheKey(q: Pick<NassQuery, "stateAlpha" | "crop">): string {
+  return `nass:yield:v1:${q.stateAlpha.toUpperCase()}:state:${q.crop}`;
+}
+
 /** Removes the API key from any text that could be logged or stored. */
 export function stripKey(text: string, key?: string): string {
   let out = text.replace(/([?&]key=)[^&\s"']*/gi, "$1***");
@@ -150,6 +155,9 @@ interface NassRecord {
   unit_desc: string;
   county_name: string;
   state_alpha: string;
+  state_name?: string;
+  /** "YEAR" = the final annual value; "YEAR - AUG FORECAST" etc. are in-season forecasts (state level only). */
+  reference_period_desc?: string;
   state_fips_code?: string;
   county_ansi?: string;
 }
@@ -202,6 +210,43 @@ async function range(
   }
 }
 
+function baseQuery(crop: NassCrop, state: string, level: "COUNTY" | "STATE"): Record<string, string> {
+  const base: Record<string, string> = {
+    source_desc: "SURVEY",
+    sector_desc: "CROPS",
+    statisticcat_desc: "YIELD",
+    agg_level_desc: level,
+    state_alpha: state,
+    commodity_desc: crop.commodity,
+    unit_desc: crop.unit,
+  };
+  if (crop.cls) base.class_desc = crop.cls;
+  if (crop.util) base.util_practice_desc = crop.util;
+  return base;
+}
+
+/**
+ * State-level yields for one crop (same crop mapping and practices as the county series), in t/ha. Used when a county
+ * has too few published values (EP-10 S-10.08). Never throws.
+ */
+export async function fetchStateYields(
+  q: Pick<NassQuery, "stateAlpha" | "crop" | "fromYear" | "toYear">,
+  ctx: NassContext = {},
+): Promise<NassResult> {
+  if (!ctx.apiKey) return { connected: false, reason: "USDA NASS API key is not configured" };
+  const crop = NASS_CROPS[q.crop];
+  if (!crop) return { connected: true, ok: false, reason: `no NASS yield series for ${q.crop}` };
+  const state = q.stateAlpha.toUpperCase();
+  const res = await range(
+    baseQuery(crop, state, "STATE"),
+    q.fromYear ?? NASS_FIRST_YEAR,
+    q.toYear ?? new Date().getUTCFullYear(),
+    ctx,
+  );
+  if ("error" in res) return { connected: true, ok: false, reason: res.error };
+  return parseCountyYields(res.data, q.crop, state, null, new Date().toISOString(), true);
+}
+
 /**
  * County yields for one crop, per year and production practice, in t/ha. Never throws: without a key the result is
  * `{ connected: false }`; failures are `{ connected: true, ok: false, reason }`.
@@ -211,17 +256,7 @@ export async function fetchCountyYields(q: NassQuery, ctx: NassContext = {}): Pr
   const crop = NASS_CROPS[q.crop];
   if (!crop) return { connected: true, ok: false, reason: `no NASS county yield series for ${q.crop}` };
   const state = q.stateAlpha.toUpperCase();
-  const base: Record<string, string> = {
-    source_desc: "SURVEY",
-    sector_desc: "CROPS",
-    statisticcat_desc: "YIELD",
-    agg_level_desc: "COUNTY",
-    state_alpha: state,
-    commodity_desc: crop.commodity,
-    unit_desc: crop.unit,
-  };
-  if (crop.cls) base.class_desc = crop.cls;
-  if (crop.util) base.util_practice_desc = crop.util;
+  const base = baseQuery(crop, state, "COUNTY");
   let fips: string | null = null;
   if (q.countyFips) {
     const f = q.countyFips.trim();
@@ -243,18 +278,22 @@ export function parseCountyYields(
   stateAlpha: string,
   countyFips: string | null = null,
   fetchedAt = new Date().toISOString(),
+  stateLevel = false,
 ): NassResult {
   const crop = NASS_CROPS[cropId];
   if (!crop) return { connected: true, ok: false, reason: `no NASS county yield series for ${cropId}` };
   const rows: CountyYield[] = [];
   let county = "";
+  let stateName = "";
   for (const r of records) {
     if (r.unit_desc !== crop.unit) continue;
+    if (r.reference_period_desc && r.reference_period_desc.toUpperCase() !== "YEAR") continue; // forecasts are not yields
     if (crop.cls && r.class_desc !== crop.cls) continue;
     if (crop.util && r.util_practice_desc !== crop.util) continue;
     const practice = practiceOf(r.prodn_practice_desc);
     if (!practice) continue;
     county ||= r.county_name;
+    stateName ||= r.state_name ?? "";
     rows.push({
       year: Number(r.year),
       practice,
@@ -269,7 +308,13 @@ export function parseCountyYields(
     connected: true,
     ok: true,
     crop: cropId,
-    area: county ? `${title} County, ${stateAlpha}` : stateAlpha,
+    area: stateLevel
+      ? stateName
+        ? stateName.toLowerCase().replace(/(^|[\s-])\w/g, (c) => c.toUpperCase())
+        : stateAlpha
+      : county
+        ? `${title} County, ${stateAlpha}`
+        : stateAlpha,
     stateAlpha,
     countyFips,
     rows,

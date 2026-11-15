@@ -504,6 +504,12 @@ const collection = {
         req("An unknown field id gives 404 on the climate shift", "GET", "/api/w/{{ws}}/fields/00000000-0000-4000-8000-000000000000/climate-shift", {
           tests: problem(404),
         }),
+        req("Trust report: the model against what happened (pending until the history is built)", "GET", "/api/w/{{ws}}/fields/{{fieldId}}/trust", {
+          tests: [
+            status(200),
+            `const t = pm.response.json(); pm.test("shape", () => { pm.expect(["pending", "ready", "unavailable"]).to.include(t.status); pm.expect(t.fieldId).to.eql(pm.collectionVariables.get("fieldId")); pm.expect(t.years).to.be.an("array"); pm.expect(t.notModelled).to.be.an("array"); pm.expect(t.actual.kind).to.be.oneOf(["nass", "derzhstat", "none"]); if (t.status === "ready") { t.years.forEach((y) => { pm.expect(y.miss).to.be.a("boolean"); if (!y.miss) pm.expect(y.reason).to.eql(null); }); if (t.retrospective) pm.expect(t.retrospective.priceBasis).to.eql("today"); } });`,
+          ],
+        }),
         req("An agronomist marks the land as cropland (override stores who and when)", "PUT", "/api/w/{{ws}}/fields/{{fieldId}}/suitability-override", {
           tests: [
             status(200),

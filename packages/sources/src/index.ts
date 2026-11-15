@@ -53,8 +53,10 @@ export {
 } from "./forecast.js";
 export {
   fetchCountyYields,
+  fetchStateYields,
   parseCountyYields,
   nassCacheKey,
+  nassStateCacheKey,
   stripKey,
   toTPerHa,
   NASS_CROPS,
