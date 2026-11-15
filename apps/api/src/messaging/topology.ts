@@ -19,6 +19,7 @@ export const QUEUES = {
   scenariosRun: "scenarios.run",
   fieldCheck: "field.check",
   recommendationCommit: "recommendation.commit",
+  zonesBuild: "zones.build",
   dead: "dead",
 } as const;
 

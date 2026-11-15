@@ -180,14 +180,14 @@ model RefreshToken {
 }
 
 model Workspace {
-  id               String   @id @default(uuid()) @db.Uuid
-  name             String
-  slug             String   @unique
-  timeZone         String   @map("time_zone")
-  units            Units    @default(metric)
-  reportLanguage   Language @default(en) @map("report_language")
-  currency         String   @default("USD")
-  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  id             String   @id @default(uuid()) @db.Uuid
+  name           String
+  slug           String   @unique
+  timeZone       String   @map("time_zone")
+  units          Units    @default(metric)
+  reportLanguage Language @default(en) @map("report_language")
+  currency       String   @default("USD")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   memberships   Membership[]
   invitations   Invitation[]
@@ -248,25 +248,25 @@ model ReportLink {
 // ---------- fields and history ----------
 
 model Field {
-  id               String                                       @id @default(uuid()) @db.Uuid
-  workspaceId      String                                       @map("workspace_id") @db.Uuid
+  id               String                                      @id @default(uuid()) @db.Uuid
+  workspaceId      String                                      @map("workspace_id") @db.Uuid
   name             String
-  aliasNo          Int                                          @map("alias_no")
+  aliasNo          Int                                         @map("alias_no")
   geom             Unsupported("geometry(MultiPolygon, 4326)")
   centroid         Unsupported("geometry(Point, 4326)")
-  areaHa           Float                                        @map("area_ha")
-  adminCode        String?                                      @map("admin_code")
+  areaHa           Float                                       @map("area_ha")
+  adminCode        String?                                     @map("admin_code")
   country          String?
-  countyName       String?                                      @map("county_name")
-  regionId         String?                                      @map("region_id")
+  countyName       String?                                     @map("county_name")
+  regionId         String?                                     @map("region_id")
   tier             Tier
-  irrigation       Irrigation                                   @default(unknown)
-  irrigationSource ValueSource                                  @default(unknown) @map("irrigation_source")
-  slopePct         Float?                                       @map("slope_pct")
-  thumbnailKey     String?                                      @map("thumbnail_key")
-  createdBy        String?                                      @map("created_by") @db.Uuid
-  createdAt        DateTime                                     @default(now()) @map("created_at") @db.Timestamptz(3)
-  archivedAt       DateTime?                                    @map("archived_at") @db.Timestamptz(3)
+  irrigation       Irrigation                                  @default(unknown)
+  irrigationSource ValueSource                                 @default(unknown) @map("irrigation_source")
+  slopePct         Float?                                      @map("slope_pct")
+  thumbnailKey     String?                                     @map("thumbnail_key")
+  createdBy        String?                                     @map("created_by") @db.Uuid
+  createdAt        DateTime                                    @default(now()) @map("created_at") @db.Timestamptz(3)
+  archivedAt       DateTime?                                   @map("archived_at") @db.Timestamptz(3)
 
   workspace     Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   cropSeasons   CropSeason[]
@@ -278,6 +278,8 @@ model Field {
   plans         Plan[]
   recs          Recommendation[]
   scoutingTasks ScoutingTask[]
+  zoneBuild     FieldZoneBuild?
+  zones         FieldZone[]
 
   @@unique([workspaceId, aliasNo])
   @@index([workspaceId])
@@ -285,14 +287,14 @@ model Field {
 }
 
 model CropSeason {
-  fieldId     String     @map("field_id") @db.Uuid
-  season      Int
-  mainCrop    String     @map("main_crop")
-  secondCrop  String?    @map("second_crop")
-  confidence  Float
-  source      CropSource
-  isOverride  Boolean    @default(false) @map("is_override")
-  updatedAt   DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+  fieldId    String     @map("field_id") @db.Uuid
+  season     Int
+  mainCrop   String     @map("main_crop")
+  secondCrop String?    @map("second_crop")
+  confidence Float
+  source     CropSource
+  isOverride Boolean    @default(false) @map("is_override")
+  updatedAt  DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   field Field @relation(fields: [fieldId], references: [id], onDelete: Cascade)
 
@@ -337,14 +339,14 @@ model FieldHistory {
 }
 
 model SourceCache {
-  key       String   @id
+  key       String    @id
   source    String
   params    Json
   payload   Json?
-  s3Key     String?  @map("s3_key")
+  s3Key     String?   @map("s3_key")
   dataDate  DateTime? @map("data_date") @db.Date
-  origin    String   @default("live")
-  fetchedAt DateTime @map("fetched_at") @db.Timestamptz(3)
+  origin    String    @default("live")
+  fetchedAt DateTime  @map("fetched_at") @db.Timestamptz(3)
   expiresAt DateTime? @map("expires_at") @db.Timestamptz(3)
 
   @@index([source])
@@ -352,12 +354,14 @@ model SourceCache {
 }
 
 model GatherJob {
-  id         String    @id @default(uuid()) @db.Uuid
-  fieldId    String    @map("field_id") @db.Uuid
-  status     JobStatus @default(queued)
-  startedAt  DateTime  @default(now()) @map("started_at") @db.Timestamptz(3)
-  finishedAt DateTime? @map("finished_at") @db.Timestamptz(3)
-  /** Set once when the provisional history was queued (claimed under a row lock). */
+  id            String    @id @default(uuid()) @db.Uuid
+  fieldId       String    @map("field_id") @db.Uuid
+  status        JobStatus @default(queued)
+  startedAt     DateTime  @default(now()) @map("started_at") @db.Timestamptz(3)
+  finishedAt    DateTime? @map("finished_at") @db.Timestamptz(3)
+  /**
+   * Set once when the provisional history was queued (claimed under a row lock).
+   */
   provisionalAt DateTime? @map("provisional_at") @db.Timestamptz(3)
 
   field Field        @relation(fields: [fieldId], references: [id], onDelete: Cascade)
@@ -372,7 +376,9 @@ model GatherTask {
   status     JobStatus @default(queued)
   attempts   Int       @default(0)
   error      String?
-  /** source_cache key of the result this task produced (read by the history builder). */
+  /**
+   * source_cache key of the result this task produced (read by the history builder).
+   */
   cacheKey   String?   @map("cache_key")
   dataDate   DateTime? @map("data_date") @db.Date
   finishedAt DateTime? @map("finished_at") @db.Timestamptz(3)
@@ -456,40 +462,40 @@ model Plan {
 // ---------- recommendations (RFC §10.3–§10.5) ----------
 
 model Recommendation {
-  id              String      @id @default(uuid()) @db.Uuid
-  workspaceId     String      @map("workspace_id") @db.Uuid
-  fieldId         String      @map("field_id") @db.Uuid
+  id              String     @id @default(uuid()) @db.Uuid
+  workspaceId     String     @map("workspace_id") @db.Uuid
+  fieldId         String     @map("field_id") @db.Uuid
   type            RecType
   subject         String
   season          Int
-  status          RecStatus   @default(open)
+  status          RecStatus  @default(open)
   level           RiskLevel
   confidence      Confidence
   tier            Tier
-  deadline        DateTime?   @db.Date
-  irreversible    Boolean     @default(false)
-  planning        Boolean     @default(false)
-  keyNumbers      Json        @default("[]") @map("key_numbers")
-  drivers         Json        @default("[]")
-  evidence        Json        @default("[]")
-  unknowns        Json        @default("[]")
-  modelRef        String?     @map("model_ref")
-  versions        Json        @default("{}")
-  inputSnapshotId String?     @map("input_snapshot_id") @db.Uuid
-  textOverride    Json?       @map("text_override")
-  editedBy        String?     @map("edited_by") @db.Uuid
-  snoozedAt       DateTime?   @map("snoozed_at") @db.Timestamptz(3)
-  snoozedUntil    DateTime?   @map("snoozed_until") @db.Timestamptz(3)
-  acceptedAt      DateTime?   @map("accepted_at") @db.Timestamptz(3)
-  acceptedBy      String?     @map("accepted_by") @db.Uuid
-  committedAt     DateTime?   @map("committed_at") @db.Timestamptz(3)
-  askOwnerAt      DateTime?   @map("ask_owner_at") @db.Timestamptz(3)
-  askOwnerBy      String?     @map("ask_owner_by") @db.Uuid
-  askNote         String?     @map("ask_note")
-  askCommittedAt  DateTime?   @map("ask_committed_at") @db.Timestamptz(3)
-  dismissedAt     DateTime?   @map("dismissed_at") @db.Timestamptz(3)
-  createdAt       DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt       DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deadline        DateTime?  @db.Date
+  irreversible    Boolean    @default(false)
+  planning        Boolean    @default(false)
+  keyNumbers      Json       @default("[]") @map("key_numbers")
+  drivers         Json       @default("[]")
+  evidence        Json       @default("[]")
+  unknowns        Json       @default("[]")
+  modelRef        String?    @map("model_ref")
+  versions        Json       @default("{}")
+  inputSnapshotId String?    @map("input_snapshot_id") @db.Uuid
+  textOverride    Json?      @map("text_override")
+  editedBy        String?    @map("edited_by") @db.Uuid
+  snoozedAt       DateTime?  @map("snoozed_at") @db.Timestamptz(3)
+  snoozedUntil    DateTime?  @map("snoozed_until") @db.Timestamptz(3)
+  acceptedAt      DateTime?  @map("accepted_at") @db.Timestamptz(3)
+  acceptedBy      String?    @map("accepted_by") @db.Uuid
+  committedAt     DateTime?  @map("committed_at") @db.Timestamptz(3)
+  askOwnerAt      DateTime?  @map("ask_owner_at") @db.Timestamptz(3)
+  askOwnerBy      String?    @map("ask_owner_by") @db.Uuid
+  askNote         String?    @map("ask_note")
+  askCommittedAt  DateTime?  @map("ask_committed_at") @db.Timestamptz(3)
+  dismissedAt     DateTime?  @map("dismissed_at") @db.Timestamptz(3)
+  createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   workspace     Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   field         Field                 @relation(fields: [fieldId], references: [id], onDelete: Cascade)
@@ -532,16 +538,16 @@ model InputSnapshot {
 // ---------- scouting (RFC §10.7) ----------
 
 model ScoutingTask {
-  id               String                               @id @default(uuid()) @db.Uuid
-  recommendationId String                               @map("recommendation_id") @db.Uuid
-  fieldId          String                               @map("field_id") @db.Uuid
-  createdBy        String                               @map("created_by") @db.Uuid
+  id               String                                     @id @default(uuid()) @db.Uuid
+  recommendationId String                                     @map("recommendation_id") @db.Uuid
+  fieldId          String                                     @map("field_id") @db.Uuid
+  createdBy        String                                     @map("created_by") @db.Uuid
   route            Unsupported("geometry(MultiPoint, 4326)")?
-  status           ScoutingStatus                       @default(open)
-  resultPct        Float?                               @map("result_pct")
-  sentAt           DateTime?                            @map("sent_at") @db.Timestamptz(3)
-  clientId         String?                              @unique @map("client_id")
-  createdAt        DateTime                             @default(now()) @map("created_at") @db.Timestamptz(3)
+  status           ScoutingStatus                             @default(open)
+  resultPct        Float?                                     @map("result_pct")
+  sentAt           DateTime?                                  @map("sent_at") @db.Timestamptz(3)
+  clientId         String?                                    @unique @map("client_id")
+  createdAt        DateTime                                   @default(now()) @map("created_at") @db.Timestamptz(3)
 
   recommendation Recommendation  @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
   field          Field           @relation(fields: [fieldId], references: [id], onDelete: Cascade)
@@ -552,12 +558,12 @@ model ScoutingTask {
 }
 
 model ScoutingPoint {
-  taskId    String                           @map("task_id") @db.Uuid
+  taskId    String                               @map("task_id") @db.Uuid
   idx       Int
   geom      Unsupported("geometry(Point, 4326)")
   affected  Int?
-  plants    Int                              @default(20)
-  checkedAt DateTime?                        @map("checked_at") @db.Timestamptz(3)
+  plants    Int                                  @default(20)
+  checkedAt DateTime?                            @map("checked_at") @db.Timestamptz(3)
 
   task ScoutingTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
@@ -582,14 +588,14 @@ model ScoutingPhoto {
 // ---------- Owner report (RFC D12) ----------
 
 model ReportItem {
-  id               String    @id @default(uuid()) @db.Uuid
-  workspaceId      String    @map("workspace_id") @db.Uuid
-  recommendationId String    @map("recommendation_id") @db.Uuid
+  id               String   @id @default(uuid()) @db.Uuid
+  workspaceId      String   @map("workspace_id") @db.Uuid
+  recommendationId String   @map("recommendation_id") @db.Uuid
   text             Json
   note             String?
-  askedBy          String?   @map("asked_by") @db.Uuid
-  committedAt      DateTime  @map("committed_at") @db.Timestamptz(3)
-  supersededBy     String?   @map("superseded_by") @db.Uuid
+  askedBy          String?  @map("asked_by") @db.Uuid
+  committedAt      DateTime @map("committed_at") @db.Timestamptz(3)
+  supersededBy     String?  @map("superseded_by") @db.Uuid
 
   workspace      Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   recommendation Recommendation @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
@@ -648,12 +654,12 @@ model Outcome {
 // ---------- assistant (RFC D9) ----------
 
 model Conversation {
-  id          String    @id @default(uuid()) @db.Uuid
-  workspaceId String    @map("workspace_id") @db.Uuid
-  userId      String    @map("user_id") @db.Uuid
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
   title       String?
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
-  expiresAt   DateTime  @map("expires_at") @db.Timestamptz(3)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  expiresAt   DateTime @map("expires_at") @db.Timestamptz(3)
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   messages  Message[]
@@ -741,7 +747,7 @@ model Notification {
 }
 
 model AdminArea {
-  code    String                                       @id
+  code    String                                      @id
   name    String
   country String
   geom    Unsupported("geometry(MultiPolygon, 4326)")
@@ -750,10 +756,72 @@ model AdminArea {
 }
 
 model UsCounty {
-  geoid     String                                       @id
+  geoid     String                                      @id
   name      String
-  stateCode String                                       @map("state_code")
+  stateCode String                                      @map("state_code")
   geom      Unsupported("geometry(MultiPolygon, 4326)")
 
   @@map("us_counties")
+}
+
+// ---------- rate-map zones (PD FR-ZN-1..3) ----------
+
+/// Build state of a field's stable zones (one row per field; the job rewrites it).
+model FieldZoneBuild {
+  fieldId       String    @id @map("field_id") @db.Uuid
+  runId         String?   @map("run_id") @db.Uuid
+  status        String // queued | running | done | failed
+  progress      Json      @default("{}")
+  startedAt     DateTime? @map("started_at") @db.Timestamptz(3)
+  finishedAt    DateTime? @map("finished_at") @db.Timestamptz(3)
+  error         String?
+  seasons       Json?
+  stats         Json?
+  params        Json?
+  ndviDate      DateTime? @map("ndvi_date") @db.Date
+  ndviSceneId   String?   @map("ndvi_scene_id")
+  ndviCorners   Json?     @map("ndvi_corners")
+  ndviPng       Bytes?    @map("ndvi_png")
+  ndviStats     Json?     @map("ndvi_stats")
+  ndviCheckedAt DateTime? @map("ndvi_checked_at") @db.Timestamptz(3)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  field Field @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  @@map("field_zone_builds")
+}
+
+/// One row per zone class of a field: a MultiPolygon clipped to the field outline, with its area.
+model FieldZone {
+  fieldId        String                                      @map("field_id") @db.Uuid
+  zone           String // strong | variable | weak
+  geom           Unsupported("geometry(MultiPolygon, 4326)")
+  areaHa         Float                                       @map("area_ha")
+  share          Float
+  meanPercentile Float?                                      @map("mean_percentile")
+  createdAt      DateTime                                    @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  field Field @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  @@id([fieldId, zone])
+  @@map("field_zones")
+}
+
+/// Peak-season NDVI raster per field outline and season (float32 little-endian, NaN = no value); past seasons never change.
+model FieldZoneCache {
+  geomHash  String   @map("geom_hash")
+  season    Int
+  res       Int
+  epsg      Int
+  x0        Float
+  y0        Float
+  width     Int
+  height    Int
+  scenes    Int
+  listed    Int
+  data      Bytes
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@id([geomHash, season, res])
+  @@map("field_zone_cache")
 }

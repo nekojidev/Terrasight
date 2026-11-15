@@ -71,3 +71,5 @@ export const ESSENTIAL = new Set(["power", "cdl", "ssurgo", "soilgrids", "modis"
 export function adaptersFor(field: FieldGeometry, keys: SourceKeys = {}): SourceAdapter[] {
   return createAdapters(keys).filter((a) => a.appliesTo(field));
 }
+
+export * from "./zones/index.js";

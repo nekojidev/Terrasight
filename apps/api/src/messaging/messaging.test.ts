@@ -137,7 +137,7 @@ describe("declareTopology", () => {
     expect(calls).toContain('b:commit.8s->terrasight.retry::{"x-match":"all","delay":"8s"}');
     expect(
       calls.filter((c) => c.startsWith("q:") && c.includes('"x-dead-letter-exchange":"terrasight.dlx"')),
-    ).toHaveLength(6);
+    ).toHaveLength(7);
     expect(calls.some((c) => c.startsWith("q:retry.30s:") && c.includes('"x-message-ttl":30000'))).toBe(true);
   });
 });
