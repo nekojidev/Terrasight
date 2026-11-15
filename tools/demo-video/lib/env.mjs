@@ -35,10 +35,10 @@ export function loadConfig() {
   return cfg;
 }
 
-// Reads only ELEVENLABS_* keys from the repo .env (this checkout, or the main checkout of the worktree).
-export function elevenLabsEnv() {
-  const out = { key: process.env.ELEVENLABS_API_KEY, voice: process.env.ELEVENLABS_VOICE_ID };
-  if (out.key) return out;
+// Reads only the named keys from the repo .env (this checkout, or the main checkout of a worktree). Never logged.
+function readEnvKeys(names) {
+  const out = {};
+  for (const n of names) if (process.env[n]) out[n] = process.env[n];
   const cands = [path.join(ROOT, ".env")];
   try {
     const common = execFileSync("git", ["-C", ROOT, "rev-parse", "--git-common-dir"], {
@@ -51,13 +51,26 @@ export function elevenLabsEnv() {
   for (const f of cands) {
     if (!fs.existsSync(f)) continue;
     for (const line of fs.readFileSync(f, "utf8").split("\n")) {
-      const m = line.match(/^\s*(ELEVENLABS_API_KEY|ELEVENLABS_VOICE_ID)\s*=\s*(.*)\s*$/);
-      if (!m) continue;
+      const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
+      if (!m || !names.includes(m[1])) continue;
       const v = m[2].replace(/^['"]|['"]$/g, "");
-      if (!v) continue;
-      if (m[1] === "ELEVENLABS_API_KEY") out.key ||= v;
-      else out.voice ||= v;
+      if (v) out[m[1]] ||= v;
     }
   }
   return out;
+}
+
+export function elevenLabsEnv() {
+  const e = readEnvKeys(["ELEVENLABS_API_KEY", "ELEVENLABS_VOICE_ID"]);
+  return { key: e.ELEVENLABS_API_KEY, voice: e.ELEVENLABS_VOICE_ID };
+}
+
+/** Gemini TTS: the product's own Gemini key; voice and model can be overridden. */
+export function geminiEnv() {
+  const e = readEnvKeys(["GEMINI_API_KEY", "DEMO_GEMINI_VOICE", "DEMO_GEMINI_TTS_MODEL"]);
+  return {
+    key: e.GEMINI_API_KEY,
+    voice: e.DEMO_GEMINI_VOICE || "Charon",
+    model: e.DEMO_GEMINI_TTS_MODEL || "gemini-3.8-flash-tts",
+  };
 }

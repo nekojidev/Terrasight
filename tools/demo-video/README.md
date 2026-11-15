@@ -81,3 +81,10 @@ cd tools/demo-video && npm install
 ```
 
 (npm goes through the same registry mirror as the rest of the repo, so it needs a valid token.)
+
+## Voice providers
+
+`DEMO_TTS` chooses the voice: `elevenlabs` (needs `ELEVENLABS_API_KEY`), `gemini` (uses the product's `GEMINI_API_KEY`;
+voice `DEMO_GEMINI_VOICE`, default `Charon`; model `DEMO_GEMINI_TTS_MODEL`, default `gemini-3.8-flash-tts`) or `say`
+(offline macOS voice, a draft). Without `DEMO_TTS`: ElevenLabs when its key exists, else Gemini, else `say`.
+Audio is cached per line by text, provider and voice; scene lengths follow the measured line durations.

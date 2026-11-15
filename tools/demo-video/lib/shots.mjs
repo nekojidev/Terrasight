@@ -385,7 +385,7 @@ async function trust(take, cfg, L) {
   must(rows.length >= 2 ? rows : null, "two r values");
   const t0 = take.mark("ready");
   const chartCard = await take.card(
-    page.getByText(/Model, county and field greenness by year/).first(),
+    page.getByText(/Model, official yield and field greenness by year/).first(),
     "chartcard",
     200,
   );

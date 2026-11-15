@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { OUT, elevenLabsEnv } from "./env.mjs";
+import { OUT, elevenLabsEnv, geminiEnv } from "./env.mjs";
 
 export const FFMPEG = "/opt/homebrew/bin/ffmpeg";
 export const FFPROBE = "/opt/homebrew/bin/ffprobe";
@@ -33,14 +33,65 @@ async function pickVoice(key) {
   return { id: voices[0].voice_id, name: voices[0].name };
 }
 
+/**
+ * Optional style instruction for Gemini TTS (part of the cache key). Empty by default: the model tends to read a long
+ * instruction aloud, so the tone comes from the choice of voice instead.
+ */
+const GEMINI_STYLE = process.env.DEMO_GEMINI_STYLE || "";
+
+/** One line through Gemini TTS: returns the audio (WAV or raw PCM with its rate). Retries a few times on 429 / 5xx. */
+async function geminiSpeak(g, text) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${g.model}:generateContent`;
+  const body = {
+    contents: [{ parts: [{ text: GEMINI_STYLE ? `${GEMINI_STYLE} ${text}` : text }] }],
+    generationConfig: {
+      responseModalities: ["AUDIO"],
+      speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: g.voice } } },
+    },
+  };
+  let last = "";
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const r = await fetch(url, {
+      method: "POST",
+      headers: { "x-goog-api-key": g.key, "Content-Type": "application/json", "User-Agent": UA },
+      body: JSON.stringify(body),
+    });
+    if (r.ok) {
+      const j = await r.json();
+      const part = j.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data);
+      if (part) {
+        const data = Buffer.from(part.inlineData.data, "base64");
+        // The API answers either with a WAV file or with raw 16-bit PCM ("audio/L16;rate=24000").
+        const isWav = data.subarray(0, 4).toString("latin1") === "RIFF";
+        const rate = Number(/rate=(\d+)/.exec(part.inlineData.mimeType || "")?.[1] ?? 24000);
+        return { data, isWav, rate };
+      }
+      last = "no audio in the response";
+    } else {
+      last = "HTTP " + r.status;
+      if (r.status !== 429 && r.status < 500) break;
+    }
+    await new Promise((res) => setTimeout(res, 1500 * (attempt + 1)));
+  }
+  throw new Error("Gemini TTS failed: " + last);
+}
+
 export async function synthesize(lines) {
   const dir = path.join(OUT, "audio");
   fs.mkdirSync(dir, { recursive: true });
   const el = elevenLabsEnv();
+  const gm = geminiEnv();
+  // DEMO_TTS forces a provider; otherwise ElevenLabs when its key exists, else Gemini, else the offline macOS voice.
+  const forced = process.env.DEMO_TTS;
   let provider = "say";
   let voiceName = `${SAY_VOICE} (macOS say, rate ${SAY_RATE})`;
   let voiceId = SAY_VOICE;
-  if (el.key) {
+  if (forced === "gemini" || (!forced && !el.key && gm.key)) {
+    if (!gm.key) throw new Error("DEMO_TTS=gemini needs GEMINI_API_KEY");
+    provider = "gemini";
+    voiceId = `${gm.model}:${gm.voice}:${GEMINI_STYLE}`;
+    voiceName = `${gm.voice} (Gemini TTS, ${gm.model})`;
+  } else if (forced !== "say" && el.key) {
     provider = "elevenlabs";
     if (el.voice) {
       voiceId = el.voice;
@@ -51,7 +102,7 @@ export async function synthesize(lines) {
       voiceName = v.name;
     }
   }
-  const info = { provider, voice: voiceName, draft: provider !== "elevenlabs", files: {}, durations: {} };
+  const info = { provider, voice: voiceName, draft: provider === "say", files: {}, durations: {} };
   for (const l of lines) {
     const hash = crypto
       .createHash("sha1")
@@ -65,6 +116,13 @@ export async function synthesize(lines) {
         execFileSync("say", ["-v", SAY_VOICE, "-r", SAY_RATE, "-o", aiff, l.text]);
         execFileSync(FFMPEG, ["-y", "-v", "error", "-i", aiff, "-ar", "48000", "-ac", "1", wav]);
         fs.rmSync(aiff);
+      } else if (provider === "gemini") {
+        const { data, isWav, rate } = await geminiSpeak(gm, l.text);
+        const raw = wav.replace(/\.wav$/, isWav ? ".src.wav" : ".pcm");
+        fs.writeFileSync(raw, data);
+        const input = isWav ? ["-i", raw] : ["-f", "s16le", "-ar", String(rate), "-ac", "1", "-i", raw];
+        execFileSync(FFMPEG, ["-y", "-v", "error", ...input, "-ar", "48000", "-ac", "1", wav]);
+        fs.rmSync(raw);
       } else {
         const r = await fetch(
           `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_128`,
