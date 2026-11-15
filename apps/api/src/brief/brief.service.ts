@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { classifyUrgency, compareItems, localDay, type Urgency } from "@terrasight/evaluators";
 import { forecastCell, nextFrostDay, type Forecast } from "@terrasight/sources";
+import { AiDaySummaryService } from "../analysis/ai-day-summary.service.js";
 import { AnalysisService } from "../analysis/analysis.service.js";
 import { PrismaService } from "../db/prisma.service.js";
 import { thumbPath } from "../geo/thumb.js";
@@ -21,6 +22,7 @@ export class BriefService {
     private readonly prisma: PrismaService,
     private readonly recs: RecommendationsService,
     private readonly analysis: AnalysisService,
+    private readonly daySummary: AiDaySummaryService,
   ) {}
 
   async get(workspaceId: string, now = new Date()) {
@@ -93,6 +95,10 @@ export class BriefService {
         return { ...view, urgency, actionable: ACTIONABLE.has(r.level) };
       });
 
+    // Assistant-suggested watch-items ("worth a look", no verified model) never join the groups: not Urgent, not hero.
+    const watch = items.filter((i) => i.aiSuggested);
+    items.splice(0, items.length, ...items.filter((i) => !i.aiSuggested));
+
     // One item per field: the most urgent; the rest are "+N" (decision 10).
     const byField = new Map<string, typeof items>();
     for (const i of items) (byField.get(i.fieldId) ?? byField.set(i.fieldId, []).get(i.fieldId)!).push(i);
@@ -112,6 +118,7 @@ export class BriefService {
     const urgent = group("urgent");
     const thisWeek = group("this_week");
     const hero = urgent[0] ?? thisWeek[0] ?? null;
+    const worthALook = watch.sort((a, b) => a.fieldName.localeCompare(b.fieldName) || a.id.localeCompare(b.id));
 
     const strip = (fieldId: string) =>
       crops
@@ -141,6 +148,7 @@ export class BriefService {
         };
       });
 
+    const weather = await this.weatherByCounty(fields, today);
     return {
       date: today,
       timeZone: ws.timeZone,
@@ -150,11 +158,14 @@ export class BriefService {
         urgent: urgent.length,
         thisWeek: thisWeek.length,
         allGood: allGood.length,
+        worthALook: worthALook.length,
       },
+      daySummary: this.summary(workspaceId, fields, urgent, thisWeek, worthALook, today, weather),
       hero: hero ? { ...hero, seasons: strip(hero.fieldId), thumb: thumbs.get(hero.fieldId) ?? null } : null,
       urgent: urgent.filter((i) => i.id !== hero?.id).map((i) => ({ ...i, seasons: strip(i.fieldId), thumb: thumbs.get(i.fieldId) ?? null })),
       thisWeek: thisWeek.filter((i) => i.id !== hero?.id).map((i) => ({ ...i, seasons: strip(i.fieldId), thumb: thumbs.get(i.fieldId) ?? null })),
       allGood,
+      worthALook: worthALook.map((i) => ({ ...i, thumb: thumbs.get(i.fieldId) ?? null })),
       lastRun: run
         ? { id: run.id, status: run.status, finishedAt: run.finishedAt, summary: run.summary }
         : null,
@@ -165,7 +176,7 @@ export class BriefService {
           newRecommendations: run?.summary?.newRecommendations ?? null,
           urgent: urgent.length,
         },
-        weather: await this.weatherByCounty(fields, today),
+        weather,
         ownerQuestion: question
           ? {
               reportItemId: question.reportItemId,
@@ -177,6 +188,49 @@ export class BriefService {
           : null,
       },
     };
+  }
+
+  /**
+   * The header sentence written by the assistant (number-checked, from the brief facts) when it is ready; null
+   * otherwise, and the web shows its own template sentence from the counts.
+   * Fields are named "F<alias>" in the facts and replaced by their names for display.
+   */
+  private summary(
+    workspaceId: string,
+    fields: Array<{ id: string; name: string; alias_no: number }>,
+    urgent: Array<{ fieldId: string; text: { title: { en: string } }; level: string; deadline: string | null }>,
+    thisWeek: Array<{ fieldId: string; text: { title: { en: string } }; level: string; deadline: string | null }>,
+    worth: unknown[],
+    today: string,
+    weather: Array<{ today: { tminC: number | null; tmaxC: number | null; precipMm: number | null } | null; nextFrost: { date: string; tminC: number } | null }>,
+  ) {
+    const ref = new Map(fields.map((f) => [f.id, `F${f.alias_no}`]));
+    const names = new Map(fields.map((f) => [`F${f.alias_no}`, f.name]));
+    const row = (i: (typeof urgent)[number]) => ({
+      field: ref.get(i.fieldId),
+      item: i.text.title.en,
+      level: i.level,
+      deadline: i.deadline,
+    });
+    const nums = (k: "tminC" | "tmaxC" | "precipMm") =>
+      weather.map((w) => w.today?.[k]).filter((v): v is number => typeof v === "number");
+    const facts = {
+      date: today,
+      fields: fields.length,
+      urgentCount: urgent.length,
+      thisWeekCount: thisWeek.length,
+      worthALookCount: worth.length,
+      urgent: urgent.slice(0, 4).map(row),
+      thisWeek: thisWeek.slice(0, 4).map(row),
+      weatherToday: {
+        lowestMinC: nums("tminC").length ? Math.min(...nums("tminC")) : null,
+        highestMaxC: nums("tmaxC").length ? Math.max(...nums("tmaxC")) : null,
+        maxRainMm: nums("precipMm").length ? Math.max(...nums("precipMm")) : null,
+        nextFrost: weather.find((w) => w.nextFrost)?.nextFrost ?? null,
+      },
+    };
+    const ai = this.daySummary.lookup(workspaceId, facts, names);
+    return ai ? { text: ai, source: "ai" as const } : null;
   }
 
   /** Today's forecast and the next frost per county, from cached forecasts only (no network in the request path). */

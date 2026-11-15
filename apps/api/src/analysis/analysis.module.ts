@@ -2,6 +2,8 @@ import { Module } from "@nestjs/common";
 import { FieldsModule } from "../fields/fields.module.js";
 import { ScenariosModule } from "../scenarios/scenarios.module.js";
 import { AnalysisController } from "./analysis.controller.js";
+import { AiDaySummaryService } from "./ai-day-summary.service.js";
+import { AiRecommendationsService } from "./ai-recommendations.service.js";
 import { AlertsService } from "./alerts.service.js";
 import { AnalysisService } from "./analysis.service.js";
 import { EvalInputsService } from "./eval-inputs.service.js";
@@ -13,7 +15,7 @@ import { AnalysisScheduler } from "./scheduler.js";
 @Module({
   imports: [FieldsModule, ScenariosModule],
   controllers: [AnalysisController],
-  providers: [AlertsService, ForecastService, AnalysisService, AnalysisScheduler, FieldCheckConsumer, EvalInputsService],
-  exports: [ForecastService, AnalysisService, EvalInputsService],
+  providers: [AiDaySummaryService, AiRecommendationsService, AlertsService, ForecastService, AnalysisService, AnalysisScheduler, FieldCheckConsumer, EvalInputsService],
+  exports: [AiDaySummaryService, ForecastService, AnalysisService, EvalInputsService],
 })
 export class AnalysisModule {}

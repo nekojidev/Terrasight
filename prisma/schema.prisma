@@ -477,6 +477,10 @@ model Recommendation {
   versions        Json        @default("{}")
   inputSnapshotId String?     @map("input_snapshot_id") @db.Uuid
   textOverride    Json?       @map("text_override")
+  /// Assistant-written text {source: "ai" or "template", hash, title, action, why}; the template text stays the fallback (PD v2.11).
+  aiText          Json?       @map("ai_text")
+  /// A "worth scouting" watch-item proposed by the assistant for a pest with no verified model (never Urgent).
+  aiSuggested     Boolean     @default(false) @map("ai_suggested")
   editedBy        String?     @map("edited_by") @db.Uuid
   snoozedAt       DateTime?   @map("snoozed_at") @db.Timestamptz(3)
   snoozedUntil    DateTime?   @map("snoozed_until") @db.Timestamptz(3)

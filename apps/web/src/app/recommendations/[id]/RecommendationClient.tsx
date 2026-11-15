@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { AiMark } from "@/components/AiMark";
 import { useLocale, useTranslations } from "next-intl";
 import { useState, type FormEvent } from "react";
 import type { AskOwnerBody } from "@terrasight/shared";
@@ -71,6 +72,8 @@ export interface RecView {
   unknowns: string[];
   text: { title: Localised; action: Localised; why: Localised; scout: Localised | null };
   edited: boolean;
+  textSource?: "ai" | "template" | "edited";
+  aiSuggested?: boolean;
   snoozedUntil: string | null;
   undoUntil: string | null;
   /** Set when the agronomist asked the owner (pending within Undo, or a live decision). */
@@ -437,9 +440,14 @@ export function RecommendationClient({
             {t(`type_${r.type}`)}
           </Chip>
           {r.edited && <Chip tone="neutral">{t("recEdited")}</Chip>}
+          {r.aiSuggested && <Chip tone="neutral" icon={<Sparkles />}>{t("aiWatchChip")}</Chip>}
         </div>
         <div>
-          <h1 className="text-h1 text-ink">{r.text.title[locale]}</h1>
+          <h1 className="text-h1 text-ink">
+            {r.text.title[locale]}
+            {r.textSource === "ai" && <AiMark />}
+          </h1>
+          {r.aiSuggested && <p className="mt-2 text-small text-ink-2">{t("aiWorthPageNote")}</p>}
           <p className="mt-2 text-body text-ink-2">
             {r.fieldName} · {t("recSeason", { season: r.season })}
           </p>

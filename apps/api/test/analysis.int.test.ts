@@ -9,6 +9,7 @@ import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { AnalysisService, type FieldCheckJob } from "../src/analysis/analysis.service.js";
 import { FieldCheckConsumer } from "../src/analysis/field-check.consumer.js";
+import { AiRecommendationsService } from "../src/analysis/ai-recommendations.service.js";
 import { AlertsService } from "../src/analysis/alerts.service.js";
 import { EvalInputsService } from "../src/analysis/eval-inputs.service.js";
 import { ForecastService } from "../src/analysis/forecast.service.js";
@@ -51,6 +52,8 @@ let env: Env;
 let prisma: PrismaService;
 let analysis: AnalysisService;
 let consumer: FieldCheckConsumer;
+let aiConsumer: FieldCheckConsumer;
+let aiService: AiRecommendationsService;
 let scheduler: AnalysisScheduler;
 let sources: SourcesService;
 let geo: GeoService;
@@ -206,6 +209,11 @@ beforeAll(async () => {
   const scenariosStub = { upsertRecommendation: async () => false } as unknown as ScenariosService;
   consumer = new FieldCheckConsumer(broker, env, lib, prisma, analysis, inputsService, scenariosStub, new AlertsService(prisma, lib));
   scheduler = new AnalysisScheduler(env, prisma, analysis);
+  // The same check with the AI wording on and a mocked Gemini (no live calls).
+  aiService = new AiRecommendationsService({ ...env, GEMINI_API_KEY: "test-key" }, lib, prisma);
+  aiConsumer = new FieldCheckConsumer(
+    broker, env, lib, prisma, analysis, inputsService, scenariosStub, new AlertsService(prisma, lib), aiService,
+  );
 });
 
 afterAll(async () => {
@@ -241,6 +249,47 @@ describe("analysis run", () => {
     expect(recs[0]!.deadline?.toISOString().slice(0, 10)).toBe("2027-04-25");
     expect(recs[0]!.inputSnapshotId).not.toBeNull();
     expect(done.summary).toEqual({ total: 1, checked: 1, newRecommendations: 1, problems: [] });
+  });
+
+  it("writes AI text and watch-items in the same check; unchanged facts cost no second call", async () => {
+    const { ws, field } = await workspaceWithField("Pivot 21");
+    await seedWeather(field);
+    const generate = vi.fn(async (args: { contents: string }) => {
+      const req = JSON.parse(args.contents) as { items: Array<{ ref: string }>; watchCandidates?: Array<{ pestId: string }> };
+      const calm = {
+        title: { en: "Worth a scouting walk", uk: "Варто пройти полем" },
+        action: { en: "Walk the field and check the crop.", uk: "Пройдіть полем і огляньте культуру." },
+        why: { en: "It suits the crop at this time of year.", uk: "Це доречно для культури в цей час року." },
+      };
+      return {
+        text: JSON.stringify({
+          items: req.items.map((i) => ({
+            ref: i.ref,
+            title: { en: "Corn rootworm: plan the rotation", uk: "Кукурудзяний жук: сплануйте сівозміну" },
+            action: { en: "Choose the 2027 crop before sowing.", uk: "Оберіть культуру на 2027 рік до сівби." },
+            why: { en: "Corn grew here in 2024 and 2025.", uk: "Кукурудза росла тут у 2024 і 2025 роках." },
+          })),
+          watch: (req.watchCandidates ?? []).slice(0, 3).map((c) => ({ pestId: c.pestId, ...calm })),
+        }),
+        usageMetadata: { promptTokenCount: 1200, candidatesTokenCount: 400, thoughtsTokenCount: 0 },
+      };
+    });
+    aiService.gemini.client = { models: { generateContent: generate } } as never;
+    for (let i = 0; i < 2; i++) {
+      const run = await analysis.start(ws, "manual", null, AS_OF);
+      for (const job of await jobsFor(run.id)) await aiConsumer.handle(job);
+    }
+    const recs = await prisma.system.recommendation.findMany({ where: { fieldId: field } });
+    const evaluated = recs.find((r) => r.subject === "western_corn_rootworm")!;
+    expect(evaluated.aiSuggested).toBe(false);
+    expect(evaluated.aiText).toMatchObject({ source: "ai" });
+    const watch = recs.filter((r) => r.aiSuggested);
+    expect(watch).toHaveLength(2); // capped at two
+    for (const w of watch) {
+      expect(w).toMatchObject({ level: "unknown", status: "open", deadline: null, planning: false, irreversible: false });
+      expect(w.aiText).toMatchObject({ source: "ai" });
+    }
+    expect(generate).toHaveBeenCalledTimes(1);
   });
 
   it("updates the live recommendation in place and appends the level history", async () => {
