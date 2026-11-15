@@ -8,6 +8,8 @@ import type { Language, OwnerAnswerKind } from "../generated/prisma/enums.js";
 import { ProblemException } from "../http/problem.js";
 import { eventRow } from "../messaging/outbox.js";
 import { OutboxService } from "../messaging/outbox.service.js";
+import { NotificationsService } from "../notifications/notifications.service.js";
+import { planReportAnswered } from "../notifications/plan.js";
 import { RecommendationsService } from "../recommendations/recommendations.service.js";
 
 type Localised = { en: string; uk: string };
@@ -35,6 +37,7 @@ export class ReportsService {
     private readonly prisma: PrismaService,
     private readonly outbox: OutboxService,
     private readonly recs: RecommendationsService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /** Live (not superseded) items grouped by field and urgency; answers and replies; "changed since accepted". */
@@ -198,6 +201,21 @@ export class ReportsService {
     await this.outbox.add(this.prisma.system, [
       eventRow(EventKeys.brief(workspaceId), "report.answered", workspaceId, { id, answer: body.answer }),
     ]);
+    // Notify the staff (RFC §15.4); a failure here must not lose the owner's answer.
+    try {
+      await this.notifications.create(
+        this.prisma.system,
+        workspaceId,
+        planReportAnswered(await this.notifications.members(workspaceId), {
+          reportItemId: id,
+          answer: body.answer,
+          fieldName: (item.text as unknown as ItemText).fieldName,
+          actorId: "userId" in by ? by.userId : null,
+        }),
+      );
+    } catch {
+      /* best effort */
+    }
     return { answer: a.answer, text: a.text, via: a.via, at: a.createdAt };
   }
 

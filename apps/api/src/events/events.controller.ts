@@ -76,7 +76,7 @@ export class EventsController {
       }
     }
     return this.events
-      .stream(ws, topics)
+      .stream(ws, topics, undefined, req.user?.id)
       .pipe(map((e) => ({ type: e.type, data: JSON.stringify(e.data), ...(e.id ? { id: e.id } : {}) })));
   }
 }

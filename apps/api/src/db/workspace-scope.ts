@@ -12,6 +12,7 @@ export const SCOPED_MODELS = new Set([
   "ReportItem",
   "Conversation",
   "AuditLog",
+  "Notification",
 ]);
 
 const READ_WRITE_WHERE = new Set([

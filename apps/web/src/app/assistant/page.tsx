@@ -32,7 +32,7 @@ export default async function AssistantPage({
   const t = await getTranslations("Assistant");
   return (
     <AppShell
-      workspace={{ name: ws.data.name, fieldCount: ws.data.fieldCount }}
+      workspace={{ id: ws.data.id, name: ws.data.name, fieldCount: ws.data.fieldCount }}
       user={{ name: me.data.name, role: ws.data.role }}
       crumb={t("crumb")}
     >

@@ -525,6 +525,19 @@ const collection = {
             `pm.test("shape", () => { const r = pm.response.json(); pm.expect(r.fields).to.be.an("array"); pm.expect(r.counts).to.have.property("items"); });`,
           ],
         }),
+        req("Notifications, unread (L-06)", "GET", "/api/w/{{ws}}/notifications?unread=1", {
+          tests: [
+            status(200),
+            `pm.test("shape", () => { const r = pm.response.json(); pm.expect(r.unread).to.be.a("number"); pm.expect(r.items).to.be.an("array"); pm.expect(r.items.length).to.be.at.most(30); });`,
+          ],
+        }),
+        req("Mark all notifications as read (L-06)", "POST", "/api/w/{{ws}}/notifications/read", {
+          body: {},
+          tests: [
+            status(200),
+            `pm.test("shape", () => pm.expect(pm.response.json().updated).to.be.a("number"));`,
+          ],
+        }),
         req("Create a report link (S-08.06)", "POST", "/api/w/{{ws}}/report-links", {
           body: { language: "uk" },
           tests: [

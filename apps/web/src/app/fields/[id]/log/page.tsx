@@ -29,7 +29,7 @@ export default async function LogPage({ params }: { params: Promise<{ id: string
   if (!field.ok) notFound();
   return (
     <AppShell
-      workspace={{ name: ws.data.name, fieldCount: ws.data.fieldCount }}
+      workspace={{ id: ws.data.id, name: ws.data.name, fieldCount: ws.data.fieldCount }}
       user={{ name: me.data.name, role: ws.data.role }}
       crumb={field.data.name}
     >

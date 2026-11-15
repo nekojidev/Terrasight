@@ -8,6 +8,8 @@ import { ProblemException } from "../http/problem.js";
 import { eventRow, jobRow, type OutboxRow } from "../messaging/outbox.js";
 import { OutboxService } from "../messaging/outbox.service.js";
 import { QUEUES } from "../messaging/topology.js";
+import { NotificationsService } from "../notifications/notifications.service.js";
+import { planRunFailed, planUrgent } from "../notifications/plan.js";
 
 type Tx = Prisma.TransactionClient;
 const ACTIVE: FieldCheckStatus[] = ["waiting", "running"];
@@ -48,6 +50,7 @@ export class AnalysisService implements OnModuleInit {
     private readonly prisma: PrismaService,
     private readonly outbox: OutboxService,
     private readonly events: EventsService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /** On (re)connect the AnalysisPanel first gets the latest run from PostgreSQL. */
@@ -215,10 +218,60 @@ export class AnalysisService implements OnModuleInit {
       where: { id: runId },
       data: { status: "done", finishedAt: new Date(), summary: summary as unknown as Prisma.InputJsonValue },
     });
+    await this.notify(tx, workspaceId, run, summary);
     return [
       eventRow(EventKeys.analysis(workspaceId), "analysis.done", workspaceId, { runId, summary }),
       eventRow(EventKeys.brief(workspaceId), "brief.changed", workspaceId, { runId }),
     ];
+  }
+
+  /** Notifications from a finished run (RFC §15.4): new Urgent items and failed fields. */
+  private async notify(
+    tx: Tx,
+    workspaceId: string,
+    run: { id: string; requestedBy: string | null; startedAt: Date; fields: Array<{ fieldId: string }> },
+    summary: RunSummary,
+  ): Promise<void> {
+    const members = await this.notifications.members(workspaceId, tx);
+    const ws = await tx.workspace.findUniqueOrThrow({
+      where: { id: workspaceId },
+      select: { timeZone: true },
+    });
+    const fresh = await tx.recommendation.findMany({
+      where: {
+        workspaceId,
+        fieldId: { in: run.fields.map((f) => f.fieldId) },
+        createdAt: { gte: run.startedAt },
+        status: "open",
+      },
+      select: {
+        id: true,
+        deadline: true,
+        irreversible: true,
+        planning: true,
+        field: { select: { name: true } },
+      },
+    });
+    await this.notifications.create(tx, workspaceId, [
+      ...planUrgent(
+        members,
+        fresh.map((r) => ({
+          id: r.id,
+          fieldName: r.field.name,
+          deadline: iso(r.deadline),
+          irreversible: r.irreversible,
+          planning: r.planning,
+        })),
+        new Date(),
+        ws.timeZone,
+      ),
+      ...planRunFailed(members, {
+        runId: run.id,
+        requestedBy: run.requestedBy,
+        failed: summary.problems.filter((p) => p.status === "failed").length,
+        total: summary.total,
+      }),
+    ]);
   }
 
   private fieldEvent(
