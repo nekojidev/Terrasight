@@ -11,6 +11,7 @@ import {
 import { Reflector } from "@nestjs/core";
 import type { Request } from "express";
 import { ENV, type Env } from "../config/config.js";
+import { enterWorkspace } from "../db/request-context.js";
 import { PrismaService } from "../db/prisma.service.js";
 import type { Role } from "../generated/prisma/enums.js";
 import { can, type Permission } from "./permissions.js";
@@ -74,6 +75,7 @@ export class WorkspaceGuard implements CanActivate {
     ]);
     if (permission && !can(membership.role, permission)) throw new ForbiddenException();
     req.workspaceId = ws;
+    enterWorkspace(ws); // the scoped Prisma client now verifies this workspace on every query
     req.role = membership.role;
     return true;
   }

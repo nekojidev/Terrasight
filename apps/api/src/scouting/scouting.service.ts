@@ -86,7 +86,7 @@ export class ScoutingService {
     if (!rec) throw new ProblemException(404, "not-found");
     if (rec.type !== "pest" && rec.type !== "disease")
       throw new ProblemException(422, "not-scoutable", "Only pest and disease items can be scouted");
-    const open = await this.prisma.system.scoutingTask.findFirst({
+    const open = await this.prisma.db.scoutingTask.findFirst({
       where: { recommendationId, createdBy: userId, status: "open" },
       select: { id: true },
     });
@@ -108,7 +108,7 @@ export class ScoutingService {
   }
 
   async get(workspaceId: string, id: string) {
-    const task = await this.prisma.system.scoutingTask.findFirst({
+    const task = await this.prisma.db.scoutingTask.findFirst({
       where: { id, recommendation: { workspaceId } },
       include: {
         recommendation: {
@@ -187,7 +187,7 @@ export class ScoutingService {
     taskId: string,
     body: { pointIdx: number; contentType: string; bytes: number },
   ) {
-    const task = await this.prisma.system.scoutingTask.findFirst({
+    const task = await this.prisma.db.scoutingTask.findFirst({
       where: { id: taskId, recommendation: { workspaceId } },
       select: { id: true, status: true, createdBy: true },
     });
@@ -204,7 +204,7 @@ export class ScoutingService {
       throw new ProblemException(422, "photo-size", "Photos can be up to 10 MB");
     const id = randomUUID();
     const key = `scouting/${workspaceId}/${taskId}/${id}`;
-    await this.prisma.system.scoutingPhoto.create({
+    await this.prisma.db.scoutingPhoto.create({
       data: {
         id,
         taskId,
@@ -237,7 +237,7 @@ export class ScoutingService {
 
   /** Development storage when no bucket is configured: the signed URL writes into UPLOADS_DIR. */
   async putLocal(photoId: string, stream: Readable): Promise<void> {
-    const photo = await this.prisma.system.scoutingPhoto.findUnique({ where: { id: photoId } });
+    const photo = await this.prisma.db.scoutingPhoto.findUnique({ where: { id: photoId } });
     if (!photo) throw new ProblemException(404, "not-found");
     const path = join(this.env.UPLOADS_DIR, photo.s3Key);
     mkdirSync(join(path, ".."), { recursive: true });
@@ -247,7 +247,7 @@ export class ScoutingService {
   }
 
   async getLocal(photoId: string) {
-    const photo = await this.prisma.system.scoutingPhoto.findUnique({ where: { id: photoId } });
+    const photo = await this.prisma.db.scoutingPhoto.findUnique({ where: { id: photoId } });
     if (!photo) throw new ProblemException(404, "not-found");
     return {
       stream: createReadStream(join(this.env.UPLOADS_DIR, photo.s3Key)),
@@ -268,7 +268,7 @@ export class ScoutingService {
     taskId: string,
     body: { clientId: string; counts: number[] },
   ) {
-    const task = await this.prisma.system.scoutingTask.findFirst({
+    const task = await this.prisma.db.scoutingTask.findFirst({
       where: { id: taskId, recommendation: { workspaceId } },
       include: { recommendation: true },
     });

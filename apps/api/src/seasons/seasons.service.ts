@@ -54,11 +54,11 @@ export class SeasonsService {
    * season is already past its first season, the plan for the first season stands in for it (decision 2026-11-14).
    */
   async planFor(fieldId: string, season: number) {
-    const exact = await this.prisma.system.plan.findUnique({
+    const exact = await this.prisma.db.plan.findUnique({
       where: { fieldId_season: { fieldId, season } },
     });
     if (exact || season <= this.planFirstSeason) return exact;
-    return this.prisma.system.plan.findUnique({
+    return this.prisma.db.plan.findUnique({
       where: { fieldId_season: { fieldId, season: this.planFirstSeason } },
     });
   }
@@ -88,7 +88,7 @@ export class SeasonsService {
     });
     if (!field) throw new ProblemException(404, "not-found");
     const [record, plan] = await Promise.all([
-      this.prisma.system.seasonRecord.findUnique({ where: { fieldId_season: { fieldId, season } } }),
+      this.prisma.db.seasonRecord.findUnique({ where: { fieldId_season: { fieldId, season } } }),
       this.planFor(fieldId, season),
     ]);
 
@@ -174,7 +174,7 @@ export class SeasonsService {
       ...(input.tillage !== undefined ? { tillage: input.tillage } : {}),
       updatedBy: userId,
     };
-    await this.prisma.system.seasonRecord.upsert({
+    await this.prisma.db.seasonRecord.upsert({
       where: { fieldId_season: { fieldId, season } },
       create: { fieldId, season, ...data },
       update: data,

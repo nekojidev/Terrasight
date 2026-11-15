@@ -157,7 +157,7 @@ export class DecisionsService {
   }
 
   private async decisions(workspaceId: string): Promise<Decision[]> {
-    const rows = await this.prisma.system.reportItem.findMany({
+    const rows = await this.prisma.db.reportItem.findMany({
       where: { workspaceId, supersededBy: null },
       orderBy: { committedAt: "desc" },
       include,
@@ -169,7 +169,7 @@ export class DecisionsService {
   }
 
   private async one(workspaceId: string, id: string): Promise<Decision> {
-    const row = await this.prisma.system.reportItem.findFirst({ where: { id, workspaceId }, include });
+    const row = await this.prisma.db.reportItem.findFirst({ where: { id, workspaceId }, include });
     if (!row) throw new ProblemException(404, "not-found");
     const names = await this.names([
       row.askedBy,
@@ -180,7 +180,7 @@ export class DecisionsService {
   }
 
   private async item(workspaceId: string, id: string) {
-    const i = await this.prisma.system.reportItem.findFirst({ where: { id, workspaceId } });
+    const i = await this.prisma.db.reportItem.findFirst({ where: { id, workspaceId } });
     if (!i) throw new ProblemException(404, "not-found");
     return i;
   }
@@ -231,7 +231,7 @@ export class DecisionsService {
     const item = await this.item(workspaceId, id);
     if (item.supersededBy)
       throw new ProblemException(409, "superseded", "This decision was replaced by a newer one");
-    await this.prisma.system.ownerAnswer.create({
+    await this.prisma.db.ownerAnswer.create({
       data: {
         reportItemId: id,
         answer: TO_DB[body.answer],
@@ -266,7 +266,7 @@ export class DecisionsService {
 
   async reply(workspaceId: string, userId: string, id: string, text: string) {
     await this.item(workspaceId, id);
-    await this.prisma.system.reportReply.create({
+    await this.prisma.db.reportReply.create({
       data: { reportItemId: id, text: text.trim(), userId },
     });
     await this.prisma.db.auditLog.create({

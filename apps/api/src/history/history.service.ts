@@ -112,7 +112,7 @@ export class HistoryService extends JobConsumer<BuildJob> implements OnModuleIni
     const irrigation = detectIrrigation(et, stats, soil, ndvi);
 
     // The agronomist's corrections win (S-02.07): drop computed seasons they overrode.
-    const overrides = await this.prisma.system.cropSeason.findMany({ where: { fieldId, isOverride: true } });
+    const overrides = await this.prisma.db.cropSeason.findMany({ where: { fieldId, isOverride: true } });
     const overridden = new Set(overrides.map((o) => o.season));
     const merged: SeasonCrop[] = [
       ...crops.filter((c) => !overridden.has(c.season)),
@@ -228,8 +228,8 @@ export class HistoryService extends JobConsumer<BuildJob> implements OnModuleIni
     });
     if (!field) throw new ProblemException(404, "not-found");
     const [history, crops] = await Promise.all([
-      this.prisma.system.fieldHistory.findUnique({ where: { fieldId } }),
-      this.prisma.system.cropSeason.findMany({ where: { fieldId }, orderBy: { season: "asc" } }),
+      this.prisma.db.fieldHistory.findUnique({ where: { fieldId } }),
+      this.prisma.db.cropSeason.findMany({ where: { fieldId }, orderBy: { season: "asc" } }),
     ]);
     return {
       built: history ? { at: history.builtAt, provisional: history.provisional } : null,
