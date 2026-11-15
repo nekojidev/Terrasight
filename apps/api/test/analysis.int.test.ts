@@ -19,6 +19,8 @@ import { ToolError, ToolExecutor } from "../src/assistant/executor.js";
 import type { ScenariosService } from "../src/scenarios/scenarios.service.js";
 import { ScoutingService } from "../src/scouting/scouting.service.js";
 import { HistoryService } from "../src/history/history.service.js";
+import { FieldsService } from "../src/fields/fields.service.js";
+import { suitabilityView } from "../src/suitability/suitability.js";
 import { RateLimitService } from "../src/auth/rate-limit.js";
 import { loadEnv, type Env } from "../src/config/config.js";
 import { PrismaService } from "../src/db/prisma.service.js";
@@ -571,5 +573,112 @@ describe("scouting W-route (S-07.01)", () => {
       }
       expect(await svc.route(id)).toEqual(pts);
     }
+  });
+});
+
+describe("land suitability", () => {
+  /** A gather job whose cached results the history builder reads (as after a real gather). */
+  async function gatherWith(fieldId: string, results: Record<string, unknown>): Promise<string> {
+    const job = await prisma.system.gatherJob.create({ data: { fieldId, status: "done", finishedAt: new Date() } });
+    for (const [source, payload] of Object.entries(results)) {
+      const key = `suit-${job.id}-${source}`;
+      await client.query(
+        `INSERT INTO source_cache (key, source, params, payload, origin, fetched_at) VALUES ($1, $2, '{}', $3, 'live', now())`,
+        [key, source, JSON.stringify({ status: "done", payload, dataDate: null, attribution: "test" })],
+      );
+      await prisma.system.gatherTask.create({ data: { jobId: job.id, source, status: "done", cacheKey: key } });
+    }
+    return job.id;
+  }
+  const soil = (nonIrrigated: Array<{ cls: number; share: number }>) => ({
+    awsMm: 200,
+    hydrologicGroup: "B",
+    drainageClass: null,
+    slopePct: 2,
+    mapUnits: [],
+    capability: { nonIrrigated, irrigated: [] },
+  });
+  const history = () =>
+    new HistoryService(new FakeBroker(), env, loadLibrary(DATA_DIR), prisma, new OutboxService(prisma, new FakeBroker(), env));
+  const fieldsSvc = () => new FieldsService(prisma, geo, sources, outboxSvc, env);
+  const fieldRow = async (id: string) =>
+    (await client.query(`SELECT suitability, suitability_override FROM fields WHERE id = $1`, [id])).rows[0] as {
+      suitability: { status: string; reasons: Array<{ code: string }> } | null;
+      suitability_override: unknown;
+    };
+
+  it("the history build stores the check on the field; GET field and the list expose it", async () => {
+    const { ws, field } = await workspaceWithField("Rocky 1", [-100.1, 37.2]);
+    const job = await gatherWith(field, { ssurgo: soil([{ cls: 7, share: 0.9 }, { cls: 3, share: 0.1 }]) });
+    await history().handle({ data: { fieldId: field, jobId: job, provisional: true } } as Envelope<never>);
+    const row = await fieldRow(field);
+    expect(row.suitability).toMatchObject({ status: "unsuitable" });
+    expect(row.suitability!.reasons.map((r) => r.code)).toEqual(["lcc_not_suited"]);
+    expect(row.suitability_override).toBeNull();
+
+    const view = (await fieldsSvc().get(ws, field)).suitability;
+    expect(view).toMatchObject({ status: "unsuitable", blocked: true, override: null });
+    const listed = (await fieldsSvc().list(ws)) as Array<{ id: string; suitabilityStatus: string | null; suitabilityOverridden: boolean }>;
+    expect(listed.find((f) => f.id === field)).toMatchObject({ suitabilityStatus: "unsuitable", suitabilityOverridden: false });
+    expect((await history().get(ws, field)).suitability).toMatchObject({ status: "unsuitable", blocked: true });
+  });
+
+  it("is rebuilt from the latest sources, and a field with no usable data stays unknown", async () => {
+    const { field } = await workspaceWithField("Unknown 1", [-100.2, 37.3]);
+    await history().handle({ data: { fieldId: field, jobId: await gatherWith(field, {}), provisional: true } } as Envelope<never>);
+    expect((await fieldRow(field)).suitability).toMatchObject({ status: "unknown", reasons: [] });
+    const job = await gatherWith(field, { ssurgo: soil([{ cls: 2, share: 1 }]) });
+    await history().handle({ data: { fieldId: field, jobId: job, provisional: false } } as Envelope<never>);
+    expect((await fieldRow(field)).suitability).toMatchObject({ status: "suitable" });
+  });
+
+  it("field.check skips the crop evaluators on unsuitable land and supersedes its open items", async () => {
+    const { ws, field } = await workspaceWithField("Rocky 2", [-100.3, 37.4]);
+    await seedWeather(field);
+    // First a normal check: the rootworm planning item appears.
+    let run = await analysis.start(ws, "manual", null, AS_OF);
+    for (const job of await jobsFor(run.id)) await consumer.handle(job);
+    expect(await prisma.system.recommendation.count({ where: { fieldId: field, status: "open" } })).toBe(1);
+
+    // The land turns out to be unsuitable: the next check creates nothing and the open item leaves the brief.
+    await client.query(`UPDATE fields SET suitability = $2 WHERE id = $1`, [
+      field,
+      JSON.stringify({ status: "unsuitable", reasons: [], checked: ["lcc"], thresholdsVersion: 1, computedAt: AS_OF }),
+    ]);
+    run = await analysis.start(ws, "manual", null, AS_OF);
+    for (const job of await jobsFor(run.id)) await consumer.handle(job);
+    const done = await analysis.view(ws, run.id);
+    expect(done.fields[0]).toMatchObject({ status: "ok", newRecommendations: 0 });
+    expect(await prisma.system.recommendation.count({ where: { fieldId: field, status: "open" } })).toBe(0);
+    expect(await prisma.system.recommendation.count({ where: { fieldId: field, status: "superseded" } })).toBe(1);
+  });
+
+  it("an agronomist's override is stored with who and when, and everything works normally again", async () => {
+    const { ws, field } = await workspaceWithField("Rocky 3", [-100.4, 37.5]);
+    await seedWeather(field);
+    await client.query(`UPDATE fields SET suitability = $2 WHERE id = $1`, [
+      field,
+      JSON.stringify({ status: "unsuitable", reasons: [], checked: ["lcc"], thresholdsVersion: 1, computedAt: AS_OF }),
+    ]);
+    const user = await client.query(`INSERT INTO users (id, email, name) VALUES (gen_random_uuid(), $1, 'Olena Agronomist') RETURNING id`, [
+      `olena-${Math.random().toString(36).slice(2)}@example.org`,
+    ]);
+    const userId = user.rows[0].id as string;
+    const after = await fieldsSvc().overrideSuitability(ws, userId, field);
+    expect(after.suitability).toMatchObject({
+      status: "unsuitable",
+      blocked: false,
+      override: { userId, userName: "Olena Agronomist" },
+    });
+    expect(Date.now() - Date.parse(after.suitability!.override!.at)).toBeLessThan(60_000);
+    expect(await prisma.system.auditLog.count({ where: { workspaceId: ws, action: "field.suitability_override", target: field } })).toBe(1);
+
+    const run = await analysis.start(ws, "manual", null, AS_OF);
+    for (const job of await jobsFor(run.id)) await consumer.handle(job);
+    expect(await prisma.system.recommendation.count({ where: { fieldId: field, status: "open" } })).toBe(1);
+
+    const cleared = await fieldsSvc().clearSuitabilityOverride(ws, userId, field);
+    expect(cleared.suitability).toMatchObject({ blocked: true, override: null });
+    expect(suitabilityView((await fieldRow(field)).suitability, (await fieldRow(field)).suitability_override)?.blocked).toBe(true);
   });
 });

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fetchSoilGrids } from "./others.js";
 import { clearSasCache, signHref } from "./planetary.js";
 import { withRetry } from "./http.js";
-import { cropShare, readSeasons, summariseCropland } from "./landcover.js";
+import { cropShare, landCoverFromCdl, readSeasons, summariseCropland } from "./landcover.js";
 import {
   cogUrl,
   ighForward,
@@ -144,8 +144,8 @@ describe("SoilGrids path selection", () => {
     for (const k of ["clayPct", "sandPct", "siltPct", "ocGPerKg", "ph"] as const) expect(r.payload![k]).toEqual(expect.any(Number));
     expect(r.payload!.searchRadiusM).toBeGreaterThan(0);
     expect(r.attribution).toContain("250 m");
-    // 1 REST call + 25 WCS layers (5 properties × 6... 5 depths)
-    expect(fetchMock).toHaveBeenCalledTimes(1 + 25);
+    // 1 REST call + 30 WCS layers (5 properties + coarse fragments, 5 depths each)
+    expect(fetchMock).toHaveBeenCalledTimes(1 + 30);
   });
 
   it("falls back when REST has no value for the exact pixel (SoilGrids gap)", async () => {
@@ -232,8 +232,32 @@ describe("land cover seasons", () => {
   const noSleep = { sleep: async () => undefined };
 
   it("computes the crop share and ignores no-data / clouds", () => {
-    expect(cropShare([0, 10, 5, 7])).toEqual({ cropShare: 0.5, n: 2 });
+    expect(cropShare([0, 10, 5, 7])).toEqual({ cropShare: 0.5, n: 2, shares: { crops: 0.5, built: 0.5 } });
     expect(cropShare([0, 0])).toBeNull();
+  });
+
+  it("US land cover from the CDL histogram: developed, water, wetland, forest and barren are not farmland", () => {
+    const cdl = {
+      seasons: [
+        {
+          year: 2023,
+          classes: [
+            { code: 122, share: 0.4 },
+            { code: 123, share: 0.2 },
+            { code: 111, share: 0.1 },
+            { code: 176, share: 0.1 },
+            { code: 1, share: 0.2 },
+          ],
+          majorityCode: 122,
+          majorityShare: 0.4,
+          method: "pixels" as const,
+          n: 100,
+        },
+      ],
+    };
+    expect(landCoverFromCdl(cdl)).toEqual([
+      { year: 2023, shares: { built: 0.6, water: 0.1, rangeland: 0.1, crops: 0.2 } },
+    ]);
   });
 
   it("all seasons read: done with no reason", async () => {

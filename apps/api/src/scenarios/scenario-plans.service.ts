@@ -3,6 +3,7 @@ import type { Library } from "@terrasight/library";
 import { ENV, type Env } from "../config/config.js";
 import { PrismaService } from "../db/prisma.service.js";
 import { ProblemException } from "../http/problem.js";
+import { assertNotBlocked, suitabilityView } from "../suitability/suitability.js";
 import { LIBRARY } from "../library/library.module.js";
 
 /** The season plan (S-06.06) and the rotations overview. */
@@ -23,10 +24,11 @@ export class ScenarioPlansService {
   ) {
     const field = await this.prisma.db.field.findFirst({
       where: { id: fieldId, workspaceId, archivedAt: null },
-      select: { id: true },
+      select: { id: true, suitability: true, suitabilityOverride: true },
     });
     if (!field) throw new ProblemException(404, "not-found");
     if (!this.lib.rotations.crops[body.crop]) throw new ProblemException(422, "unknown-crop", "Unknown crop");
+    assertNotBlocked(field.suitability, field.suitabilityOverride);
     if (body.scenarioRunId) {
       // The run must belong to this very field (and so this workspace): a foreign run id is "not found".
       const run = await this.prisma.db.scenarioRun.findFirst({
@@ -66,6 +68,8 @@ export class ScenarioPlansService {
         irrigation: true,
         areaHa: true,
         countyName: true,
+        suitability: true,
+        suitabilityOverride: true,
       },
       orderBy: { aliasNo: "asc" },
     });
@@ -101,6 +105,7 @@ export class ScenarioPlansService {
           areaHa: f.areaHa,
           county: f.countyName,
           irrigation: f.irrigation,
+          suitability: suitabilityView(f.suitability, f.suitabilityOverride),
           hasLibrary: Boolean(
             f.regionId && this.lib.rotations.rotations.some((r) => r.region === f.regionId),
           ),

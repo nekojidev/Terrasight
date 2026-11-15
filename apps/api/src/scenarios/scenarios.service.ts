@@ -19,6 +19,7 @@ import { ENV, type Env } from "../config/config.js";
 import { PrismaService } from "../db/prisma.service.js";
 import type { Prisma } from "../generated/prisma/client.js";
 import { ProblemException } from "../http/problem.js";
+import { fieldSuitability } from "../suitability/suitability.js";
 import { LIBRARY } from "../library/library.module.js";
 import { SeasonsService } from "../seasons/seasons.service.js";
 import { AiRotationsService, toRotations, type AiStatus, type Proposal } from "./ai-rotations.service.js";
@@ -74,6 +75,9 @@ export class ScenariosService implements OnModuleDestroy {
   }
 
   async run(workspaceId: string, fieldId: string, o: Overrides, aiMode: "generate" | "cached" = "generate") {
+    // Unsuitable land (not overridden): the page explains why instead of showing options.
+    const suitability = await fieldSuitability(this.prisma.system, fieldId);
+    if (suitability?.blocked) return { id: null, landUnsuitable: true as const, suitability };
     const { input: full, meta, aiCtx } = await this.inputsSvc.build(workspaceId, fieldId, o);
     if (!full.rotations.length) return { id: null, noLibrary: true as const };
     const missing = [
@@ -345,7 +349,7 @@ export class ScenariosService implements OnModuleDestroy {
    */
   async upsertRecommendation(workspaceId: string, fieldId: string, runId: string | null): Promise<boolean> {
     const view = await this.run(workspaceId, fieldId, {}, "cached");
-    if (view.noLibrary || !("result" in view)) return false;
+    if ("landUnsuitable" in view || view.noLibrary || !("result" in view)) return false;
     // A crop recommendation needs money: the agronomy-only comparison is shown on the page but never becomes an item.
     if (view.mode === "agronomy") return false;
     const { result, firstSeason, regionId } = view;

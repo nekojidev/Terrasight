@@ -28,12 +28,12 @@ const history: PlannerHistory = {
 const today = todayIso();
 const r = (value: string | null, source: string) => ({ value, source });
 
-function setup() {
+function setup(suitability?: PlannerHistory["suitability"]) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <NextIntlClientProvider locale="en" messages={{ App: app.App }}>
       <QueryClientProvider client={client}>
-        <SeasonPlanner base="/b" canEdit history={history} workspaceId="w" fieldId="f" />
+        <SeasonPlanner base="/b" canEdit history={{ ...history, suitability }} workspaceId="w" fieldId="f" />
       </QueryClientProvider>
     </NextIntlClientProvider>,
   );
@@ -136,5 +136,59 @@ describe("SeasonPlanner stages", () => {
     expect(await screen.findByText("Sown")).toBeTruthy();
     await screen.findByText(/≈/);
     expect(screen.queryByText("Have the seedlings come up?")).toBeNull();
+  });
+});
+
+describe("SeasonPlanner on land that is not suitable", () => {
+  const reason = {
+    code: "slope_steep",
+    level: "unsuitable" as const,
+    value: 31,
+    threshold: 25,
+    unit: "%",
+    source: "FAO: Land evaluation",
+    sourceUrl: "https://example.org",
+    verified: true,
+    mvpDefault: true,
+  };
+  const planning = () => {
+    record = {
+      season: 2027,
+      crop: r(null, "unknown"),
+      sowingDate: r(null, "unknown"),
+      emergenceDate: r(null, "unknown"),
+      tillage: r(null, "unknown"),
+      missing: [],
+    };
+    suggestion = sug(null);
+  };
+
+  it("switches the crop choice off, lists the reasons and offers the override; no suggestion is requested", async () => {
+    planning();
+    setup({ status: "unsuitable", reasons: [reason], blocked: true, override: null });
+    expect(await screen.findByText("Crop choice is off for this field")).toBeTruthy();
+    expect(screen.getByText(/average slope is 31%, steeper than 25%/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: /still cropland/ })).toBeTruthy();
+    expect(screen.queryByLabelText(/What will you grow/)).toBeNull();
+    expect(calls.some((c) => c.path.includes("/suggest"))).toBe(false);
+  });
+
+  it("override: the planner works normally again", async () => {
+    planning();
+    setup({
+      status: "unsuitable",
+      reasons: [reason],
+      blocked: false,
+      override: { userId: "u", userName: "Olena", at: "2026-11-15T10:00:00Z" },
+    });
+    expect(await screen.findByText(/What will you grow in season/)).toBeTruthy();
+    expect(screen.queryByText("Crop choice is off for this field")).toBeNull();
+  });
+
+  it("limited land only warns: the crop choice stays", async () => {
+    planning();
+    setup({ status: "limited", reasons: [{ ...reason, level: "limited", value: 18, threshold: 15 }] });
+    expect(await screen.findByText(/This land has limits for crops/)).toBeTruthy();
+    expect(screen.getByRole("combobox")).toBeTruthy();
   });
 });

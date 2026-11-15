@@ -22,6 +22,8 @@ export interface SoilGridsSummary {
   ocGPerKg?: number | null;
   /** Topsoil (0–30 cm) pH in water. */
   ph?: number | null;
+  /** Coarse fragments (> 2 mm), % by volume, thickness-weighted over 0–100 cm (land suitability). Absent in older cache entries. */
+  cfvoPct?: number | null;
   /** Which path produced the numbers: the REST query, the WCS (250 m) or the COG files (1000 m). */
   via?: "rest" | "wcs" | "cog";
   resolutionM?: number;
@@ -75,6 +77,7 @@ export function summariseSoilGrids(json: SoilGridsResponse): SoilGridsSummary {
     siltPct: mean("silt"),
     ocGPerKg: mean("soc", TOPSOIL),
     ph: mean("phh2o", TOPSOIL),
+    cfvoPct: mean("cfvo"),
   };
 }
 
@@ -127,7 +130,7 @@ export async function fetchSoilGrids(
 
   if (!opts.only || opts.only === "rest") {
     try {
-      const props = ["clay", "sand", "silt", "soc", "phh2o"].map((p) => `property=${p}`).join("&");
+      const props = ["clay", "sand", "silt", "soc", "phh2o", "cfvo"].map((p) => `property=${p}`).join("&");
       const depths = Object.keys(THICKNESS)
         .map((d) => `depth=${d}`)
         .join("&");
@@ -168,6 +171,7 @@ export async function fetchSoilGrids(
       (prop, depth, centre) =>
         withRetry(() => readCogWindow(prop, depth, centre, c), { attempts: 3, baseMs: 300, signal: c.signal }),
       1,
+      false, // no coarse fragments here: 1000 m files are read one by one and the time budget is short
     );
     const summary = summariseSoilGrids({ properties: { layers: soil.layers } });
     if (hasTexture(summary))
@@ -186,7 +190,7 @@ export async function fetchSoilGrids(
 export const soilgrids: SourceAdapter<SoilGridsSummary> = {
   id: "soilgrids",
   appliesTo: (field) => field.country !== "US",
-  // v2: 0–100 cm texture plus organic carbon and pH (older cached entries have only 0–30 cm texture).
-  cacheKey: (field) => `${cellKey(field.centroid.lon, field.centroid.lat, 0.0025)}:v2`,
+  // v3: adds coarse fragments (v2: 0–100 cm texture plus organic carbon and pH; older entries have only 0–30 cm texture).
+  cacheKey: (field) => `${cellKey(field.centroid.lon, field.centroid.lat, 0.0025)}:v3`,
   fetch: (field, ctx) => fetchSoilGrids(field, ctx),
 };

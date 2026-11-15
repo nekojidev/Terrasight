@@ -26,6 +26,15 @@ export interface SoilSummary {
   organicCarbonGPerKg?: number | null;
   /** Topsoil pH in water (SoilGrids 0–30 cm). */
   ph?: number | null;
+  /** SSURGO land capability class (NRCS, 1–8 = I–VIII) as area shares of the outline: non-irrigated and irrigated conditions. */
+  capability?: { nonIrrigated: CapabilityShare[]; irrigated: CapabilityShare[] };
+  /** Depth to bedrock, cm (area-weighted over the map units that have it); null when SSURGO has none. */
+  bedrockDepthCm?: number | null;
+}
+
+export interface CapabilityShare {
+  cls: number;
+  share: number;
 }
 
 const SDA = "https://sdmdataaccess.sc.egov.usda.gov/Tabular/post.rest";
@@ -82,7 +91,23 @@ export function summariseSoil(areas: string[][], attrs: string[][]): SoilSummary
     return [...shares.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
   };
 
+  /** Area shares per capability class (the dominant class of each map unit; units without one are left out). */
+  const capability = (name: string): CapabilityShare[] => {
+    const shares = new Map<number, number>();
+    for (const u of units) {
+      const cls = parseInt(u.attrs?.[col(name)] ?? "", 10);
+      if (cls >= 1 && cls <= 8) shares.set(cls, (shares.get(cls) ?? 0) + u.share);
+    }
+    return [...shares.entries()]
+      .map(([cls, share]) => ({ cls, share: Math.round(share * 1000) / 1000 }))
+      .sort((a, b) => a.cls - b.cls);
+  };
+  const nonIrrigated = capability("niccdcd");
+  const irrigated = capability("iccdcd");
+
   return {
+    ...(nonIrrigated.length || irrigated.length ? { capability: { nonIrrigated, irrigated } } : {}),
+    bedrockDepthCm: weighted("brockdepmin"),
     awsMm: weighted("aws0150wta", 10), // SSURGO reports cm
     aws100Mm: weighted("aws0100wta", 10),
     hydrologicGroup: dominant("hydgrpdcd"),
@@ -110,7 +135,7 @@ export const ssurgo: SourceAdapter<SoilSummary> = {
     const keys = areas.slice(1).map((r) => `'${r[0]!.replace(/\D/g, "")}'`);
     const attrs = keys.length
       ? await sda(
-          `SELECT mukey, muname, aws0150wta, aws0100wta, hydgrpdcd, drclassdcd, slopegraddcp FROM muaggatt WHERE mukey IN (${keys.join(",")})`,
+          `SELECT mukey, muname, aws0150wta, aws0100wta, hydgrpdcd, drclassdcd, slopegraddcp, niccdcd, iccdcd, brockdepmin FROM muaggatt WHERE mukey IN (${keys.join(",")})`,
           ctx,
         )
       : [];

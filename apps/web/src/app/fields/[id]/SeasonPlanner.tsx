@@ -6,6 +6,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useState, type ReactNode } from "react";
 import { api } from "@/lib/api";
 import { useReportError } from "@/components/useReportError";
+import { LandBanner, LandBlocked, type LandView } from "@/components/LandSuitability";
 import {
   deriveStage,
   emergenceDefault,
@@ -79,6 +80,8 @@ export interface PlannerHistory {
   cropNames: Record<string, { en: string; uk: string }>;
   regionCrops?: string[];
   seasons: Array<{ season: number; mainCrop: string }>;
+  /** Land suitability of the field: "unsuitable" (not overridden) switches the crop choice off. */
+  suitability?: LandView | null;
 }
 
 const TILLAGE: Tillage[] = ["conventional", "reduced", "no_till"];
@@ -224,7 +227,7 @@ function PlannerForm({
   const querySowing = planning ? dateOk(sowingEdit) : sownDate;
   const suggest = useQuery({
     queryKey: ["field", workspaceId, fieldId, "suggest", record.season, queryCrop, querySowing],
-    enabled: !!queryCrop,
+    enabled: !!queryCrop && history.suitability?.blocked !== true,
     staleTime: 5 * 60_000,
     retry: false,
     placeholderData: (prev) => prev,
@@ -369,12 +372,32 @@ function PlannerForm({
         .join(" · ")
     : t("spNoCalendar");
 
+  const land = history.suitability ?? null;
+  // Unsuitable land (not overridden): the crop choice is off and the reasons take its place, with the override.
+  if (land?.blocked && planning)
+    return (
+      <section className="flex flex-col gap-3 rounded-card border border-line bg-surface p-5">
+        <h2 className="text-h2 text-ink">{title}</h2>
+        <LandBlocked workspaceId={workspaceId} fieldId={fieldId} suitability={land} canEdit={canEdit} compact />
+      </section>
+    );
+
   return (
     <section className="rounded-card border border-line bg-surface p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-h2 text-ink">{title}</h2>
         {stageChip}
       </div>
+      {land?.blocked && (
+        <div className="mt-3">
+          <LandBlocked workspaceId={workspaceId} fieldId={fieldId} suitability={land} canEdit={canEdit} compact />
+        </div>
+      )}
+      {land?.status === "limited" && (
+        <div className="mt-3">
+          <LandBanner suitability={land} />
+        </div>
+      )}
       <p className="mt-1 text-small text-ink-2">{t(`spModels_${stage}`)}</p>
       <p role="status" className="mt-3 rounded-input bg-surface-2 p-3 text-small text-ink">
         {t(`spNext_${step}`)}

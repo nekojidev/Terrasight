@@ -255,6 +255,10 @@ model Field {
   thumbnailKey     String?                                     @map("thumbnail_key")
   /// Simplified outline for thumbnails, filled by a trigger when geom changes (see migration 20261116000000).
   thumbGeojson     String?                                     @map("thumb_geojson")
+  /// Land suitability check (can the field be cropped at all?): status, reasons with values and sources, computed after the history build. Null until then.
+  suitability         Json?
+  /// An agronomist's "this is still cropland" override: { userId, userName, at }. While set, an unsuitable field behaves as cropland.
+  suitabilityOverride Json?                                    @map("suitability_override")
   createdBy        String?                                     @map("created_by") @db.Uuid
   createdAt        DateTime                                    @default(now()) @map("created_at") @db.Timestamptz(3)
   archivedAt       DateTime?                                   @map("archived_at") @db.Timestamptz(3)

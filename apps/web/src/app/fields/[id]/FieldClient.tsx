@@ -38,6 +38,7 @@ import { OutlookCard } from "./OutlookCard";
 import { SeasonPlanner } from "./SeasonPlanner";
 import { GatherFocus, isFirstBuild } from "./GatherFocus";
 import { FieldBrief, FieldTabs, RisksCard, WeatherCard, type Risk } from "./Overview";
+import { LandBanner, LandChip, LandSuitabilityCard, type LandView } from "@/components/LandSuitability";
 
 export interface FieldView {
   id: string;
@@ -48,6 +49,8 @@ export interface FieldView {
   irrigation: "irrigated" | "dryland" | "unknown";
   irrigationSource: string;
   thumb?: string | null;
+  /** Land suitability (can the field be cropped at all?): null until the history is built. */
+  suitability?: LandView | null;
 }
 
 type TaskStatus = "queued" | "running" | "done" | "partial" | "failed" | "cached";
@@ -224,6 +227,7 @@ export function FieldClient({
               {f(`tier_${initial.tier}`)}
             </Chip>
             <InfoHint label={t("hintLabel")}>{t(`hintTier_${initial.tier}` as "hintTier_A")}</InfoHint>
+            <LandChip status={field.data.suitability?.status} overridden={Boolean(field.data.suitability?.override)} />
           </p>
         </header>
         <ConfirmDialog
@@ -264,6 +268,7 @@ export function FieldClient({
               cropName={(c) => cropLabel(history.data!.cropNames, locale, c)}
             />
           )}
+          <LandBanner suitability={field.data.suitability} />
           {history.data && (
             <StatCards
               history={history.data}
@@ -272,6 +277,12 @@ export function FieldClient({
               cropName={(c) => cropLabel(history.data!.cropNames, locale, c)}
             />
           )}
+          <LandSuitabilityCard
+            workspaceId={workspaceId}
+            fieldId={id}
+            suitability={field.data.suitability}
+            canEdit={canEdit}
+          />
           <YieldCard workspaceId={workspaceId} fieldId={id} units={units} />
           <QueryState query={risks}>{(r) => <RisksCard risks={r} />}</QueryState>
           <WeatherCard workspaceId={workspaceId} fieldId={id} units={units} />
@@ -296,7 +307,15 @@ export function FieldClient({
               workspaceId={workspaceId}
             />
           )}
-          {history.data && <SeasonPlanner base={base} canEdit={canEdit} history={history.data} workspaceId={workspaceId} fieldId={id} />}
+          {history.data && (
+            <SeasonPlanner
+              base={base}
+              canEdit={canEdit}
+              history={{ ...history.data, suitability: field.data.suitability }}
+              workspaceId={workspaceId}
+              fieldId={id}
+            />
+          )}
         </div>
       </div>
       {canEdit && (

@@ -5,6 +5,7 @@ import { ChevronRight, MapPin, Plus } from "lucide-react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
+import { LandChip, type LandStatus } from "@/components/LandSuitability";
 
 type Localised = { en: string; uk: string };
 type Urgency = "urgent" | "this_week" | "all_good";
@@ -14,6 +15,8 @@ interface Row {
   areaHa: number;
   lastCrop: Localised | null;
   lastCropId?: string | null;
+  suitabilityStatus?: LandStatus | null;
+  suitabilityOverridden?: boolean;
   thumb?: string | null;
   urgency: Urgency;
   next: { id: string; title: Localised; deadline: string | null; more: number; plan?: boolean } | null;
@@ -420,6 +423,7 @@ export function FieldsOverview({
                   <span className="text-ink-2">{t("fpNothing")}</span>
                 )}
               </span>
+              <LandChip status={f.suitabilityStatus} overridden={f.suitabilityOverridden} />
               <Chip tone={TONE[f.urgency]}>
                 {t(f.urgency === "urgent" ? "fpUrgent" : f.urgency === "this_week" ? "fpWeek" : "fpOk")}
               </Chip>

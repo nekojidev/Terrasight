@@ -10,6 +10,7 @@ import { RateLimitService } from "../auth/rate-limit.js";
 import { ENV, type Env } from "../config/config.js";
 import { PrismaService } from "../db/prisma.service.js";
 import { ProblemException } from "../http/problem.js";
+import { assertNotBlocked } from "../suitability/suitability.js";
 import { LIBRARY } from "../library/library.module.js";
 import { GeoService } from "../geo/geo.service.js";
 import { SourcesService } from "../sources/sources.service.js";
@@ -144,9 +145,10 @@ export class SeasonSuggestService {
     if (!this.lib.rotations.crops[crop]) throw new ProblemException(422, "unknown-crop");
     const field = await this.prisma.db.field.findFirst({
       where: { id: fieldId, workspaceId, archivedAt: null },
-      select: { regionId: true, slopePct: true, country: true },
+      select: { regionId: true, slopePct: true, country: true, suitability: true, suitabilityOverride: true },
     });
     if (!field) throw new ProblemException(404, "not-found");
+    assertNotBlocked(field.suitability, field.suitabilityOverride);
     const ws = await this.prisma.system.workspace.findUnique({
       where: { id: workspaceId },
       select: { timeZone: true },
