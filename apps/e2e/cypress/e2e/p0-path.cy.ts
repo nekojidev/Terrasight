@@ -85,9 +85,9 @@ describe("P0 path", () => {
 
     // Ask the assistant why.
     cy.contains("a", "Why?").click();
-    cy.get('input[placeholder*="Ask about"]', { timeout: 20_000 }).type(
-      "Why is there a rootworm risk on this field?{enter}",
-    );
+    cy.get('textarea[placeholder*="Ask about"], input[placeholder*="Ask about"]', { timeout: 20_000 })
+      .first()
+      .type("Why is there a rootworm risk on this field?{enter}");
     cy.contains(
       /numbers? checked against the models|No numbers in this answer|Assistant unavailable|Showing the data directly/,
       { timeout: 60_000 },
