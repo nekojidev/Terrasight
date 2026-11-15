@@ -67,12 +67,15 @@ export function TodayWindows({
   units,
   fieldId,
   rail = false,
+  bare = false,
 }: {
   workspaceId: string;
   units: "metric" | "imperial";
   fieldId?: string;
   /** Home rail: the shared rail-card frame; otherwise a plain card for the field overview. */
   rail?: boolean;
+  /** Home "Next 7 days" strip: rows only, the parent supplies the frame, title and the link to the full page. */
+  bare?: boolean;
 }) {
   const t = useTranslations("App");
   const limitText = useLimitText(units);
@@ -107,7 +110,7 @@ export function TodayWindows({
   const body = (
     <>
       {q.data === undefined ? (
-        <QueryState query={q} className="w-full">
+        <QueryState query={q} skeletonVariant="text" what={t("wwToday")} className="w-full">
           {() => null}
         </QueryState>
       ) : rows.length === 0 ? (
@@ -137,13 +140,19 @@ export function TodayWindows({
         </ul>
       )}
       {q.data?.thresholdsUnverified && rows.length > 0 && (
-        <p className="mt-3 text-micro text-ink-3">{t("wwUnverified")}</p>
+        <p className="mt-3 text-caption text-ink-3">{t("wwUnverified")}</p>
       )}
-      <Link href="/work-windows" className="mt-3 inline-block text-small font-semibold text-ink underline">
-        {t("wwSeeWeek")}
-      </Link>
+      {!bare && (
+        <Link
+          href="/work-windows"
+          className="focus-ring mt-3 inline-flex min-h-tap items-center text-small font-semibold text-ink underline"
+        >
+          {t("wwSeeWeek")}
+        </Link>
+      )}
     </>
   );
+  if (bare) return body;
   return rail ? (
     <RailCard title={t("wwToday")}>{body}</RailCard>
   ) : (
