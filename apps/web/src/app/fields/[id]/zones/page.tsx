@@ -40,7 +40,7 @@ export default async function ZonesPage({ params }: { params: Promise<{ id: stri
         fieldId={id}
         fieldName={field.data.name}
         geometry={field.data.geometry}
-        canEdit={ws.data.role !== "viewer"}
+        canEdit
       />
     </AppShell>
   );
