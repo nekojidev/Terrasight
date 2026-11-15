@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   Controller,
   ForbiddenException,
   Get,
@@ -15,6 +14,7 @@ import type { Observable } from "rxjs";
 import { map } from "rxjs";
 import { AuthGuard, Requires, WorkspaceGuard, type AuthedRequest } from "../auth/current-user.js";
 import { PrismaService } from "../db/prisma.service.js";
+import { ProblemException } from "../http/problem.js";
 import { EventsService } from "./events.service.js";
 
 interface SseMessage {
@@ -49,7 +49,7 @@ export class EventsController {
     const topics: StreamTopic[] = [];
     for (const t of raw) {
       const parsed = StreamTopic.safeParse(t);
-      if (!parsed.success) throw new BadRequestException(`Unknown topic ${t}`);
+      if (!parsed.success) throw new ProblemException(422, "invalid-input", `Unknown topic ${t}`);
       topics.push(parsed.data);
     }
     // field:<id> must belong to this workspace; conversation:<id> only to the user who owns the conversation
@@ -72,7 +72,7 @@ export class EventsController {
           where: { id, workspaceId: ws },
           select: { id: true },
         });
-        if (!field) throw new BadRequestException(`Unknown topic ${t}`);
+        if (!field) throw new ProblemException(422, "invalid-input", `Unknown topic ${t}`);
       }
     }
     return this.events
