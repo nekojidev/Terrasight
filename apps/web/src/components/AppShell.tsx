@@ -9,6 +9,7 @@ import { api, setCookie } from "@/lib/api";
 import { Brand } from "./Brand";
 import { NotificationsBell } from "./NotificationsBell";
 import { OfflineBanner } from "./OfflineBanner";
+import { useSidebarState } from "./SidebarState";
 import { ThemeToggle } from "./ThemeToggle";
 
 export interface ShellWorkspace {
@@ -48,6 +49,7 @@ export function AppShell({
   const locale = useLocale();
   const router = useRouter();
   const path = usePathname();
+  const { collapsed, toggle } = useSidebarState();
 
   const items: NavItem[] = [
     { href: "/", label: t("n_today"), icon: <Home />, active: path === "/" },
@@ -72,13 +74,16 @@ export function AppShell({
       <div className="sticky top-0 hidden h-dvh lg:block">
         <Sidebar
           label={t("nav_label")}
+          collapsed={collapsed}
+          onToggle={toggle}
+          toggleLabel={a(collapsed ? "sidebarExpand" : "sidebarCollapse")}
           brand={<Brand />}
           company={
-            <div className="flex items-center gap-3 rounded-card border border-line bg-surface-2 p-3">
+            <div className="sb-card flex items-center gap-3 rounded-card border border-line bg-surface-2 p-3">
               <span className="inline-flex size-10 items-center justify-center rounded-btn bg-ink text-small font-bold text-surface">
                 {initials(workspace.name)}
               </span>
-              <span className="min-w-0">
+              <span className="sb-label min-w-0">
                 <span className="block truncate text-body font-semibold text-ink">{workspace.name}</span>
                 <span className="block text-small text-ink-2">
                   {a("coFields", { n: workspace.fieldCount })}
@@ -88,11 +93,11 @@ export function AppShell({
           }
           items={items}
           footer={
-            <div className="flex items-center gap-3">
+            <div className="sb-row flex items-center gap-3">
               <span className="inline-flex size-10 items-center justify-center rounded-chip bg-ink-2 text-small font-bold text-surface">
                 {initials(user.name)}
               </span>
-              <span className="min-w-0 flex-1">
+              <span className="sb-label min-w-0 flex-1">
                 <span className="block truncate text-body font-semibold text-ink">{user.name}</span>
                 <span className="block text-small text-ink-2">{a(`role_${user.role}`)}</span>
               </span>

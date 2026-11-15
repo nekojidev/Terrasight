@@ -31,6 +31,8 @@
     "role_agronomist": "Agronomist",
     "role_viewer": "Viewer",
     "signOut": "Sign out",
+    "sidebarCollapse": "Collapse sidebar",
+    "sidebarExpand": "Expand sidebar",
     "offlineTitle": "No internet",
     "offlineBody": "Changes can't be saved right now. Drafts stay on this device.",
     "scQueued": "The {field} check is saved. We'll send it once you're back online.",
