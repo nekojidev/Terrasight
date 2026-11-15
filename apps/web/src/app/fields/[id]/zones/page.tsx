@@ -23,7 +23,7 @@ export default async function ZonesPage({ params }: { params: Promise<{ id: stri
   if (!active) redirect("/onboarding");
   const [ws, field] = await Promise.all([
     serverGet<WorkspaceDetail>(`/api/w/${active.id}`),
-    serverGet<{ id: string; name: string; areaHa: number; geometry: FieldGeometry }>(
+    serverGet<{ id: string; name: string; areaHa: number; country: string | null; geometry: FieldGeometry }>(
       `/api/w/${active.id}/fields/${id}`,
     ),
   ]);
@@ -40,6 +40,7 @@ export default async function ZonesPage({ params }: { params: Promise<{ id: stri
         fieldId={id}
         fieldName={field.data.name}
         geometry={field.data.geometry}
+        country={field.data.country}
         canEdit
       />
     </AppShell>

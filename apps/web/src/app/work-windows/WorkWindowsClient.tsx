@@ -1,16 +1,20 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Skeleton, ErrorCard } from "@terrasight/ui";
+import { Button, InfoHint, Skeleton, Surface, Tabs } from "@terrasight/ui";
 import { AlertTriangle, Check, HelpCircle, ShieldCheck, X } from "lucide-react";
-import { useLocale, useTranslations } from "next-intl";
+import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useState } from "react";
-import { StatusMark, STATUS_STYLE, useConditionText, useLimitText } from "@/components/TodayWindows";
+import { QueryState } from "@/components/QueryState";
+import { STATUS_STYLE } from "@/components/TodayWindows";
 import { api } from "@/lib/api";
+import { useFormat } from "@/lib/useFormat";
 import {
   OPERATIONS,
+  factorText,
   workWindowsKey,
-  type DayWindows,
+  type Limiting,
   type Operation,
   type WindowStatus,
   type WorkWindowsView,
@@ -18,13 +22,16 @@ import {
 
 interface Sel {
   fieldId: string;
-  op: Operation;
   date: string;
 }
 
 const ICON = { good: Check, marginal: AlertTriangle, no: X, unknown: HelpCircle } as const;
+const STATUSES: WindowStatus[] = ["good", "marginal", "no", "unknown"];
 
-/** "Work windows": a week grid per field (days × operations), a filter by operation, tap a day for the limiting factor. */
+/**
+ * "Work windows": pick one operation, then read a matrix of fields (rows) by the next 7 days (columns). Each cell is an
+ * icon, a colour and an accessible label; opening a cell lists the reasons with values in the company's units.
+ */
 export function WorkWindowsClient({
   workspaceId,
   units,
@@ -33,10 +40,11 @@ export function WorkWindowsClient({
   units: "metric" | "imperial";
 }) {
   const t = useTranslations("App");
-  const locale = useLocale() as "en" | "uk";
-  const limitText = useLimitText(units);
-  const condText = useConditionText(units);
-  const [filter, setFilter] = useState<Operation | "all">("all");
+  const w = useTranslations("Zones");
+  const router = useRouter();
+  const fmt = useFormat({ units });
+  const locale = fmt.locale;
+  const [op, setOp] = useState<Operation>("spraying");
   const [sel, setSel] = useState<Sel | null>(null);
   const q = useQuery({
     queryKey: workWindowsKey(workspaceId),
@@ -44,11 +52,18 @@ export function WorkWindowsClient({
     staleTime: 10 * 60_000,
   });
 
-  const intl = (o: Intl.DateTimeFormatOptions, iso: string) =>
-    new Intl.DateTimeFormat(locale === "uk" ? "uk-UA" : "en-US", { timeZone: "UTC", ...o }).format(
-      new Date(`${iso}T12:00:00Z`),
-    );
-  const ops = filter === "all" ? OPERATIONS : [filter];
+  // ISO dates are calendar days: format them in UTC so no zone shifts them.
+  const day = (iso: string, style: "dayMonth" | "full" = "dayMonth") => fmt.date(`${iso}T12:00:00Z`, style, { timeZone: "UTC" });
+  const status = (s: WindowStatus) => w(`ww5_st_${s}`);
+  const factor = (l: Limiting, prefix: "wwLim" | "wwCond") => {
+    const f = factorText(l, fmt, prefix);
+    return t(f.key as "wwLim_wind", { v: f.v, h: f.h });
+  };
+  const limitText = (l: Limiting | null) => (l ? factor(l, "wwLim") : t("wwNoLimit"));
+  const condText = (l: Limiting) => {
+    const f = factorText(l, fmt, "wwCond");
+    return t.has(f.key as "wwCond_wind") ? t(f.key as "wwCond_wind", { v: f.v }) : factor(l, "wwLim");
+  };
 
   return (
     <div className="flex flex-col gap-5">
@@ -57,151 +72,208 @@ export function WorkWindowsClient({
         <p className="text-body text-ink-2">{t("wwSub")}</p>
       </header>
 
-      <div role="group" aria-label={t("wwFilter")} className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
-        {(["all", ...OPERATIONS] as const).map((o) => (
-          <button
-            key={o}
-            type="button"
-            aria-pressed={filter === o}
-            onClick={() => setFilter(o)}
-            className={`min-h-11 shrink-0 rounded-chip border px-4 text-small font-semibold ${
-              filter === o ? "border-ink bg-ink text-bg" : "border-line-strong bg-surface text-ink"
-            }`}
-          >
-            {o === "all" ? t("wwAllOps") : t(`wwOp_${o}`)}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        label={t("wwFilter")}
+        value={op}
+        onChange={(id) => {
+          setOp(id as Operation);
+          setSel(null);
+        }}
+        items={OPERATIONS.map((o) => ({ id: o, label: t(`wwOp_${o}`) }))}
+      />
 
-      {q.data?.thresholdsUnverified && (
-        <p role="note" className="flex items-start gap-2 rounded-input bg-week-soft px-3 py-2 text-small text-week">
-          <AlertTriangle aria-hidden className="mt-0.5 size-4 shrink-0" strokeWidth={1.7} />
-          {t("wwUnverified")}
-        </p>
-      )}
-
-      {q.isPending ? (
-        <div className="flex flex-col gap-4" aria-busy>
-          <Skeleton label="…" className="h-48 w-full rounded-card" />
-          <Skeleton label="…" className="h-48 w-full rounded-card" />
-        </div>
-      ) : q.isError || !q.data ? (
-        <ErrorCard title={t("errGeneric")} body="" retryLabel={t("retry")} onRetry={() => void q.refetch()} />
-      ) : q.data.fields.length === 0 ? (
-        <p className="text-body text-ink-2">{t("wwNone")}</p>
-      ) : (
-        <ul className="flex flex-col gap-4">
-          {q.data.fields.map((f) => {
-            const open = sel?.fieldId === f.fieldId ? sel : null;
-            const detailOp = open ? f.operations.find((o) => o.operation === open.op) : null;
-            const detail: DayWindows | undefined = detailOp?.days.find((d) => d.date === open?.date);
-            const crop = f.sowingCrop ? q.data.cropNames[f.sowingCrop]?.[locale] ?? f.sowingCrop : null;
+      <div role="tabpanel" className="flex flex-col gap-4">
+        <ul aria-label={w("ww5_keyLabel")} className="flex flex-wrap gap-x-4 gap-y-2">
+          {STATUSES.map((s) => {
+            const Icon = ICON[s];
             return (
-              <li key={f.fieldId} className="rounded-card border border-line bg-surface p-4 sm:p-5">
-                <h2 className="text-h2 text-ink">{f.name}</h2>
-                {!f.available ? (
-                  <p className="mt-2 text-small text-ink-2">{t("wwUnavail")}</p>
-                ) : (
-                  <div className="mt-3 flex flex-col gap-4">
-                    {ops.map((op) => {
-                      const o = f.operations.find((x) => x.operation === op);
-                      if (!o) return null;
-                      return (
-                        <div key={op}>
-                          <p className="mb-1.5 text-small font-semibold text-ink">
-                            {t(`wwOp_${op}`)}
-                            {op === "sowing" && o.applicable && crop && (
-                              <span className="font-normal text-ink-2"> · {t("wwSowingFor", { crop })}</span>
-                            )}
-                          </p>
-                          {!o.applicable ? (
-                            <p className="text-small text-ink-2">{t("wwNoSowingCrop")}</p>
-                          ) : (
-                            <div className="grid grid-cols-7 gap-1">
-                              {o.days.map((d) => {
-                                const Icon = ICON[d.status];
-                                const active = open?.op === op && open.date === d.date;
-                                return (
-                                  <button
-                                    key={d.date}
-                                    type="button"
-                                    aria-pressed={active}
-                                    aria-label={t("wwDayAria", {
-                                      field: f.name,
-                                      op: t(`wwOp_${op}`),
-                                      day: intl({ weekday: "long", day: "numeric", month: "long" }, d.date),
-                                      status: t(`wwSt_${d.status}`),
-                                    })}
-                                    onClick={() => setSel(active ? null : { fieldId: f.fieldId, op, date: d.date })}
-                                    className={`flex min-h-14 flex-col items-center justify-center gap-0.5 rounded-input border text-center ${STATUS_STYLE[d.status]} ${
-                                      active ? "border-ink" : "border-transparent"
-                                    }`}
-                                  >
-                                    <span className="text-micro">{intl({ weekday: "short" }, d.date)}</span>
-                                    <Icon aria-hidden className="size-4" strokeWidth={2.2} />
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                    {open && detail && (
-                      <div className="rounded-input bg-muted p-3" role="status">
-                        <p className="flex flex-wrap items-center gap-2 text-small font-semibold text-ink">
-                          {t(`wwOp_${open.op}`)} · {intl({ weekday: "long", day: "numeric", month: "long" }, detail.date)}
-                          <StatusMark status={detail.status} label={t(`wwSt_${detail.status}`)} />
-                        </p>
-                        <p className="mt-1 text-small text-ink-2">
-                          {detail.status === "unknown" ? t("wwUnknownThreshold") : limitText(detail.limiting)}
-                        </p>
-                        {(detail.conditions?.length ?? 0) > 0 && (
-                          <>
-                            <p className="mt-3 text-micro text-ink-2">{t("wwCondTitle")}</p>
-                            <ul className="mt-1 flex flex-col gap-1 text-small text-ink">
-                              {detail.conditions!.map((c) => (
-                                <li key={c.factor}>
-                                  {condText(c)}
-                                  {!c.verified && <span className="text-ink-3"> · {t("wwUnknownThreshold")}</span>}
-                                </li>
-                              ))}
-                            </ul>
-                          </>
-                        )}
-                        {detail.windows.length > 0 && (
-                          <>
-                            <p className="mt-3 text-micro text-ink-2">{t("wwWindows")}</p>
-                            <ul className="mt-1 flex flex-col gap-1">
-                              {detail.windows.map((w) => (
-                                <li key={w.from} className="flex flex-wrap items-center gap-2 text-small text-ink">
-                                  <span className="font-mono">
-                                    {w.from}–{w.to}
-                                  </span>
-                                  <StatusMark status={w.status as WindowStatus} label={t(`wwSt_${w.status}`)} />
-                                  {w.limiting && <span className="text-ink-2">{limitText(w.limiting)}</span>}
-                                </li>
-                              ))}
-                            </ul>
-                          </>
-                        )}
-                      </div>
-                    )}
-                    {f.forecast && (
-                      <p className="text-micro text-ink-3">{f.forecast.attribution}</p>
-                    )}
-                  </div>
-                )}
+              <li key={s} className="flex items-center gap-2 text-caption text-ink-2">
+                <span className={`inline-flex size-6 items-center justify-center rounded-input ${STATUS_STYLE[s]}`}>
+                  <Icon aria-hidden className="size-4" strokeWidth={2.2} />
+                </span>
+                {status(s)}
               </li>
             );
           })}
         </ul>
-      )}
 
-      <p className="flex items-center gap-2 text-small text-ink-3">
-        <ShieldCheck aria-hidden className="size-4 shrink-0" strokeWidth={1.7} />
-        {t("wwTapHint")} {t("wwNeutral")}
-      </p>
+        <QueryState
+          query={q}
+          what={w("ww5_what")}
+          skeleton={<Skeleton variant="rows" rows={4} label={w("ww5_loading")} />}
+          isEmpty={(d) => d.fields.length === 0}
+          empty={{ text: t("wwNone"), actionLabel: w("ww5_addField"), onAction: () => router.push("/fields/new") }}
+        >
+          {(data) => {
+            const days = data.fields.find((f) => f.available)?.operations.find((o) => o.operation === op)?.days ?? [];
+            const open = sel ? data.fields.find((f) => f.fieldId === sel.fieldId) : undefined;
+            const detail = open?.operations.find((o) => o.operation === op)?.days.find((d) => d.date === sel?.date);
+            return (
+              <>
+                <Surface pad="none" className="overflow-hidden">
+                  <div className="overflow-x-auto" tabIndex={0} role="region" aria-label={w("ww5_tableLabel", { op: t(`wwOp_${op}`) })}>
+                    <table className="w-full border-separate border-spacing-0">
+                      <caption className="sr-only">{w("ww5_tableLabel", { op: t(`wwOp_${op}`) })}</caption>
+                      <thead>
+                        <tr>
+                          <th
+                            scope="col"
+                            className="sticky left-0 z-10 min-w-32 border-b border-line bg-surface px-3 py-2 text-left text-caption font-semibold text-ink-2"
+                          >
+                            {w("ww5_fieldCol")}
+                          </th>
+                          {days.map((d, i) => (
+                            <th
+                              key={d.date}
+                              scope="col"
+                              className="min-w-16 border-b border-line px-1 py-2 text-center text-caption font-semibold text-ink-2"
+                            >
+                              {i === 0 ? w("ww5_today") : day(d.date)}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {data.fields.map((f, r) => {
+                          const o = f.operations.find((x) => x.operation === op);
+                          const crop = f.sowingCrop ? data.cropNames[f.sowingCrop]?.[locale] : null;
+                          return (
+                            <tr key={f.fieldId}>
+                              <th
+                                scope="row"
+                                className="sticky left-0 z-10 max-w-40 border-b border-line bg-surface px-3 py-2 text-left text-body font-semibold text-ink"
+                              >
+                                {f.name}
+                                {op === "sowing" && o?.applicable && crop && (
+                                  <span className="block text-caption font-normal text-ink-2">
+                                    {t("wwSowingFor", { crop })}
+                                  </span>
+                                )}
+                              </th>
+                              {!f.available || !o || !o.applicable ? (
+                                <td colSpan={Math.max(1, days.length)} className="border-b border-line px-3 py-2 text-caption text-ink-2">
+                                  {!f.available ? w("ww5_noForecast") : t("wwNoSowingCrop")}
+                                </td>
+                              ) : (
+                                o.days.map((d, c) => {
+                                  const Icon = ICON[d.status];
+                                  const active = sel?.fieldId === f.fieldId && sel.date === d.date;
+                                  return (
+                                    <td key={d.date} className="border-b border-line p-1 text-center">
+                                      <button
+                                        type="button"
+                                        aria-pressed={active}
+                                        aria-label={w("ww5_cellAria", {
+                                          field: f.name,
+                                          op: t(`wwOp_${op}`),
+                                          day: day(d.date, "full"),
+                                          status: status(d.status),
+                                        })}
+                                        onClick={() => setSel(active ? null : { fieldId: f.fieldId, date: d.date })}
+                                        style={{ "--i": r + c } as React.CSSProperties}
+                                        className={`focus-ring animate-rise stagger inline-flex min-h-11 w-full min-w-14 items-center justify-center rounded-input border-2 ${STATUS_STYLE[d.status]} ${
+                                          active ? "border-ink" : "border-transparent"
+                                        }`}
+                                      >
+                                        <Icon aria-hidden className="size-5" strokeWidth={2.2} />
+                                      </button>
+                                    </td>
+                                  );
+                                })
+                              )}
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </Surface>
+                <p className="text-caption text-ink-3">{w("ww5_scrollHint")}</p>
+
+                {open && detail && (
+                  <Surface tone="inset" pad="sm" role="status" className="animate-fade">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="flex flex-wrap items-center gap-2 text-body font-semibold text-ink">
+                        {w("ww5_reasonsTitle", { field: open.name, day: day(detail.date, "full") })}
+                        <span
+                          className={`inline-flex items-center gap-1 rounded-chip px-2 py-0.5 text-caption font-semibold ${STATUS_STYLE[detail.status]}`}
+                        >
+                          {(() => {
+                            const Icon = ICON[detail.status];
+                            return <Icon aria-hidden className="size-4" strokeWidth={2} />;
+                          })()}
+                          {status(detail.status)}
+                        </span>
+                      </p>
+                      <Button variant="ghost" onClick={() => setSel(null)}>
+                        {w("ww5_hide")}
+                      </Button>
+                    </div>
+                    <p className="mt-2 text-small text-ink-2">
+                      {detail.status === "unknown" ? t("wwUnknownThreshold") : limitText(detail.limiting)}
+                    </p>
+                    {(detail.conditions?.length ?? 0) > 0 && (
+                      <>
+                        <p className="kicker mt-3">{t("wwCondTitle")}</p>
+                        <ul className="mt-1 flex flex-col gap-1 text-small text-ink">
+                          {detail.conditions!.map((c) => (
+                            <li key={c.factor} className="flex flex-wrap items-center gap-x-2">
+                              {condText(c)}
+                              {c.factor === "delta_t" && (
+                                <InfoHint label={t("hintLabel")}>{w("ww5_deltaTHint")}</InfoHint>
+                              )}
+                              {!c.verified && <span className="text-caption text-ink-3">· {w("ww5_mvp")}</span>}
+                            </li>
+                          ))}
+                        </ul>
+                      </>
+                    )}
+                    {detail.windows.length > 0 && (
+                      <>
+                        <p className="kicker mt-3">{t("wwWindows")}</p>
+                        <ul className="mt-1 flex flex-col gap-1">
+                          {detail.windows.map((s) => {
+                            const Icon = ICON[s.status];
+                            return (
+                              <li key={s.from} className="flex flex-wrap items-center gap-2 text-small text-ink">
+                                <span className="font-mono">
+                                  {s.from}–{s.to}
+                                </span>
+                                <span
+                                  className={`inline-flex items-center gap-1 rounded-chip px-2 py-0.5 text-caption font-semibold ${STATUS_STYLE[s.status]}`}
+                                >
+                                  <Icon aria-hidden className="size-4" strokeWidth={2} />
+                                  {status(s.status)}
+                                </span>
+                                {s.limiting && <span className="text-ink-2">{limitText(s.limiting)}</span>}
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </>
+                    )}
+                  </Surface>
+                )}
+
+                {data.thresholdsUnverified && (
+                  <p role="note" className="flex items-start gap-2 text-caption text-ink-3">
+                    <AlertTriangle aria-hidden className="mt-0.5 size-4 shrink-0" strokeWidth={1.7} />
+                    {w("ww5_mvpNote")}
+                  </p>
+                )}
+                {data.fields.find((f) => f.forecast)?.forecast && (
+                  <p className="text-caption text-ink-3">{data.fields.find((f) => f.forecast)!.forecast!.attribution}</p>
+                )}
+              </>
+            );
+          }}
+        </QueryState>
+
+        <p className="flex items-center gap-2 text-caption text-ink-3">
+          <ShieldCheck aria-hidden className="size-4 shrink-0" strokeWidth={1.7} />
+          {t("wwNeutral")}
+        </p>
+      </div>
     </div>
   );
 }
