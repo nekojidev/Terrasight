@@ -9,12 +9,14 @@ import { ProblemFilter } from "./http/problem.js";
 import { securityHeaders } from "./http/security-headers.js";
 import { loadEnv } from "./config/config.js";
 import { installProcessGuards } from "./process-guards.js";
+import { initSentry } from "./observability/sentry.js";
 
 let logger: Logger | null = null;
 installProcessGuards(() => logger ?? console);
 
 async function bootstrap(): Promise<void> {
   const env = loadEnv();
+  await initSentry();
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
   const pino = app.get(Logger);
   logger = pino;

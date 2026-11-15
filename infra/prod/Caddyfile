@@ -1,6 +1,11 @@
 # TLS from Let's Encrypt for $DOMAIN; the API's SSE needs no buffering.
 {$DOMAIN} {
 	encode zstd gzip
+	# External uptime check: /api/readyz -> the api's /readyz (outside the /api prefix), 200 only when PostgreSQL and RabbitMQ are up.
+	handle /api/readyz {
+		rewrite * /readyz
+		reverse_proxy api:4000
+	}
 	handle /api/* {
 		reverse_proxy api:4000 {
 			flush_interval -1

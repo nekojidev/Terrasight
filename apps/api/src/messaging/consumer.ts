@@ -1,6 +1,7 @@
 import { Logger } from "@nestjs/common";
 import { Envelope } from "@terrasight/shared";
 import type { Broker, IncomingMessage } from "./broker.js";
+import { captureException } from "../observability/sentry.js";
 import { EXCHANGES, RETRY_DELAYS, type JobQueue } from "./topology.js";
 
 export const ATTEMPT_HEADER = "x-attempt";
@@ -52,6 +53,12 @@ export abstract class JobConsumer<T = unknown> {
       const err = e as Error;
       if (attempt >= this.options.retries) {
         this.log.error(`${env.type} ${env.id} failed after ${attempt + 1} attempts: ${err.message}`);
+        captureException(err, {
+          queue: this.options.queue,
+          jobType: env.type,
+          jobId: env.id,
+          attempts: attempt + 1,
+        });
         return "dead";
       }
       const delay = RETRY_DELAYS[Math.min(attempt, RETRY_DELAYS.length - 1)] ?? "30s";

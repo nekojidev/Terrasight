@@ -1,0 +1,64 @@
+name: E2E (nightly)
+
+# The Cypress P0 path against the real local stack (infra/docker-compose.yml: postgres, rabbitmq, redis, migrate, api, web).
+# Slow, so not on every PR: nightly and on demand (Actions -> E2E (nightly) -> Run workflow).
+on:
+  schedule:
+    - cron: "30 2 * * *"
+  workflow_dispatch:
+    inputs:
+      spec:
+        description: "Cypress spec (default: the P0 path)"
+        default: "cypress/e2e/p0-path.cy.ts"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e
+  cancel-in-progress: true
+
+jobs:
+  cypress:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --filter @terrasight/e2e...
+      - name: Cypress binary cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/Cypress
+          key: cypress-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+      - run: pnpm --filter @terrasight/e2e exec cypress install
+      - name: Start the stack (waits for healthchecks)
+        env:
+          # Sign-ups come from one IP; production keeps the default burst of 10.
+          AUTH_RATE_BURST: "100"
+        run: docker compose -f infra/docker-compose.yml up -d --build --wait --wait-timeout 600
+      - name: Boundaries for field previews
+        run: docker compose -f infra/docker-compose.yml exec -T api npm run boundaries:load
+      - name: Cypress
+        working-directory: apps/e2e
+        env:
+          CYPRESS_BASE_URL: http://localhost:3000
+          SPEC: ${{ inputs.spec || 'cypress/e2e/p0-path.cy.ts' }}
+        run: pnpm exec cypress run --spec "$SPEC"
+      - name: Stack logs
+        if: failure()
+        run: docker compose -f infra/docker-compose.yml logs --no-color --tail 300
+      - name: Screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cypress-screenshots
+          path: apps/e2e/cypress/screenshots
+          if-no-files-found: ignore
+      - name: Stop the stack
+        if: always()
+        run: docker compose -f infra/docker-compose.yml down -v

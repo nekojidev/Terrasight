@@ -2,6 +2,7 @@
 #   docker compose -f infra/docker-compose.yml up --build
 # Builds use the public npm registry. To build through a private mirror instead, build the images first:
 #   docker build --secret id=npmrc,src=$HOME/.npmrc -f infra/api.Dockerfile -t terrasight-api .
+#   docker build --secret id=npmrc,src=$HOME/.npmrc -f infra/api.Dockerfile --target migrate -t terrasight-api-migrate .
 #   docker build --secret id=npmrc,src=$HOME/.npmrc -f infra/web.Dockerfile -t terrasight-web .
 # then run `docker compose -f infra/docker-compose.yml up` (without --build).
 # Without Redis:  docker compose -f infra/docker-compose.yml up --build --scale redis=0  (and unset REDIS_URL)
@@ -24,7 +25,7 @@ services:
       retries: 20
 
   rabbitmq:
-    image: rabbitmq:4-management-alpine
+    image: rabbitmq:4.1-management-alpine
     ports: ["5672:5672", "15672:15672"]
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
@@ -35,6 +36,24 @@ services:
   redis:
     image: redis:8-alpine
     ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # One-shot: applies Prisma migrations, then exits. The api image itself never migrates at start.
+  migrate:
+    image: terrasight-api-migrate
+    build:
+      context: ..
+      dockerfile: infra/api.Dockerfile
+      target: migrate
+    environment:
+      DATABASE_URL: postgresql://terrasight:terrasight@postgres:5432/terrasight
+    depends_on:
+      postgres: { condition: service_healthy }
+    restart: "no"
 
   api:
     image: terrasight-api
@@ -51,10 +70,24 @@ services:
       REDIS_URL: ${REDIS_URL-redis://redis:6379}
       NODE_ENV: ${NODE_ENV:-development}
       ROLE: ${ROLE:-all}
+      AUTH_RATE_BURST: ${AUTH_RATE_BURST:-} # raised by the E2E workflow; empty = the default burst of 10
     ports: ["4000:4000"]
     depends_on:
       postgres: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+    healthcheck: # the image's HEALTHCHECK (/healthz), tightened for local starts
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:4000/healthz').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 5s
+      start_period: 40s
+      retries: 20
 
   web:
     image: terrasight-web
@@ -64,7 +97,20 @@ services:
     environment:
       API_URL: http://api:4000
     ports: ["3000:3000"]
-    depends_on: [api]
+    depends_on:
+      api: { condition: service_healthy }
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.status<500?0:1),()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 5s
+      start_period: 20s
+      retries: 20
 
 volumes:
   pgdata:
