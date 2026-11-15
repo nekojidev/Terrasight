@@ -1,0 +1,26 @@
+{
+  "name": "@terrasight/climate",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Climate shift of a field from NASA POWER daily weather: Theil–Sen, Mann–Kendall, season metrics, flowering windows",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "@terrasight/shared": "workspace:*"
+  },
+  "devDependencies": {}
+}

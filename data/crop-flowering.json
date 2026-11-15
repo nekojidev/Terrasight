@@ -1,0 +1,89 @@
+{
+  "version": 1,
+  "about": "Flowering window and heat-stress threshold per crop for 'hot days at flowering' in the climate shift block (EP-10, S-10.02). Every value cites a page that was opened on the access date and contains the value or the numbers it is derived from. All entries are verified: false until the owner reviews them; the product labels them 'not yet reviewed'. Windows are 'days after emergence' (published rules of thumb count from emergence); the API converts them to calendar dates with the season record's emergence date, else sowing date plus the typical emergence days of data/crop-phenology.json (itself unverified). A crop without an entry here uses the labelled fallback: days above 35 C in June-August (December-February in the southern hemisphere). Crops left out because no checkable source was found: winter and spring wheat (heat threshold found, no window), soybean (flowering length found, no threshold or start), canola (threshold found, no window), sunflower, cotton, millet, barley.",
+  "fallback": {
+    "thresholdC": 35,
+    "north": { "from": "06-01", "to": "08-31" },
+    "south": { "from": "12-01", "to": "02-28" }
+  },
+  "crops": {
+    "corn": {
+      "threshold": {
+        "valueC": 35,
+        "sources": [
+          {
+            "title": "Corn pollination: effect of high temperature and stress",
+            "publisher": "Iowa State University Extension and Outreach, Integrated Crop Management",
+            "url": "https://crops.extension.iastate.edu/encyclopedia/corn-pollination-effect-high-temperature-and-stress",
+            "accessed": "2026-11-15"
+          },
+          {
+            "title": "How Extended High Heat Disrupts Corn Pollination",
+            "publisher": "University of Nebraska-Lincoln, CropWatch",
+            "url": "https://cropwatch.unl.edu/how-extended-high-heat-disrupts-corn-pollination/",
+            "accessed": "2026-11-15"
+          }
+        ],
+        "note": "Both pages name 95 F (= 35 C): 'Temperatures greater than 95 F with low relative humidity will desiccate exposed silks' (Iowa State); 'Heat over 95 F depresses pollen production' (Nebraska). Iowa State adds that high temperature does not severely stress pollination when soil moisture is adequate."
+      },
+      "window": {
+        "afterEmergence": {
+          "from": 55,
+          "to": 80,
+          "sources": [
+            {
+              "title": "Corn Growth & Development - R1 Silking",
+              "publisher": "Ohio State University Extension, Knox County",
+              "url": "https://u.osu.edu/knoxcountyag/?p=3093",
+              "accessed": "2026-11-15"
+            },
+            {
+              "title": "Corn pollination: effect of high temperature and stress",
+              "publisher": "Iowa State University Extension and Outreach, Integrated Crop Management",
+              "url": "https://crops.extension.iastate.edu/encyclopedia/corn-pollination-effect-high-temperature-and-stress",
+              "accessed": "2026-11-15"
+            }
+          ],
+          "note": "Start 55 and 66: silking (R1) 'occurs about 55 to 66 days after emergence' (Ohio State). End 80 = 66 + 14: 'Pollen shed occurs over a two-week period' (Iowa State). The sum is derived by the team, not quoted."
+        }
+      },
+      "verified": false
+    },
+    "sorghum": {
+      "threshold": {
+        "valueC": 36,
+        "sources": [
+          {
+            "title": "Impact of high temperature stress on floret fertility and individual grain weight of grain sorghum: sensitive stages and thresholds for temperature and duration",
+            "publisher": "Prasad, Djanaguiraman, Perumal, Ciampitti; Frontiers in Plant Science 6:820 (2015)",
+            "url": "https://www.frontiersin.org/journals/plant-science/articles/10.3389/fpls.2015.00820/full",
+            "accessed": "2026-11-15"
+          }
+        ],
+        "note": "'episodes of high temperature stress (>36 C; daytime maximum temperature) decreases floret fertility'."
+      },
+      "window": {
+        "afterEmergence": {
+          "from": 55,
+          "to": 65,
+          "sources": [
+            {
+              "title": "How a Sorghum Plant Develops",
+              "publisher": "Texas A&M AgriLife Research and Extension Center at San Angelo (B. E. Warrick)",
+              "url": "https://sanangelo.tamu.edu/agronomy/agronomy-publications/how-a-sorghum-plant-develops",
+              "accessed": "2026-11-15"
+            },
+            {
+              "title": "Impact of high temperature stress on floret fertility and individual grain weight of grain sorghum: sensitive stages and thresholds for temperature and duration",
+              "publisher": "Prasad, Djanaguiraman, Perumal, Ciampitti; Frontiers in Plant Science 6:820 (2015)",
+              "url": "https://www.frontiersin.org/journals/plant-science/articles/10.3389/fpls.2015.00820/full",
+              "accessed": "2026-11-15"
+            }
+          ],
+          "note": "Centre 60: 'half-bloom is reached at approximately 60 days after emergence' (Texas A&M). Width +-5 days: 'between 5 d before- and 5 d after-anthesis were most sensitive to high temperatures' (Prasad et al.). The window 55 to 65 is derived by the team, not quoted."
+        }
+      },
+      "verified": false
+    }
+  }
+}

@@ -28,6 +28,7 @@
     "@prisma/client": "7.10.1",
     "@sentry/node": "11.12.0",
     "@terrasight/assistant-core": "workspace:*",
+    "@terrasight/climate": "workspace:*",
     "@terrasight/evaluators": "workspace:*",
     "@terrasight/library": "workspace:*",
     "@terrasight/scenario-engine": "workspace:*",

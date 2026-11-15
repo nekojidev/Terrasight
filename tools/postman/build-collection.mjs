@@ -493,6 +493,17 @@ const collection = {
             `const h = pm.response.json(); pm.test("suitability key", () => { pm.expect(h).to.have.property("suitability"); if (h.suitability) { pm.expect(["suitable", "limited", "unsuitable", "unknown"]).to.include(h.suitability.status); pm.expect(h.suitability.reasons).to.be.an("array"); pm.expect(h.suitability.blocked).to.be.a("boolean"); } });`,
           ],
         }),
+        req("Climate shift is readable while the history is still gathering (EP-10)", "GET", "/api/w/{{ws}}/fields/{{fieldId}}/climate-shift", {
+          tests: [
+            status(200),
+            `const c = pm.response.json(); pm.test("status", () => pm.expect(["pending", "ready", "unavailable"]).to.include(c.status));`,
+            `pm.test("shape is valid in every status", () => { pm.expect(c.periods.baseline).to.eql({ from: 1981, to: 2000 }); pm.expect(c.periods.recent).to.eql({ from: 2006, to: 2025 }); pm.expect(["north", "south"]).to.include(c.hemisphere); pm.expect(c.metrics).to.be.an("array"); pm.expect(c.skippedYears).to.be.an("array"); pm.expect(c.flowering).to.have.property("thresholdC"); pm.expect(c.alpha).to.eql(0.05); });`,
+            `pm.test("ready carries the source line and eight metrics", () => { if (c.status === "ready") { pm.expect(c.metrics.length).to.eql(8); pm.expect(c.source.dataset).to.eql("NASA POWER"); pm.expect(c.source.resolutionKm).to.eql(55); pm.expect(c.source.cell.lat).to.be.a("number"); c.metrics.forEach((m) => { pm.expect(m.trend).to.have.property("significant"); }); } else { pm.expect(c.metrics.length).to.eql(0); } });`,
+          ],
+        }),
+        req("An unknown field id gives 404 on the climate shift", "GET", "/api/w/{{ws}}/fields/00000000-0000-4000-8000-000000000000/climate-shift", {
+          tests: problem(404),
+        }),
         req("An agronomist marks the land as cropland (override stores who and when)", "PUT", "/api/w/{{ws}}/fields/{{fieldId}}/suitability-override", {
           tests: [
             status(200),
