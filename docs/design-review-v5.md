@@ -16,9 +16,9 @@ Status: audit finished 2026-11-15 (15 read-only reviews of the built web app aga
 
 | Area | Decision |
 | --- | --- |
-| Sidebar (Agronomist) | Today · Fields · Plan · Assistant · Decisions, then Settings. Work windows live inside Today and the field page. Work log moves under the field and Plan. |
+| Sidebar (Agronomist) | Today · Fields · Plan · Assistant, then Settings. No Decisions item: the owner's answer (waiting / approved / not now / question) shows on the recommendation, with a link into the conversation (`/decisions` stays as a route). Work windows live inside Today and the field page. Work log moves under the field and Plan. |
 | Sidebar (Owner) | Decisions · Today · Fields · Plan · Assistant, then Settings (with Team and Prices). |
-| Phone tabs | Today · Fields · Assistant · Decisions · More. "More" holds Plan, Work windows, Settings and Sign out. Scouting is reached from Today and from the field. |
+| Phone tabs | Owner: Today · Fields · Assistant · Decisions · More. Agronomist: Today · Fields · Plan · Assistant · More. "More" holds Plan, Work windows, Settings and Sign out. Scouting is reached from Today and from the field. |
 | Field page tabs | Overview · Season · Plan (rotation) · Data & history. Zones and Work log are links inside Data & history. |
 | Field Overview | Header (Archive in the "⋯" menu), brief with sources, status chips, top 3 risks, "Next 7 days" (weather and work windows merged), season strip. Yield, outlook, irrigation, gather status and history move to the other tabs. |
 | Actions | One primary button per screen. Recommendation: Accept and Ask the owner; the rest in "More". |

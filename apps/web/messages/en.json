@@ -682,7 +682,9 @@
     "tf2": "Larvae hatch at ~380 °C·days — expected in June",
     "tf3": "Beetles were reported in Finney County last summer",
     "tf_t": "Top factors",
-    "tf_s": "What raised the risk most"
+    "tf_s": "What raised the risk most",
+    "ownerOpen": "Open the conversation with the owner",
+    "ownerReply": "Reply to the owner"
   },
   "Rotation": {
     "lang_group": "Interface language",

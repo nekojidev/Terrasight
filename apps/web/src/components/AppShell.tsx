@@ -113,13 +113,18 @@ export function AppShell({
   const items: NavItem[] =
     user.role === "owner"
       ? [nav.decisions, nav.today, nav.fields, nav.plan, nav.assistant]
-      : [nav.today, nav.fields, nav.plan, nav.assistant, nav.decisions];
+      : // The agronomist has no Decisions item: the owner's answer shows on the recommendation itself.
+        [nav.today, nav.fields, nav.plan, nav.assistant];
   const settingsActive = path.startsWith("/settings");
   const bottomItems: NavItem[] = [
     { href: settingsHref, label: a("navSettings"), icon: <Settings />, active: settingsActive },
   ];
-  const tabs: NavItem[] = [nav.today, nav.fields, nav.assistant, nav.decisions];
-  const moreActive = settingsActive || nav.plan.active || path.startsWith("/work-windows");
+  const tabs: NavItem[] =
+    user.role === "owner"
+      ? [nav.today, nav.fields, nav.assistant, nav.decisions]
+      : [nav.today, nav.fields, nav.plan, nav.assistant];
+  const planInMore = user.role === "owner";
+  const moreActive = settingsActive || (planInMore && nav.plan.active) || path.startsWith("/work-windows");
 
   const setLocale = (l: "uk" | "en") => {
     setCookie("ts_locale", l);
@@ -133,7 +138,7 @@ export function AppShell({
 
   const moreRows = (
     <>
-      <SheetRow href="/rotation" label={a("navPlan")} icon={<RefreshCw />} active={nav.plan.active} />
+      {planInMore && <SheetRow href="/rotation" label={a("navPlan")} icon={<RefreshCw />} active={nav.plan.active} />}
       <SheetRow
         href="/work-windows"
         label={a("navWorkWindows")}

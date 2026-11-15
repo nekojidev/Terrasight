@@ -1,5 +1,6 @@
 "use client";
 
+import { OwnerAnswer } from "./OwnerAnswer";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Button,
@@ -572,6 +573,7 @@ export function RecommendationClient({
               {status}
             </p>
           )}
+          {askedOwner && canAsk && !r.undoUntil && <OwnerAnswer workspaceId={workspaceId} recommendationId={r.id} />}
           {r.undoUntil ? (
             <DoneRow
               label={askedOwner ? t("askDone") : r.status === "accepted" ? t("accDone") : m("snz_done")}

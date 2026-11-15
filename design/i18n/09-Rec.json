@@ -102,7 +102,9 @@
   "tf2": "Личинки виходять за ~380 °C·днів — за прогнозом у червні",
   "tf3": "Минулого літа жуків бачили в окрузі Фінні",
   "tf_t": "Головні фактори",
-  "tf_s": "Що найбільше підняло ризик"
+  "tf_s": "Що найбільше підняло ризик",
+  "ownerOpen": "Відкрити розмову з власником",
+  "ownerReply": "Відповісти власнику"
  },
  "en": {
   "undo": "Undo",
@@ -207,6 +209,8 @@
   "tf2": "Larvae hatch at ~380 °C·days — expected in June",
   "tf3": "Beetles were reported in Finney County last summer",
   "tf_t": "Top factors",
-  "tf_s": "What raised the risk most"
+  "tf_s": "What raised the risk most",
+  "ownerOpen": "Open the conversation with the owner",
+  "ownerReply": "Reply to the owner"
  }
 }
