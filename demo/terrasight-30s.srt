@@ -1,0 +1,27 @@
+1
+00:00:00,100 --> 00:00:05,327
+NASA weather data, turned into a decision you can act on tomorrow. With the proof attached.
+
+2
+00:00:05,927 --> 00:00:09,833
+Every morning it reads the data, and says what to do first, and why.
+
+3
+00:00:11,127 --> 00:00:16,296
+It tests every rotation across a hundred and fifty weather runs, and ten price scenarios.
+
+4
+00:00:16,896 --> 00:00:19,841
+Every number the assistant gives is checked against the models.
+
+5
+00:00:21,296 --> 00:00:23,634
+And the models are checked against past seasons.
+
+6
+00:00:24,696 --> 00:00:26,352
+The owner decides in one tap.
+
+7
+00:00:28,096 --> 00:00:30,541
+From NASA data, to tomorrow’s decision.

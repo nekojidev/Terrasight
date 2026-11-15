@@ -18,7 +18,8 @@
     "i18n:unused": "node tools/i18n-unused.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "golden": "node tools/golden/run.mjs"
+    "golden": "node tools/golden/run.mjs",
+    "demo:video": "node tools/demo-video/build.mjs"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

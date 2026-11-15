@@ -1,0 +1,10 @@
+{
+  "name": "@terrasight/demo-video",
+  "private": true,
+  "type": "module",
+  "version": "0.0.0",
+  "description": "30-second demo video recorded from the real app (run: pnpm demo:video from the repo root)",
+  "devDependencies": {
+    "playwright": "1.63.0"
+  }
+}

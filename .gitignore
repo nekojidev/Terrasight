@@ -20,3 +20,8 @@ apps/web/public/maplibre-gl-worker.mjs
 
 # Agent worktrees
 .claude/
+
+# demo video (takes, audio cache, frames) and local env
+tools/demo-video/out/
+tools/demo-video/.env.local
+tools/demo-video/node_modules/
