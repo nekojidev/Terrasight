@@ -1,5 +1,6 @@
 import { CheckCircle2, ScanLine, ShieldCheck } from "lucide-react";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
 import { Brand } from "@/components/Brand";
@@ -12,6 +13,7 @@ export default async function LoginPage() {
   const me = await serverGet<Me>("/api/me");
   if (me.ok) redirect("/");
   const t = await getTranslations("Login");
+  const tExplore = await getTranslations("Explore");
 
   return (
     <main className="grid min-h-dvh lg:grid-cols-[52%_48%]">
@@ -49,6 +51,14 @@ export default async function LoginPage() {
             <LoginForm />
           </Suspense>
         </div>
+        <p className="text-center">
+          <Link
+            href="/explore"
+            className="focus-ring inline-flex min-h-11 items-center text-small text-ink-2 underline underline-offset-4"
+          >
+            {tExplore("tryLink")}
+          </Link>
+        </p>
         <p className="text-center text-small text-ink-3">{t("data")}</p>
       </section>
     </main>

@@ -22,6 +22,7 @@ import { FieldsModule } from "./fields/fields.module.js";
 import { HealthController } from "./health/health.controller.js";
 import { LibraryModule } from "./library/library.module.js";
 import { MessagingModule } from "./messaging/messaging.module.js";
+import { PublicModule } from "./public/public.module.js";
 import { RecommendationsModule } from "./recommendations/recommendations.module.js";
 import { ScenariosModule } from "./scenarios/scenarios.module.js";
 import { NotificationsModule } from "./notifications/notifications.module.js";
@@ -82,6 +83,7 @@ function hasPrettyPrinter(): boolean {
     FieldsModule,
     AnalysisModule,
     ClimateModule,
+    PublicModule,
     RecommendationsModule,
     AssistantModule,
     CropPricesModule,

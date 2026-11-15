@@ -71,6 +71,8 @@ export const EnvSchema = z.object({
   AUTH_TEST_HOOKS: z.enum(["0", "1"]).default("0"),
   /** First planned season (harvest year) of the 5-season horizon (RFC §7.7: 2026–2030). */
   PLAN_FIRST_SEASON: z.coerce.number().int().min(2020).max(2100).default(2026),
+  /** Public page and its /api/public/* routes (S-10.14). `0` is the kill switch: all of them answer 404. */
+  PUBLIC_EXPLORE: z.enum(["0", "1"]).default("1"),
   /** Recorded real responses served when a live call fails (RFC §5.4). */
   FIXTURES_DIR: z.string().default(fileURLToPath(new URL("../../../../fixtures/", import.meta.url))),
 });

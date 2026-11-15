@@ -70,6 +70,7 @@ Copy `.env.example` to `.env` for runs outside Docker. In production, secrets li
 | `GEMINI_API_KEY`, `GEMINI_MODEL` | unset, `gemini-3.5-flash-lite` | Assistant and AI-written texts; without a key the assistant says "unavailable" |
 | `AI_ROTATIONS`, `AI_RECOMMENDATIONS` | on when a key is set | `0` / `1` to switch AI-proposed rotations and AI-written recommendations |
 | `GEMINI_DAILY_TOKEN_BUDGET`, `GEMINI_DAILY_CALL_BUDGET` | `0` (unlimited) | Daily Gemini limits (UTC day, all instances). Over budget the AI-written texts and proposed rotations fall back to templates; assistant chat turns are not counted. Set both on a public host (starting point `2000000` / `1000`, see the runbook) |
+| `PUBLIC_EXPLORE` | `1` | The public page `/explore` and `/api/public/*` (climate for any point, no account). `0` is the kill switch: they answer 404 |
 | `OPEN_METEO_API_KEY` | unset | Commercial Open-Meteo key (the free endpoint is non-commercial) |
 | `OPENET_API_KEY`, `NASS_API_KEY`, `EARTHDATA_TOKEN`, `CDSE_CLIENT_ID`, `CDSE_CLIENT_SECRET` | unset | Source credentials; sources report "not configured" without them |
 | `EARTHDATA_TOKEN` | unset | Optional. NASA Earthdata bearer token for the GPM IMERG rainfall check (an independent check of POWER rainfall, EP-10); without it the check reports "unavailable" |
