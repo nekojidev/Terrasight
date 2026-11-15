@@ -287,7 +287,7 @@ export function AddFieldClient({
           </p>
           {preview?.placeLabel && <p className="-mt-3 text-small text-ink-2">{preview.placeLabel}</p>}
           <fieldset className="flex flex-col gap-3">
-            <legend className="mb-3 text-body font-semibold text-ink">{t("irr_q")}</legend>
+            <legend className="mb-3 text-body font-semibold text-ink">{a("irrOptional")}</legend>
             <div className="grid grid-cols-2 gap-2">
               {(["yes", "no"] as const).map((v) => (
                 <button
@@ -307,6 +307,7 @@ export function AddFieldClient({
               ))}
             </div>
             <p className="text-small text-ink-2">{a("irrigationDetectHint")}</p>
+            <p className="text-small text-ink-2">{a("irrWhy")}</p>
           </fieldset>
           <hr className="border-line" />
           <div>

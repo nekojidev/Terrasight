@@ -118,6 +118,7 @@ export function YieldCard({
         {d.yieldRef != null ? ` · ${t("ycRef", { v: fmt(d.yieldRef), unit })}` : ""}
       </p>
       <p className="mt-1 text-small text-ink-2">{t("ycNoPest")}</p>
+      <p className="mt-1 text-small text-ink-2">{t("ycIrrHint")}</p>
     </section>
   );
 }

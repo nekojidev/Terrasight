@@ -609,6 +609,7 @@ export function RotationClient({
           </tbody>
         </table>
         <p className="mt-3 text-micro text-ink-3">{t("rotPrices", { asOf: run.data.priceAsOf })}</p>
+        <p className="mt-1 text-micro text-ink-3">{t("rotIrrHint")}</p>
       </details>
 
       <Link href={`/fields/${fieldId}`} className="text-small text-ink-2 underline">
