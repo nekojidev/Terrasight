@@ -1015,7 +1015,7 @@
     "askSub": "The owner will see this, can approve it, say not now, or ask you a question.",
     "askNote": "Note for the owner (optional)",
     "askSend": "Send",
-    "navDecisions": "Owner decisions",
+    "navDecisions": "Decisions",
     "decOpen": "Open owner decisions",
     "decTitle": "Owner decisions",
     "decSub": "What you asked the owner, what they answered, and your replies.",
