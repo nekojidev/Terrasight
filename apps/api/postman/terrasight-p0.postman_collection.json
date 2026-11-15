@@ -1000,6 +1000,364 @@
       ]
     },
     {
+      "name": "Owner creates users (PD v2.9)",
+      "item": [
+        {
+          "name": "Create an agronomist: a one-time setup link",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 201\", () => pm.response.to.have.status(201));",
+                  "const b = pm.response.json(); pm.test(\"link shown once, no password\", () => { pm.expect(b.setupUrl).to.match(/^\\/setup\\//); pm.expect(b.expiresAt).to.be.a(\"string\"); });",
+                  "pm.collectionVariables.set(\"setupToken\", pm.response.json().setupUrl.split(\"/\").pop());",
+                  "pm.collectionVariables.set(\"newUserId\", pm.response.json().userId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/members",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Ira Agro\",\n  \"email\": \"ira-{{run}}@example.com\",\n  \"role\": \"agronomist\"\n}"
+            }
+          }
+        },
+        {
+          "name": "The same email is already a member",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 409\", () => pm.response.to.have.status(409));",
+                  "pm.test(\"problem+json\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"));",
+                  "pm.test(\"type already-member\", () => pm.expect(pm.response.json().type).to.include(\"already-member\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/members",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Ira Agro\",\n  \"email\": \"ira-{{run}}@example.com\",\n  \"role\": \"viewer\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Members list shows who has not set a password",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"needsSetup\", () => pm.expect(pm.response.json().members.find((x) => x.id === pm.collectionVariables.get(\"newUserId\")).needsSetup).to.eql(true));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/members"
+          }
+        },
+        {
+          "name": "Login without a password fails generically",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"problem+json\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"));",
+                  "pm.test(\"type bad-credentials\", () => pm.expect(pm.response.json().type).to.include(\"bad-credentials\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"ira-{{run}}@example.com\",\n  \"password\": \"anything long enough\"\n}"
+            }
+          }
+        },
+        {
+          "name": "A new link replaces the old one",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "const old = pm.collectionVariables.get(\"setupToken\"); pm.collectionVariables.set(\"oldSetupToken\", old);",
+                  "pm.collectionVariables.set(\"setupToken\", pm.response.json().setupUrl.split(\"/\").pop());"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/members/{{newUserId}}/setup-link"
+          }
+        },
+        {
+          "name": "The old link no longer works",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 410\", () => pm.response.to.have.status(410));",
+                  "pm.test(\"problem+json\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"));",
+                  "pm.test(\"type setup-link-invalid\", () => pm.expect(pm.response.json().type).to.include(\"setup-link-invalid\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/setup/{{oldSetupToken}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"password\": \"a long enough password\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Short passwords are rejected",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 422\", () => pm.response.to.have.status(422));",
+                  "pm.test(\"problem+json\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/setup/{{setupToken}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"password\": \"short\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Set the password: signs the user in",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"signed in as the new user\", () => pm.expect(pm.response.json().email).to.eql(pm.variables.replaceIn(\"ira-{{run}}@example.com\")));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/setup/{{setupToken}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"password\": \"a long enough password\"\n}"
+            }
+          }
+        },
+        {
+          "name": "The link works once",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 410\", () => pm.response.to.have.status(410));",
+                  "pm.test(\"problem+json\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"));",
+                  "pm.test(\"type setup-link-invalid\", () => pm.expect(pm.response.json().type).to.include(\"setup-link-invalid\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/setup/{{setupToken}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"password\": \"another long password\"\n}"
+            }
+          }
+        },
+        {
+          "name": "An agronomist cannot create users",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"problem+json\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/members",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"X\",\n  \"email\": \"x-{{run}}@example.com\",\n  \"role\": \"viewer\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Owner signs back in",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{ownerEmail}}\",\n  \"password\": \"correct horse battery\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "Fields & history (EP-02)",
       "item": [
         {

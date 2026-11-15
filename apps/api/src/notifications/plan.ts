@@ -32,13 +32,13 @@ export function planReportAnswered(
     }));
 }
 
-/** A decision was asked: tell the Viewers (the company owner / manager who answers it). */
+/** A decision was asked: tell the Owners and Viewers (the company owner / manager who answer it). */
 export function planDecisionAsked(
   members: Member[],
   e: { decisionId: string; recommendationId: string; fieldName: string },
 ): NotificationDraft[] {
   return members
-    .filter((m) => m.role === "viewer")
+    .filter((m) => m.role === "viewer" || m.role === "owner")
     .map((m) => ({
       userId: m.userId,
       kind: "decision_asked" as const,

@@ -21,7 +21,7 @@ export const PERMISSIONS = {
   "fields.read": ["owner", "admin", "agronomist"],
   "scenarios.explore": ["owner", "admin", "agronomist", "viewer"],
   "report.read": ["owner", "admin", "agronomist", "viewer"],
-  "report.answer": ["owner", "admin", "agronomist", "viewer"],
+  "report.answer": ["owner", "viewer"],
   "workspace.read": ["owner", "admin", "agronomist", "viewer"],
 } as const satisfies Record<string, readonly Role[]>;
 

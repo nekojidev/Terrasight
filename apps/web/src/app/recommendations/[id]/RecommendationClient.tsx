@@ -271,11 +271,14 @@ export function RecommendationClient({
   workspaceId,
   timeZone,
   canAct,
+  canAsk = true,
   initial,
 }: {
   workspaceId: string;
   timeZone: string;
   canAct: boolean;
+  /** False for Owners: they never see "Ask the owner" (PD v2.9). */
+  canAsk?: boolean;
   initial: RecView;
 }) {
   const t = useTranslations("App");
@@ -477,13 +480,7 @@ export function RecommendationClient({
           )}
           {r.undoUntil ? (
             <DoneRow
-              label={
-                askedOwner
-                  ? t("askDone")
-                  : r.status === "accepted"
-                    ? t("accDone")
-                    : m("snz_done")
-              }
+              label={askedOwner ? t("askDone") : r.status === "accepted" ? t("accDone") : m("snz_done")}
               undoLabel={m("undo")}
               undoUntil={r.undoUntil}
               onUndo={() => void act("undo")}
@@ -495,9 +492,11 @@ export function RecommendationClient({
                 <Button icon={<Check />} onClick={() => void act("accept")}>
                   {t("acceptBtn")}
                 </Button>
-                <Button variant="outline" icon={<MessageCircleQuestion />} onClick={() => setAsking(true)}>
-                  {t("askBtn")}
-                </Button>
+                {canAsk && (
+                  <Button variant="outline" icon={<MessageCircleQuestion />} onClick={() => setAsking(true)}>
+                    {t("askBtn")}
+                  </Button>
+                )}
                 <Button variant="outline" onClick={() => void act("snooze")}>
                   {m("snooze")}
                 </Button>
@@ -719,6 +718,7 @@ export function RecommendationClient({
                 </Button>
                 {(r.status === "open" || r.status === "accepted" || r.status === "in_report") &&
                   !r.undoUntil &&
+                  canAsk &&
                   !askedOwner && (
                     <Button icon={<MessageCircleQuestion />} onClick={() => setAsking(true)}>
                       {t("askBtn")}
@@ -792,7 +792,7 @@ export function RecommendationClient({
       </aside>
       <AskOwnerSheet
         preview={
-          asking
+          asking && canAsk
             ? {
                 fieldName: r.fieldName,
                 title: r.text.title[locale],

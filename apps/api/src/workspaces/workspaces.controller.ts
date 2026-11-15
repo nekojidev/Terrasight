@@ -17,6 +17,11 @@ const InviteBody = z.object({
   email: z.string().trim().toLowerCase().pipe(z.email("enter an email address").max(254)),
   role: z.enum(["owner", "admin", "agronomist", "viewer"]).default("viewer"),
 });
+const CreateUserBody = z.object({
+  name: z.string().trim().min(1).max(100),
+  email: z.string().trim().toLowerCase().pipe(z.email("enter an email address").max(254)),
+  role: z.enum(["owner", "admin", "agronomist", "viewer"]),
+});
 const RoleBody = z.object({ role: z.enum(["owner", "admin", "agronomist", "viewer"]) });
 
 /** Routes without a workspace in the path. */
@@ -69,6 +74,24 @@ export class WorkspaceController {
   @Requires("members.manage")
   members(@Req() req: AuthedRequest) {
     return this.workspaces.members(req.workspaceId!);
+  }
+
+  /** Owner creates users (PD v2.9): returns a one-time setup link, or adds an existing account. */
+  @Post("members")
+  @Requires("members.manage")
+  createUser(
+    @Body(new ZodPipe(CreateUserBody)) body: z.infer<typeof CreateUserBody>,
+    @Req() req: AuthedRequest,
+  ) {
+    return this.workspaces.createUser(req.workspaceId!, { id: req.user!.id, role: req.role! }, body);
+  }
+
+  @Post("members/:userId/setup-link")
+  @HttpCode(200)
+  @Requires("members.manage")
+  setupLink(@Param("userId") userId: string, @Req() req: AuthedRequest) {
+    if (!UUID.test(userId)) throw new ProblemException(404, "not-found");
+    return this.workspaces.newSetupLink(req.workspaceId!, { id: req.user!.id, role: req.role! }, userId);
   }
 
   @Post("invitations")

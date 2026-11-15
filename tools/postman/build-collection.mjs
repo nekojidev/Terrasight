@@ -250,6 +250,68 @@ const collection = {
       ],
     },
     {
+      name: "Owner creates users (PD v2.9)",
+      item: [
+        req("Create an agronomist: a one-time setup link", "POST", "/api/w/{{ws}}/members", {
+          body: { name: "Ira Agro", email: "ira-{{run}}@example.com", role: "agronomist" },
+          tests: [
+            status(201),
+            `const b = pm.response.json(); pm.test("link shown once, no password", () => { pm.expect(b.setupUrl).to.match(/^\\/setup\\//); pm.expect(b.expiresAt).to.be.a("string"); });`,
+            `pm.collectionVariables.set("setupToken", pm.response.json().setupUrl.split("/").pop());`,
+            `pm.collectionVariables.set("newUserId", pm.response.json().userId);`,
+          ],
+        }),
+        req("The same email is already a member", "POST", "/api/w/{{ws}}/members", {
+          body: { name: "Ira Agro", email: "ira-{{run}}@example.com", role: "viewer" },
+          tests: problem(409, "already-member"),
+        }),
+        req("Members list shows who has not set a password", "GET", "/api/w/{{ws}}/members", {
+          tests: [
+            status(200),
+            `pm.test("needsSetup", () => pm.expect(pm.response.json().members.find((x) => x.id === pm.collectionVariables.get("newUserId")).needsSetup).to.eql(true));`,
+          ],
+        }),
+        req("Login without a password fails generically", "POST", "/api/auth/login", {
+          body: { email: "ira-{{run}}@example.com", password: "anything long enough" },
+          tests: problem(401, "bad-credentials"),
+        }),
+        req("A new link replaces the old one", "POST", "/api/w/{{ws}}/members/{{newUserId}}/setup-link", {
+          tests: [
+            status(200),
+            `const old = pm.collectionVariables.get("setupToken"); pm.collectionVariables.set("oldSetupToken", old);`,
+            `pm.collectionVariables.set("setupToken", pm.response.json().setupUrl.split("/").pop());`,
+          ],
+        }),
+        req("The old link no longer works", "POST", "/api/auth/setup/{{oldSetupToken}}", {
+          body: { password: "a long enough password" },
+          tests: problem(410, "setup-link-invalid"),
+        }),
+        req("Short passwords are rejected", "POST", "/api/auth/setup/{{setupToken}}", {
+          body: { password: "short" },
+          tests: problem(422),
+        }),
+        req("Set the password: signs the user in", "POST", "/api/auth/setup/{{setupToken}}", {
+          body: { password: "a long enough password" },
+          tests: [
+            status(200),
+            `pm.test("signed in as the new user", () => pm.expect(pm.response.json().email).to.eql(pm.variables.replaceIn("ira-{{run}}@example.com")));`,
+          ],
+        }),
+        req("The link works once", "POST", "/api/auth/setup/{{setupToken}}", {
+          body: { password: "another long password" },
+          tests: problem(410, "setup-link-invalid"),
+        }),
+        req("An agronomist cannot create users", "POST", "/api/w/{{ws}}/members", {
+          body: { name: "X", email: "x-{{run}}@example.com", role: "viewer" },
+          tests: problem(403),
+        }),
+        req("Owner signs back in", "POST", "/api/auth/login", {
+          body: { email: "{{ownerEmail}}", password: "correct horse battery" },
+          tests: [status(200)],
+        }),
+      ],
+    },
+    {
       name: "Fields & history (EP-02)",
       item: [
         req("Bow-tie boundary is rejected", "POST", "/api/w/{{ws}}/fields/preview", {

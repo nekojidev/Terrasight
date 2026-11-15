@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Inject, Post, Req, Res, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, Inject, Param, Post, Req, Res, UseGuards } from "@nestjs/common";
 import type { CookieOptions, Request, Response } from "express";
 import { z } from "zod";
 import { ENV, type Env } from "../config/config.js";
@@ -7,7 +7,7 @@ import { ZodPipe } from "../http/zod.js";
 import { AuthService, type Session } from "./auth.service.js";
 import { AuthGuard, type AuthedRequest } from "./current-user.js";
 import { AUTH_BUCKET, RateLimitService } from "./rate-limit.js";
-import { ACCESS_COOKIE, ACCESS_TTL_S, REFRESH_COOKIE, REFRESH_TTL_S } from "./tokens.js";
+import { ACCESS_COOKIE, hashToken, ACCESS_TTL_S, REFRESH_COOKIE, REFRESH_TTL_S } from "./tokens.js";
 
 const Email = z.string().trim().toLowerCase().pipe(z.email().max(254));
 const SignupBody = z.object({
@@ -16,6 +16,7 @@ const SignupBody = z.object({
   name: z.string().trim().min(1).max(100),
   uiLanguage: z.enum(["uk", "en"]).default("en"),
 });
+const SetupBody = z.object({ password: z.string().min(10, "at least 10 characters").max(200) });
 const LoginBody = z.object({ email: Email, password: z.string().min(1).max(200) });
 
 @Controller("auth")
@@ -63,6 +64,26 @@ export class AuthController {
   ) {
     await this.limit(req, body.email);
     const s = await this.auth.signup(body);
+    this.setSession(res, s);
+    return this.auth.me(s.userId);
+  }
+
+  @Get("setup/:token")
+  async setupInfo(@Param("token") token: string, @Req() req: Request) {
+    await this.limit(req, `setup:${hashToken(token).slice(0, 16)}`);
+    return this.auth.setupInfo(token);
+  }
+
+  @Post("setup/:token")
+  @HttpCode(200)
+  async setup(
+    @Param("token") token: string,
+    @Body(new ZodPipe(SetupBody)) body: z.infer<typeof SetupBody>,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    await this.limit(req, `setup:${hashToken(token).slice(0, 16)}`);
+    const s = await this.auth.completeSetup(token, body.password);
     this.setSession(res, s);
     return this.auth.me(s.userId);
   }

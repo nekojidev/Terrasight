@@ -40,6 +40,7 @@ export async function RecommendationPageBody({ id, canonical }: { id: string; ca
         workspaceId={ws.data.id}
         timeZone={ws.data.timeZone}
         canAct={ws.data.role !== "viewer"}
+        canAsk={ws.data.role !== "owner"}
         initial={rec.data}
       />
     </AppShell>
