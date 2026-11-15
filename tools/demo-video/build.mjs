@@ -26,13 +26,13 @@ const STORY = [
     id: "hook",
     min: 5.0,
     lead: 0.1,
-    line: "NASA weather data, turned into a decision you can act on tomorrow. With the proof attached.",
+    line: "Forty-five years of NASA weather. One field. Its first frost now comes eight days later.",
     shots: [["hook", 1]],
   },
   {
     id: "brief",
     min: 5.2,
-    line: "Every morning it reads the data, and says what to do first, and why.",
+    line: "So what do you plant? Each morning, Terrasight says what to do first.",
     shots: [
       ["briefHome", 0.38],
       ["briefField", 0.62],
@@ -41,18 +41,18 @@ const STORY = [
   {
     id: "rotation",
     min: 5.2,
-    line: "It tests every rotation across a hundred and fifty weather runs, and ten price scenarios.",
+    line: "Each rotation faces a hundred and fifty weather runs and ten price scenarios.",
     shots: [["rotation", 1]],
   },
   {
     id: "proofA",
     min: 4.4,
-    line: "Every number the assistant gives is checked against the models.",
+    line: "Ask why. Every number in the answer is checked against the models.",
     shots: [["assistant", 1]],
   },
-  { id: "proofB", min: 3.4, line: "And the models are checked against past seasons.", shots: [["trust", 1]] },
+  { id: "proofB", min: 3.4, line: "And the models are checked against what really happened.", shots: [["trust", 1]] },
   { id: "owner", min: 3.4, line: "The owner decides in one tap.", shots: [["owner", 1]] },
-  { id: "end", min: 3.0, line: "From NASA data, to tomorrow’s decision.", shots: [["endCard", 1]] },
+  { id: "end", min: 3.0, line: "From NASA data to tomorrow’s decision.", shots: [["endCard", 1]] },
 ];
 const ONCE = new Set(["assistant", "owner"]);
 const fmt = (s) => {

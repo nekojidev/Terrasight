@@ -1,27 +1,27 @@
 1
-00:00:00,100 --> 00:00:05,721
-NASA weather data, turned into a decision you can act on tomorrow. With the proof attached.
+00:00:00,100 --> 00:00:06,032
+Forty-five years of NASA weather. One field. Its first frost now comes eight days later.
 
 2
-00:00:06,321 --> 00:00:09,877
-Every morning it reads the data, and says what to do first, and why.
+00:00:06,632 --> 00:00:10,534
+So what do you plant? Each morning, Terrasight says what to do first.
 
 3
-00:00:11,521 --> 00:00:16,149
-It tests every rotation across a hundred and fifty weather runs, and ten price scenarios.
+00:00:11,832 --> 00:00:16,053
+Each rotation faces a hundred and fifty weather runs and ten price scenarios.
 
 4
-00:00:16,749 --> 00:00:20,124
-Every number the assistant gives is checked against the models.
+00:00:17,032 --> 00:00:20,933
+Ask why. Every number in the answer is checked against the models.
 
 5
-00:00:21,149 --> 00:00:23,550
-And the models are checked against past seasons.
+00:00:21,533 --> 00:00:24,260
+And the models are checked against what really happened.
 
 6
-00:00:24,549 --> 00:00:26,362
+00:00:24,933 --> 00:00:26,746
 The owner decides in one tap.
 
 7
-00:00:27,949 --> 00:00:30,532
-From NASA data, to tomorrow’s decision.
+00:00:28,333 --> 00:00:30,703
+From NASA data to tomorrow’s decision.
