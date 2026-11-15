@@ -250,6 +250,9 @@ importers:
       '@terrasight/library':
         specifier: workspace:*
         version: link:../library
+      '@terrasight/simulator':
+        specifier: workspace:*
+        version: link:../simulator
 
   packages/library:
     dependencies:
@@ -5065,6 +5068,7 @@ packages:
   systeminformation@5.33.22:
     resolution: {integrity: sha512-RXcsXv2cXGTJljCratq2iJxc4XRuelHEek8OOCKn4gq+73EytipintntC6rqaw/iHOOZdiLTPFRrwjV3IVk2+g==}
     engines: {node: '>=10.0.0'}
+    os: [darwin, linux, win32, freebsd, openbsd, netbsd, sunos, android]
     hasBin: true
 
   tailwindcss@4.3.5:

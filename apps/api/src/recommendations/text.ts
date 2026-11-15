@@ -101,8 +101,57 @@ function rotationText(rec: RecLike, lib: Library): RecText {
   };
 }
 
+const numbers = (rec: RecLike) =>
+  ((rec.keyNumbers as Array<{ id: string; value: number | string }>) ?? []).reduce<
+    Record<string, number | string>
+  >((acc, k) => ({ ...acc, [k.id]: k.value }), {});
+
+/**
+ * Weather and irrigation items (L-13): a frost forecast (0 °C, no crop-specific damage claim) and FAO-56 root-zone
+ * depletion against readily available water. Wording stays at "check"; never products or doses.
+ */
+function alertText(rec: RecLike): RecText {
+  const n = numbers(rec);
+  if (rec.subject === "frost_alert") {
+    const date = (lang: Lang) => value(n.frostDate ?? "", lang);
+    const min = n.frostMinC ?? "";
+    return {
+      title: { en: `Frost expected on ${date("en")}`, uk: `Очікується заморозок ${date("uk")}` },
+      action: {
+        en: "Frost forecast; check sensitive crops and the growth stage in the field.",
+        uk: "Прогноз заморозку; перевірте чутливі культури та фазу розвитку на полі.",
+      },
+      why: {
+        en: `Forecast daily minimum air temperature ${min} °C (frost = 0 °C or below).`,
+        uk: `Прогнозована мінімальна температура повітря ${min} °C (заморозок = 0 °C і нижче).`,
+      },
+      scout: null,
+    };
+  }
+  const days = n.daysToStress;
+  const soon = days === 0 || days === "0";
+  return {
+    title: soon
+      ? { en: "Irrigation needed now", uk: "Потрібен полив зараз" }
+      : {
+          en: `Irrigation needed within ${days} days`,
+          uk: `Потрібен полив протягом ${days} дн.`,
+        },
+    action: {
+      en: "Plan an irrigation round: soil water in the root zone is at or past the readily available level.",
+      uk: "Заплануйте полив: вода в кореневій зоні досягла або перейшла рівень легкодоступної вологи.",
+    },
+    why: {
+      en: `Root-zone depletion ${n.depletionMm} mm against readily available water ${n.rawMm} mm (total available ${n.tawMm} mm), FAO-56 water balance.`,
+      uk: `Дефіцит води в кореневій зоні ${n.depletionMm} мм проти легкодоступної ${n.rawMm} мм (загалом доступної ${n.tawMm} мм), водний баланс FAO-56.`,
+    },
+    scout: null,
+  };
+}
+
 export function recommendationText(rec: RecLike, lib: Library): RecText {
   if (rec.type === "rotation") return rotationText(rec, lib);
+  if (rec.type === "weather" || rec.type === "irrigation") return alertText(rec);
   const pest = lib.pests.pests.find((p) => p.id === rec.subject);
   const name: Localised = pest
     ? { en: pest.name.en, uk: pest.name.uk }

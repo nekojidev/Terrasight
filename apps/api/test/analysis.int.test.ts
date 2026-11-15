@@ -9,6 +9,7 @@ import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { AnalysisService, type FieldCheckJob } from "../src/analysis/analysis.service.js";
 import { FieldCheckConsumer } from "../src/analysis/field-check.consumer.js";
+import { AlertsService } from "../src/analysis/alerts.service.js";
 import { EvalInputsService } from "../src/analysis/eval-inputs.service.js";
 import { ForecastService } from "../src/analysis/forecast.service.js";
 import { AnalysisScheduler } from "../src/analysis/scheduler.js";
@@ -202,7 +203,7 @@ beforeAll(async () => {
     limits,
   );
   const scenariosStub = { upsertRecommendation: async () => false } as unknown as ScenariosService;
-  consumer = new FieldCheckConsumer(broker, env, lib, prisma, analysis, inputsService, scenariosStub);
+  consumer = new FieldCheckConsumer(broker, env, lib, prisma, analysis, inputsService, scenariosStub, new AlertsService(prisma, lib));
   scheduler = new AnalysisScheduler(env, prisma, analysis);
 });
 
