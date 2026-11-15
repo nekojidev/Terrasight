@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "about": "Crop phenology and sowing parameters for the 'This season' suggestions (GET .../season-records/:season/suggest). Every value is UNVERIFIED (verified: false): written from general extension knowledge and still to be checked line by line against the cited guide. The UI shows them as estimates. `source.url` and `accessed` stay null until someone opens the source and confirms the number. tBaseC: base temperature of the growing-degree-day sum (daily mean of Tmin and Tmax minus base, floored at 0). emergenceGdd: degree days from sowing to emergence, deg C d; absent = unknown. typicalEmergenceDays: fallback when no degree-day requirement is known, labelled 'typical'. sowingSoilTempC: minimum soil temperature (6 cm) for sowing, used only to pick the best date inside an open window.",
+  "sources": {
+    "isu-corn": { "title": "Iowa State University Extension, Corn Growth and Development (PMR 1009)", "url": null, "accessed": null },
+    "isu-soy": { "title": "Iowa State University Extension, Soybean Growth and Development (PM 1945)", "url": null, "accessed": null },
+    "ksre-wheat": { "title": "K-State Research and Extension, Winter Wheat Production Handbook (C-529)", "url": null, "accessed": null },
+    "ksre-sorghum": { "title": "K-State Research and Extension, Grain Sorghum Production Handbook (C-687)", "url": null, "accessed": null },
+    "ksre-sunflower": { "title": "K-State Research and Extension, Sunflower Production Handbook (L-815)", "url": null, "accessed": null },
+    "ksre-cotton": { "title": "K-State Research and Extension, Cotton Production Handbook", "url": null, "accessed": null },
+    "ksre-canola": { "title": "K-State Research and Extension, Winter Canola Production Handbook (MF-2734)", "url": null, "accessed": null },
+    "nrcs-329": { "title": "USDA NRCS Conservation Practice Standard 329, Residue and Tillage Management, No-Till", "url": null, "accessed": null }
+  },
+  "crops": {
+    "corn": { "tBaseC": 10, "emergenceGdd": 65, "typicalEmergenceDays": 10, "sowingSoilTempC": 10, "source": "isu-corn", "verified": false },
+    "soybean": { "tBaseC": 10, "emergenceGdd": 55, "typicalEmergenceDays": 8, "sowingSoilTempC": 10, "source": "isu-soy", "verified": false },
+    "winter_wheat": { "tBaseC": 0, "emergenceGdd": 120, "typicalEmergenceDays": 10, "source": "ksre-wheat", "verified": false },
+    "sorghum": { "tBaseC": 10, "emergenceGdd": 80, "typicalEmergenceDays": 8, "sowingSoilTempC": 16, "source": "ksre-sorghum", "verified": false },
+    "forage_sorghum": { "tBaseC": 10, "emergenceGdd": 80, "typicalEmergenceDays": 8, "sowingSoilTempC": 16, "source": "ksre-sorghum", "verified": false },
+    "sunflower": { "tBaseC": 6, "typicalEmergenceDays": 9, "sowingSoilTempC": 8, "source": "ksre-sunflower", "verified": false },
+    "cotton": { "tBaseC": 15.6, "typicalEmergenceDays": 8, "sowingSoilTempC": 16, "source": "ksre-cotton", "verified": false },
+    "winter_canola": { "tBaseC": 0, "typicalEmergenceDays": 10, "source": "ksre-canola", "verified": false },
+    "millet": { "tBaseC": 10, "typicalEmergenceDays": 6, "sowingSoilTempC": 16, "source": "ksre-sorghum", "verified": false }
+  },
+  "tillage": {
+    "about": "Slope thresholds (percent) for the tillage suggestion: team rules of thumb read against NRCS 329; never mandatory. no_till from noTillSlopePct, reduced from reducedSlopePct; below that the regional practice (if any) decides.",
+    "noTillSlopePct": 6,
+    "reducedSlopePct": 3,
+    "source": "nrcs-329",
+    "verified": false,
+    "regions": {
+      "us-southern-plains": { "practice": "reduced", "note": "Reduced or no-till is common on the semi-arid Southern High Plains to save soil water." },
+      "us-central-high-plains": { "practice": "no_till", "note": "No-till is widely used on Central High Plains dryland rotations." }
+    }
+  }
+}

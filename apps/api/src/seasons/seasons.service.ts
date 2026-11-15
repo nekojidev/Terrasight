@@ -8,7 +8,15 @@ import { ProblemException } from "../http/problem.js";
 
 /** data/crop-calendar.json: typical sowing dates per region and crop (rules of thumb, `verify: true`). */
 interface CropCalendar {
-  regions: Record<string, { verify: boolean; sowing: Record<string, string> }>;
+  regions: Record<
+    string,
+    {
+      verify: boolean;
+      sowing: Record<string, string>;
+      /** Recommended sowing window per crop, [from, to] as MM-DD (v2). */
+      windows?: Record<string, [string, string]>;
+    }
+  >;
 }
 
 export interface ResolvedValue<T> {
@@ -23,7 +31,7 @@ export interface SeasonRecordView {
   emergenceDate: ResolvedValue<string>;
   irrigated: ResolvedValue<boolean>;
   tillage: ResolvedValue<string>;
-  /** What dependent models will report as missing. */
+  /** What dependent models will report as missing: ids `crop`, `sowingDate`, `emergenceDate`, `irrigation` (the UI localises them). */
   missing: string[];
 }
 
@@ -66,6 +74,16 @@ export class SeasonsService {
   /** The region's typical sowing dates, crop → "MM-DD" (crop calendar). */
   sowingCalendar(regionId: string | null): Record<string, string> {
     return (regionId && this.calendar.regions[regionId]?.sowing) || {};
+  }
+
+  /** Recommended sowing windows of a region, crop → [from, to] as MM-DD; empty when the calendar has none. */
+  sowingWindows(regionId: string | null): Record<string, [string, string]> {
+    return (regionId && this.calendar.regions[regionId]?.windows) || {};
+  }
+
+  /** true when the region's calendar is still a rule of thumb (`verify: true`). */
+  calendarUnverified(regionId: string | null): boolean {
+    return !regionId || this.calendar.regions[regionId]?.verify !== false;
   }
 
   /** Typical sowing date of a crop in a region for a harvest year (crop calendar, `regional`); autumn sowing falls in the year before. */
@@ -121,13 +139,16 @@ export class SeasonsService {
           ? { value: null, source: "unknown" }
           : { value: field.irrigation === "irrigated", source: field.irrigationSource };
     const tillage: ResolvedValue<string> = record?.tillage
-      ? { value: record.tillage, source: "confirmed" }
+      ? {
+          value: record.tillage,
+          source: record.tillageSource === "unknown" ? "confirmed" : record.tillageSource,
+        }
       : { value: null, source: "unknown" };
 
     const missing = [
       ...(crop.value ? [] : ["crop"]),
-      ...(sowingDate.value ? [] : ["sowing date"]),
-      ...(emergenceDate.value ? [] : ["emergence date"]),
+      ...(sowingDate.value ? [] : ["sowingDate"]),
+      ...(emergenceDate.value ? [] : ["emergenceDate"]),
       ...(irrigated.value === null ? ["irrigation"] : []),
     ];
     return { season, crop, sowingDate, emergenceDate, irrigated, tillage, missing };
@@ -145,6 +166,13 @@ export class SeasonsService {
       emergenceDate?: string | null;
       irrigated?: boolean | null;
       tillage?: string | null;
+      /** A value saved untouched from a recommendation keeps its origin (`plan`, `estimate`, `regional`) instead of `confirmed`. */
+      sources?: Partial<
+        Record<
+          "crop" | "sowingDate" | "emergenceDate" | "tillage",
+          Exclude<ValueSource, "confirmed" | "unknown">
+        >
+      >;
     },
   ): Promise<SeasonRecordView> {
     const field = await this.prisma.db.field.findFirst({
@@ -154,24 +182,26 @@ export class SeasonsService {
     if (!field) throw new ProblemException(404, "not-found");
     const date = (v: string | null | undefined) =>
       v === undefined ? undefined : v === null ? null : new Date(`${v}T00:00:00Z`);
+    const src = (k: "crop" | "sowingDate" | "emergenceDate" | "tillage", has: boolean): ValueSource =>
+      has ? (input.sources?.[k] ?? "confirmed") : "unknown";
     const data = {
-      ...(input.crop !== undefined
-        ? { crop: input.crop, cropSource: (input.crop ? "confirmed" : "unknown") as ValueSource }
-        : {}),
+      ...(input.crop !== undefined ? { crop: input.crop, cropSource: src("crop", !!input.crop) } : {}),
       ...(input.sowingDate !== undefined
         ? {
             sowingDate: date(input.sowingDate),
-            sowingSource: (input.sowingDate ? "confirmed" : "unknown") as ValueSource,
+            sowingSource: src("sowingDate", !!input.sowingDate),
           }
         : {}),
       ...(input.emergenceDate !== undefined
         ? {
             emergenceDate: date(input.emergenceDate),
-            emergenceSource: (input.emergenceDate ? "confirmed" : "unknown") as ValueSource,
+            emergenceSource: src("emergenceDate", !!input.emergenceDate),
           }
         : {}),
       ...(input.irrigated !== undefined ? { irrigated: input.irrigated } : {}),
-      ...(input.tillage !== undefined ? { tillage: input.tillage } : {}),
+      ...(input.tillage !== undefined
+        ? { tillage: input.tillage, tillageSource: src("tillage", !!input.tillage) }
+        : {}),
       updatedBy: userId,
     };
     await this.prisma.db.seasonRecord.upsert({

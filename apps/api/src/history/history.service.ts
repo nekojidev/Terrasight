@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { Inject, Injectable, Logger, type OnModuleInit } from "@nestjs/common";
 import { ModuleRef } from "@nestjs/core";
-import { loadUaYields, oblastYields, type Library, type UaYieldsFile } from "@terrasight/library";
+import { loadUaYields, oblastYields, seqCrops, type Library, type UaYieldsFile } from "@terrasight/library";
 import { EventKeys, type Envelope } from "@terrasight/shared";
 import {
   soilSummaryFromGrids,
@@ -220,11 +220,20 @@ export class HistoryService extends JobConsumer<BuildJob> implements OnModuleIni
     return this.uaYields ? oblastYields(this.uaYields, adminCode) : null;
   }
 
+  private regionCrops(regionId: string | null): string[] {
+    if (!regionId) return [];
+    const ids = new Set<string>();
+    for (const r of this.lib.rotations.rotations)
+      if (r.region === regionId) for (const item of r.sequence) for (const c of seqCrops(item)) ids.add(c);
+    ids.delete("fallow");
+    return [...ids].filter((c) => this.lib.rotations.crops[c]).sort();
+  }
+
   /** History view for the field page (design 08): 18-season strip, stress years, irrigation, current rotation. */
   async get(workspaceId: string, fieldId: string) {
     const field = await this.prisma.db.field.findFirst({
       where: { id: fieldId, workspaceId, archivedAt: null },
-      select: { id: true, irrigation: true, irrigationSource: true, adminCode: true },
+      select: { id: true, irrigation: true, irrigationSource: true, adminCode: true, regionId: true },
     });
     if (!field) throw new ProblemException(404, "not-found");
     const [history, crops] = await Promise.all([
@@ -252,6 +261,8 @@ export class HistoryService extends JobConsumer<BuildJob> implements OnModuleIni
       currentRotation: history?.baselineMatch ?? null,
       /** Ukraine only: oblast average yields (State Statistics Service). Context, never verified, never a price. */
       regionalYields: this.regionalYields(field.adminCode),
+      /** Crops of the field's region (rotations of the library), for the "This season" crop picker; empty when the region has no library. */
+      regionCrops: this.regionCrops(field.regionId),
       /** Localised names of every library crop: labels for the strip and the "correct a season" picker. */
       cropNames: Object.fromEntries(
         Object.entries(this.lib.rotations.crops).map(([id, c]) => [id, { en: c.en, uk: c.uk }]),

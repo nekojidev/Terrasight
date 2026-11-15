@@ -303,6 +303,7 @@ model SeasonRecord {
   emergenceSource ValueSource @default(unknown) @map("emergence_source")
   irrigated       Boolean?
   tillage         String?
+  tillageSource   ValueSource @default(unknown) @map("tillage_source")
   updatedBy       String?     @map("updated_by") @db.Uuid
   updatedAt       DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
 
