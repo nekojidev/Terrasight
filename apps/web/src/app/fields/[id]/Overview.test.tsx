@@ -62,7 +62,8 @@ describe("field Overview blocks", () => {
         units="metric"
       />,
     );
-    expect(screen.getByText("Crop: Corn")).toBeTruthy();
+    // exceptions only: the crop and the plan are not chips any more
+    expect(screen.queryByText("Crop: Corn")).toBeNull();
     expect(screen.getByText("Limited")).toBeTruthy();
     expect(screen.getByText("2 items need attention")).toBeTruthy();
   });

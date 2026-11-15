@@ -1,6 +1,7 @@
 "use client";
 
 import { clsx } from "clsx";
+import { Info } from "lucide-react";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 
 export interface InfoHintProps {
@@ -59,9 +60,9 @@ export function InfoHint({ label, children, align = "start", className }: InfoHi
         onBlur={(e) => {
           if (!root.current?.contains(e.relatedTarget as Node | null)) setPinned(false);
         }}
-        className="focus-ring relative inline-flex size-5 items-center justify-center rounded-chip border border-line-strong bg-surface font-mono text-micro leading-none font-semibold text-ink-2 before:absolute before:-inset-3 before:content-[''] hover:bg-muted hover:text-ink"
+        className="focus-ring relative inline-flex size-5 items-center justify-center rounded-chip text-ink-2 before:absolute before:-inset-3 before:content-[''] hover:bg-muted hover:text-ink"
       >
-        <span aria-hidden>i</span>
+        <Info aria-hidden strokeWidth={2} className="size-4" />
       </button>
       {open && (
         <span

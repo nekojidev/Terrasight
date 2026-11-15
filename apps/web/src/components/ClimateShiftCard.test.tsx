@@ -187,10 +187,38 @@ describe("ClimateShiftCard", () => {
 
   it("compact shows the strongest clear changes and the full table behind a disclosure", () => {
     wrap(card({ data: shift(), compact: true }));
-    const lists = screen.getAllByRole("list", { name: /Climate metrics/, hidden: true });
-    expect(lists).toHaveLength(2);
-    expect(within(lists[0]!).getAllByRole("listitem")).toHaveLength(2);
+    // only two clear changes in this data: two takeaways, the table lives behind "All metrics"
+    const take = screen.getByRole("list", { name: "Main changes" });
+    expect(within(take).getAllByRole("listitem")).toHaveLength(2);
     expect(screen.getByRole("button", { name: /All metrics/ }).getAttribute("aria-expanded")).toBe("false");
+    expect(screen.getAllByRole("list", { name: /Climate metrics/, hidden: true })).toHaveLength(1);
+  });
+
+  it("compact picks exactly 3 plain takeaways: frost date, season length, heat", () => {
+    const d = shift();
+    const sig = new Set(["firstAutumnFrost", "frostFreeDays", "seasonTemp", "hotDaysFlowering"]);
+    d.metrics = d.metrics.map((m) => (sig.has(m.id) ? { ...m, trend: trend(true, Math.sign(m.delta ?? 1) * 3, 0.01) } : m));
+    wrap(card({ data: d, compact: true }));
+    const take = screen.getByRole("list", { name: "Main changes" });
+    const items = within(take).getAllByRole("listitem");
+    expect(items).toHaveLength(3);
+    expect(items[0]!.textContent).toMatch(/first autumn frost/i);
+    expect(items[1]!.textContent).toMatch(/frost-free/i);
+    expect(items[2]!.textContent).toMatch(/growing season/i);
+    expect(take.textContent).toMatch(/every 10 years/);
+  });
+
+  it("picks fixes the takeaways, and a metric without a clear trend is never shown as a change", () => {
+    wrap(card({ data: shift(), compact: true, picks: ["hotDaysFlowering", "seasonPrecip"] }));
+    const items = within(screen.getByRole("list", { name: "Main changes" })).getAllByRole("listitem");
+    expect(items).toHaveLength(1);
+    expect(items[0]!.textContent).toMatch(/Hot days at flowering/);
+  });
+
+  it("collapsed is one row that names the first takeaway and opens the compact card", () => {
+    wrap(card({ data: shift(), compact: true, collapsed: true }));
+    const row = screen.getByRole("button", { name: /How this field's climate has changed: /i });
+    expect(row.getAttribute("aria-expanded")).toBe("false");
   });
 
   it("renders in Ukrainian", () => {

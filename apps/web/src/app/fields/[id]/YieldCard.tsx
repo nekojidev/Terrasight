@@ -87,7 +87,11 @@ export function YieldCard({
   return (
     <Surface as="section" data-testid="yield-card">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-h2 text-ink">{t("ycTitle")}</h2>
+        <h2 className="text-h2 text-ink">
+          {d.source === "current-rotation" || d.season == null
+            ? t("ycTitle")
+            : r("yc_titlePlan", { crop: name, season: d.season })}
+        </h2>
         <span className="text-caption text-ink-2">
           {t("ycCropSeason", { crop: name, season: d.season ?? "" })} · {t(`ycSrc_${d.source ?? "plan"}`)}
           {d.season != null && (

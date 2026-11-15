@@ -19,8 +19,12 @@ export interface ClimateShiftCardProps {
   units?: "metric" | "imperial";
   /** "How far can you trust this" link. */
   trustHref?: string;
-  /** Headline, the three strongest significant changes and the full table behind a disclosure. */
+  /** Three plain takeaways; the full table, the trend wording and the source sit behind "All metrics". */
   compact?: boolean;
+  /** Compact form only: fixed takeaways for another screen (a metric without a clear trend is skipped). */
+  picks?: ClimateMetricId[];
+  /** Compact form only: one collapsed row ("How this field's climate has changed: ...") that opens the card. */
+  collapsed?: boolean;
 }
 
 /** Order in which a second sentence is picked for the headline. The growing-season temperature always goes first. */
@@ -59,6 +63,32 @@ export function pickHeadlineMetrics(metrics: ClimateMetric[], visible: (m: Clima
   return ok(temp) ? [temp, ...others.slice(0, 1)] : others.slice(0, 2);
 }
 
+/** Compact takeaways: frost date, season length and heat first; the rest by smallest p-value. */
+const TAKEAWAY_GROUPS: ClimateMetricId[][] = [["firstAutumnFrost"], ["frostFreeDays"], ["seasonTemp", "gdd"]];
+
+/**
+ * At most three metrics for the compact card: only clear changes that still print as a change. `picks` fixes the
+ * choice (in its order); otherwise one per group above, then the strongest of the rest.
+ */
+export function pickTakeaways(
+  metrics: ClimateMetric[],
+  visible: (m: ClimateMetric) => boolean,
+  picks?: ClimateMetricId[],
+): ClimateMetric[] {
+  const ok = (m: ClimateMetric | undefined): m is ClimateMetric => m !== undefined && isClearChange(m) && visible(m);
+  const byId = (id: ClimateMetricId) => metrics.find((m) => m.id === id);
+  if (picks) return picks.map(byId).filter(ok).slice(0, 3);
+  const out: ClimateMetric[] = [];
+  for (const group of TAKEAWAY_GROUPS) {
+    const m = group.map(byId).find(ok);
+    if (m) out.push(m);
+  }
+  const rest = metrics
+    .filter((m) => ok(m) && !out.includes(m))
+    .sort((a, b) => (a.trend.pValue ?? 1) - (b.trend.pValue ?? 1));
+  return [...out, ...rest].slice(0, 3);
+}
+
 const round1 = (n: number) => Math.round(n * 10) / 10;
 const KNOWN_REASONS = { "weather-missing": "weatherMissing", "too-few-years": "tooFewYears", "outside-coverage": "outsideCoverage" } as const;
 
@@ -72,6 +102,8 @@ export function ClimateShiftCard({
   units,
   trustHref,
   compact = false,
+  picks,
+  collapsed = false,
 }: ClimateShiftCardProps) {
   const t = useTranslations("Field");
   const fmt = useFormat({
@@ -286,10 +318,36 @@ export function ClimateShiftCard({
       </ul>
     );
 
-    const strongest = data.metrics
-      .filter((m) => m.trend.significant && m.delta !== null)
-      .sort((a, b) => (a.trend.pValue ?? 1) - (b.trend.pValue ?? 1))
-      .slice(0, 3);
+    const takeaways = pickTakeaways(data.metrics, (m) => directionOf(m, m.delta ?? 0) !== "flat", picks);
+    const sentence = (m: ClimateMetric) =>
+      tt(`hl_${m.id}_${(m.delta ?? 0) > 0 ? "up" : "down"}`, {
+        value: magnitude(m, m.delta ?? 0),
+        baseline: periodText(baseline),
+      });
+    const upper = (x: string) => x.charAt(0).toLocaleUpperCase(fmt.locale) + x.slice(1);
+    const lower = (x: string) => x.charAt(0).toLocaleLowerCase(fmt.locale) + x.slice(1);
+    /** "Oct 21 → Oct 30 · about 3 days later every 10 years", numbers only from the data. */
+    const detail = (m: ClimateMetric): string => {
+      const parts: string[] = [];
+      if (m.baseline !== null && m.recent !== null && m.unit !== "degDays")
+        parts.push(`${absText(m, m.baseline)} → ${absText(m, m.recent)}`);
+      const slope = m.trend.slopePerDecade;
+      if (slope !== null && /[1-9]/.test(deltaText(m, slope, 0)))
+        parts.push(
+          tt("cs_per10", { value: m.unit === "dayOfYear" ? shiftText(slope, 0) : deltaText(m, slope, 1) }),
+        );
+      return parts.join(" · ");
+    };
+    const takeawayList = (
+      <ul aria-label={t("cs_takeaways")} className="flex flex-col divide-y divide-line">
+        {takeaways.map((m) => (
+          <li key={m.id} className="py-3">
+            <p className="text-body font-semibold text-ink">{upper(sentence(m))}</p>
+            <p className="text-caption text-ink-2">{detail(m)}</p>
+          </li>
+        ))}
+      </ul>
+    );
 
     const gpm = data.gpm;
     const gpmText = (() => {
@@ -305,6 +363,74 @@ export function ClimateShiftCard({
       return tt(gpm.agree === null ? "cs_gpm_values" : gpm.agree ? "cs_gpm_same" : "cs_gpm_opposite", values);
     })();
 
+    const gpmShown = gpmText && !(compact && gpm && gpm.status !== "ready") ? gpmText : null;
+    const extras = (
+      <>
+        {gpmShown && <p className="text-body text-ink-2">{gpmShown}</p>}
+        {data.skippedYears.length > 0 && (
+          <p className="text-caption text-ink-2">{t("cs_skipped", { years: data.skippedYears.join(", ") })}</p>
+        )}
+        <p className="text-caption text-ink-2">
+          {t("cs_footer", {
+            km: fmt.number(data.source?.resolutionKm ?? 55, { maximumFractionDigits: 0 }),
+            baseline: periodText(baseline),
+            recent: periodText(recent),
+            date: data.source ? fmt.date(`${data.source.lastDate.slice(0, 10)}T00:00:00Z`, "full", { timeZone: "UTC" }) : "—",
+          })}
+        </p>
+      </>
+    );
+    const trustLink = trustHref && (
+      <Link
+        href={trustHref}
+        className="focus-ring inline-flex min-h-tap items-center gap-1 self-start rounded-btn text-body font-semibold text-ink underline underline-offset-4"
+      >
+        {t("cs_trust")}
+        <ChevronRight aria-hidden className="size-4" />
+      </Link>
+    );
+
+    if (compact) {
+      const body = (
+        <div className="flex min-w-0 flex-col gap-4">
+          {takeaways.length > 0 ? takeawayList : <p className="text-body text-ink-2">{t("cs_headline_none", { from: fromYear, to: toYear })}</p>}
+          <Disclosure summary={t("cs_all")}>
+            <div className="flex flex-col gap-3 pb-1">
+              {list(data.metrics, true)}
+              {extras}
+            </div>
+          </Disclosure>
+          {trustLink}
+        </div>
+      );
+      if (collapsed)
+        return (
+          <section aria-labelledby="cs-headline" className="rounded-card border border-line bg-surface px-4 py-1">
+            <Disclosure
+              summary={
+                <span id="cs-headline" className="min-w-0">
+                  {t("cs_title")}
+                  {takeaways[0] ? `: ${lower(sentence(takeaways[0]))}` : ""}
+                </span>
+              }
+            >
+              <div className="pb-3">{body}</div>
+            </Disclosure>
+          </section>
+        );
+      return (
+        <Surface as="section" aria-labelledby="cs-headline" className="flex min-w-0 flex-col gap-3">
+          <div className="flex flex-col gap-1">
+            <Kicker>{t("cs_kicker", { from: fromYear, to: toYear })}</Kicker>
+            <h2 id="cs-headline" className="text-h2 text-ink">
+              {t("cs_title")}
+            </h2>
+          </div>
+          {body}
+        </Surface>
+      );
+    }
+
     return (
       <Surface as="section" aria-labelledby="cs-headline" className="flex min-w-0 flex-col gap-4">
         <div className="flex flex-col gap-1">
@@ -313,16 +439,7 @@ export function ClimateShiftCard({
             {headline}
           </h2>
         </div>
-        {compact ? (
-          <>
-            {strongest.length > 0 && list(strongest)}
-            <Disclosure summary={t("cs_all")}>
-              <div className="pb-1">{list(data.metrics, true)}</div>
-            </Disclosure>
-          </>
-        ) : (
-          list(data.metrics)
-        )}
+        {list(data.metrics)}
         {gpmText && <p className="text-body text-ink-2">{gpmText}</p>}
         {data.skippedYears.length > 0 && (
           <p className="text-caption text-ink-2">{t("cs_skipped", { years: data.skippedYears.join(", ") })}</p>
