@@ -12,7 +12,6 @@ import { QueryState } from "@/components/QueryState";
 import { api } from "@/lib/api";
 import { useWorkspaceEvents } from "@/lib/events";
 import { DecisionCard } from "./DecisionCard";
-import { ReportLinks } from "./ReportLinks";
 
 type Tab = "waiting" | "answered";
 const tabOf = (d: Decision): Tab => (d.state === "waiting" ? "waiting" : "answered");
@@ -115,7 +114,6 @@ export function DecisionsClient({ workspaceId, fieldId }: { workspaceId: string;
         </div>
 
         <aside className="flex min-w-0 flex-col gap-4">
-          <ReportLinks workspaceId={workspaceId} />
           <Surface as="section">
             <h2 className="mb-2 text-h3 text-ink">{t("decWho")}</h2>
             {recipients.length > 0 ? (

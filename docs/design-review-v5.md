@@ -58,7 +58,7 @@ Priority: C = critical, I = important, N = nice to have. Effort: S â‰¤ 1 h, M â‰
 | 4 | States | Action failures have no toast and no retry | C | M | many; `ZonesClient.tsx:159`, `AssistantClient.tsx:264` |
 | 5 | States | Offline banner is not sticky and says nothing about what works | C | M | `components/OfflineBanner.tsx` |
 | 6 | A11y | Input and outline-button border contrast 1.5:1 | C | S | `design/tokens.css` |
-| 7 | Decisions | Owner's link is always English and sits on the owner's page | C | S | `components/ReportLinks.tsx:45` |
+| 7 | Decisions | The no-account link is always English (it stays on the owner's page: only the Owner manages links) | C | S | `components/ReportLinks.tsx:45` |
 | 8 | Fields | `canEdit` is hard-coded to true | C | S | `app/fields/page.tsx:37` |
 | 9 | Recommendation | 5 actions in the hero; duplicate Ask and Compare buttons | I | M | `app/recommendations/[id]/RecommendationClient.tsx` |
 | 10 | Recommendation | Edit form has 4 fields where one message is enough | I | S | same |

@@ -1,5 +1,6 @@
 "use client";
 
+import { ReportLinks } from "./ReportLinks";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Decision, DecisionList } from "@terrasight/shared";
 import { useTranslations } from "next-intl";
@@ -36,6 +37,10 @@ export function OwnerDecisionsClient({ workspaceId }: { workspaceId: string }) {
           return saved;
         }}
       />
+      {/* Only the Owner manages no-account links (Product Definition, roles). */}
+      <div className="mt-6">
+        <ReportLinks workspaceId={workspaceId} />
+      </div>
     </div>
   );
 }
