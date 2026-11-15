@@ -78,7 +78,7 @@ export function RotationClient({
   const t = useTranslations("App");
   const r = useTranslations("Rotation");
   const locale = useLocale() as "en" | "uk";
-  const [priority, setPriority] = useState<Metric | null>(null);
+  const [priority, setPriority] = useState<Metric>("margin");
   const [chosen, setChosen] = useState<string | null>(null);
   // Climate sliders and the water cap re-run the simulation (S-06.07); results are cached by inputs hash.
   const [draft, setDraft] = useState({ deltaT: 0, rain: 0, cap: 0 });
@@ -103,9 +103,7 @@ export function RotationClient({
   const scenarios = useMemo(() => {
     if (!run.data?.result) return [];
     const all = [run.data.result.current, ...run.data.result.alternatives];
-    const w = priority
-      ? { margin: 0.25, water: 0.25, soil: 0.25, drought: 0.25, [priority]: 3 }
-      : { margin: 1, water: 1, soil: 1, drought: 1 };
+    const w = { margin: 0.25, water: 0.25, soil: 0.25, drought: 0.25, [priority]: 3 };
     return rank(all, w as Record<Metric, number>);
   }, [run.data, priority]);
   const best = scenarios.reduce<ScenarioResult | null>(
@@ -195,8 +193,23 @@ export function RotationClient({
   );
   const lo = Math.min(0, ...cum.flat());
   const hi = Math.max(1, ...cum.flat());
-  const X = (i: number) => 40 + (i / 4) * 520;
+  const X = (i: number) => 64 + (i / 4) * 500;
   const Y = (v: number) => 210 - ((v - lo) / (hi - lo)) * 190;
+  const ticks = [0, 1, 2, 3].map((k) => lo + ((hi - lo) * k) / 3);
+  const kfmt = (v: number) =>
+    `${v < 0 ? "−" : ""}$${(Math.abs(v) / 1000).toFixed(Math.abs(v) >= 10000 ? 0 : 1)}k`;
+  // End labels: keep at least 14px apart so they never overlap.
+  const endY = (() => {
+    const ys = cum.map((c, k) => ({ k, y: Y(c.at(-1) ?? 0) + 4 })).sort((p, q) => p.y - q.y);
+    for (let n = 1; n < ys.length; n++) ys[n]!.y = Math.max(ys[n]!.y, ys[n - 1]!.y + 14);
+    return Object.fromEntries(ys.map((e) => [e.k, e.y]));
+  })();
+  // Establishment dip: a weak first year followed by a clearly better one (e.g. alfalfa).
+  const dips = scenarios.flatMap((s, k) => {
+    const m = s.marginBySeason;
+    const later = Math.max(...m.slice(1), 0);
+    return m.length > 1 && later > 0 && m[0]! < 0.4 * later ? [k] : [];
+  });
 
   return (
     <div className="flex flex-col gap-8">
@@ -211,16 +224,18 @@ export function RotationClient({
         <div className="flex items-center gap-5">
           <span
             aria-hidden
-            className="size-14 rounded-chip border-4 border-surface/20"
+            className="size-14 shrink-0 rounded-chip border-4 border-surface/20"
             style={{ backgroundColor: cropColour(firstCrop ?? "fallow") }}
-          />
+          >
+            <span className="block size-full rounded-chip ring-2 ring-inset ring-surface/40" />
+          </span>
           <div>
             <p className="font-mono text-small tracking-wide text-signal uppercase dark:text-on-signal">
               {chosen && chosen !== best?.id
                 ? t("rotYourChoice", { season: first })
                 : t("rotRecommended", { season: first })}
             </p>
-            <p className="text-h1">{cropName(firstCrop ?? "fallow")}</p>
+            <p className="text-h1">{t("rotSow", { crop: cropName(firstCrop ?? "fallow") })}</p>
             <p className="text-small text-surface/70">{t("rotBannerSub", { from: first, to: first + 4 })}</p>
           </div>
         </div>
@@ -260,7 +275,7 @@ export function RotationClient({
               type="button"
               role="radio"
               aria-checked={priority === p.key}
-              onClick={() => setPriority(priority === p.key ? null : p.key)}
+              onClick={() => setPriority(p.key)}
               className={`focus-ring flex flex-col items-start gap-3 rounded-card border p-4 text-left ${priority === p.key ? "border-ink bg-muted" : "border-line bg-surface"}`}
             >
               <span
@@ -286,17 +301,18 @@ export function RotationClient({
                 key={s.id}
                 className={`relative flex flex-col gap-4 rounded-card border bg-surface p-5 ${isPick ? "border-ink shadow-hero" : "border-line"}`}
               >
-                {isBest && (
-                  <Chip
-                    tone="neutral"
-                    icon={<Check />}
-                    className="absolute -top-3 left-5 bg-ink text-surface"
-                  >
-                    {t("rotBest")}
-                  </Chip>
-                )}
                 <div>
-                  <p className="text-small text-ink-2">{t("rotAlt", { letter: letters[i] ?? "" })}</p>
+                  <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-small font-semibold text-ink-2">
+                      {t("rotAlt", { letter: letters[i] ?? "" })}
+                    </p>
+                    {isBest && (
+                      <span className="inline-flex items-center gap-1 rounded-chip bg-ink px-2.5 py-1 text-small font-semibold text-surface [&>svg]:size-3.5">
+                        <Check aria-hidden />
+                        {t("rotBest")}
+                      </span>
+                    )}
+                  </div>
                   <h3 className="text-h2 text-ink">{name(s)}</h3>
                   <p className="text-small text-ink-2">
                     {s.plan.map((p) => p.crops.map(cropName).join(" + ")).join(" → ")}
@@ -420,8 +436,9 @@ export function RotationClient({
         </section>
       )}
 
-      <section className="rounded-card border border-line bg-surface p-6">
-        <h2 className="mb-4 text-h2 text-ink">{t("rotSliders")}</h2>
+      <details className="rounded-card border border-line bg-surface p-6">
+        <summary className="cursor-pointer text-h2 text-ink">{t("rotSliders")}</summary>
+        <p className="mt-2 mb-4 text-small text-ink-2">{t("rotSlidersSub")}</p>
         <div className="grid gap-5 sm:grid-cols-3">
           <label className="flex flex-col gap-2 text-small text-ink-2">
             {t("rotDeltaT")}:{" "}
@@ -484,15 +501,30 @@ export function RotationClient({
             {t("rotReset")}
           </Button>
         </div>
-      </section>
+      </details>
 
       <section className="rounded-card border border-line bg-surface p-6">
         <h2 className="text-h2 text-ink">{t("rotCumTitle")}</h2>
         <p className="mb-4 text-small text-ink-2">
           {t("rotCumSub", { unit: area, from: first, to: first + 4 })}
         </p>
-        <svg viewBox="0 0 680 240" role="img" aria-label={r("money_label")} className="w-full">
-          <line x1="40" x2="560" y1={Y(0)} y2={Y(0)} className="stroke-line" />
+        <svg viewBox="0 0 720 240" role="img" aria-label={r("money_label")} className="w-full">
+          {ticks.map((v) => (
+            <g key={v}>
+              <line
+                x1="64"
+                x2="564"
+                y1={Y(v)}
+                y2={Y(v)}
+                className="stroke-line"
+                strokeDasharray={v === 0 ? undefined : "3 4"}
+              />
+              <text x="56" y={Y(v) + 4} textAnchor="end" className="fill-ink-2 text-[11px]">
+                {kfmt(v)}
+              </text>
+            </g>
+          ))}
+          <line x1="64" x2="564" y1={Y(0)} y2={Y(0)} className="stroke-ink-3" />
           {seasons.map((y, i) => (
             <text key={y} x={X(i)} y="236" textAnchor="middle" className="fill-ink-2 text-[12px]">
               {y}
@@ -515,12 +547,32 @@ export function RotationClient({
                   className={k === 0 ? "fill-ink-2" : k === 1 ? "fill-ink" : "fill-week"}
                 />
               ))}
-              <text x="570" y={Y(c.at(-1) ?? 0) + 4} className="fill-ink text-[12px] font-semibold">
+              <text x="572" y={endY[k]} className="fill-ink text-[12px] font-semibold">
                 {letters[k]} ${c.at(-1)?.toLocaleString()}
               </text>
             </g>
           ))}
+          {dips.slice(0, 1).map((k) => (
+            <g key="dip">
+              <circle
+                cx={X(0)}
+                cy={Y(cum[k]![0]!)}
+                r="7"
+                fill="none"
+                strokeWidth="1.5"
+                className="stroke-week"
+              />
+              <text x={X(0) + 12} y={Y(cum[k]![0]!) - 10} className="fill-week text-[11px] font-semibold">
+                {t("rotDipTag")}
+              </text>
+            </g>
+          ))}
         </svg>
+        {dips.length > 0 && (
+          <p className="mt-2 text-small text-ink-2">
+            {t("rotDip", { letters: dips.map((k) => letters[k]).join(", "), year: first })}
+          </p>
+        )}
       </section>
 
       <section className="rounded-card border border-line bg-surface p-6">
