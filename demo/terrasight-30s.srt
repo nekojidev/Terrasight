@@ -1,23 +1,27 @@
 1
-00:00:00,300 --> 00:00:05,569
-Terrasight is an AI assistant for farmers. Every morning, it says what to do, and why.
+00:00:00,300 --> 00:00:05,558
+Terrasight is an AI assistant for farmers. Each morning it says what to do, and why.
 
 2
-00:00:05,719 --> 00:00:06,789
-Add your field.
+00:00:05,708 --> 00:00:09,179
+Add a field: it reads forty-five years of NASA weather.
 
 3
-00:00:08,219 --> 00:00:12,291
-It shows what has changed on the field, and what to plant for five seasons.
+00:00:09,329 --> 00:00:13,212
+It shows how the climate has shifted: first frost, nine days later.
 
 4
-00:00:15,269 --> 00:00:18,637
-Ask it anything. Every number is checked against the models.
+00:00:13,362 --> 00:00:16,568
+It plans five seasons: thirty-two dollars more per acre.
 
 5
-00:00:21,869 --> 00:00:23,821
-And it shows you where it was wrong.
+00:00:17,162 --> 00:00:20,383
+Ask it anything. Every number is checked against the models.
 
 6
-00:00:26,169 --> 00:00:28,624
-From NASA data to your next decision.
+00:00:20,662 --> 00:00:24,692
+It also shows where it was wrong: four years missed out of ten.
+
+7
+00:00:25,212 --> 00:00:29,076
+Built on NASA data, for farms adapting to a changing climate.

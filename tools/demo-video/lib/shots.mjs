@@ -4,7 +4,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { OUT, ROOT } from "./env.mjs";
 import { settle } from "./take.mjs";
-import { openGraph, sources, tiles, proof, askLive, today } from "./graphics.mjs";
+import { openGraph, sources, tiles } from "./graphics.mjs";
+import * as G2 from "./graphics2.mjs";
 
 const must = (v, what) => {
   if (v == null || (Array.isArray(v) && !v.length)) throw new Error("Could not read from the page: " + what);
@@ -468,7 +469,7 @@ async function endCard(take, cfg, L) {
   } catch {
     // no team file: the card shows the event line only
   }
-  const footer = (team ? team + " · " : "") + "NASA Space Apps 2026 · Field Shift";
+  const footer = "NASA Space Apps 2026 · Field Shift" + (team ? " · Team " + team : "");
   await settle(page, 500);
   const t0 = take.mark("ready");
   await page.evaluate(({ html, footer }) => {
@@ -495,7 +496,7 @@ async function endCard(take, cfg, L) {
       row("ESA Copernicus Sentinel-2 · USDA", "font-family:var(--ts-mono);font-size:22px;color:var(--ts-ink-2)") +
       row(
         footer,
-        "font-family:var(--ts-mono);font-size:22px;letter-spacing:.08em;text-transform:uppercase;color:var(--ts-ink-3);margin-top:var(--ts-s4)",
+        "font-family:var(--ts-mono);font-size:30px;font-weight:600;letter-spacing:.03em;color:var(--ts-ink);margin-top:var(--ts-s4)",
       ) +
       row(
         "Narration: AI-generated voices",
@@ -510,7 +511,7 @@ async function endCard(take, cfg, L) {
       easing: d.tok("--ts-ease-standard"),
       fill: "both",
     });
-    card.animate([{ transform: "scale(1)" }, { transform: "scale(1.035)" }], { duration: 2000, easing: "linear", fill: "both" });
+    card.animate([{ transform: "scale(1)" }, { transform: "scale(1.035)" }], { duration: 2650, easing: "linear", fill: "both" });
     document.getElementById("ul").animate([{ transform: "scaleX(0)" }, { transform: "scaleX(1)" }], { duration: 1300, delay: 650, easing: d.tok("--ts-ease-standard"), fill: "both" });
     [...card.children].slice(1).forEach((r, i) =>
       r.animate(
@@ -877,4 +878,27 @@ export async function renderPhoneBackdrop(browser, cfg, stateFile, file) {
   return geo;
 }
 
-export const SHOTS = { openGraph, sources, tiles, proof, askLive, today, coldOpen, addField, climate, overview, plan, trust, ask1, ask2, endCard, hook, briefHome, briefField, rotation, assistant, owner };
+export const SHOTS = { openGraph, sources, tiles, coldOpen, addField, climate, overview, plan, trust, ask1, ask2, endCard, hook, briefHome, briefField, rotation, assistant, owner };
+
+Object.assign(SHOTS, { proof: G2.proof, askLive: G2.askLive, today: G2.today, climate: G2.climate, rotation: G2.rotation });
+
+/** A lime pill (design tokens) as a transparent PNG, for overlays that are added in the edit. */
+export async function renderPill(browser, cfg, text, file) {
+  const ctx = await browser.newContext({ viewport: { width: 1920, height: 1080 }, locale: "en-US" });
+  const page = await ctx.newPage();
+  await page.goto(cfg.base + "/explore");
+  await page.locator("header > span").first().waitFor();
+  await page.evaluate((t) => {
+    document.documentElement.style.background = "transparent";
+    document.body.style.background = "transparent";
+    [...document.body.children].forEach((c) => (c.style.display = "none"));
+    const d = document.createElement("div");
+    d.id = "pill";
+    d.textContent = t;
+    d.style.cssText = `position:fixed;left:60px;top:60px;padding:var(--ts-s3) var(--ts-s6);border-radius:var(--ts-r-card);background:var(--ts-signal);color:var(--ts-on-signal);box-shadow:var(--ts-shadow-hero);font-family:var(--ts-font);font-size:72px;font-weight:600;letter-spacing:-0.03em;line-height:1.15;white-space:nowrap`;
+    document.body.appendChild(d);
+  }, text);
+  await page.waitForTimeout(300);
+  await page.locator("#pill").screenshot({ path: file, omitBackground: true });
+  await ctx.close();
+}

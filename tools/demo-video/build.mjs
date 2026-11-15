@@ -7,7 +7,8 @@ import { execFileSync } from "node:child_process";
 import { ROOT, OUT, loadConfig } from "./lib/env.mjs";
 import { synthesize, FFMPEG } from "./lib/tts.mjs";
 import { launch, signIn, newTake } from "./lib/take.mjs";
-import { SHOTS, renderPhoneBackdrop } from "./lib/shots.mjs";
+import { SHOTS, renderPhoneBackdrop, renderPill } from "./lib/shots.mjs";
+import { readFacts, words } from "./lib/graphics2.mjs";
 import { renderClip, xfadeChain, mixAudio, probe, run, joinClips, makeSfx, mapTime } from "./lib/ff.mjs";
 
 const args = process.argv.slice(2);
@@ -26,50 +27,63 @@ const ASSISTANT = process.env.DEMO_VOICE_ASSISTANT || "Kore";
 const TAIL = 0.3;
 const JCUT = 0.15;
 const OV = 0.25; // act wipe
-const STORY = [
+const makeStory = (F) => [
   {
     id: "open",
     group: 0,
-    min: 5.6,
+    min: 4.8,
     lead: 0.3,
-    line: "Terrasight is an AI assistant for farmers. Every morning, it says what to do, and why.",
+    line: "Terrasight is an AI assistant for farmers. Each morning it says what to do, and why.",
     voice: NARRATOR,
     shots: [["today", 1]],
   },
-  { id: "add", group: 1, min: 2.5, line: "Add your field.", voice: NARRATOR, shots: [["addField", 1]] },
   {
-    id: "tiles",
+    id: "add",
     group: 1,
-    min: 6.0,
-    line: "It shows what has changed on the field, and what to plant for five seasons.",
+    min: 3.2,
+    line: `Add a field: it reads ${words(F.years)} years of NASA weather.`,
     voice: NARRATOR,
-    shots: [["tiles", 1]],
+    shots: [["addField", 1]],
+  },
+  {
+    id: "climate",
+    group: 1,
+    min: 3.8,
+    line: `It shows how the climate has shifted: first frost, ${words(F.days)} days later.`,
+    voice: NARRATOR,
+    shots: [["climate", 1]],
+  },
+  {
+    id: "rotation",
+    group: 1,
+    min: 3.8,
+    line: `It plans ${words(F.seasons)} seasons: ${words(F.gain)} dollars more per acre.`,
+    voice: NARRATOR,
+    shots: [["rotation", 1]],
   },
   {
     id: "ask",
-    group: 2,
-    min: 7.0,
-    lead: 0.9,
+    group: 1,
+    min: 3.5,
     line: "Ask it anything. Every number is checked against the models.",
     voice: NARRATOR,
     shots: [["askLive", 1]],
   },
   {
     id: "proof",
-    group: 2,
-    min: 5.1,
-    lead: 0.5,
-    line: "And it shows you where it was wrong.",
+    group: 1,
+    min: 4.7,
+    line: `It also shows where it was wrong: ${words(F.missed.length)} years missed out of ${words(F.seasonsChecked)}.`,
     voice: NARRATOR,
     shots: [["proof", 1]],
   },
   {
     id: "end",
-    group: 3,
-    min: 3.0,
+    group: 2,
+    min: 3.2,
     jcut: 0.3,
     tail: 0.05,
-    line: "From NASA data to your next decision.",
+    line: "Built on NASA data, for farms adapting to a changing climate.",
     voice: ASSISTANT,
     shots: [["endCard", 1]],
   },
@@ -78,27 +92,27 @@ const STORY = [
 const RECUT = {
   addField: (c) => {
     const m = c.marks;
+    // the map first and large: it pushes in while the outline closes, then the checklist, then the click
     c.segs = [
-      { from: m.uploaded, to: m.checked, ramp: 0.75, zoom: { from: 1.7, to: 1.35, cx: 0.386, cy: 0.86 } },
-      { from: m.checked, to: m.checked + 1.0, zoom: { from: 1.3, to: 1.5, cx: 1, cy: 0.74 } },
-      { from: c.clicks[1] - 0.8, to: c.clicks[2] + 0.2, ramp: 0.75, zoom: { from: 1.5, to: 1.75, cx: 1, cy: 0.74 } },
+      { from: m.uploaded - 0.2, to: m.checked, ramp: 1.0, zoom: { from: 1.3, to: 1.9, cx: 0.386, cy: 0.86 } },
+      { from: m.checked, to: m.checked + 1.6, zoom: { from: 1.3, to: 1.55, cx: 1, cy: 0.74 } },
+      { from: c.clicks[1] - 0.8, to: c.clicks[2] + 0.2, ramp: 1.0, zoom: { from: 1.55, to: 1.75, cx: 1, cy: 0.74 } },
     ];
   },
   askLive: (c) => {
-    // palette typing (already zoomed), then straight to the question bubble + finished answer + opened data card:
-    // no wide field page, no loading skeleton, no empty assistant page
     const m = c.marks;
     c.segs = [
-      // tight on the palette (post zoom 1.94x on top of the take's camera): no page figure is behind it
-      { from: c.clicks[0] + 0.7, to: m.typed - 0.15, ramp: 1.0, zoom: { from: 1.94, to: 1.94, cx: 0.5, cy: 0.077 } },
-      { from: m.answered + 0.45, to: m.answered + 0.45 + 5.78 },
+      { from: c.clicks[0] + 0.7, to: m.typed - 0.15, ramp: 0.8, zoom: { from: 1.94, to: 1.94, cx: 0.5, cy: 0.077 } },
+      { from: m.answered + 0.1, to: m.highlight },
+      { from: m.highlight, to: m.chip, ramp: 0.55 },
+      { from: m.chip + 0.95, to: m.chip + 2.2 },
     ];
   },
 };
 const DISCLOSURE =
   "Narration: AI-generated voices (Google Gemini TTS). Screen recording of the real application; no AI-generated imagery.";
 const ONCE = new Set(["addField", "askLive", "ask2", "assistant", "owner"]);
-const NEEDED = new Set(STORY.flatMap((s) => s.shots.map(([id]) => id)));
+
 const fmt = (s) => {
   const ms = Math.round(s * 1000);
   const p = (n, w = 2) => String(n).padStart(w, "0");
@@ -111,9 +125,38 @@ fs.mkdirSync(path.join(OUT, "clips"), { recursive: true });
 fs.mkdirSync(path.join(OUT, "frames"), { recursive: true });
 fs.mkdirSync(path.join(ROOT, "demo"), { recursive: true });
 
+// 0. the numbers that the voice and the overlays use: read from the pages, asserted again by every shot
+const team = (() => {
+  try {
+    const t = JSON.parse(fs.readFileSync(path.join(ROOT, "tools/demo-deck/team.json"), "utf8")).teamName;
+    return t && !/TEAM NAME|PLACEHOLDER/i.test(t) ? t : "";
+  } catch {
+    return "";
+  }
+})();
+const facts = await (async () => {
+  const b0 = await launch();
+  try {
+    return await readFacts(b0, cfg, await signIn(b0, cfg, "agronomist"));
+  } finally {
+    await b0.close();
+  }
+})();
+console.log("facts", JSON.stringify(facts));
+const STORY = makeStory(facts);
+const NEEDED = new Set(STORY.flatMap((s) => s.shots.map(([id]) => id)));
+const ctxShots = { facts, team: `NASA Space Apps 2026 · Field Shift · Team ${team}` };
+
 // 1. voice first
 const voice = await synthesize(STORY.filter((s) => s.line).map((s) => ({ id: s.id, text: s.line, voice: s.voice })));
 console.log(`voice: ${voice.provider} / ${voice.voice}${voice.draft ? "  (DRAFT)" : ""}`);
+// the voice is sped up by 5 % so that the narration fits without gaps
+for (const id of Object.keys(voice.files)) {
+  const out = voice.files[id].replace(/\.t\.wav$/, ".x105.wav");
+  if (!fs.existsSync(out)) run(["-i", voice.files[id], "-af", "atempo=1.05", out]);
+  voice.files[id] = out;
+  voice.durations[id] = parseFloat(probe(out, ["-show_entries", "format=duration", "-of", "csv=p=0"]));
+}
 let t = 0;
 for (const s of STORY) {
   s.dur = s.line ? voice.durations[s.id] : 0;
@@ -175,7 +218,7 @@ try {
     console.log("record", id, len.toFixed(2) + "s");
     let r;
     try {
-      r = await fn(take, cfg, len);
+      r = await fn(take, cfg, len, ctxShots);
     } catch (e) {
       await take.finish().catch(() => {});
       if (e.code === "NO_WAITING_ITEMS" && fs.existsSync(cache)) {
@@ -288,6 +331,42 @@ for (const g of groups) {
 }
 const silent = path.join(OUT, "video-silent.mp4");
 const seams = xfadeChain(groupClips, groupLens, OV, silent);
+// the NASA overlay of the "add a field" scene, set in the same lime / ink as the in-page pills
+const addScene = STORY.find((x) => x.id === "add");
+const silentOv = path.join(OUT, "video-ov.mp4");
+{
+  const pill = path.join(OUT, "pill-nasa.png");
+  const bp = await launch();
+  try {
+    await renderPill(bp, cfg, `${facts.years} years of NASA weather`, pill);
+  } finally {
+    await bp.close();
+  }
+  const t0 = (addScene.start + 1.1).toFixed(2);
+  const t1 = (addScene.start + addScene.len - 0.1).toFixed(2);
+  run([
+    "-i",
+    silent,
+    "-loop",
+    "1",
+    "-i",
+    pill,
+    "-filter_complex",
+    `[0:v][1:v]overlay=x=96:y=H-h-132:shortest=1:enable='between(t,${t0},${t1})'[v]`,
+    "-map",
+    "[v]",
+    "-c:v",
+    "libx264",
+    "-crf",
+    "16",
+    "-pix_fmt",
+    "yuv420p",
+    "-r",
+    "30",
+    "-an",
+    silentOv,
+  ]);
+}
 
 // 5. sound: voices (J-cuts), synthesised clicks and whooshes (>= 12 LU under the voice), -16 LUFS
 const sfxFiles = makeSfx(path.join(OUT, "audio"));
@@ -309,7 +388,7 @@ sfx.push({ file: sfxFiles.whoosh, at: ask.start + 1.45, db: -14 });
 const ln = mixAudio({
   items: STORY.filter((s) => s.line).map((s) => ({ file: voice.files[s.id], at: s.start + s.at })),
   sfx,
-  pad: { file: sfxFiles.pad, db: -26, fade: 3.4 },
+  pad: { file: sfxFiles.pad, db: -15, fade: 3.2 },
   total,
   out: mix,
 });
@@ -331,7 +410,7 @@ const vf = flag("burn")
   : [];
 run([
   "-i",
-  silent,
+  silentOv,
   "-i",
   mix,
   ...vf,
