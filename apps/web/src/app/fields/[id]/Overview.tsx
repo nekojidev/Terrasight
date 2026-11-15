@@ -2,8 +2,9 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { Chip } from "@terrasight/ui";
-import { Bug, ChevronRight, CloudRain, Microscope, RefreshCw, Snowflake, Sun } from "lucide-react";
+import { Bug, ChevronRight, CloudRain, Microscope, RefreshCw, Snowflake, Sparkles, Sun } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/lib/api";
 
@@ -56,14 +57,14 @@ export function FieldTabs({ fieldId, active = 0 }: { fieldId: string; active?: 0
     { label: r("tab4"), href: `/reports?field=${fieldId}` },
   ];
   return (
-    <nav aria-label={r("tabs")} className="flex w-fit gap-1 rounded-input bg-muted p-1">
+    <nav aria-label={r("tabs")} className="flex w-fit max-w-full gap-1 overflow-x-auto rounded-input bg-muted p-1">
       {tabs.map((tab, i) =>
         tab.href ? (
           <Link
             key={tab.label}
             href={tab.href}
             aria-current={i === active ? "page" : undefined}
-            className={`focus-ring rounded-btn px-4 py-2 text-body font-semibold ${i === active ? "bg-ink text-surface" : "text-ink hover:bg-surface"}`}
+            className={`focus-ring whitespace-nowrap rounded-btn px-3 py-2 text-body font-semibold sm:px-4 ${i === active ? "bg-ink text-surface" : "text-ink hover:bg-surface"}`}
           >
             {tab.label}
           </Link>
@@ -71,7 +72,7 @@ export function FieldTabs({ fieldId, active = 0 }: { fieldId: string; active?: 0
           <span
             key={tab.label}
             aria-disabled
-            className="rounded-btn px-4 py-2 text-body font-semibold text-ink-3"
+            className="whitespace-nowrap rounded-btn px-3 py-2 text-body font-semibold text-ink-3 sm:px-4"
           >
             {tab.label}
           </span>
@@ -104,16 +105,32 @@ export function FieldBrief({
   const top =
     risks.find((x) => x.type !== "rotation" && (x.level === "high" || x.level === "moderate")) ??
     (rotation?.level === "moderate" ? rotation : undefined);
+  const router = useRouter();
+  // The assistant panel is a sibling component: fill its question box and send, or open the recommendation.
+  const ask = () => {
+    const input = document.querySelector<HTMLInputElement>("aside input[type=text], aside input:not([type])");
+    if (!input) {
+      if (top) router.push(`/recommendations/${top.id}`);
+      return;
+    }
+    input.scrollIntoView({ behavior: "smooth", block: "center" });
+    input.focus({ preventScroll: true });
+    if (input.value !== "" || input.disabled) return;
+    const question = top ? t("bfWhyQ", { title: top.text.title[locale] }) : t("faSugg1");
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, question);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    setTimeout(() => input.form?.requestSubmit(), 0);
+  };
   const sorted = [...seasons].sort((a, b) => b.season - a.season);
   const last = sorted[0];
   let inRow = 0;
   if (last)
     for (const s of sorted) if (s.mainCrop === last.mainCrop && s.season === last.season - inRow) inRow += 1;
   return (
-    <section className="flex flex-col gap-5 rounded-hero bg-surface p-7 shadow-hero">
+    <section className="flex flex-col gap-5 rounded-hero bg-surface p-5 shadow-hero sm:p-7">
       <Chip tone="signal">{r("bf_k")}</Chip>
       <h2 className="text-h1 text-ink">{top ? top.text.title[locale] : t("fieldAllFine")}</h2>
-      <div className="grid gap-6 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-3 sm:gap-6">
         {rotation &&
           rotation.keyNumbers.slice(0, 3).map((k) => (
             <div key={k.id} className="border-t-2 border-ink pt-3">
@@ -154,14 +171,14 @@ export function FieldBrief({
           <RefreshCw aria-hidden className="size-4" strokeWidth={1.7} />
           {r("bf_cta")}
         </Link>
-        {top && (
-          <Link
-            href={`/recommendations/${top.id}`}
-            className="text-body font-semibold text-ink underline underline-offset-4"
-          >
-            {r("bf_ask")}
-          </Link>
-        )}
+        <button
+          type="button"
+          onClick={ask}
+          className="focus-ring inline-flex min-h-tap items-center gap-2 rounded-btn border border-line-strong bg-surface px-5 text-body font-semibold text-ink hover:bg-muted"
+        >
+          <Sparkles aria-hidden className="size-4" strokeWidth={1.7} />
+          {r("bf_ask")}
+        </button>
       </div>
     </section>
   );
@@ -188,8 +205,8 @@ export function RisksCard({ risks }: { risks: Risk[] }) {
                   {x.type === "rotation" ? <RefreshCw /> : x.type === "disease" ? <Microscope /> : <Bug />}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-body font-semibold text-ink">{x.text.title[locale]}</span>
-                  <span className="block text-small text-ink-2">{x.text.action[locale]}</span>
+                  <span className="block truncate text-body font-semibold text-ink">{x.text.title[locale]}</span>
+                  <span className="block truncate text-small text-ink-2">{x.text.action[locale]}</span>
                 </span>
                 <span aria-hidden className="flex items-end gap-0.5">
                   {[1, 2, 3].map((n) => (
@@ -200,7 +217,7 @@ export function RisksCard({ risks }: { risks: Risk[] }) {
                     />
                   ))}
                 </span>
-                <span className={`w-24 text-small font-semibold ${LEVEL_TONE[x.level]}`}>
+                <span className={`sr-only text-small font-semibold sm:not-sr-only sm:w-24 ${LEVEL_TONE[x.level]}`}>
                   {t(`recLevel_${x.level}`)}
                 </span>
                 <ChevronRight aria-hidden className="size-4 text-ink-3" />
@@ -253,12 +270,16 @@ export function WeatherCard({
       {days.length === 0 ? (
         <p className="mt-2 text-small text-ink-2">{t("noForecast")}</p>
       ) : (
-        <ol className="mt-4 grid grid-cols-7 gap-1 text-center">
+        <ol className="mt-4 grid grid-cols-7 gap-0.5 text-center sm:gap-1">
           {days.map((d) => {
             const frost = d.tminC !== null && d.tminC <= 0;
             const wet = (d.precipMm ?? 0) >= 1;
             return (
-              <li key={d.date} className={`rounded-input p-2 ${frost ? "bg-info-soft" : ""}`}>
+              <li
+                key={d.date}
+                title={frost ? t("frostDay") : undefined}
+                className={`min-w-0 rounded-input p-1 sm:p-2 ${frost ? "bg-info-soft ring-1 ring-info" : ""}`}
+              >
                 <span className="block text-small text-ink-2">{wd(d.date)}</span>
                 <span aria-hidden className="my-1 flex justify-center">
                   {frost ? (
