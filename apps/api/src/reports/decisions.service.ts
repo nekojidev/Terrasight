@@ -1,4 +1,5 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
+import type { Library } from "@terrasight/library";
 import type {
   AnswerBody,
   Decision,
@@ -17,6 +18,8 @@ import { eventRow } from "../messaging/outbox.js";
 import { OutboxService } from "../messaging/outbox.service.js";
 import { NotificationsService } from "../notifications/notifications.service.js";
 import { planReportAnswered } from "../notifications/plan.js";
+import { LIBRARY } from "../library/library.module.js";
+import { ownerQuestionText } from "../recommendations/text.js";
 import { RecommendationsService } from "../recommendations/recommendations.service.js";
 
 type Localised = { en: string; uk: string };
@@ -114,6 +117,7 @@ export class DecisionsService {
     private readonly outbox: OutboxService,
     private readonly recs: RecommendationsService,
     private readonly notifications: NotificationsService,
+    @Optional() @Inject(LIBRARY) private readonly lib: Library | null = null,
   ) {}
 
   private async names(ids: Array<string | null>): Promise<Map<string, string>> {
@@ -174,6 +178,7 @@ export class DecisionsService {
       fieldId: rec.fieldId,
       fieldName: text.fieldName,
       title: text.title,
+      question: ownerQuestionText(rec, this.lib, text.fieldName, asker, text.title),
       action: text.action,
       why: text.why,
       deadline: text.deadline,

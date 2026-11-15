@@ -78,6 +78,14 @@ export function ExploreClient({ outlines }: { outlines: OutlineItem[] }) {
     };
   }, [outlines]);
 
+  // On a phone the result must appear right under the tapped place: scroll to it once the choice is made.
+  useEffect(() => {
+    if (!choice) return;
+    if (typeof window.matchMedia === "function" && window.matchMedia("(min-width: 1024px)").matches) return;
+    const id = requestAnimationFrame(() => result.current?.scrollIntoView?.({ block: "start", behavior: "smooth" }));
+    return () => cancelAnimationFrame(id);
+  }, [choice]);
+
   const load = useCallback(async (lonV: number, latV: number) => {
     const mine = ++request.current;
     setPhase({ s: "loading" });
@@ -106,7 +114,6 @@ export function ExploreClient({ outlines }: { outlines: OutlineItem[] }) {
         const o = outlines.find((x) => x.id === next.id);
         if (o) void load(o.centroid.lon, o.centroid.lat);
       }
-      requestAnimationFrame(() => result.current?.scrollIntoView?.({ block: "nearest", behavior: "smooth" }));
     },
     [load, outlines],
   );
@@ -181,17 +188,6 @@ export function ExploreClient({ outlines }: { outlines: OutlineItem[] }) {
         </section>
 
         <section className="flex min-w-0 flex-col gap-4" aria-label={t("mapLabel")}>
-          <ExploreMap
-            outlines={mapOutlines}
-            selectedId={selected?.id ?? null}
-            point={choice?.kind === "point" ? { lon: choice.lon, lat: choice.lat } : null}
-            onPickPoint={pickPoint}
-            onPickOutline={(id) => choose({ kind: "outline", id })}
-            label={t("mapLabel")}
-            markerLabel={t("markerLabel")}
-          />
-          <p className="text-small text-ink-2">{t("mapHint")}</p>
-
           {outlines.length > 0 && (
             <div className="flex flex-col gap-2">
               <h2 className="text-body font-semibold text-ink">{t("fieldsTitle")}</h2>
@@ -211,6 +207,17 @@ export function ExploreClient({ outlines }: { outlines: OutlineItem[] }) {
               </ul>
             </div>
           )}
+
+          <ExploreMap
+            outlines={mapOutlines}
+            selectedId={selected?.id ?? null}
+            point={choice?.kind === "point" ? { lon: choice.lon, lat: choice.lat } : null}
+            onPickPoint={pickPoint}
+            onPickOutline={(id) => choose({ kind: "outline", id })}
+            label={t("mapLabel")}
+            markerLabel={t("markerLabel")}
+          />
+          <p className="text-small text-ink-2">{t("mapHint")}</p>
 
           <form onSubmit={submit} noValidate className="flex flex-col gap-3" aria-labelledby="coords-title">
             <h2 id="coords-title" className="text-body font-semibold text-ink">
@@ -262,6 +269,7 @@ export function ExploreClient({ outlines }: { outlines: OutlineItem[] }) {
               isLoading={false}
               isError={false}
               onRetry={() => retry()}
+              compact
               {...(selected ? { country: "US" } : {})}
               units={selected ? "imperial" : "metric"}
             />
@@ -285,16 +293,14 @@ export function ExploreClient({ outlines }: { outlines: OutlineItem[] }) {
             </Surface>
           )}
           {choice && phase.s === "ready" && (
-            <Surface as="section">
-              <p className="text-body text-ink-2">
-                {selected ? t("fieldNote") : t("pointNote")}{" "}
-                <Link
-                  href={selected ? "/login" : "/login?mode=signup"}
-                  className="focus-ring inline-flex min-h-11 items-center font-semibold text-ink underline underline-offset-4"
-                >
-                  {selected ? t("fieldNoteLink") : t("pointNoteLink")}
-                </Link>
-              </p>
+            <Surface as="section" className="flex flex-col items-start gap-3">
+              <Link
+                href={selected ? "/login" : "/login?mode=signup"}
+                className="focus-ring inline-flex min-h-12 items-center rounded-btn bg-ink px-5 text-body font-semibold text-surface"
+              >
+                {selected ? t("fieldNoteLink") : t("pointNoteLink")}
+              </Link>
+              <p className="text-small text-ink-2">{selected ? t("fieldNote") : t("pointNote")}</p>
             </Surface>
           )}
         </section>

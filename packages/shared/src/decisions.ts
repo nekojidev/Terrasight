@@ -45,6 +45,8 @@ export interface Decision {
   fieldName: string;
   /** Snapshot taken when asked (the owner sees what was asked, not later model changes). */
   title: Localised;
+  /** The question in plain words for the owner (template, no new numbers); absent on older data: use `title`. */
+  question?: Localised;
   action: Localised;
   why: Localised;
   deadline: string | null;
