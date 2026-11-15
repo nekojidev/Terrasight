@@ -46,7 +46,11 @@ async function one(sql: string, args: unknown[] = []): Promise<string> {
   return r.rows[0].id as string;
 }
 
-async function tenant(tag: string, fieldName: string, sign: (id: string) => Promise<string>): Promise<Tenant> {
+async function tenant(
+  tag: string,
+  fieldName: string,
+  sign: (id: string) => Promise<string>,
+): Promise<Tenant> {
   const ws = await one(
     `INSERT INTO workspaces (id, name, slug, time_zone) VALUES (gen_random_uuid(), $1, $1, 'UTC') RETURNING id`,
     [`co-${tag}`],
@@ -55,7 +59,10 @@ async function tenant(tag: string, fieldName: string, sign: (id: string) => Prom
     `INSERT INTO users (id, email, password_hash, name) VALUES (gen_random_uuid(), $1, 'x', $2) RETURNING id`,
     [`${tag}@example.com`, `User ${tag}`],
   );
-  await client.query(`INSERT INTO memberships (workspace_id, user_id, role) VALUES ($1, $2, 'owner')`, [ws, user]);
+  await client.query(`INSERT INTO memberships (workspace_id, user_id, role) VALUES ($1, $2, 'owner')`, [
+    ws,
+    user,
+  ]);
   const field = await one(
     `INSERT INTO fields (id, workspace_id, name, alias_no, geom, centroid, area_ha, tier, irrigation)
      VALUES (gen_random_uuid(), $1, $2, 1,
@@ -82,14 +89,21 @@ async function tenant(tag: string, fieldName: string, sign: (id: string) => Prom
      VALUES (gen_random_uuid(), $1, 'h', '{}', $2, 1) RETURNING id`,
     [field, JSON.stringify({ marker: fieldName })],
   );
-  await client.query(
-    `INSERT INTO plans (field_id, season, crop, saved_by) VALUES ($1, 2026, 'wheat', $2)`,
-    [field, user],
-  );
+  await client.query(`INSERT INTO plans (field_id, season, crop, saved_by) VALUES ($1, 2026, 'wheat', $2)`, [
+    field,
+    user,
+  ]);
   const reportItem = await one(
     `INSERT INTO report_items (id, workspace_id, recommendation_id, text, committed_at)
      VALUES (gen_random_uuid(), $1, $2, $3, now()) RETURNING id`,
-    [ws, rec, JSON.stringify({ en: { title: fieldName, action: "a", why: "w" }, uk: { title: fieldName, action: "a", why: "w" } })],
+    [
+      ws,
+      rec,
+      JSON.stringify({
+        en: { title: fieldName, action: "a", why: "w" },
+        uk: { title: fieldName, action: "a", why: "w" },
+      }),
+    ],
   );
   const link = await one(
     `INSERT INTO report_links (id, workspace_id, token_hash, language) VALUES (gen_random_uuid(), $1, $2, 'en') RETURNING id`,
@@ -104,11 +118,29 @@ async function tenant(tag: string, fieldName: string, sign: (id: string) => Prom
     [ws, user, JSON.stringify({ fieldName })],
   );
   await client.query(
-    `INSERT INTO crop_seasons (field_id, season, main_crop, source) VALUES ($1, 2025, 'corn', 'user')`,
-    [field],
-  ).catch(() => undefined);
+    `INSERT INTO workspace_crop_prices (id, workspace_id, crop, price_per_t, variable_cost_per_ha, currency, updated_by)
+     VALUES (gen_random_uuid(), $1, 'corn', $2, 1000, 'USD', $3)`,
+    [ws, tag === "b" ? 777.77 : 111.11, user],
+  );
+  await client
+    .query(
+      `INSERT INTO crop_seasons (field_id, season, main_crop, source) VALUES ($1, 2025, 'corn', 'user')`,
+      [field],
+    )
+    .catch(() => undefined);
   return {
-    ws, user, cookie: `ts_at=${await sign(user)}`, field, rec, conv, run, scenarioRun, reportItem, link, task, notif,
+    ws,
+    user,
+    cookie: `ts_at=${await sign(user)}`,
+    field,
+    rec,
+    conv,
+    run,
+    scenarioRun,
+    reportItem,
+    link,
+    task,
+    notif,
   };
 }
 
@@ -225,15 +257,63 @@ function body(r: RouteDef): unknown {
   const key = `${r.method} ${r.path}`;
   if (key === "patch /api/w/:ws/recommendations/:id") return { title: { en: "t", uk: "t" } };
   if (key.endsWith("/accept")) return { note: "n" };
-  if (key.endsWith("/members") || key.endsWith("/members/:userId")) return { name: "N", email: "n@example.com", role: "agronomist" };
-  if (key.endsWith("/fields")) return { name: "x", geometry: { type: "Polygon", coordinates: [[[0, 0], [0, 1], [1, 1], [0, 0]]] } };
+  if (key.endsWith("/members") || key.endsWith("/members/:userId"))
+    return { name: "N", email: "n@example.com", role: "agronomist" };
+  if (key.endsWith("/fields"))
+    return {
+      name: "x",
+      geometry: {
+        type: "Polygon",
+        coordinates: [
+          [
+            [0, 0],
+            [0, 1],
+            [1, 1],
+            [0, 0],
+          ],
+        ],
+      },
+    };
   return {
-    text: "hello", note: "n", crop: "corn", mainCrop: "corn", secondCrop: null, answer: "approve", language: "en",
-    role: "agronomist", pointIdx: 1, contentType: "image/jpeg", bytes: 100, clientId: "client-12345678", counts: [1],
-    ids: [B.notif], fieldIds: [B.field], format: "geojson", unit: "kg/ha", overrides: {}, name: "x",
-    email: "n@example.com", timeZone: "UTC", units: "metric", reportLanguage: "en", title: "t", sowingDate: null,
-    rates: { strong: 1, variable: 1, weak: 1 }, scenarioRunId: B.scenarioRun, rotationId: null,
-    geometry: { type: "Polygon", coordinates: [[[0, 0], [0, 1], [1, 1], [0, 0]]] },
+    text: "hello",
+    note: "n",
+    crop: "corn",
+    mainCrop: "corn",
+    secondCrop: null,
+    answer: "approve",
+    language: "en",
+    role: "agronomist",
+    pointIdx: 1,
+    contentType: "image/jpeg",
+    bytes: 100,
+    clientId: "client-12345678",
+    counts: [1],
+    ids: [B.notif],
+    fieldIds: [B.field],
+    format: "geojson",
+    unit: "kg/ha",
+    overrides: {},
+    name: "x",
+    email: "n@example.com",
+    timeZone: "UTC",
+    units: "metric",
+    reportLanguage: "en",
+    title: "t",
+    sowingDate: null,
+    rates: { strong: 1, variable: 1, weak: 1 },
+    scenarioRunId: B.scenarioRun,
+    rotationId: null,
+    geometry: {
+      type: "Polygon",
+      coordinates: [
+        [
+          [0, 0],
+          [0, 1],
+          [1, 1],
+          [0, 0],
+        ],
+      ],
+    },
   };
 }
 
@@ -245,7 +325,22 @@ async function call(r: RouteDef, url: string, cookie: string) {
   return t.timeout(15_000);
 }
 
-const MARKERS = () => [NAME_B, B.field, B.rec, B.conv, B.run, B.scenarioRun, B.reportItem, B.link, B.task, B.notif, B.user, B.ws, "b@example.com"];
+const MARKERS = () => [
+  NAME_B,
+  B.field,
+  B.rec,
+  B.conv,
+  B.run,
+  B.scenarioRun,
+  B.reportItem,
+  B.link,
+  B.task,
+  B.notif,
+  B.user,
+  B.ws,
+  "b@example.com",
+  "777.77",
+];
 const HAS_ID = (p: string) => /:(?!ws\b)/.test(p);
 
 describe("workspace isolation (IDOR)", () => {
@@ -310,17 +405,97 @@ describe("workspace isolation (IDOR)", () => {
     expect(guard.status).toBe(404);
   });
 
+  it("crop prices: A reads and writes only its own rows; validation answers 422; B's row is untouched", async () => {
+    const url = (ws: string) => `/api/w/${ws}/crop-prices`;
+    const send = (verb: "get" | "put", ws: string, cookie: string, payload?: object) => {
+      const agent = request(app.getHttpServer());
+      const t = (verb === "put" ? agent.put(url(ws)) : agent.get(url(ws)))
+        .set("Cookie", cookie)
+        .set("X-Requested-With", "t");
+      return verb === "put" ? t.send(payload ?? {}) : t;
+    };
+    const list = await send("get", A.ws, A.cookie);
+    expect(list.status).toBe(200);
+    expect(list.body.currency).toBe("USD");
+    expect(list.body.rows.map((r: { pricePerT: number }) => r.pricePerT)).toEqual([111.11]);
+    expect(list.text).not.toContain("777.77");
+
+    const bad = await send("put", A.ws, A.cookie, {
+      rows: [{ crop: "corn", pricePerT: -5, variableCostPerHa: 1 }],
+    });
+    expect(bad.status).toBe(422);
+    const unknown = await send("put", A.ws, A.cookie, {
+      rows: [{ crop: "unobtainium", pricePerT: 5, variableCostPerHa: 1 }],
+    });
+    expect(unknown.status).toBe(422);
+
+    const ok = await send("put", A.ws, A.cookie, {
+      rows: [
+        { crop: "corn", pricePerT: 222.22, variableCostPerHa: 900, yieldRefTHa: 9 },
+        { crop: "winter_wheat", pricePerT: 180, variableCostPerHa: 500 },
+      ],
+    });
+    expect(ok.status).toBe(200);
+    expect(ok.body.rows).toHaveLength(2);
+    // Replacing a crop's row keeps one row per crop and kind.
+    const mine = await client.query(
+      `SELECT crop, price_per_t FROM workspace_crop_prices WHERE workspace_id = $1 ORDER BY crop`,
+      [A.ws],
+    );
+    expect(mine.rows.map((r) => [r.crop, r.price_per_t])).toEqual([
+      ["corn", 222.22],
+      ["winter_wheat", 180],
+    ]);
+    const theirs = await client.query(
+      `SELECT price_per_t FROM workspace_crop_prices WHERE workspace_id = $1`,
+      [B.ws],
+    );
+    expect(theirs.rows).toEqual([{ price_per_t: 777.77 }]);
+
+    // A cannot write through B's URL.
+    const cross = await send("put", B.ws, A.cookie, {
+      rows: [{ crop: "corn", pricePerT: 1, variableCostPerHa: 1 }],
+    });
+    expect(cross.status).toBe(404);
+    // Migration constraints: one row per (workspace, crop, kind) and positive prices.
+    await expect(
+      client.query(
+        `INSERT INTO workspace_crop_prices (id, workspace_id, crop, price_per_t, variable_cost_per_ha, currency) VALUES (gen_random_uuid(), $1, 'corn', 1, 1, 'USD')`,
+        [A.ws],
+      ),
+    ).rejects.toThrow(/workspace_crop_prices_key/);
+    await expect(
+      client.query(
+        `INSERT INTO workspace_crop_prices (id, workspace_id, crop, price_per_t, variable_cost_per_ha, currency) VALUES (gen_random_uuid(), $1, 'soybean', 0, 1, 'USD')`,
+        [A.ws],
+      ),
+    ).rejects.toThrow(/price_check/);
+  });
+
   it("B's data is unchanged after all attempts", async () => {
     const f = await client.query(`SELECT archived_at, name FROM fields WHERE id = $1`, [B.field]);
     expect(f.rows[0]).toMatchObject({ archived_at: null, name: NAME_B });
-    const rec = await client.query(`SELECT status, text_override FROM recommendations WHERE id = $1`, [B.rec]);
+    const rec = await client.query(`SELECT status, text_override FROM recommendations WHERE id = $1`, [
+      B.rec,
+    ]);
     expect(rec.rows[0]).toMatchObject({ status: "open", text_override: null });
     expect((await client.query(`SELECT 1 FROM conversations WHERE id = $1`, [B.conv])).rowCount).toBe(1);
-    expect((await client.query(`SELECT 1 FROM report_links WHERE id = $1 AND revoked_at IS NULL`, [B.link])).rowCount).toBe(1);
-    expect((await client.query(`SELECT 1 FROM notifications WHERE id = $1 AND read_at IS NULL`, [B.notif])).rowCount).toBe(1);
+    expect(
+      (await client.query(`SELECT 1 FROM report_links WHERE id = $1 AND revoked_at IS NULL`, [B.link]))
+        .rowCount,
+    ).toBe(1);
+    expect(
+      (await client.query(`SELECT 1 FROM notifications WHERE id = $1 AND read_at IS NULL`, [B.notif]))
+        .rowCount,
+    ).toBe(1);
     const plan = await client.query(`SELECT crop FROM plans WHERE field_id = $1`, [B.field]);
     expect(plan.rows.map((x) => x.crop)).toEqual(["wheat"]);
-    expect((await client.query(`SELECT 1 FROM memberships WHERE workspace_id = $1`, [B.ws])).rowCount).toBe(1);
-    expect((await client.query(`SELECT 1 FROM scouting_tasks WHERE id = $1 AND status = 'open'`, [B.task])).rowCount).toBe(1);
+    expect((await client.query(`SELECT 1 FROM memberships WHERE workspace_id = $1`, [B.ws])).rowCount).toBe(
+      1,
+    );
+    expect(
+      (await client.query(`SELECT 1 FROM scouting_tasks WHERE id = $1 AND status = 'open'`, [B.task]))
+        .rowCount,
+    ).toBe(1);
   });
 });

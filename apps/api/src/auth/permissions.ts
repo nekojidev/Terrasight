@@ -20,6 +20,7 @@ export const PERMISSIONS = {
   "scouting.use": ["owner", "agronomist"],
   "assistant.use": ["owner", "agronomist"],
   "plans.save": ["owner", "agronomist"],
+  "cropPrices.manage": ["owner", "agronomist"],
   "brief.read": ["owner", "agronomist"],
   "fields.read": ["owner", "agronomist"],
   "scenarios.explore": ["owner", "agronomist"],

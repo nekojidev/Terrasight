@@ -1,5 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
-import type { Library } from "@terrasight/library";
+import { loadUaYields, oblastYields, type Library, type UaYieldsFile } from "@terrasight/library";
 import {
   planSeasons,
   splitRotations,
@@ -17,12 +17,14 @@ import {
 import { CROPS } from "@terrasight/simulator";
 import { ENV, type Env } from "../config/config.js";
 import { PrismaService } from "../db/prisma.service.js";
+import { CropPricesService } from "../crop-prices/crop-prices.service.js";
 import { GeoService } from "../geo/geo.service.js";
 import { matchBaseline } from "../history/compute.js";
 import { ProblemException } from "../http/problem.js";
 import { LIBRARY } from "../library/library.module.js";
 import { SeasonsService } from "../seasons/seasons.service.js";
 import { SourcesService } from "../sources/sources.service.js";
+import { resolvePrices, type LibraryPrice, type PriceSource } from "./price-resolution.js";
 import {
   doubleCropPairs,
   irrigationOnlyCrops,
@@ -39,6 +41,14 @@ export interface InputMeta {
   lastSeason: number;
   /** Library crops left out because the simulator has no parameters for them (rotations with them do not compete). */
   unmodelled?: string[];
+  /** Workspace currency of the company's prices and the margins. */
+  currency: string;
+  /** Where each priced crop's numbers come from. */
+  priceSources: Record<string, PriceSource>;
+  /** Crops the company priced without a yield, where no verified library yield exists (the user's yield is required). */
+  needYield: string[];
+  /** Oblast average yields (t/ha) for context next to the yield field; never a model input. */
+  yieldHints: Record<string, { meanTHa: number; oblast: string }>;
 }
 
 export interface Overrides {
@@ -86,6 +96,7 @@ export class ScenarioInputsService {
     private readonly sources: SourcesService,
     private readonly geo: GeoService,
     private readonly seasons: SeasonsService,
+    private readonly cropPrices: CropPricesService,
   ) {}
   /** Builds the engine input; null fields mean "No rotation library for this region yet". */
   async inputs(workspaceId: string, fieldId: string, o: Overrides): Promise<EngineInput> {
@@ -99,7 +110,7 @@ export class ScenarioInputsService {
   ): Promise<{ input: EngineInput; meta: InputMeta; aiCtx: ProposalContext | null }> {
     const field = await this.prisma.db.field.findFirst({
       where: { id: fieldId, workspaceId, archivedAt: null },
-      select: { id: true, regionId: true, irrigation: true, slopePct: true, tier: true },
+      select: { id: true, regionId: true, irrigation: true, slopePct: true, tier: true, adminCode: true },
     });
     if (!field) throw new ProblemException(404, "not-found");
     const region = field.regionId ? this.lib.rotations.regions[field.regionId] : undefined;
@@ -178,17 +189,40 @@ export class ScenarioInputsService {
 
     const irrigated = field.irrigation === "irrigated";
     const regionPrices = field.regionId ? (this.lib.prices.regions[field.regionId]?.crops ?? {}) : {};
-    const prices: EngineInput["prices"] = {};
-    for (const [crop, e] of Object.entries(regionPrices)) {
-      if (!e.verified) continue;
-      const irr = { variableCost: e.variableCost.value, yieldRef: e.yieldRef.value };
-      const dry = e.dryland
-        ? { variableCost: e.dryland.variableCost.value, yieldRef: e.dryland.yieldRef.value }
-        : irr;
-      const pick = irrigated && irr.variableCost != null ? irr : dry.variableCost != null ? dry : irr;
-      if (e.price.value == null || pick.variableCost == null || pick.yieldRef == null) continue;
-      prices[crop] = { price: e.price.value, variableCost: pick.variableCost, yieldRef: pick.yieldRef };
-    }
+    const library: Record<string, LibraryPrice> = Object.fromEntries(
+      Object.entries(regionPrices).map(([crop, e]) => [
+        crop,
+        {
+          verified: e.verified,
+          price: e.price.value,
+          irrigated: { variableCost: e.variableCost.value, yieldRef: e.yieldRef.value },
+          dryland: e.dryland
+            ? { variableCost: e.dryland.variableCost.value, yieldRef: e.dryland.yieldRef.value }
+            : null,
+        },
+      ]),
+    );
+    const [currency, company] = await Promise.all([
+      this.cropPrices.currency(workspaceId),
+      this.cropPrices.rows(workspaceId),
+    ]);
+    const seqCrops = (seq: EngineInput["current"]["sequence"]) =>
+      seq.flatMap((x) => (typeof x === "string" ? [x] : [x.main, x.second]));
+    const resolved = resolvePrices({
+      crops: [
+        ...new Set([
+          ...Object.keys(regionPrices),
+          ...rotations.flatMap((r) => seqCrops(r.sequence)),
+          ...seqCrops(current.sequence),
+        ]),
+      ].filter((c) => c !== "fallow"),
+      irrigated,
+      currency,
+      libraryCurrency: this.lib.prices.currency,
+      company,
+      library,
+    });
+    const prices = resolved.prices;
     // Pumping cost only once verified (CLAUDE.md: thresholds and inputs are used after verification).
     const ic = this.lib.prices.irrigationCostPerMm;
     const irrCost = ic?.verified && ic.value != null && ic.value > 0 ? ic.value : undefined;
@@ -211,6 +245,7 @@ export class ScenarioInputsService {
       ),
       sowing: this.seasons.sowingCalendar(field.regionId),
       prices,
+      yieldRefs: resolved.yieldRefs,
       ...(irrCost ? { irrigationCostPerMm: irrCost } : {}),
       soilCarbon: DEFAULT_SOIL_C,
       ...(o.waterCapMm !== undefined ? { waterCapMm: o.waterCapMm } : {}),
@@ -225,9 +260,39 @@ export class ScenarioInputsService {
       : null;
     return {
       input,
-      meta: { currentBasis: basis, currentSequence: input.current.sequence, soilBasis, lastSeason },
+      meta: {
+        currentBasis: basis,
+        currentSequence: input.current.sequence,
+        soilBasis,
+        lastSeason,
+        currency,
+        priceSources: resolved.sources,
+        needYield: resolved.needYield,
+        yieldHints: this.yieldHints(field.adminCode),
+      },
       aiCtx,
     };
+  }
+
+  private uaYields: UaYieldsFile | null | undefined;
+
+  /** Oblast average yields for crops whose id matches the library's (context only, never a price or model input). */
+  private yieldHints(adminCode: string | null): InputMeta["yieldHints"] {
+    if (!adminCode?.startsWith("UA-")) return {};
+    if (this.uaYields === undefined) this.uaYields = loadUaYields(this.env.DATA_DIR);
+    const ctx = this.uaYields ? oblastYields(this.uaYields, adminCode) : null;
+    if (!ctx) return {};
+    const alias: Record<string, string[]> = {
+      sunflower: ["sunflower"],
+      sugar_beet: ["sugar_beet"],
+      soybean: ["soybean"],
+      potato: ["potato"],
+      rapeseed: ["winter_canola", "spring_canola"],
+    };
+    const out: InputMeta["yieldHints"] = {};
+    for (const y of ctx.yields)
+      for (const id of alias[y.crop] ?? []) out[id] = { meanTHa: y.meanTHa, oblast: ctx.oblast.en };
+    return out;
   }
 
   /** What the assistant is told about the field (and what its proposals are checked against). No name, no coordinates. */

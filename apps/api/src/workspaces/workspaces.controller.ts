@@ -11,6 +11,8 @@ const WorkspaceBody = z.object({
   timeZone: z.string().refine(isTimeZone, "unknown time zone"),
   units: z.enum(["metric", "imperial"]),
   reportLanguage: z.enum(["uk", "en"]),
+  /** Currency of the company's own prices and the margins (no conversion between currencies). */
+  currency: z.enum(["USD", "UAH"]).optional(),
 });
 const WorkspacePatch = WorkspaceBody.partial().refine((v) => Object.keys(v).length > 0, "nothing to change");
 const CreateUserBody = z.object({

@@ -6,13 +6,14 @@ export async function SettingsNav({
   active,
   owner,
 }: {
-  active: "workspace" | "account" | "team";
+  active: "workspace" | "account" | "team" | "prices";
   owner: boolean;
 }) {
   const t = await getTranslations("App");
   const tabs = [
     ...(owner ? [{ id: "workspace" as const, href: "/settings/workspace", label: t("setWorkspace") }] : []),
     { id: "account" as const, href: "/settings/account", label: t("setAccount") },
+    { id: "prices" as const, href: "/settings/prices", label: t("setPrices") },
     ...(owner ? [{ id: "team" as const, href: "/settings/team", label: t("navTeam") }] : []),
   ];
   return (

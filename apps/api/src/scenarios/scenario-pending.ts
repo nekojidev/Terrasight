@@ -35,13 +35,25 @@ export function pendingView(
     cropNames: Object.fromEntries(
       Object.entries(lib.rotations.crops).map(([id, c]) => [id, { en: c.en, uk: c.uk }]),
     ),
-    candidates: input.rotations.map((r) => ({
-      id: r.id,
-      sequence: r.sequence,
-      name: (
-        lib.rotations.rotations.find((x) => x.id === r.id) as unknown as
-          { name: { en: string; uk: string } } | undefined
-      )?.name ?? { en: r.id, uk: r.id },
-    })),
+    currency: meta.currency,
+    /** Each library rotation once: localised name (it already shows the crop order), the crops, and why it fits. */
+    candidates: input.rotations.map((r) => {
+      const entry = lib0(lib, r.id);
+      return {
+        id: r.id,
+        sequence: r.sequence,
+        name: entry?.name ?? { en: r.id, uk: r.id },
+        rationale: entry?.rationale ?? null,
+        risks: entry?.risks ?? null,
+        irrigation: r.irrigation,
+      };
+    }),
   };
+}
+
+type I18n = { en: string; uk: string };
+function lib0(lib: Library, id: string) {
+  return lib.rotations.rotations.find((x) => x.id === id) as unknown as
+    | { name: I18n; rationale?: I18n; risks?: I18n }
+    | undefined;
 }

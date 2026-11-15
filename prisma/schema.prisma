@@ -202,6 +202,7 @@ model Workspace {
   conversations Conversation[]
   auditLog      AuditLog[]
   notifications Notification[]
+  cropPrices    WorkspaceCropPrice[]
 
   @@map("workspaces")
 }
@@ -736,6 +737,28 @@ model AuditLog {
 
   @@index([workspaceId, at])
   @@map("audit_log")
+}
+
+/// The company's own crop prices and per-hectare costs (user data, entered in the workspace currency; no FX).
+/// Unique per (workspace, crop, irrigated-or-any): the unique expression index is in the migration (Prisma cannot express it).
+model WorkspaceCropPrice {
+  id                String   @id @default(uuid()) @db.Uuid
+  workspaceId       String   @map("workspace_id") @db.Uuid
+  crop              String
+  pricePerT         Float    @map("price_per_t")
+  variableCostPerHa Float    @map("variable_cost_per_ha")
+  /// Expected yield without water stress, t/ha. Empty = use a verified library yield, else it is required for margins.
+  yieldRefTHa       Float?   @map("yield_ref_t_ha")
+  /// null = applies to irrigated and rainfed fields; true / false = only that kind of field.
+  irrigated         Boolean?
+  currency          String
+  updatedBy         String?  @map("updated_by") @db.Uuid
+  updatedAt         DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("workspace_crop_prices")
 }
 
 /// In-app notifications (RFC §15.4, L-06): one row per recipient; the client builds the text from kind + payload.
