@@ -147,7 +147,35 @@ export async function climate(take, cfg, L, ctx) {
   const aLen = Math.max(1.3, (L + 0.4) * 0.42);
   // (a) the real history strip fills the frame
   await take.cam(histSel, { dur: 1, fill: [0.9, 0.5], anchor: [0.5, 0.42], maxScale: 2.0 });
+  // Level 3: the cells of the strip appear left to right (the data is untouched)
+  const nCells = await page.evaluate(() => {
+    const cells = [...document.querySelectorAll('ol[aria-label*="2025"] > li')];
+    cells.forEach((c) => (c.style.opacity = "0"));
+    window.__cells = cells;
+    return cells.length;
+  });
+  if (nCells < 10) throw new Error("history strip cells not found: " + nCells);
+  // the takeaways slide up as soon as they are rendered
+  await page.evaluate(() => {
+    const tok = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+    const mo = new MutationObserver(() => {
+      const titles = [...document.querySelectorAll("*")].filter((e) => e.children.length === 0 && /^(The first autumn frost comes|The frost-free period is|Growing degree days are)/.test(e.textContent.trim()));
+      if (titles.length < 3 || window.__slid) return;
+      window.__slid = true;
+      titles.slice(0, 3).forEach((t, i) => {
+        const row = t.parentElement;
+        row.animate([{ transform: "translateY(26px)", opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 320, delay: i * 150, easing: tok("--ts-ease-enter"), fill: "both" });
+      });
+    });
+    mo.observe(document.body, { childList: true, subtree: true });
+  });
   const t0 = take.mark("ready");
+  await page.evaluate(() => {
+    const tok = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+    window.__cells.forEach((c, i) =>
+      c.animate([{ opacity: 0, transform: "translateY(16px) scale(.9)" }, { opacity: 1, transform: "none" }], { duration: 260, delay: 150 + i * 40, easing: tok("--ts-ease-enter"), fill: "both" }),
+    );
+  });
   await take.d("say", [{ segs: [{ text: `${nHist} seasons of field history` }], accent: true, size: NUM }], { pos: "bl" });
   await take.cam(histSel, { dur: aLen * 1000 - 100, ease: "--ts-ease-enter", fill: [0.94, 0.56], anchor: [0.5, 0.42], maxScale: 2.15 });
   const endA = take.now();
@@ -190,7 +218,35 @@ export async function rotation(take, cfg, L, ctx) {
   const optsHead = await take.tag(page.getByText(/We compared \d+ options over \d+ seasons/).first(), "optshead");
   const optsBtn = await take.tag(page.getByRole("button", { name: /Choose this option|Chosen/ }).first(), "optsbtn");
   await take.cam(decCard, { dur: 1, fill: [0.9, 0.62], anchor: [0.5, 0.42], maxScale: 2.0 });
+  // Level 3: the crops of 2026-2030 light up one after another (the text is not changed)
+  const nCrops = await page.evaluate(() => {
+    const el = [...document.querySelectorAll("*")].find((e) => e.children.length === 0 && /^Plan for \d{4}.\d{4}:/.test(e.textContent.trim()));
+    if (!el) return 0;
+    const txt = el.textContent;
+    const i = txt.indexOf(":") + 1;
+    const head = txt.slice(0, i);
+    const crops = txt.slice(i).split("→");
+    el.textContent = "";
+    el.appendChild(document.createTextNode(head + " "));
+    window.__crops = [];
+    crops.forEach((c, k) => {
+      const sp = document.createElement("span");
+      sp.textContent = c.trim();
+      sp.style.cssText = "border-radius:6px;padding:0 4px;margin:0 -4px";
+      el.appendChild(sp);
+      window.__crops.push(sp);
+      if (k < crops.length - 1) el.appendChild(document.createTextNode(" → "));
+    });
+    return crops.length;
+  });
+  if (nCrops < 4) throw new Error("plan line not found: " + nCrops);
   const t0 = take.mark("ready");
+  await page.evaluate(() => {
+    const tok = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+    window.__crops.forEach((sp, i) =>
+      sp.animate([{ backgroundColor: "transparent" }, { backgroundColor: tok("--ts-signal") }], { duration: 200, delay: 250 + i * 260, easing: tok("--ts-ease-enter"), fill: "forwards" }),
+    );
+  });
   await take.d("say", [{ segs: [{ text: `+$${gain} per acre a year · ${ctx.facts.seasons} seasons of seeding` }], accent: true, size: NUM }], { pos: "bl" });
   const flick = 1100;
   const hold = Math.max(300, (L + 0.4) * 1000 - flick - 150);
@@ -391,9 +447,18 @@ export async function proof(take, cfg, L, ctx) {
   take.cam(verdictSel, { dur: 1300, ease: "--ts-ease-enter", fill: [0.94, 0.68], anchor: [0.5, 0.45], maxScale: 2.45 });
   await take.d("say", [{ segs: [{ text: `Honest about misses: ${ringText.length} of ${nSeasons} seasons` }], accent: true, size: NUM }], { pos: "bl" });
   await wait(1.45);
+  await page.evaluate(() => {
+    const svg = [...document.querySelectorAll("svg")].find((x) => /2022/.test(x.textContent) && x.querySelector("circle.stroke-urgent"));
+    svg.style.clipPath = "inset(0 100% 0 0)";
+  });
   await take.cam(chartCard, { dur: 500, fill: [0.94, 0.92], anchor: [0.5, 0.5], maxScale: 2.0 });
   const clicks = [];
-  const t1 = take.now() - t0;
+  // Level 3: the chart draws itself from left to right
+  await page.evaluate(() => {
+    const svg = [...document.querySelectorAll("svg")].find((x) => /2022/.test(x.textContent) && x.querySelector("circle.stroke-urgent"));
+    svg.animate([{ clipPath: "inset(0 100% 0 0)" }, { clipPath: "inset(0 0 0 0)" }], { duration: 850, easing: window.__demo.tok("--ts-ease-standard"), fill: "both" });
+  });
+  const t1 = take.now() - t0 + 0.85;
   for (let i = 0; i < rings.length; i++) {
     await wait(t1 + 0.15 + i * 0.25);
     clicks.push(take.now());
