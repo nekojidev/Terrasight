@@ -91,7 +91,7 @@ describe("P0 path", () => {
       .then((url) => {
         cy.visit(new URL(url).pathname);
         cy.contains("button", "Approve").click();
-        cy.contains("Thanks! Your agronomist got your answer.");
+        cy.contains("You approved on");
       });
   });
 });

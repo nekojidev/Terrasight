@@ -230,6 +230,7 @@
     "recActionUk": "What to do (Ukrainian)",
     "recStatus_accepted": "Accepted into your plan",
     "recStatus_in_report": "Asked the owner. See Owner decisions.",
+    "recStatus_asked": "Asked the owner — see Owner decisions.",
     "recStatus_snoozed": "Snoozed until {when}",
     "recStatus_dismissed": "Dismissed",
     "recStatus_expired": "Expired",

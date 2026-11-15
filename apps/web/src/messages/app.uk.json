@@ -230,6 +230,7 @@
     "recActionUk": "Що зробити (українською)",
     "recStatus_accepted": "Прийнято у ваш план",
     "recStatus_in_report": "Запитали власника. Дивіться «Рішення власника».",
+    "recStatus_asked": "Запитали власника — див. «Рішення власника».",
     "recStatus_snoozed": "Відкладено до {when}",
     "recStatus_dismissed": "Відхилено",
     "recStatus_expired": "Термін минув",

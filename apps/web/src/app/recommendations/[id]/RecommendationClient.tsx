@@ -73,6 +73,9 @@ export interface RecView {
   edited: boolean;
   snoozedUntil: string | null;
   undoUntil: string | null;
+  /** Set when the agronomist asked the owner (pending within Undo, or a live decision). */
+  askedOwnerAt?: string | null;
+  decisionPending?: boolean;
   /** Detail only: the field's last crops before this season and the pest's library facts. */
   recentCrops?: Array<{ season: number; crop: string; name: Localised }>;
   pest?: {
@@ -200,7 +203,9 @@ function HeatChart({
   const forecast =
     firstFc === -1
       ? []
-      : series.slice(Math.max(firstFc - 1, 0)).map((p, i): [number, number] => [Math.max(firstFc - 1, 0) + i, p.dd]);
+      : series
+          .slice(Math.max(firstFc - 1, 0))
+          .map((p, i): [number, number] => [Math.max(firstFc - 1, 0) + i, p.dd]);
   const ticks = [0, Math.floor((series.length - 1) / 2), series.length - 1];
   return (
     <figure className="mt-3">
@@ -347,7 +352,12 @@ export function RecommendationClient({
     const num = typeof k.value === "number" ? k.value : Number(k.value);
     const source = sourceFor(k.id);
     const tail = source ? { source } : {};
-    if (t.has(`knS_${k.id}`) && k.value !== "" && k.value !== "—" && (Number.isFinite(num) || ISO_RE.test(String(k.value))))
+    if (
+      t.has(`knS_${k.id}`) &&
+      k.value !== "" &&
+      k.value !== "—" &&
+      (Number.isFinite(num) || ISO_RE.test(String(k.value)))
+    )
       return {
         label: t(`knS_${k.id}`, { n: Number.isFinite(num) ? num : 0, v: isoOrText(String(k.value)) }),
         weight: k.weight,
@@ -386,18 +396,18 @@ export function RecommendationClient({
     setEditing(false);
   }
 
-  const status =
-    r.status === "accepted"
+  const askedOwner = asked || Boolean(r.askedOwnerAt);
+  const status = askedOwner
+    ? t("recStatus_asked")
+    : r.status === "accepted" || r.status === "in_report"
       ? t("recStatus_accepted")
-      : r.status === "in_report"
-        ? t("recStatus_in_report")
-        : r.status === "snoozed"
-          ? t("recStatus_snoozed", { when: r.snoozedUntil ? when(r.snoozedUntil) : "—" })
-          : r.status === "dismissed"
-            ? t("recStatus_dismissed")
-            : r.status === "expired"
-              ? t("recStatus_expired")
-              : null;
+      : r.status === "snoozed"
+        ? t("recStatus_snoozed", { when: r.snoozedUntil ? when(r.snoozedUntil) : "—" })
+        : r.status === "dismissed"
+          ? t("recStatus_dismissed")
+          : r.status === "expired"
+            ? t("recStatus_expired")
+            : null;
   const message = t("recMsg", {
     field: r.fieldName,
     title: r.text.title[locale],
@@ -468,7 +478,7 @@ export function RecommendationClient({
           {r.undoUntil ? (
             <DoneRow
               label={
-                asked || r.status === "in_report"
+                askedOwner
                   ? t("askDone")
                   : r.status === "accepted"
                     ? t("accDone")
@@ -707,11 +717,13 @@ export function RecommendationClient({
                 <Button variant="outline" icon={<Pencil />} onClick={() => setEditing(true)}>
                   {r9("edit")}
                 </Button>
-                {(r.status === "open" || r.status === "accepted") && !r.undoUntil && (
-                  <Button icon={<MessageCircleQuestion />} onClick={() => setAsking(true)}>
-                    {t("askBtn")}
-                  </Button>
-                )}
+                {(r.status === "open" || r.status === "accepted" || r.status === "in_report") &&
+                  !r.undoUntil &&
+                  !askedOwner && (
+                    <Button icon={<MessageCircleQuestion />} onClick={() => setAsking(true)}>
+                      {t("askBtn")}
+                    </Button>
+                  )}
               </div>
             </div>
           )}
