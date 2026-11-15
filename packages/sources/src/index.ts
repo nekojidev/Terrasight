@@ -23,6 +23,7 @@ export {
 } from "./cdl.js";
 export { cdlCrop, cdlName, type CdlCrop } from "./cdl-classes.js";
 export { soilgrids, type SoilGridsSummary } from "./others.js";
+export { soilFromTexture, textureClass } from "./texture.js";
 export { openetAdapter, type EtSeries } from "./openet.js";
 export { sentinel2Adapter, parseStats, type S2Ndvi, type S2Result } from "./sentinel2.js";
 export {

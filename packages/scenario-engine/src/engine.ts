@@ -497,9 +497,9 @@ export function yieldRange(
   const ys = runs
     .map(
       (r) =>
-        simulateRun(withCal, plan.slice(0, seasonIndex + 1), r, input.waterCapMm).revenueParts[seasonIndex]?.find(
-          (x) => x.crop === crop,
-        )?.tonnes,
+        simulateRun(withCal, plan.slice(0, seasonIndex + 1), r, input.waterCapMm).revenueParts[
+          seasonIndex
+        ]?.find((x) => x.crop === crop)?.tonnes,
     )
     .filter((t): t is number => t != null && Number.isFinite(t))
     .sort((a, b) => a - b);
@@ -514,6 +514,39 @@ export function yieldRange(
     runs: ys.length,
     pestLossIncluded: false,
   };
+}
+
+/**
+ * Which rotations can compete honestly. A crop without a verified price counts as $0 revenue and $0 cost, and a crop
+ * the simulator has no parameters for is silently skipped (the season looks like fallow), so both keep a rotation
+ * out; callers report the lists instead. Fallow is free and always fine.
+ */
+export function splitRotations(
+  rotations: Rotation[],
+  prices: EngineInput["prices"],
+): { usable: Rotation[]; unpriced: string[]; unmodelled: string[] } {
+  const unpriced = new Set<string>();
+  const unmodelled = new Set<string>();
+  const usable = rotations.filter((r) => {
+    let ok = true;
+    for (const c of r.sequence.flatMap(cropsOf)) {
+      if (c === "fallow") continue;
+      if (!CROPS[c]) {
+        unmodelled.add(c);
+        ok = false;
+      } else if (!prices[c]) {
+        unpriced.add(c);
+        ok = false;
+      }
+    }
+    return ok;
+  });
+  return { usable, unpriced: [...unpriced].sort(), unmodelled: [...unmodelled].sort() };
+}
+
+/** Crops of a sequence that cannot be evaluated (no price or no simulator parameters); fallow never counts. */
+export function unevaluableCrops(sequence: Rotation["sequence"], prices: EngineInput["prices"]): string[] {
+  return [...new Set(sequence.flatMap(cropsOf))].filter((c) => c !== "fallow" && (!CROPS[c] || !prices[c]));
 }
 
 /** The D5 pipeline (RFC §8): filters (with relaxation) → Monte Carlo → price step → score → 2 different alternatives. */
@@ -628,4 +661,4 @@ export function runScenarios(engineInput: EngineInput, weights: Weights = EQUAL_
 export { addDays };
 
 /** Bumped whenever the engine or simulator changes results; part of the scenario cache key. */
-export const ENGINE_VERSION = "2026-11-15.1";
+export const ENGINE_VERSION = "2026-11-15.2";

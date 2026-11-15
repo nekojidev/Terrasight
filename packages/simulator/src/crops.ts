@@ -166,6 +166,16 @@ export const CROPS: Record<string, CropParams> = {
   },
 };
 
+// Small-grain proxies for the Ukraine library (added 2026-11-15, UNREVIEWED). FAO-56 Table 12 gives barley, oats,
+// spring wheat and winter wheat one Kc row (0.3 / 1.15 / 0.25-0.4), so these reuse the wheat parameters of the same
+// sowing type (spring: spring_wheat; winter: winter_wheat), including the FAO-33 wheat Ky. Stage lengths, root depth
+// and Ky differ a little by species; a team review should replace them with the species rows.
+const proxy = (id: string, from: string): CropParams => ({ ...CROPS[from]!, id, adapted: true });
+CROPS.spring_barley = proxy("spring_barley", "spring_wheat");
+CROPS.oat = proxy("oat", "spring_wheat");
+CROPS.winter_barley = proxy("winter_barley", "winter_wheat");
+CROPS.winter_rye = proxy("winter_rye", "winter_wheat");
+
 /** Bare soil: evaporation only (FAO-56 Ke for a wet surface drying out, mean ~0.3 between rains). */
 export const FALLOW_KC = 0.3;
 export const BARE_C = 0.45;

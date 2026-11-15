@@ -6,6 +6,8 @@ import { stableStringify } from "@terrasight/evaluators";
 import {
   ENGINE_VERSION,
   planSeasons,
+  splitRotations,
+  unevaluableCrops,
   weatherRuns,
   withEt0,
   yieldRange,
@@ -14,7 +16,12 @@ import {
   type Rotation,
 } from "@terrasight/scenario-engine";
 import type { HydGroup, WeatherDay } from "@terrasight/simulator";
-import type { DailyWeather as PowerSeries, SoilSummary } from "@terrasight/sources";
+import {
+  soilFromTexture,
+  type DailyWeather as PowerSeries,
+  type SoilGridsSummary,
+  type SoilSummary,
+} from "@terrasight/sources";
 import { ENV, type Env } from "../config/config.js";
 import { PrismaService } from "../db/prisma.service.js";
 import type { Prisma } from "../generated/prisma/client.js";
@@ -24,6 +31,17 @@ import { ProblemException } from "../http/problem.js";
 import { LIBRARY } from "../library/library.module.js";
 import { SeasonsService } from "../seasons/seasons.service.js";
 import { SourcesService } from "../sources/sources.service.js";
+
+/** How the inputs were obtained: shown in the UI so estimates are never presented as measurements. */
+export interface InputMeta {
+  /** baseline = matched a library rotation; detected = from confirmed history; estimated = satellite guess only; missing = nothing. */
+  currentBasis: "baseline" | "detected" | "estimated" | "missing";
+  currentSequence: EngineInput["current"]["sequence"];
+  soilBasis: "ssurgo" | "soilgrids" | "default";
+  lastSeason: number;
+  /** Library crops left out because the simulator has no parameters for them (rotations with them do not compete). */
+  unmodelled?: string[];
+}
 
 export interface Overrides {
   waterCapMm?: number;
@@ -78,6 +96,14 @@ export class ScenariosService {
 
   /** Builds the engine input; null fields mean "No rotation library for this region yet". */
   async inputs(workspaceId: string, fieldId: string, o: Overrides): Promise<EngineInput> {
+    return (await this.build(workspaceId, fieldId, o)).input;
+  }
+
+  private async build(
+    workspaceId: string,
+    fieldId: string,
+    o: Overrides,
+  ): Promise<{ input: EngineInput; meta: InputMeta }> {
     const field = await this.prisma.db.field.findFirst({
       where: { id: fieldId, workspaceId, archivedAt: null },
       select: { id: true, regionId: true, irrigation: true, slopePct: true },
@@ -87,19 +113,22 @@ export class ScenariosService {
     const southern = region?.hemisphere === "S";
     const geom = await this.geo.fieldGeometry(fieldId);
     const today = new Date().toISOString().slice(0, 10);
-    const [power, soil] = await Promise.all([
+    const [power, soil, soilGrids] = await Promise.all([
       this.sources.fresh<PowerSeries>("power", geom, today, async () => undefined),
       this.sources.fresh<SoilSummary>("ssurgo", geom, today, async () => undefined),
+      this.sources.fresh<SoilGridsSummary>("soilgrids", geom, today, async () => undefined),
     ]);
     if (!power?.result.payload)
       throw new ProblemException(409, "weather-missing", "Weather for this field is not gathered yet");
     const s = soil?.result.payload;
-    const aws = s?.aws100Mm ?? (s?.awsMm != null ? (s.awsMm * 2) / 3 : null);
+    // Outside the US there is no SSURGO: the SoilGrids texture gives a class-typical water capacity (an estimate).
+    const tex = soilGrids?.result.payload ? soilFromTexture(soilGrids.result.payload) : null;
+    const aws = s?.aws100Mm ?? (s?.awsMm != null ? (s.awsMm * 2) / 3 : (tex?.awsMmPerM ?? null));
     const site = {
       latDeg: geom.centroid.lat,
       elevationM: power.result.payload.elevationM ?? 500,
       awsMmPerM: aws ?? 150,
-      hydGroup: ((s?.hydrologicGroup?.[0] ?? "B") as HydGroup) || "B",
+      hydGroup: ((s?.hydrologicGroup?.[0] ?? tex?.hydrologicGroup ?? "B") as HydGroup) || "B",
       slopePct: field.slopePct ?? 1,
     };
 
@@ -111,15 +140,19 @@ export class ScenariosService {
     const rotations = (field.regionId
       ? this.lib.rotations.rotations.filter((r) => r.region === field.regionId)
       : []) as unknown as Rotation[];
+    // Satellite-only guesses (NDVI curve shape) never claim a library rotation: the current one is then "estimated".
+    const recentConfirmed = crops.slice(-3).some((c) => c.source !== "ndvi");
     const match = matchBaseline(
-      crops.map((c) => ({
-        season: c.season,
-        mainCrop: c.mainCrop,
-        secondCrop: c.secondCrop,
-        confidence: c.confidence,
-        source: c.source as never,
-        isOverride: c.isOverride,
-      })),
+      crops
+        .filter((c) => recentConfirmed || c.source !== "ndvi")
+        .map((c) => ({
+          season: c.season,
+          mainCrop: c.mainCrop,
+          secondCrop: c.secondCrop,
+          confidence: c.confidence,
+          source: c.source as never,
+          isOverride: c.isOverride,
+        })),
       this.lib,
       field.regionId,
     );
@@ -129,6 +162,13 @@ export class ScenariosService {
     const detected = match.detected
       .slice(-4)
       .map((d) => (d.includes("+") ? { main: d.split("+")[0]!, second: d.split("+")[1]! } : d));
+    const basis: InputMeta["currentBasis"] = !crops.length
+      ? "missing"
+      : baseline
+        ? "baseline"
+        : recentConfirmed
+          ? "detected"
+          : "estimated";
     const current: EngineInput["current"] = baseline
       ? {
           rotationId: baseline.id,
@@ -162,7 +202,7 @@ export class ScenariosService {
       const t = tree.seasons?.ref ? m.thresholds[tree.seasons.ref] : undefined;
       return t?.value != null ? [{ pest: m.pest, hosts: tree.host, repeatSeasons: t.value }] : [];
     });
-    return {
+    const input: EngineInput = {
       fieldKey: fieldId,
       site,
       irrigated,
@@ -182,19 +222,52 @@ export class ScenariosService {
       pestModels,
       history: crops.slice(-3).map((c) => c.mainCrop),
     };
+    return {
+      input,
+      meta: {
+        currentBasis: basis,
+        currentSequence: input.current.sequence,
+        soilBasis: s ? "ssurgo" : tex ? "soilgrids" : "default",
+        lastSeason,
+      },
+    };
   }
 
   /** Runs (or reuses) the scenarios for a field with the given overrides. */
   async run(workspaceId: string, fieldId: string, o: Overrides) {
-    const input = await this.inputs(workspaceId, fieldId, o);
-    if (!input.rotations.length) return { id: null, noLibrary: true as const };
+    const { input: full, meta } = await this.build(workspaceId, fieldId, o);
+    if (!full.rotations.length) return { id: null, noLibrary: true as const };
     const missing = [
       ...new Set(
-        input.rotations.flatMap((r) =>
+        full.rotations.flatMap((r) =>
           r.sequence.flatMap((s) => (typeof s === "string" ? [s] : [s.main, s.second])),
         ),
       ),
-    ].filter((c) => !input.prices[c]);
+    ].filter((c) => c !== "fallow" && !full.prices[c]);
+    const split = splitRotations(full.rotations, full.prices);
+    // Never invent the current rotation, never rank on missing prices: say what is missing instead.
+    if (meta.currentBasis === "missing") return this.pending("crop-history", full, meta, missing);
+    // Only rotations whose every crop has a verified price compete (a missing price would count as $0 revenue).
+    const bad = unevaluableCrops(full.current.sequence, full.prices);
+    const curAll = new Set(
+      full.current.sequence.flatMap((x) => (typeof x === "string" ? [x] : [x.main, x.second])),
+    );
+    // A library rotation as "current" must be fully evaluable; a detected one only needs some evaluable crop.
+    const currentOk =
+      full.current.label === "baseline"
+        ? bad.length === 0
+        : [...curAll].some((c) => !bad.includes(c) && c !== "fallow");
+    if (!split.usable.length || !currentOk) {
+      return this.pending(
+        split.unpriced.length || bad.some((c) => !full.prices[c]) ? "prices" : "crops",
+        full,
+        meta,
+        missing,
+        split.unmodelled,
+      );
+    }
+    meta.unmodelled = split.unmodelled;
+    const input: EngineInput = { ...full, rotations: split.usable };
     const hash = createHash("sha256")
       .update(
         stableStringify({
@@ -217,6 +290,7 @@ export class ScenariosService {
         cached.durationMs,
         missing,
         input,
+        meta,
       );
     const t0 = Date.now();
     const result = await this.inWorker(input);
@@ -231,7 +305,50 @@ export class ScenariosService {
       },
     });
     this.log.log(`scenarios for ${fieldId}: ${result.candidates} candidates in ${durationMs} ms`);
-    return this.view(row.id, result, row.createdAt, durationMs, missing, input);
+    return this.view(row.id, result, row.createdAt, durationMs, missing, input, meta);
+  }
+
+  /** Nothing is simulated: the agronomist sees what is missing (prices awaiting verification, or the last crops). */
+  private pending(
+    reason: "prices" | "crop-history" | "crops",
+    input: EngineInput,
+    meta: InputMeta,
+    missingPrices: string[],
+    unmodelled: string[] = [],
+  ) {
+    const regionId =
+      this.lib.rotations.rotations.find((x) => x.id === input.rotations[0]?.id)?.region ?? null;
+    const regionPrices = regionId ? (this.lib.prices.regions[regionId]?.crops ?? {}) : {};
+    const unverified = Object.entries(regionPrices)
+      .filter(([, e]) => !e.verified)
+      .map(([c]) => c);
+    return {
+      id: null,
+      noLibrary: false as const,
+      pending: reason,
+      firstSeason: input.firstSeason,
+      regionId,
+      regionVerify: regionId ? (this.lib.rotations.regions[regionId]?.verify ?? false) : false,
+      missingPrices,
+      unverifiedPrices: unverified,
+      unmodelledCrops: unmodelled,
+      priceAsOf: [...new Set(Object.values(regionPrices).map((p) => p.asOf))].join(", "),
+      currentBasis: meta.currentBasis,
+      currentSequence: meta.currentSequence,
+      lastSeason: meta.lastSeason,
+      soilBasis: meta.soilBasis,
+      cropNames: Object.fromEntries(
+        Object.entries(this.lib.rotations.crops).map(([id, c]) => [id, { en: c.en, uk: c.uk }]),
+      ),
+      candidates: input.rotations.map((r) => ({
+        id: r.id,
+        sequence: r.sequence,
+        name: (
+          this.lib.rotations.rotations.find((x) => x.id === r.id) as unknown as
+            { name: { en: string; uk: string } } | undefined
+        )?.name ?? { en: r.id, uk: r.id },
+      })),
+    };
   }
 
   /**
@@ -306,6 +423,7 @@ export class ScenariosService {
     durationMs: number,
     missingPrices: string[],
     input: EngineInput,
+    meta: InputMeta,
   ) {
     const regionId =
       this.lib.rotations.rotations.find((x) => x.id === input.rotations[0]?.id)?.region ?? null;
@@ -320,6 +438,12 @@ export class ScenariosService {
       regionId,
       regionVerify: regionId ? (this.lib.rotations.regions[regionId]?.verify ?? false) : false,
       missingPrices,
+      unmodelledCrops: meta.unmodelled ?? [],
+      pending: null,
+      currentBasis: meta.currentBasis,
+      currentSequence: meta.currentSequence,
+      lastSeason: meta.lastSeason,
+      soilBasis: meta.soilBasis,
       priceAsOf: [...new Set(Object.values(regionPrices).map((p) => p.asOf))].join(", "),
       cropNames: Object.fromEntries(
         Object.entries(this.lib.rotations.crops).map(([id, c]) => [id, { en: c.en, uk: c.uk }]),

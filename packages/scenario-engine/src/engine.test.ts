@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import type { WeatherDay } from "@terrasight/simulator";
 import { describe, expect, it } from "vitest";
 import {
@@ -6,6 +7,8 @@ import {
   planSeasons,
   rank,
   runScenarios,
+  splitRotations,
+  unevaluableCrops,
   weatherRuns,
   withEt0,
   yieldRange,
@@ -264,7 +267,11 @@ describe("yield range (FR-YF-1)", () => {
   });
 
   it("dryland yields spread wider than irrigated", () => {
-    const dry = yieldRange(input({ runs: 40, irrigated: false }), plan, weatherRuns(input({ runs: 40, irrigated: false })))!;
+    const dry = yieldRange(
+      input({ runs: 40, irrigated: false }),
+      plan,
+      weatherRuns(input({ runs: 40, irrigated: false })),
+    )!;
     const wet = yieldRange(inp, plan, runs)!;
     expect(dry.p90 - dry.p10).toBeGreaterThan(wet.p90 - wet.p10);
   });
@@ -272,5 +279,65 @@ describe("yield range (FR-YF-1)", () => {
   it("is null for fallow or an unpriced crop", () => {
     expect(yieldRange(inp, [{ season: 2026, crops: ["fallow"] }], runs)).toBeNull();
     expect(yieldRange(inp, [{ season: 2026, crops: ["rye"] }], runs)).toBeNull();
+  });
+});
+
+describe("Ukraine (tier C) inputs", () => {
+  const lib = JSON.parse(readFileSync(new URL("../../../data/rotations.json", import.meta.url), "utf8")) as {
+    rotations: Array<Rotation & { region: string }>;
+  };
+  const ua = (region: string) => lib.rotations.filter((r) => r.region === region);
+  const uaPrices = {
+    winter_wheat: { price: 200, variableCost: 500, yieldRef: 4.5 },
+    corn: { price: 190, variableCost: 800, yieldRef: 7 },
+    sunflower: { price: 450, variableCost: 450, yieldRef: 2 },
+    soybean: { price: 420, variableCost: 400, yieldRef: 2.4 },
+    spring_barley: { price: 180, variableCost: 400, yieldRef: 4 },
+  };
+
+  it("has UA library rotations in every UA region", () => {
+    for (const r of ["ua-steppe", "ua-forest-steppe", "ua-polissia"]) expect(ua(r).length).toBeGreaterThan(2);
+  });
+
+  it("missing prices path: no verified prices means no rotation competes and nothing is invented", () => {
+    const s = splitRotations(ua("ua-forest-steppe"), {});
+    expect(s.usable).toEqual([]);
+    expect(s.unpriced).toContain("corn");
+  });
+
+  it("unmodelled crops (no simulator parameters) keep a rotation out instead of looking like fallow", () => {
+    const s = splitRotations(ua("ua-polissia"), {
+      ...uaPrices,
+      winter_rye: { price: 150, variableCost: 300, yieldRef: 3 },
+    });
+    expect(s.unmodelled).toEqual(expect.arrayContaining(["lupin", "potato"]));
+    expect(s.usable.map((r) => r.id)).toContain("ua-po-corn-soy-rye");
+    expect(unevaluableCrops(["winter_wheat", "lupin"], uaPrices)).toEqual(["lupin"]);
+  });
+
+  it("with prices for a UA region, candidates are found and barley and rye are simulated (not dropped)", () => {
+    const { usable } = splitRotations(ua("ua-forest-steppe"), uaPrices);
+    expect(usable.length).toBeGreaterThan(1);
+    const base = usable.find((r) => r.id === "ua-fs-corn-soy")!;
+    const res = runScenarios(
+      input({
+        irrigated: false,
+        rotations: usable,
+        current: { rotationId: base.id, sequence: base.sequence, position: 0, label: "baseline" },
+        prices: uaPrices,
+        sowing: { ...sowing, sunflower: "04-25", spring_barley: "03-25" },
+        history: ["soybean"],
+        runs: 30,
+      }),
+    );
+    expect(res.noLibrary).toBe(false);
+    expect(res.candidates).toBeGreaterThan(0);
+    expect(res.alternatives.length).toBeGreaterThan(0);
+    expect(Number.isFinite(res.current.margin)).toBe(true);
+    const barley = splitRotations(
+      [{ id: "b", sequence: ["spring_barley", "winter_wheat"], irrigation: "none" }],
+      uaPrices,
+    ).usable;
+    expect(barley).toHaveLength(1);
   });
 });

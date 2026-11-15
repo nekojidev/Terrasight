@@ -1,8 +1,8 @@
 "use client";
 
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { rank, type Metric, type ScenarioResult } from "@terrasight/scenario-engine";
-import { Button, Chip, FieldThumb, SeasonStrip, Skeleton, cropColour } from "@terrasight/ui";
+import { Button, Chip, FieldThumb, SeasonStrip, SelectField, Skeleton, cropColour } from "@terrasight/ui";
 import { Check, Droplet, Leaf, PiggyBank, ShieldCheck, Sparkles, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
@@ -17,6 +17,18 @@ interface RunView {
   firstSeason: number;
   regionVerify: boolean;
   missingPrices: string[];
+  /** Set when nothing was simulated: what is missing instead. */
+  pending?: "prices" | "crop-history" | "crops" | null;
+  regionId?: string | null;
+  unmodelledCrops?: string[];
+  currentBasis?: "baseline" | "detected" | "estimated" | "missing";
+  lastSeason?: number;
+  soilBasis?: "ssurgo" | "soilgrids" | "default";
+  candidates?: Array<{
+    id: string;
+    name: Localised;
+    sequence: Array<string | { main: string; second: string }>;
+  }>;
   priceAsOf: string;
   names: Record<string, Localised>;
   cropNames?: Record<string, Localised>;
@@ -36,6 +48,75 @@ const PRIORITY: Array<{ key: Metric; icon: React.ReactNode; label: string }> = [
   { key: "soil", icon: <Leaf />, label: "p_soil" },
   { key: "drought", icon: <ShieldCheck />, label: "p_drought" },
 ];
+
+const seqCrops = (s: string | { main: string; second: string }) =>
+  typeof s === "string" ? [s] : [s.main, s.second];
+
+/** The agronomist enters the last 3 crops (stored as crop-season overrides); never invented, never guessed silently. */
+function CropHistoryForm({
+  workspaceId,
+  fieldId,
+  lastSeason,
+  cropNames,
+  estimated,
+  canSave,
+}: {
+  workspaceId: string;
+  fieldId: string;
+  lastSeason: number;
+  cropNames: Record<string, Localised>;
+  estimated: boolean;
+  canSave: boolean;
+}) {
+  const t = useTranslations("App");
+  const locale = useLocale() as "en" | "uk";
+  const qc = useQueryClient();
+  const seasons = [lastSeason - 2, lastSeason - 1, lastSeason];
+  const [picked, setPicked] = useState<Record<number, string>>({});
+  const options = Object.entries(cropNames)
+    .map(([value, n]) => ({ value, label: n[locale] }))
+    .sort((a, b) => a.label.localeCompare(b.label, locale));
+  const save = useMutation({
+    mutationFn: async () => {
+      for (const season of seasons)
+        if (picked[season])
+          await api(`/api/w/${workspaceId}/fields/${fieldId}/crop-seasons/${season}`, {
+            method: "PUT",
+            body: { mainCrop: picked[season], secondCrop: null },
+          });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["scenarios", workspaceId, fieldId] }),
+  });
+  return (
+    <section className="rounded-card border border-line bg-surface p-6">
+      <h2 className="text-h2 text-ink">{t("rotHistTitle")}</h2>
+      <p className="mb-4 text-small text-ink-2">{estimated ? t("rotHistEstimated") : t("rotPendHistory")}</p>
+      <div className="grid gap-4 sm:grid-cols-3">
+        {seasons.map((season) => (
+          <SelectField
+            key={season}
+            label={String(season)}
+            value={picked[season] ?? ""}
+            onChange={(e) => setPicked({ ...picked, [season]: e.target.value })}
+            options={[{ value: "", label: t("rotHistPick") }, ...options]}
+            disabled={!canSave}
+          />
+        ))}
+      </div>
+      {canSave && (
+        <Button
+          className="mt-4"
+          onClick={() => save.mutate()}
+          disabled={save.isPending || seasons.some((y) => !picked[y])}
+          aria-busy={save.isPending}
+        >
+          {t("rotHistSave")}
+        </Button>
+      )}
+      {save.isError && <p className="mt-2 text-small text-urgent">{t("rotHistError")}</p>}
+    </section>
+  );
+}
 
 /** Rotation screen (design 10, S-06.04): decision first, evidence below; priorities re-rank in the browser. */
 const METRICS: Array<{ key: Metric; label: string }> = [
@@ -149,6 +230,62 @@ export function RotationClient({
         {t("rotNoLibrary")}
       </p>
     );
+  const cropLabel = (c: string) => run.data!.cropNames?.[c]?.[locale] ?? c.replace(/_/g, " ");
+  const histForm = (estimated: boolean) =>
+    run.data!.cropNames && run.data!.lastSeason ? (
+      <CropHistoryForm
+        workspaceId={workspaceId}
+        fieldId={fieldId}
+        lastSeason={run.data!.lastSeason}
+        cropNames={run.data!.cropNames}
+        estimated={estimated}
+        canSave={canSave}
+      />
+    ) : null;
+  if (run.data.pending) {
+    const d = run.data;
+    return (
+      <div className="flex flex-col gap-6">
+        <header className="flex flex-col gap-3">
+          <div className="flex items-center gap-4">
+            <FieldThumb name={fieldName} outline={thumb} crop={crop} size={56} />
+            <h1 className="text-h1 text-ink">{fieldName}</h1>
+          </div>
+          <FieldTabs fieldId={fieldId} active={2} />
+        </header>
+        {d.pending === "prices" && (
+          <p className="flex items-center gap-2 rounded-card border border-line bg-surface-2 p-4 text-body text-ink">
+            <TriangleAlert aria-hidden className="size-5 shrink-0 text-week" />
+            {d.regionId?.startsWith("ua-") ? t("rotPendPricesUa") : t("rotPendPrices")}
+          </p>
+        )}
+        {d.pending === "crops" && (
+          <p className="flex items-center gap-2 rounded-card border border-line bg-surface-2 p-4 text-body text-ink">
+            <TriangleAlert aria-hidden className="size-5 shrink-0 text-week" />
+            {t("rotPendCrops", { list: (d.unmodelledCrops ?? []).map(cropLabel).join(", ") })}
+          </p>
+        )}
+        {d.pending === "crop-history" && histForm(false)}
+        {d.pending !== "crop-history" && d.currentBasis === "estimated" && histForm(true)}
+        {d.regionVerify && <p className="text-small text-week">{t("rotVerify")}</p>}
+        {d.candidates && d.candidates.length > 0 && (
+          <section className="rounded-card border border-line bg-surface p-6">
+            <h2 className="mb-3 text-h2 text-ink">{t("rotCandidates")}</h2>
+            <ul className="flex flex-col gap-3">
+              {d.candidates.map((c) => (
+                <li key={c.id}>
+                  <p className="text-body font-semibold text-ink">{c.name[locale]}</p>
+                  <p className="text-small text-ink-2">
+                    {c.sequence.map((x) => seqCrops(x).map(cropLabel).join(" + ")).join(" → ")}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+      </div>
+    );
+  }
 
   const pros = (s: ScenarioResult): string[] => {
     if (s.kind === "current") return [t("rotProCurrent")];
@@ -178,9 +315,11 @@ export function RotationClient({
   };
   const name = (s: ScenarioResult) =>
     s.kind === "current"
-      ? s.label === "detected"
-        ? t("rotDetected")
-        : t("rotCurrent")
+      ? run.data!.currentBasis === "estimated"
+        ? t("rotCurrentEstimated")
+        : s.label === "detected"
+          ? t("rotDetected")
+          : t("rotCurrent")
       : (run.data!.names[s.id]?.[locale] ?? s.id);
   const cropName = (c: string) => run.data!.cropNames?.[c]?.[locale] ?? c.replace(/_/g, " ");
   const letters = ["A", "B", "C"];
@@ -259,6 +398,13 @@ export function RotationClient({
         {t("rotNote", { n: run.data.result.candidates + 1 })}
         {run.data.regionVerify && <span className="ml-2 text-week">{t("rotVerify")}</span>}
       </p>
+      {run.data.soilBasis === "soilgrids" && <p className="text-small text-ink-2">{t("rotSoilEstimate")}</p>}
+      {(run.data.unmodelledCrops?.length ?? 0) > 0 && (
+        <p className="text-small text-ink-2">
+          {t("rotNotCompared", { list: run.data.unmodelledCrops!.map(cropLabel).join(", ") })}
+        </p>
+      )}
+      {run.data.currentBasis === "estimated" && histForm(true)}
       {run.data.result.relaxed.length > 0 && (
         <p className="text-small text-week">
           {t("rotRelaxed", { list: run.data.result.relaxed.join(", ") })}

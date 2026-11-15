@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "about": "Default prices and costs per region (RFC §16, Tech Design §6.2). Prices: USDA NASS Crop Values 2025 Summary (preliminary). Variable costs and reference yields: K-State KSU Farm Management Guides (direct expenses, include labour, exclude rent and capital recovery) and UNL Nebraska Crop Budgets (total operating costs). variableCost / yieldRef = irrigated budget; dryland = dryland budget. Unit conversions: 56 lb/bu corn and sorghum, 60 lb wheat and soybean, 50 lb millet and canola; $/acre × 2.471 = $/ha. Researched and verified by the team on 2026-11-14; scenarios use a crop only once verified.",
+  "about": "Default prices and costs per region (RFC §16, Tech Design §6.2). Prices: USDA NASS Crop Values 2025 Summary (preliminary). Variable costs and reference yields: K-State KSU Farm Management Guides (direct expenses, include labour, exclude rent and capital recovery) and UNL Nebraska Crop Budgets (total operating costs). variableCost / yieldRef = irrigated budget; dryland = dryland budget. Unit conversions: 56 lb/bu corn and sorghum, 60 lb wheat and soybean, 50 lb millet and canola; $/acre × 2.471 = $/ha. Researched and verified by the team on 2026-11-14; scenarios use a crop only once verified. Ukraine regions (ua-*) were added on 2026-11-15 as UNVERIFIED placeholders: only national 2025 yields with citations; prices and costs are empty until the team finds and verifies sources, so scenarios do not use them.",
   "currency": "USD",
   "regions": {
     "us-southern-plains": {
@@ -609,6 +609,522 @@
           "note": "$0 by team decision (2026-11-14): fallow-year weed control is already inside the wheat–fallow budget, so wheat–fallow margins match the K-State / UNL W-F budgets.",
           "verified": true,
           "verifiedBy": "Oleksandr Baranovskyi"
+        }
+      }
+    },
+    "ua-steppe": {
+      "crops": {
+        "winter_wheat": {
+          "price": {
+            "value": null,
+            "unit": "$/t"
+          },
+          "variableCost": {
+            "value": null,
+            "unit": "$/ha"
+          },
+          "yieldRef": {
+            "value": 4.55,
+            "unit": "t/ha"
+          },
+          "source": "Yield: Interfax-Ukraine (Dec 2025) citing Ministry of Economy of Ukraine 2025 harvest results; price indications: Ukragroconsult / Ukrinform; prices and costs pending (Ukrstat, APK-Inform, Latifundist, USDA FAS GAIN Ukraine)",
+          "asOf": "2025",
+          "urls": [
+            "https://interfax.com.ua/news/economic/1131543.html",
+            "https://latifundist.com/en/novosti/68679-agrariyi-zibrali-376-mln-t-zerna-novogo-vrozhayu-kukurudzu-obmolotili-na-tretini-ploshch",
+            "https://ukrstat.gov.ua/operativ/menu/menu_e/cg.htm"
+          ],
+          "note": "UNVERIFIED, awaiting team review. Yield: Ukraine national average 2025 for wheat (4.55 t/ha), not regional. Indicative EXW quote Jan-Feb 2025: about 9,200-9,650 UAH/t (Ukragroconsult weekly series, https://ukragroconsult.com/en/grain-prices). Price (USD/t) and variableCost (USD/ha) are deliberately empty: no citable annual average price (Ukrstat table not read) and no per-crop cost table found; currency policy (USD vs UAH) is undecided. Do not convert or estimate without a source. (accessed 2026-11-15)",
+          "verified": false,
+          "verifiedBy": null
+        },
+        "spring_barley": {
+          "price": {
+            "value": null,
+            "unit": "$/t"
+          },
+          "variableCost": {
+            "value": null,
+            "unit": "$/ha"
+          },
+          "yieldRef": {
+            "value": 3.98,
+            "unit": "t/ha"
+          },
+          "source": "Yield: Interfax-Ukraine (Dec 2025) citing Ministry of Economy of Ukraine 2025 harvest results; price indications: Ukragroconsult / Ukrinform; prices and costs pending (Ukrstat, APK-Inform, Latifundist, USDA FAS GAIN Ukraine)",
+          "asOf": "2025",
+          "urls": [
+            "https://interfax.com.ua/news/economic/1131543.html",
+            "https://latifundist.com/en/novosti/68679-agrariyi-zibrali-376-mln-t-zerna-novogo-vrozhayu-kukurudzu-obmolotili-na-tretini-ploshch",
+            "https://ukrstat.gov.ua/operativ/menu/menu_e/cg.htm"
+          ],
+          "note": "UNVERIFIED, awaiting team review. Yield: Ukraine national average 2025 for barley (3.98 t/ha), not regional. No price quote found yet. Price (USD/t) and variableCost (USD/ha) are deliberately empty: no citable annual average price (Ukrstat table not read) and no per-crop cost table found; currency policy (USD vs UAH) is undecided. Do not convert or estimate without a source. (accessed 2026-11-15)",
+          "verified": false,
+          "verifiedBy": null
+        },
+        "winter_barley": {
+          "price": {
+            "value": null,
+            "unit": "$/t"
+          },
+          "variableCost": {
+            "value": null,
+            "unit": "$/ha"
+          },
+          "yieldRef": {
+            "value": 3.98,
+            "unit": "t/ha"
+          },
+          "source": "Yield: Interfax-Ukraine (Dec 2025) citing Ministry of Economy of Ukraine 2025 harvest results; price indications: Ukragroconsult / Ukrinform; prices and costs pending (Ukrstat, APK-Inform, Latifundist, USDA FAS GAIN Ukraine)",
+          "asOf": "2025",
+          "urls": [
+            "https://interfax.com.ua/news/economic/1131543.html",
+            "https://latifundist.com/en/novosti/68679-agrariyi-zibrali-376-mln-t-zerna-novogo-vrozhayu-kukurudzu-obmolotili-na-tretini-ploshch",
+            "https://ukrstat.gov.ua/operativ/menu/menu_e/cg.htm"
+          ],
+          "note": "UNVERIFIED, awaiting team review. Yield: Ukraine national average 2025 for barley (3.98 t/ha), not regional. No price quote found yet. Price (USD/t) and variableCost (USD/ha) are deliberately empty: no citable annual average price (Ukrstat table not read) and no per-crop cost table found; currency policy (USD vs UAH) is undecided. Do not convert or estimate without a source. (accessed 2026-11-15)",
+          "verified": false,
+          "verifiedBy": null
+        },
+        "corn": {
+          "price": {
+            "value": null,
+            "unit": "$/t"
+          },
+          "variableCost": {
+            "value": null,
+            "unit": "$/ha"
+          },
+          "yieldRef": {
+            "value": 7.13,
+            "unit": "t/ha"
+          },
+          "source": "Yield: Interfax-Ukraine (Dec 2025) citing Ministry of Economy of Ukraine 2025 harvest results; price indications: Ukragroconsult / Ukrinform; prices and costs pending (Ukrstat, APK-Inform, Latifundist, USDA FAS GAIN Ukraine)",
+          "asOf": "2025",
+          "urls": [
+            "https://interfax.com.ua/news/economic/1131543.html",
+            "https://latifundist.com/en/novosti/68679-agrariyi-zibrali-376-mln-t-zerna-novogo-vrozhayu-kukurudzu-obmolotili-na-tretini-ploshch",
+            "https://ukrstat.gov.ua/operativ/menu/menu_e/cg.htm"
+          ],
+          "note": "UNVERIFIED, awaiting team review. Yield: Ukraine national average 2025 for corn (7.13 t/ha), not regional. Indicative EXW quote Jan-Feb 2025: about 9,450-9,650 UAH/t (Ukragroconsult). Price (USD/t) and variableCost (USD/ha) are deliberately empty: no citable annual average price (Ukrstat table not read) and no per-crop cost table found; currency policy (USD vs UAH) is undecided. Do not convert or estimate without a source. (accessed 2026-11-15)",
+          "verified": false,
+          "verifiedBy": null
+        },
+        "winter_canola": {
+          "price": {
+            "value": null,
+            "unit": "$/t"
+          },
+          "variableCost": {
+            "value": null,
+            "unit": "$/ha"
+          },
+          "yieldRef": {
+            "value": 2.63,
+            "unit": "t/ha"
+          },
+          "source": "Yield: Interfax-Ukraine (Dec 2025) citing Ministry of Economy of Ukraine 2025 harvest results; price indications: Ukragroconsult / Ukrinform; prices and costs pending (Ukrstat, APK-Inform, Latifundist, USDA FAS GAIN Ukraine)",
+          "asOf": "2025",
+          "urls": [
+            "https://interfax.com.ua/news/economic/1131543.html",
+            "https://latifundist.com/en/novosti/68679-agrariyi-zibrali-376-mln-t-zerna-novogo-vrozhayu-kukurudzu-obmolotili-na-tretini-ploshch",
+            "https://ukrstat.gov.ua/operativ/menu/menu_e/cg.htm"
+          ],
+          "note": "UNVERIFIED, awaiting team review. Yield: Ukraine national average 2025 for rapeseed (2.63 t/ha), not regional. Processor bids reported by Ukrinform (Online Grain Exchange data, date not confirmed): 24,000-24,500 UAH/t. Price (USD/t) and variableCost (USD/ha) are deliberately empty: no citable annual average price (Ukrstat table not read) and no per-crop cost table found; currency policy (USD vs UAH) is undecided. Do not convert or estimate without a source. (accessed 2026-11-15)",
+          "verified": false,
+          "verifiedBy": null
+        },
+        "soybean": {
+          "price": {
+            "value": null,
+            "unit": "$/t"
+          },
+          "variableCost": {
+            "value": null,
+            "unit": "$/ha"
+          },
+          "yieldRef": {
+            "value": 2.37,
+            "unit": "t/ha"
+          },
+          "source": "Yield: Interfax-Ukraine (Dec 2025) citing Ministry of Economy of Ukraine 2025 harvest results; price indications: Ukragroconsult / Ukrinform; prices and costs pending (Ukrstat, APK-Inform, Latifundist, USDA FAS GAIN Ukraine)",
+          "asOf": "2025",
+          "urls": [
+            "https://interfax.com.ua/news/economic/1131543.html",
+            "https://latifundist.com/en/novosti/68679-agrariyi-zibrali-376-mln-t-zerna-novogo-vrozhayu-kukurudzu-obmolotili-na-tretini-ploshch",
+            "https://ukrstat.gov.ua/operativ/menu/menu_e/cg.htm"
+          ],
+          "note": "UNVERIFIED, awaiting team review. Yield: Ukraine national average 2025 for soybean (2.37 t/ha), not regional. No price quote found yet. Price (USD/t) and variableCost (USD/ha) are deliberately empty: no citable annual average price (Ukrstat table not read) and no per-crop cost table found; currency policy (USD vs UAH) is undecided. Do not convert or estimate without a source. (accessed 2026-11-15)",
+          "verified": false,
+          "verifiedBy": null
+        },
+        "sunflower": {
+          "price": {
+            "value": null,
+            "unit": "$/t"
+          },
+          "variableCost": {
+            "value": null,
+            "unit": "$/ha"
+          },
+          "yieldRef": {
+            "value": 1.91,
+            "unit": "t/ha"
+          },
+          "source": "Yield: Interfax-Ukraine (Dec 2025) citing Ministry of Economy of Ukraine 2025 harvest results; price indications: Ukragroconsult / Ukrinform; prices and costs pending (Ukrstat, APK-Inform, Latifundist, USDA FAS GAIN Ukraine)",
+          "asOf": "2025",
+          "urls": [
+            "https://interfax.com.ua/news/economic/1131543.html",
+            "https://latifundist.com/en/novosti/68679-agrariyi-zibrali-376-mln-t-zerna-novogo-vrozhayu-kukurudzu-obmolotili-na-tretini-ploshch",
+            "https://ukrstat.gov.ua/operativ/menu/menu_e/cg.htm"
+          ],
+          "note": "UNVERIFIED, awaiting team review. Yield: Ukraine national average 2025 for sunflower (1.91 t/ha), not regional. Processor bids reported by Ukrinform (Online Grain Exchange data, date not confirmed): 28,000-28,500 UAH/t. Price (USD/t) and variableCost (USD/ha) are deliberately empty: no citable annual average price (Ukrstat table not read) and no per-crop cost table found; currency policy (USD vs UAH) is undecided. Do not convert or estimate without a source. (accessed 2026-11-15)",
+          "verified": false,
+          "verifiedBy": null
+        }
+      }
+    },
+    "ua-forest-steppe": {
+      "crops": {
+        "winter_wheat": {
+          "price": {
+            "value": null,
+            "unit": "$/t"
+          },
+          "variableCost": {
+            "value": null,
+            "unit": "$/ha"
+          },
+          "yieldRef": {
+            "value": 4.55,
+            "unit": "t/ha"
+          },
+          "source": "Yield: Interfax-Ukraine (Dec 2025) citing Ministry of Economy of Ukraine 2025 harvest results; price indications: Ukragroconsult / Ukrinform; prices and costs pending (Ukrstat, APK-Inform, Latifundist, USDA FAS GAIN Ukraine)",
+          "asOf": "2025",
+          "urls": [
+            "https://interfax.com.ua/news/economic/1131543.html",
+            "https://latifundist.com/en/novosti/68679-agrariyi-zibrali-376-mln-t-zerna-novogo-vrozhayu-kukurudzu-obmolotili-na-tretini-ploshch",
+            "https://ukrstat.gov.ua/operativ/menu/menu_e/cg.htm"
+          ],
+          "note": "UNVERIFIED, awaiting team review. Yield: Ukraine national average 2025 for wheat (4.55 t/ha), not regional. Indicative EXW quote Jan-Feb 2025: about 9,200-9,650 UAH/t (Ukragroconsult weekly series, https://ukragroconsult.com/en/grain-prices). Price (USD/t) and variableCost (USD/ha) are deliberately empty: no citable annual average price (Ukrstat table not read) and no per-crop cost table found; currency policy (USD vs UAH) is undecided. Do not convert or estimate without a source. (accessed 2026-11-15)",
+          "verified": false,
+          "verifiedBy": null
+        },
+        "spring_barley": {
+          "price": {
+            "value": null,
+            "unit": "$/t"
+          },
+          "variableCost": {
+            "value": null,
+            "unit": "$/ha"
+          },
+          "yieldRef": {
+            "value": 3.98,
+            "unit": "t/ha"
+          },
+          "source": "Yield: Interfax-Ukraine (Dec 2025) citing Ministry of Economy of Ukraine 2025 harvest results; price indications: Ukragroconsult / Ukrinform; prices and costs pending (Ukrstat, APK-Inform, Latifundist, USDA FAS GAIN Ukraine)",
+          "asOf": "2025",
+          "urls": [
+            "https://interfax.com.ua/news/economic/1131543.html",
+            "https://latifundist.com/en/novosti/68679-agrariyi-zibrali-376-mln-t-zerna-novogo-vrozhayu-kukurudzu-obmolotili-na-tretini-ploshch",
+            "https://ukrstat.gov.ua/operativ/menu/menu_e/cg.htm"
+          ],
+          "note": "UNVERIFIED, awaiting team review. Yield: Ukraine national average 2025 for barley (3.98 t/ha), not regional. No price quote found yet. Price (USD/t) and variableCost (USD/ha) are deliberately empty: no citable annual average price (Ukrstat table not read) and no per-crop cost table found; currency policy (USD vs UAH) is undecided. Do not convert or estimate without a source. (accessed 2026-11-15)",
+          "verified": false,
+          "verifiedBy": null
+        },
+        "winter_barley": {
+          "price": {
+            "value": null,
+            "unit": "$/t"
+          },
+          "variableCost": {
+            "value": null,
+            "unit": "$/ha"
+          },
+          "yieldRef": {
+            "value": 3.98,
+            "unit": "t/ha"
+          },
+          "source": "Yield: Interfax-Ukraine (Dec 2025) citing Ministry of Economy of Ukraine 2025 harvest results; price indications: Ukragroconsult / Ukrinform; prices and costs pending (Ukrstat, APK-Inform, Latifundist, USDA FAS GAIN Ukraine)",
+          "asOf": "2025",
+          "urls": [
+            "https://interfax.com.ua/news/economic/1131543.html",
+            "https://latifundist.com/en/novosti/68679-agrariyi-zibrali-376-mln-t-zerna-novogo-vrozhayu-kukurudzu-obmolotili-na-tretini-ploshch",
+            "https://ukrstat.gov.ua/operativ/menu/menu_e/cg.htm"
+          ],
+          "note": "UNVERIFIED, awaiting team review. Yield: Ukraine national average 2025 for barley (3.98 t/ha), not regional. No price quote found yet. Price (USD/t) and variableCost (USD/ha) are deliberately empty: no citable annual average price (Ukrstat table not read) and no per-crop cost table found; currency policy (USD vs UAH) is undecided. Do not convert or estimate without a source. (accessed 2026-11-15)",
+          "verified": false,
+          "verifiedBy": null
+        },
+        "corn": {
+          "price": {
+            "value": null,
+            "unit": "$/t"
+          },
+          "variableCost": {
+            "value": null,
+            "unit": "$/ha"
+          },
+          "yieldRef": {
+            "value": 7.13,
+            "unit": "t/ha"
+          },
+          "source": "Yield: Interfax-Ukraine (Dec 2025) citing Ministry of Economy of Ukraine 2025 harvest results; price indications: Ukragroconsult / Ukrinform; prices and costs pending (Ukrstat, APK-Inform, Latifundist, USDA FAS GAIN Ukraine)",
+          "asOf": "2025",
+          "urls": [
+            "https://interfax.com.ua/news/economic/1131543.html",
+            "https://latifundist.com/en/novosti/68679-agrariyi-zibrali-376-mln-t-zerna-novogo-vrozhayu-kukurudzu-obmolotili-na-tretini-ploshch",
+            "https://ukrstat.gov.ua/operativ/menu/menu_e/cg.htm"
+          ],
+          "note": "UNVERIFIED, awaiting team review. Yield: Ukraine national average 2025 for corn (7.13 t/ha), not regional. Indicative EXW quote Jan-Feb 2025: about 9,450-9,650 UAH/t (Ukragroconsult). Price (USD/t) and variableCost (USD/ha) are deliberately empty: no citable annual average price (Ukrstat table not read) and no per-crop cost table found; currency policy (USD vs UAH) is undecided. Do not convert or estimate without a source. (accessed 2026-11-15)",
+          "verified": false,
+          "verifiedBy": null
+        },
+        "winter_canola": {
+          "price": {
+            "value": null,
+            "unit": "$/t"
+          },
+          "variableCost": {
+            "value": null,
+            "unit": "$/ha"
+          },
+          "yieldRef": {
+            "value": 2.63,
+            "unit": "t/ha"
+          },
+          "source": "Yield: Interfax-Ukraine (Dec 2025) citing Ministry of Economy of Ukraine 2025 harvest results; price indications: Ukragroconsult / Ukrinform; prices and costs pending (Ukrstat, APK-Inform, Latifundist, USDA FAS GAIN Ukraine)",
+          "asOf": "2025",
+          "urls": [
+            "https://interfax.com.ua/news/economic/1131543.html",
+            "https://latifundist.com/en/novosti/68679-agrariyi-zibrali-376-mln-t-zerna-novogo-vrozhayu-kukurudzu-obmolotili-na-tretini-ploshch",
+            "https://ukrstat.gov.ua/operativ/menu/menu_e/cg.htm"
+          ],
+          "note": "UNVERIFIED, awaiting team review. Yield: Ukraine national average 2025 for rapeseed (2.63 t/ha), not regional. Processor bids reported by Ukrinform (Online Grain Exchange data, date not confirmed): 24,000-24,500 UAH/t. Price (USD/t) and variableCost (USD/ha) are deliberately empty: no citable annual average price (Ukrstat table not read) and no per-crop cost table found; currency policy (USD vs UAH) is undecided. Do not convert or estimate without a source. (accessed 2026-11-15)",
+          "verified": false,
+          "verifiedBy": null
+        },
+        "soybean": {
+          "price": {
+            "value": null,
+            "unit": "$/t"
+          },
+          "variableCost": {
+            "value": null,
+            "unit": "$/ha"
+          },
+          "yieldRef": {
+            "value": 2.37,
+            "unit": "t/ha"
+          },
+          "source": "Yield: Interfax-Ukraine (Dec 2025) citing Ministry of Economy of Ukraine 2025 harvest results; price indications: Ukragroconsult / Ukrinform; prices and costs pending (Ukrstat, APK-Inform, Latifundist, USDA FAS GAIN Ukraine)",
+          "asOf": "2025",
+          "urls": [
+            "https://interfax.com.ua/news/economic/1131543.html",
+            "https://latifundist.com/en/novosti/68679-agrariyi-zibrali-376-mln-t-zerna-novogo-vrozhayu-kukurudzu-obmolotili-na-tretini-ploshch",
+            "https://ukrstat.gov.ua/operativ/menu/menu_e/cg.htm"
+          ],
+          "note": "UNVERIFIED, awaiting team review. Yield: Ukraine national average 2025 for soybean (2.37 t/ha), not regional. No price quote found yet. Price (USD/t) and variableCost (USD/ha) are deliberately empty: no citable annual average price (Ukrstat table not read) and no per-crop cost table found; currency policy (USD vs UAH) is undecided. Do not convert or estimate without a source. (accessed 2026-11-15)",
+          "verified": false,
+          "verifiedBy": null
+        },
+        "sunflower": {
+          "price": {
+            "value": null,
+            "unit": "$/t"
+          },
+          "variableCost": {
+            "value": null,
+            "unit": "$/ha"
+          },
+          "yieldRef": {
+            "value": 1.91,
+            "unit": "t/ha"
+          },
+          "source": "Yield: Interfax-Ukraine (Dec 2025) citing Ministry of Economy of Ukraine 2025 harvest results; price indications: Ukragroconsult / Ukrinform; prices and costs pending (Ukrstat, APK-Inform, Latifundist, USDA FAS GAIN Ukraine)",
+          "asOf": "2025",
+          "urls": [
+            "https://interfax.com.ua/news/economic/1131543.html",
+            "https://latifundist.com/en/novosti/68679-agrariyi-zibrali-376-mln-t-zerna-novogo-vrozhayu-kukurudzu-obmolotili-na-tretini-ploshch",
+            "https://ukrstat.gov.ua/operativ/menu/menu_e/cg.htm"
+          ],
+          "note": "UNVERIFIED, awaiting team review. Yield: Ukraine national average 2025 for sunflower (1.91 t/ha), not regional. Processor bids reported by Ukrinform (Online Grain Exchange data, date not confirmed): 28,000-28,500 UAH/t. Price (USD/t) and variableCost (USD/ha) are deliberately empty: no citable annual average price (Ukrstat table not read) and no per-crop cost table found; currency policy (USD vs UAH) is undecided. Do not convert or estimate without a source. (accessed 2026-11-15)",
+          "verified": false,
+          "verifiedBy": null
+        }
+      }
+    },
+    "ua-polissia": {
+      "crops": {
+        "winter_wheat": {
+          "price": {
+            "value": null,
+            "unit": "$/t"
+          },
+          "variableCost": {
+            "value": null,
+            "unit": "$/ha"
+          },
+          "yieldRef": {
+            "value": 4.55,
+            "unit": "t/ha"
+          },
+          "source": "Yield: Interfax-Ukraine (Dec 2025) citing Ministry of Economy of Ukraine 2025 harvest results; price indications: Ukragroconsult / Ukrinform; prices and costs pending (Ukrstat, APK-Inform, Latifundist, USDA FAS GAIN Ukraine)",
+          "asOf": "2025",
+          "urls": [
+            "https://interfax.com.ua/news/economic/1131543.html",
+            "https://latifundist.com/en/novosti/68679-agrariyi-zibrali-376-mln-t-zerna-novogo-vrozhayu-kukurudzu-obmolotili-na-tretini-ploshch",
+            "https://ukrstat.gov.ua/operativ/menu/menu_e/cg.htm"
+          ],
+          "note": "UNVERIFIED, awaiting team review. Yield: Ukraine national average 2025 for wheat (4.55 t/ha), not regional. Indicative EXW quote Jan-Feb 2025: about 9,200-9,650 UAH/t (Ukragroconsult weekly series, https://ukragroconsult.com/en/grain-prices). Price (USD/t) and variableCost (USD/ha) are deliberately empty: no citable annual average price (Ukrstat table not read) and no per-crop cost table found; currency policy (USD vs UAH) is undecided. Do not convert or estimate without a source. (accessed 2026-11-15)",
+          "verified": false,
+          "verifiedBy": null
+        },
+        "spring_barley": {
+          "price": {
+            "value": null,
+            "unit": "$/t"
+          },
+          "variableCost": {
+            "value": null,
+            "unit": "$/ha"
+          },
+          "yieldRef": {
+            "value": 3.98,
+            "unit": "t/ha"
+          },
+          "source": "Yield: Interfax-Ukraine (Dec 2025) citing Ministry of Economy of Ukraine 2025 harvest results; price indications: Ukragroconsult / Ukrinform; prices and costs pending (Ukrstat, APK-Inform, Latifundist, USDA FAS GAIN Ukraine)",
+          "asOf": "2025",
+          "urls": [
+            "https://interfax.com.ua/news/economic/1131543.html",
+            "https://latifundist.com/en/novosti/68679-agrariyi-zibrali-376-mln-t-zerna-novogo-vrozhayu-kukurudzu-obmolotili-na-tretini-ploshch",
+            "https://ukrstat.gov.ua/operativ/menu/menu_e/cg.htm"
+          ],
+          "note": "UNVERIFIED, awaiting team review. Yield: Ukraine national average 2025 for barley (3.98 t/ha), not regional. No price quote found yet. Price (USD/t) and variableCost (USD/ha) are deliberately empty: no citable annual average price (Ukrstat table not read) and no per-crop cost table found; currency policy (USD vs UAH) is undecided. Do not convert or estimate without a source. (accessed 2026-11-15)",
+          "verified": false,
+          "verifiedBy": null
+        },
+        "winter_barley": {
+          "price": {
+            "value": null,
+            "unit": "$/t"
+          },
+          "variableCost": {
+            "value": null,
+            "unit": "$/ha"
+          },
+          "yieldRef": {
+            "value": 3.98,
+            "unit": "t/ha"
+          },
+          "source": "Yield: Interfax-Ukraine (Dec 2025) citing Ministry of Economy of Ukraine 2025 harvest results; price indications: Ukragroconsult / Ukrinform; prices and costs pending (Ukrstat, APK-Inform, Latifundist, USDA FAS GAIN Ukraine)",
+          "asOf": "2025",
+          "urls": [
+            "https://interfax.com.ua/news/economic/1131543.html",
+            "https://latifundist.com/en/novosti/68679-agrariyi-zibrali-376-mln-t-zerna-novogo-vrozhayu-kukurudzu-obmolotili-na-tretini-ploshch",
+            "https://ukrstat.gov.ua/operativ/menu/menu_e/cg.htm"
+          ],
+          "note": "UNVERIFIED, awaiting team review. Yield: Ukraine national average 2025 for barley (3.98 t/ha), not regional. No price quote found yet. Price (USD/t) and variableCost (USD/ha) are deliberately empty: no citable annual average price (Ukrstat table not read) and no per-crop cost table found; currency policy (USD vs UAH) is undecided. Do not convert or estimate without a source. (accessed 2026-11-15)",
+          "verified": false,
+          "verifiedBy": null
+        },
+        "corn": {
+          "price": {
+            "value": null,
+            "unit": "$/t"
+          },
+          "variableCost": {
+            "value": null,
+            "unit": "$/ha"
+          },
+          "yieldRef": {
+            "value": 7.13,
+            "unit": "t/ha"
+          },
+          "source": "Yield: Interfax-Ukraine (Dec 2025) citing Ministry of Economy of Ukraine 2025 harvest results; price indications: Ukragroconsult / Ukrinform; prices and costs pending (Ukrstat, APK-Inform, Latifundist, USDA FAS GAIN Ukraine)",
+          "asOf": "2025",
+          "urls": [
+            "https://interfax.com.ua/news/economic/1131543.html",
+            "https://latifundist.com/en/novosti/68679-agrariyi-zibrali-376-mln-t-zerna-novogo-vrozhayu-kukurudzu-obmolotili-na-tretini-ploshch",
+            "https://ukrstat.gov.ua/operativ/menu/menu_e/cg.htm"
+          ],
+          "note": "UNVERIFIED, awaiting team review. Yield: Ukraine national average 2025 for corn (7.13 t/ha), not regional. Indicative EXW quote Jan-Feb 2025: about 9,450-9,650 UAH/t (Ukragroconsult). Price (USD/t) and variableCost (USD/ha) are deliberately empty: no citable annual average price (Ukrstat table not read) and no per-crop cost table found; currency policy (USD vs UAH) is undecided. Do not convert or estimate without a source. (accessed 2026-11-15)",
+          "verified": false,
+          "verifiedBy": null
+        },
+        "winter_canola": {
+          "price": {
+            "value": null,
+            "unit": "$/t"
+          },
+          "variableCost": {
+            "value": null,
+            "unit": "$/ha"
+          },
+          "yieldRef": {
+            "value": 2.63,
+            "unit": "t/ha"
+          },
+          "source": "Yield: Interfax-Ukraine (Dec 2025) citing Ministry of Economy of Ukraine 2025 harvest results; price indications: Ukragroconsult / Ukrinform; prices and costs pending (Ukrstat, APK-Inform, Latifundist, USDA FAS GAIN Ukraine)",
+          "asOf": "2025",
+          "urls": [
+            "https://interfax.com.ua/news/economic/1131543.html",
+            "https://latifundist.com/en/novosti/68679-agrariyi-zibrali-376-mln-t-zerna-novogo-vrozhayu-kukurudzu-obmolotili-na-tretini-ploshch",
+            "https://ukrstat.gov.ua/operativ/menu/menu_e/cg.htm"
+          ],
+          "note": "UNVERIFIED, awaiting team review. Yield: Ukraine national average 2025 for rapeseed (2.63 t/ha), not regional. Processor bids reported by Ukrinform (Online Grain Exchange data, date not confirmed): 24,000-24,500 UAH/t. Price (USD/t) and variableCost (USD/ha) are deliberately empty: no citable annual average price (Ukrstat table not read) and no per-crop cost table found; currency policy (USD vs UAH) is undecided. Do not convert or estimate without a source. (accessed 2026-11-15)",
+          "verified": false,
+          "verifiedBy": null
+        },
+        "soybean": {
+          "price": {
+            "value": null,
+            "unit": "$/t"
+          },
+          "variableCost": {
+            "value": null,
+            "unit": "$/ha"
+          },
+          "yieldRef": {
+            "value": 2.37,
+            "unit": "t/ha"
+          },
+          "source": "Yield: Interfax-Ukraine (Dec 2025) citing Ministry of Economy of Ukraine 2025 harvest results; price indications: Ukragroconsult / Ukrinform; prices and costs pending (Ukrstat, APK-Inform, Latifundist, USDA FAS GAIN Ukraine)",
+          "asOf": "2025",
+          "urls": [
+            "https://interfax.com.ua/news/economic/1131543.html",
+            "https://latifundist.com/en/novosti/68679-agrariyi-zibrali-376-mln-t-zerna-novogo-vrozhayu-kukurudzu-obmolotili-na-tretini-ploshch",
+            "https://ukrstat.gov.ua/operativ/menu/menu_e/cg.htm"
+          ],
+          "note": "UNVERIFIED, awaiting team review. Yield: Ukraine national average 2025 for soybean (2.37 t/ha), not regional. No price quote found yet. Price (USD/t) and variableCost (USD/ha) are deliberately empty: no citable annual average price (Ukrstat table not read) and no per-crop cost table found; currency policy (USD vs UAH) is undecided. Do not convert or estimate without a source. (accessed 2026-11-15)",
+          "verified": false,
+          "verifiedBy": null
+        },
+        "sunflower": {
+          "price": {
+            "value": null,
+            "unit": "$/t"
+          },
+          "variableCost": {
+            "value": null,
+            "unit": "$/ha"
+          },
+          "yieldRef": {
+            "value": 1.91,
+            "unit": "t/ha"
+          },
+          "source": "Yield: Interfax-Ukraine (Dec 2025) citing Ministry of Economy of Ukraine 2025 harvest results; price indications: Ukragroconsult / Ukrinform; prices and costs pending (Ukrstat, APK-Inform, Latifundist, USDA FAS GAIN Ukraine)",
+          "asOf": "2025",
+          "urls": [
+            "https://interfax.com.ua/news/economic/1131543.html",
+            "https://latifundist.com/en/novosti/68679-agrariyi-zibrali-376-mln-t-zerna-novogo-vrozhayu-kukurudzu-obmolotili-na-tretini-ploshch",
+            "https://ukrstat.gov.ua/operativ/menu/menu_e/cg.htm"
+          ],
+          "note": "UNVERIFIED, awaiting team review. Yield: Ukraine national average 2025 for sunflower (1.91 t/ha), not regional. Processor bids reported by Ukrinform (Online Grain Exchange data, date not confirmed): 28,000-28,500 UAH/t. Price (USD/t) and variableCost (USD/ha) are deliberately empty: no citable annual average price (Ukrstat table not read) and no per-crop cost table found; currency policy (USD vs UAH) is undecided. Do not convert or estimate without a source. (accessed 2026-11-15)",
+          "verified": false,
+          "verifiedBy": null
         }
       }
     }
