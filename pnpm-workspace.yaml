@@ -1,6 +1,7 @@
 packages:
   - "apps/*"
   - "packages/*"
+  - "tools/demo-video"
 onlyBuiltDependencies:
   - "@prisma/engines"
   - "@swc/core"
