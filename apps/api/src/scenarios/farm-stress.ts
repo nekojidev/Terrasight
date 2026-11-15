@@ -14,17 +14,25 @@ export type StressFieldOutcome =
   | { kind: "skip"; reason: FarmStressSkip }
   | { kind: "run"; result: EngineResult; currency: string; runId?: string };
 
-/** Loss of one scenario in one season of 2022 weather: (typical − margin) per hectare, or null without 2022 data. */
+/**
+ * Loss of one scenario when 2022 weather repeats: (typical − margin) per hectare, averaged over the five planned
+ * seasons the weather could fall in. One season alone would mostly measure what happens to be planted that season
+ * (a fallow first season cannot lose anything), not how the plan stands up to such a year. Null without 2022 data.
+ */
 function lossPerHa(result: EngineResult, id: string): { loss: number; typical: number } | null {
   const s = [result.current, ...result.alternatives].find((x) => x.id === id);
-  const hit = s?.if2022BySeason?.[0];
-  if (!hit || !Number.isFinite(hit.margin) || !Number.isFinite(hit.typical)) return null;
-  return { loss: hit.typical - hit.margin, typical: hit.typical };
+  const hits = (s?.if2022BySeason ?? []).filter(
+    (h): h is { margin: number; typical: number } => !!h && Number.isFinite(h.margin) && Number.isFinite(h.typical),
+  );
+  if (!hits.length) return null;
+  const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
+  return { loss: mean(hits.map((h) => h.typical - h.margin)), typical: mean(hits.map((h) => h.typical)) };
 }
 
 /**
- * Farm stress test (T14): 2022 weather in the first planned season on every counted field; loss = typical margin −
- * margin in that season, times the area, summed for the current plan and for the recommended option (equal priorities).
+ * Farm stress test (T14, revised): 2022 weather in one of the five planned seasons of every counted field; loss =
+ * typical margin − margin of the hit season, averaged over the five placements, times the area, summed for the current
+ * plan and for the recommended option (equal priorities).
  * Pure: the caller supplies each field's stored default run (or the reason there is none).
  */
 export function farmStress(

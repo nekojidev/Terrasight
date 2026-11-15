@@ -57,11 +57,11 @@ function show(
 describe("FarmStressCard", () => {
   it("positive difference: says the recommended plan puts less at risk, shows both numbers and the method", () => {
     show(base);
-    expect(screen.getByText(/Stress test · if the weather of 2022 repeats in 2026/)).toBeTruthy();
+    expect(screen.getByText(/Stress test · if the weather of 2022 repeats in one of the seasons from 2026/)).toBeTruthy();
     expect(screen.getByText(/puts \$30,000 less at risk than the current plan/)).toBeTruthy();
     expect(screen.getByText("$80,000 at risk")).toBeTruthy();
     expect(screen.getByText("$50,000 at risk")).toBeTruthy();
-    expect(screen.getAllByText(/of \$400,000 typical margin for that season/).length).toBe(2);
+    expect(screen.getAllByText(/of \$400,000 typical margin for a season/).length).toBe(2);
     expect(screen.getByText(/20%/)).toBeTruthy();
     expect(screen.getByText("1 of 1 fields counted")).toBeTruthy();
     expect(screen.getByTestId("farm-stress-method").textContent).toMatch(/no new model/);

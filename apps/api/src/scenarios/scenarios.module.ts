@@ -14,6 +14,6 @@ import { YearSetsService } from "./year-sets.service.js";
   imports: [FieldsModule, CropPricesModule],
   controllers: [ScenariosController, RotationsOverviewController, FarmStressController],
   providers: [AiRotationsService, ScenarioInputsService, ScenarioPlansService, ScenariosService, YearSetsService, FarmStressService],
-  exports: [ScenariosService],
+  exports: [ScenariosService, YearSetsService],
 })
 export class ScenariosModule {}
