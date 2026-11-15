@@ -144,6 +144,19 @@ export class FieldsController {
     await this.fields.archive(req.workspaceId!, req.user!.id, fieldId(id));
   }
 
+  /** "This is still cropland": overrides an unsuitable land check (who and when are stored). */
+  @Put(":id/suitability-override")
+  @Requires("fields.write")
+  overrideSuitability(@Param("id") id: string, @Req() req: AuthedRequest) {
+    return this.fields.overrideSuitability(req.workspaceId!, req.user!.id, fieldId(id));
+  }
+
+  @Delete(":id/suitability-override")
+  @Requires("fields.write")
+  clearSuitabilityOverride(@Param("id") id: string, @Req() req: AuthedRequest) {
+    return this.fields.clearSuitabilityOverride(req.workspaceId!, req.user!.id, fieldId(id));
+  }
+
   @Get(":id/gather")
   @Requires("fields.read")
   gatherStatus(@Param("id") id: string, @Req() req: AuthedRequest) {

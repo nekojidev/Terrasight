@@ -30,6 +30,7 @@ const FieldMap = dynamic(() => import("@/components/FieldMap").then((m) => m.Fie
   loading: () => <MapSkeleton className="h-[520px]" />,
 });
 import { api, ApiError } from "@/lib/api";
+import { LandPreviewWarning, type LandView } from "@/components/LandSuitability";
 import { parseCoordinates, ringFromFile } from "@/lib/upload";
 
 interface Preview {
@@ -39,6 +40,8 @@ interface Preview {
   hasRotationLibrary: boolean;
   tier: "A" | "B" | "C";
   sources: string[];
+  /** Quick land check (null = could not be checked): warns before saving. */
+  suitability?: LandView | null;
 }
 
 const HA_TO_AC = 2.471054;
@@ -429,6 +432,7 @@ export function AddFieldClient({
               <p className="text-small text-ink-2">{a(`asTier_${preview.tier}`)}</p>
             </div>
           )}
+          <LandPreviewWarning suitability={preview?.suitability} />
           {preview && !preview.hasRotationLibrary && (
             <p className="text-small text-week">{a("noRotationLibrary")}</p>
           )}

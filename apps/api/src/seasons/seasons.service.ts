@@ -5,6 +5,7 @@ import { ENV, type Env } from "../config/config.js";
 import { PrismaService } from "../db/prisma.service.js";
 import type { ValueSource } from "../generated/prisma/enums.js";
 import { ProblemException } from "../http/problem.js";
+import { assertNotBlocked } from "../suitability/suitability.js";
 
 /** data/crop-calendar.json: typical sowing dates per region and crop (rules of thumb, `verify: true`). */
 interface CropCalendar {
@@ -177,9 +178,10 @@ export class SeasonsService {
   ): Promise<SeasonRecordView> {
     const field = await this.prisma.db.field.findFirst({
       where: { id: fieldId, workspaceId, archivedAt: null },
-      select: { id: true },
+      select: { id: true, suitability: true, suitabilityOverride: true },
     });
     if (!field) throw new ProblemException(404, "not-found");
+    if (input.crop) assertNotBlocked(field.suitability, field.suitabilityOverride); // choosing a crop on unsuitable land
     const date = (v: string | null | undefined) =>
       v === undefined ? undefined : v === null ? null : new Date(`${v}T00:00:00Z`);
     const src = (k: "crop" | "sowingDate" | "emergenceDate" | "tillage", has: boolean): ValueSource =>

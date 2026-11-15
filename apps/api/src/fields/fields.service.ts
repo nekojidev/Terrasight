@@ -1,7 +1,10 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
+import { ModuleRef } from "@nestjs/core";
+import { fetchLatestLandCover, type SoilSummary } from "@terrasight/sources";
 import { ENV, type Env } from "../config/config.js";
 import { EventKeys } from "@terrasight/shared";
 import { PrismaService } from "../db/prisma.service.js";
+import { Prisma } from "../generated/prisma/client.js";
 import type { Irrigation } from "../generated/prisma/enums.js";
 import { GeoService, type GeoJsonPolygonal } from "../geo/geo.service.js";
 import { thumbPath } from "../geo/thumb.js";
@@ -10,6 +13,7 @@ import { OutboxService } from "../messaging/outbox.service.js";
 import { eventRow, jobRow } from "../messaging/outbox.js";
 import { QUEUES } from "../messaging/topology.js";
 import { SourcesService } from "../sources/sources.service.js";
+import { loadSuitabilityConfig, previewSuitability, suitabilityView } from "../suitability/suitability.js";
 
 export interface CreateFieldInput {
   name: string;
@@ -23,6 +27,9 @@ const IRRIGATION: Record<CreateFieldInput["irrigated"], Irrigation> = {
   unknown: "unknown",
 };
 
+/** Time budget of the preview's quick land check. */
+const PREVIEW_CHECK_MS = 12_000;
+
 @Injectable()
 export class FieldsService {
   constructor(
@@ -31,7 +38,38 @@ export class FieldsService {
     private readonly sources: SourcesService,
     private readonly outbox: OutboxService,
     @Inject(ENV) private readonly env: Env,
+    @Optional() private readonly moduleRef?: ModuleRef,
   ) {}
+
+  /**
+   * The add-field preview's quick land check (land suitability): US = the SSURGO land capability class, elsewhere the
+   * latest season of the 10 m land cover. A few seconds at most; any failure just means "unknown", never an error.
+   */
+  private async quickSuitability(field: {
+    polygons: number[][][][];
+    centroid: { lon: number; lat: number };
+    bbox: [number, number, number, number];
+    country: string | null;
+  }) {
+    try {
+      const ctx = () => ({
+        signal: AbortSignal.timeout(PREVIEW_CHECK_MS),
+        fetch,
+        today: new Date().toISOString().slice(0, 10),
+      });
+      const cfg = loadSuitabilityConfig(this.env.DATA_DIR);
+      if (field.country === "US") {
+        const ssurgo = this.sources.adapter("ssurgo");
+        const r = ssurgo ? await ssurgo.fetch(field, ctx()) : null;
+        return previewSuitability({ ssurgo: (r?.payload as SoilSummary | null) ?? null }, cfg);
+      }
+      if (field.country === null) return previewSuitability({}, cfg);
+      return previewSuitability({ landCover: await fetchLatestLandCover(field, ctx()) }, cfg);
+    } catch (e) {
+      new Logger(FieldsService.name).warn(`preview land check skipped: ${(e as Error).message}`);
+      return null;
+    }
+  }
 
   /** Design 13 "what we'll find": area, county, region and tier before saving (S-02.01). */
   async preview(geometry: GeoJsonPolygonal) {
@@ -47,6 +85,8 @@ export class FieldsService {
       hasRotationLibrary: p.regionId !== null,
       tier: p.tier,
       sources: this.sources.applicable(field).map((a) => a.id),
+      /** Quick land suitability (null = could not be checked): the user is warned before saving. */
+      suitability: await this.quickSuitability(field),
     };
   }
 
@@ -133,11 +173,14 @@ export class FieldsService {
         lon: number;
         lat: number;
         gather_status: string | null;
+        suitability_status: string | null;
+        suitability_overridden: boolean;
       }>
     >`
       SELECT f.id, f.name, f.alias_no, f.area_ha, f.county_name, f.country, f.admin_code, f.region_id, f.tier, f.irrigation,
              ST_X(f.centroid) AS lon, ST_Y(f.centroid) AS lat,
-             (SELECT status FROM gather_jobs g WHERE g.field_id = f.id ORDER BY started_at DESC LIMIT 1) AS gather_status
+             (SELECT status FROM gather_jobs g WHERE g.field_id = f.id ORDER BY started_at DESC LIMIT 1) AS gather_status,
+             f.suitability->>'status' AS suitability_status, (f.suitability_override IS NOT NULL) AS suitability_overridden
       FROM fields f WHERE f.workspace_id = ${workspaceId}::uuid AND f.archived_at IS NULL
         AND (${after}::int IS NULL OR f.alias_no > ${after}::int)
       ORDER BY f.alias_no LIMIT ${limit === null ? null : limit + 1}::int`;
@@ -155,6 +198,8 @@ export class FieldsService {
       irrigation: r.irrigation,
       centroid: { lon: r.lon, lat: r.lat },
       gatherStatus: r.gather_status,
+      suitabilityStatus: r.suitability_status,
+      suitabilityOverridden: r.suitability_overridden,
     }));
     if (!paged) return items;
     return { items, nextCursor: hasMore ? String(items.at(-1)!.aliasNo) : null };
@@ -177,6 +222,8 @@ export class FieldsService {
         slope_pct: number | null;
         geojson: string;
         thumb_geojson: string | null;
+        suitability: unknown;
+        suitability_override: unknown;
         lon: number;
         lat: number;
         created_at: Date;
@@ -184,7 +231,7 @@ export class FieldsService {
     >`
       SELECT id, name, alias_no, area_ha, county_name, country, admin_code, region_id, tier, irrigation, irrigation_source, slope_pct,
              ST_AsGeoJSON(geom, 7) AS geojson,
-             thumb_geojson,
+             thumb_geojson, suitability, suitability_override,
              ST_X(centroid) AS lon, ST_Y(centroid) AS lat, created_at
       FROM fields WHERE id = ${fieldId}::uuid AND workspace_id = ${workspaceId}::uuid AND archived_at IS NULL`;
     const r = rows[0];
@@ -204,6 +251,7 @@ export class FieldsService {
       slopePct: r.slope_pct,
       geometry: JSON.parse(r.geojson) as unknown,
       thumb: thumbPath(r.thumb_geojson),
+      suitability: suitabilityView(r.suitability, r.suitability_override),
       centroid: { lon: r.lon, lat: r.lat },
       createdAt: r.created_at,
     };
@@ -228,6 +276,59 @@ export class FieldsService {
       data: { workspaceId, userId, action: "field.update", target: fieldId },
     });
     return this.get(workspaceId, fieldId);
+  }
+
+  /**
+   * "This is still cropland": an agronomist overrides an unsuitable verdict (stored with who and when). Everything
+   * then works as on any other field; a field check starts so the first recommendations do not wait for 06:00.
+   */
+  async overrideSuitability(workspaceId: string, userId: string, fieldId: string) {
+    await this.assertField(workspaceId, fieldId);
+    const user = await this.prisma.system.user.findUnique({
+      where: { id: userId },
+      select: { name: true, email: true },
+    });
+    const override = { userId, userName: user?.name ?? user?.email ?? null, at: new Date().toISOString() };
+    await this.prisma.db.field.updateMany({
+      where: { id: fieldId, workspaceId },
+      data: { suitabilityOverride: override },
+    });
+    await this.prisma.db.auditLog.create({
+      data: { workspaceId, userId, action: "field.suitability_override", target: fieldId },
+    });
+    await this.recheck(workspaceId, fieldId);
+    return this.get(workspaceId, fieldId);
+  }
+
+  async clearSuitabilityOverride(workspaceId: string, userId: string, fieldId: string) {
+    await this.assertField(workspaceId, fieldId);
+    await this.prisma.db.field.updateMany({
+      where: { id: fieldId, workspaceId },
+      data: { suitabilityOverride: Prisma.DbNull },
+    });
+    await this.prisma.db.auditLog.create({
+      data: { workspaceId, userId, action: "field.suitability_override_clear", target: fieldId },
+    });
+    await this.recheck(workspaceId, fieldId);
+    return this.get(workspaceId, fieldId);
+  }
+
+  private async recheck(workspaceId: string, fieldId: string): Promise<void> {
+    try {
+      const { AnalysisService } = await import("../analysis/analysis.service.js");
+      const { localDate } = await import("../analysis/scheduler.js");
+      const analysis = this.moduleRef?.get(AnalysisService, { strict: false });
+      if (!analysis) return;
+      const ws = await this.prisma.system.workspace.findUniqueOrThrow({
+        where: { id: workspaceId },
+        select: { timeZone: true },
+      });
+      await analysis.start(workspaceId, "manual", null, localDate(ws.timeZone), [fieldId]);
+    } catch (e) {
+      new Logger(FieldsService.name).warn(
+        `check after suitability change for ${fieldId} skipped: ${(e as Error).message}`,
+      );
+    }
   }
 
   async archive(workspaceId: string, userId: string, fieldId: string): Promise<void> {

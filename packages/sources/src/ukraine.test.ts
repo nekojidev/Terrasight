@@ -91,7 +91,7 @@ describe("land cover", () => {
   });
 
   it("counts the Crops class (5) among valid pixels, ignoring no-data and clouds", () => {
-    expect(cropShare([5, 5, 5, 7, 0, 10])).toEqual({ cropShare: 0.75, n: 4 });
+    expect(cropShare([5, 5, 5, 7, 0, 10])).toEqual({ cropShare: 0.75, n: 4, shares: { crops: 0.75, built: 0.25 } });
     expect(cropShare([0, 0, 10])).toBeNull();
   });
 });
@@ -113,6 +113,7 @@ describe("SoilGrids", () => {
         layer("silt", [450, 450, 450, 350, 350], 10),
         layer("soc", [200, 150, 100, 50, 30], 10),
         layer("phh2o", [65, 66, 68, 70, 72], 10),
+        layer("cfvo", [100, 100, 100, 200, 300], 10),
       ],
     },
   };
@@ -121,6 +122,7 @@ describe("SoilGrids", () => {
     const s = summariseSoilGrids(json);
     expect(s.clayPct).toBe(32); // (25×5 + 25×10 + 25×15 + 35×30 + 35×40) / 100
     expect(s.sandPct).toBe(30);
+    expect(s.cfvoPct).toBe(21); // (10×5 + 10×10 + 10×15 + 20×30 + 30×40) / 100
     expect(s.siltPct).toBe(38); // (45×30 + 35×70) / 100
     expect(s.ocGPerKg).toBe(13.3); // (20×5 + 15×10 + 10×15) / 30
     expect(s.ph).toBe(6.7); // (6.5×5 + 6.6×10 + 6.8×15) / 30

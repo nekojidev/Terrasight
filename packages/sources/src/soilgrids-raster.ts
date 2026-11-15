@@ -119,6 +119,8 @@ export async function parseWindow(buffer: ArrayBuffer, noData: (v: number) => bo
 }
 
 export const PROPERTIES = ["clay", "sand", "silt", "soc", "phh2o"] as const;
+/** Read after the five above, best effort: a missing coarse-fragment layer never fails the soil. */
+export const EXTRA_PROPERTIES = ["cfvo"] as const;
 export const DEPTHS = ["0-5cm", "5-15cm", "15-30cm", "30-60cm", "60-100cm"] as const;
 export type SoilProperty = (typeof PROPERTIES)[number];
 
@@ -207,16 +209,26 @@ export async function readRasterSoil(
   field: FieldGeometry,
   readWindow: (prop: string, depth: string, centre: [number, number]) => Promise<LayerWindow>,
   concurrency = 6,
+  withExtra = true,
 ): Promise<RasterSoil> {
   const centre = ighForward(field.centroid.lon, field.centroid.lat);
   const polygons = field.polygons.map((poly) => poly.map((ring) => ring.map(([lon, lat]) => ighForward(lon!, lat!))));
   const jobs = PROPERTIES.flatMap((prop) => DEPTHS.map((depth) => ({ prop, depth })));
-  const stats = await mapLimit(jobs, concurrency, async ({ prop, depth }) => ({
+  const stats: Array<{ prop: string; depth: string; stat: WindowStat }> = await mapLimit(jobs, concurrency, async ({ prop, depth }) => ({
     prop,
     depth,
     stat: windowMean(await readWindow(prop, depth, centre), polygons, centre),
   }));
-  const layers: RasterSoil["layers"] = PROPERTIES.map((name) => ({
+  const extraJobs = withExtra ? EXTRA_PROPERTIES.flatMap((prop) => DEPTHS.map((depth) => ({ prop, depth }))) : [];
+  const extra = await mapLimit(extraJobs, concurrency, async ({ prop, depth }) => {
+    try {
+      return { prop, depth, stat: windowMean(await readWindow(prop, depth, centre), polygons, centre) };
+    } catch {
+      return { prop, depth, stat: { mean: null, radiusM: 0, pixels: 0 } };
+    }
+  });
+  stats.push(...extra);
+  const layers: RasterSoil["layers"] = [...PROPERTIES, ...(withExtra ? EXTRA_PROPERTIES : [])].map((name) => ({
     name,
     unit_measure: { d_factor: 10 },
     depths: stats

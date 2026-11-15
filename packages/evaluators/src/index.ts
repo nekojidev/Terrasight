@@ -24,6 +24,22 @@ export {
   type UrgencyItem,
 } from "./urgency.js";
 export {
+  blocksCrops,
+  landSuitability,
+  lccNotSuitedShare,
+  meanLandCover,
+  NON_FARM_CLASSES,
+  type LandCoverClass,
+  type LandSuitability,
+  type LandSuitabilityConfig,
+  type LccShare,
+  type SuitabilityInputs,
+  type SuitabilityOverride,
+  type SuitabilityReason,
+  type SuitabilityStatus,
+  type SuitabilityThreshold,
+} from "./suitability.js";
+export {
   OPERATIONS,
   computeWorkWindows,
   deltaT,

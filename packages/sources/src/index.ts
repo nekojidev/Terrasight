@@ -10,7 +10,7 @@ export {
   type DailyWeather,
   type PowerParameter,
 } from "./power.js";
-export { ssurgo, summariseSoil, type SoilSummary } from "./ssurgo.js";
+export { ssurgo, summariseSoil, type CapabilityShare, type SoilSummary } from "./ssurgo.js";
 export { modis, type NdviPoint, type NdviSeries } from "./modis.js";
 export { dem, slopes, type Terrain } from "./dem.js";
 export {
@@ -27,12 +27,15 @@ export { soilFromTexture, soilSummaryFromGrids, textureClass } from "./texture.j
 export {
   cropland,
   cropShare,
+  fetchLatestLandCover,
+  landCoverFromCdl,
   utmProj,
   CROPLAND_FIRST_YEAR,
   CROPLAND_MIN_SHARE,
   NOT_CROPLAND_SHARE,
   type CroplandHistory,
   type CroplandSeason,
+  type LandCoverClass,
 } from "./landcover.js";
 export { wapor, waporTile, waporUrl, toEtSeries, monthRange, WAPOR_FIRST_YEAR } from "./wapor.js";
 export { openetAdapter, type EtSeries } from "./openet.js";

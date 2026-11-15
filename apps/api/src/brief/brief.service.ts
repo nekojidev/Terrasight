@@ -7,10 +7,19 @@ import { PrismaService } from "../db/prisma.service.js";
 import { thumbPath } from "../geo/thumb.js";
 import { ProblemException } from "../http/problem.js";
 import { RecommendationsService } from "../recommendations/recommendations.service.js";
+import { suitabilityView } from "../suitability/suitability.js";
 
 const GROUP_RANK: Record<Urgency, number> = { urgent: 0, this_week: 1, all_good: 2 };
 /** Levels that make an item worth a row; low / none count as "fine" for the field. */
 const ACTIONABLE = new Set(["high", "moderate", "unknown"]);
+
+/** Chip for the brief's field cards: only the statuses that need attention. */
+export function landChip(stored: unknown, override: unknown): "unsuitable" | "limited" | "overridden" | null {
+  const v = suitabilityView(stored, override);
+  if (!v) return null;
+  if (v.status === "unsuitable") return v.override ? "overridden" : "unsuitable";
+  return v.status === "limited" ? "limited" : null;
+}
 
 /**
  * The morning brief in one call (S-04.02, RFC §10.5): groups, hero, one item per field with "+N", All good chips with
@@ -44,10 +53,12 @@ export class BriefService {
           lat: number;
           lon: number;
           thumb_geojson: string | null;
+          suitability: unknown;
+          suitability_override: unknown;
         }>
       >`
         SELECT id, name, alias_no, area_ha, county_name, admin_code, ST_Y(centroid) AS lat, ST_X(centroid) AS lon,
-          thumb_geojson
+          thumb_geojson, suitability, suitability_override
         FROM fields WHERE workspace_id = ${workspaceId}::uuid AND archived_at IS NULL ORDER BY alias_no`,
       this.prisma.system.recommendation.findMany({
         where: { workspaceId, status: "open", field: { archivedAt: null } },
@@ -142,6 +153,8 @@ export class BriefService {
           county: f.county_name,
           seasons: strip(f.id),
           thumb: thumbs.get(f.id) ?? null,
+          /** Land suitability chip: "unsuitable" (not overridden) or "limited"; null when fine or unknown. */
+          land: landChip(f.suitability, f.suitability_override),
           // A planning item under All good shows as "Plan: … · by <date>" (RFC §10.5).
           plan:
             t && t.actionable && t.planning ? { id: t.id, title: t.text.title, deadline: t.deadline } : null,

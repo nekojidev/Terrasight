@@ -430,6 +430,7 @@ const collection = {
             `pm.test("area about 19 ha", () => pm.expect(p.areaHa).to.be.within(17, 21));`,
             `pm.test("US sources", () => pm.expect(p.sources).to.include.members(["power", "ssurgo", "cdl"]));`,
             `pm.test("tier", () => pm.expect(["A", "B", "C"]).to.include(p.tier));`,
+            `pm.test("quick land check: null (could not be checked) or a status with plain reasons", () => { pm.expect(p).to.have.property("suitability"); if (p.suitability) { pm.expect(["suitable", "limited", "unsuitable", "unknown"]).to.include(p.suitability.status); pm.expect(p.suitability.reasons).to.be.an("array"); } });`,
           ],
         }),
         req("Add the field (gather starts in the same transaction)", "POST", "/api/w/{{ws}}/fields", {
@@ -484,6 +485,24 @@ const collection = {
           tests: [
             status(200),
             `const h = pm.response.json(); pm.test("shape", () => { pm.expect(h.seasons).to.be.an("array"); pm.expect(h.cropNames.corn.uk).to.be.a("string"); });`,
+          ],
+        }),
+        req("History and the field carry the land suitability (null until the history is built)", "GET", "/api/w/{{ws}}/fields/{{fieldId}}/history", {
+          tests: [
+            status(200),
+            `const h = pm.response.json(); pm.test("suitability key", () => { pm.expect(h).to.have.property("suitability"); if (h.suitability) { pm.expect(["suitable", "limited", "unsuitable", "unknown"]).to.include(h.suitability.status); pm.expect(h.suitability.reasons).to.be.an("array"); pm.expect(h.suitability.blocked).to.be.a("boolean"); } });`,
+          ],
+        }),
+        req("An agronomist marks the land as cropland (override stores who and when)", "PUT", "/api/w/{{ws}}/fields/{{fieldId}}/suitability-override", {
+          tests: [
+            status(200),
+            `const f = pm.response.json(); pm.test("override stored", () => { pm.expect(f.id).to.eql(pm.collectionVariables.get("fieldId")); if (f.suitability) { pm.expect(f.suitability.override.userId).to.be.a("string"); pm.expect(f.suitability.override.at).to.be.a("string"); pm.expect(f.suitability.blocked).to.eql(false); } });`,
+          ],
+        }),
+        req("The override can be removed", "DELETE", "/api/w/{{ws}}/fields/{{fieldId}}/suitability-override", {
+          tests: [
+            status(200),
+            `const f = pm.response.json(); pm.test("override cleared", () => { if (f.suitability) pm.expect(f.suitability.override).to.eql(null); });`,
           ],
         }),
         req(

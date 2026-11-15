@@ -1,5 +1,6 @@
 "use client";
 
+import { LandChip } from "@/components/LandSuitability";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Button,
@@ -65,6 +66,8 @@ interface Brief {
     thumb?: string | null;
     plan: { id: string; title: Localised; deadline: string | null } | null;
     unknown: { id: string; title: Localised } | null;
+    /** Land suitability chip: only for land that is not farmland (or limited / marked cropland anyway). */
+    land?: "unsuitable" | "limited" | "overridden" | null;
   }>;
   rail: {
     today: { fields: number; checked: number | null; newRecommendations: number | null; urgent: number };
@@ -472,6 +475,7 @@ export function Brief({
                       </>
                     )}
                     {g.unknown && <Chip tone="neutral">{t("unknownChip")}</Chip>}
+                    <LandChip status={g.land} />
                   </Link>
                 </li>
               ))}

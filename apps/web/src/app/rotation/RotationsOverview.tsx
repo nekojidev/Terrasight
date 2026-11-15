@@ -4,6 +4,7 @@ import { Chip, InfoHint, SeasonStrip, seasonHintText } from "@terrasight/ui";
 import { ChevronRight, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
+import { LandChip, type LandView } from "@/components/LandSuitability";
 
 type Localised = { en: string; uk: string };
 export interface Overview {
@@ -17,6 +18,7 @@ export interface Overview {
     county: string | null;
     irrigation: string;
     hasLibrary: boolean;
+    suitability?: LandView | null;
     recent: Array<{ season: number; crop: string }>;
     plan: { crop: string; rotationId: string | null } | null;
     recommendation: {
@@ -64,7 +66,10 @@ export function RotationsOverview({ overview, units }: { overview: Overview; uni
                 className="focus-ring flex flex-wrap items-center gap-4 p-4 hover:bg-muted"
               >
                 <span className="min-w-48 flex-1">
-                  <span className="block text-body font-semibold text-ink">{f.name}</span>
+                  <span className="flex flex-wrap items-center gap-2 text-body font-semibold text-ink">
+                    {f.name}
+                    <LandChip status={f.suitability?.status} overridden={Boolean(f.suitability?.override)} />
+                  </span>
                   <span className="block text-small text-ink-2">
                     {[area, f.county].filter(Boolean).join(" · ")}
                   </span>

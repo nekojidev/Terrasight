@@ -24,6 +24,7 @@ import { JobConsumer } from "../messaging/consumer.js";
 import { eventRow, jobRow } from "../messaging/outbox.js";
 import { OutboxService } from "../messaging/outbox.service.js";
 import { QUEUES } from "../messaging/topology.js";
+import { compute as computeSuitability, loadSuitabilityConfig, suitabilityView } from "../suitability/suitability.js";
 import {
   applyCroplandMask,
   bareMonths,
@@ -82,7 +83,7 @@ export class HistoryService extends JobConsumer<BuildJob> implements OnModuleIni
     const { fieldId, jobId, provisional } = env.data;
     const field = await this.prisma.system.field.findUnique({
       where: { id: fieldId },
-      select: { id: true, workspaceId: true, regionId: true, irrigationSource: true },
+      select: { id: true, workspaceId: true, regionId: true, irrigation: true, irrigationSource: true, slopePct: true },
     });
     if (!field) return;
     const r = await this.results(jobId);
@@ -125,6 +126,24 @@ export class HistoryService extends JobConsumer<BuildJob> implements OnModuleIni
       })),
     ];
     const baseline = matchBaseline(merged, this.lib, field.regionId);
+    // Land suitability (can the field be cropped at all?) from what was gathered; failures leave it as it was.
+    let suitability: Prisma.InputJsonValue | undefined;
+    try {
+      suitability = computeSuitability(
+        {
+          irrigated: field.irrigation === "irrigated" ? true : field.irrigation === "dryland" ? false : null,
+          slopePct: field.slopePct,
+          ssurgo: payload<SoilSummary>("ssurgo"),
+          grids,
+          cdl,
+          cropland,
+          ndviPeaks: stats.map((x) => x.ndviPeak),
+        },
+        loadSuitabilityConfig(this.env.DATA_DIR),
+      ) as unknown as Prisma.InputJsonValue;
+    } catch (e) {
+      this.log.warn(`land suitability for ${fieldId} not computed: ${(e as Error).message}`);
+    }
     const inputsHash = createHash("sha256")
       .update(
         JSON.stringify(
@@ -174,6 +193,7 @@ export class HistoryService extends JobConsumer<BuildJob> implements OnModuleIni
         baselineMatch: baseline as unknown as Prisma.InputJsonValue,
       };
       await tx.fieldHistory.upsert({ where: { fieldId }, create: { fieldId, ...data }, update: data });
+      if (suitability) await tx.field.update({ where: { id: fieldId }, data: { suitability } });
       // Detection fills in only what nobody confirmed (RFC §6.2).
       if (field.irrigationSource !== "confirmed" && irrigation.status !== "unknown") {
         await tx.field.update({
@@ -233,7 +253,15 @@ export class HistoryService extends JobConsumer<BuildJob> implements OnModuleIni
   async get(workspaceId: string, fieldId: string) {
     const field = await this.prisma.db.field.findFirst({
       where: { id: fieldId, workspaceId, archivedAt: null },
-      select: { id: true, irrigation: true, irrigationSource: true, adminCode: true, regionId: true },
+      select: {
+        id: true,
+        irrigation: true,
+        irrigationSource: true,
+        adminCode: true,
+        regionId: true,
+        suitability: true,
+        suitabilityOverride: true,
+      },
     });
     if (!field) throw new ProblemException(404, "not-found");
     const [history, crops] = await Promise.all([
@@ -241,6 +269,7 @@ export class HistoryService extends JobConsumer<BuildJob> implements OnModuleIni
       this.prisma.db.cropSeason.findMany({ where: { fieldId }, orderBy: { season: "asc" } }),
     ]);
     return {
+      suitability: suitabilityView(field.suitability, field.suitabilityOverride),
       built: history ? { at: history.builtAt, provisional: history.provisional } : null,
       seasons: crops.map((c) => ({
         season: c.season,

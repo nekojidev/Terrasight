@@ -21,11 +21,14 @@ import { api } from "@/lib/api";
 import { CaveatNotes } from "@/components/CaveatNotes";
 import { CropPricesEditor } from "@/components/CropPricesEditor";
 import { FieldTabs } from "../Overview";
+import { LandBanner, LandBlocked, type LandView } from "@/components/LandSuitability";
 
 type Localised = { en: string; uk: string };
 interface RunView {
   id: string | null;
   noLibrary: boolean;
+  /** Unsuitable land (not overridden): nothing was simulated, the page explains why. */
+  landUnsuitable?: boolean;
   firstSeason: number;
   regionVerify: boolean;
   missingPrices: string[];
@@ -200,6 +203,13 @@ export function RotationClient({
     placeholderData: (prev) => prev,
   });
 
+  // Land suitability comes with the field (same query as the field page), so the override refreshes both.
+  const land = useQuery({
+    queryKey: ["field", workspaceId, fieldId, "info"],
+    queryFn: () => api<{ suitability?: LandView | null }>(`/api/w/${workspaceId}/fields/${fieldId}`),
+  });
+  const suitability = land.data?.suitability ?? null;
+
   const agro = run.data?.mode === "agronomy";
   const cur = run.data?.currency ?? "USD";
   const sym = cur === "UAH" ? "₴" : "$";
@@ -257,6 +267,21 @@ export function RotationClient({
 
   if (run.isPending) return <Skeleton label={t("rotLoading")} />;
   if (run.isError || !run.data) return <p className="text-body text-urgent">{t("errGeneric")}</p>;
+  if (run.data.landUnsuitable || suitability?.blocked)
+    return (
+      <div className="flex flex-col gap-6">
+        <header className="flex flex-col gap-3">
+          <div className="flex items-center gap-4">
+            <FieldThumb name={fieldName} outline={thumb} crop={crop} size={56} />
+            <h1 className="text-h1 text-ink">{fieldName}</h1>
+          </div>
+          <FieldTabs fieldId={fieldId} active={2} />
+        </header>
+        {suitability && (
+          <LandBlocked workspaceId={workspaceId} fieldId={fieldId} suitability={suitability} canEdit={canSave} />
+        )}
+      </div>
+    );
   if (run.data.noLibrary)
     return (
       <p className="rounded-card border border-line bg-surface p-6 text-body text-ink-2">
@@ -445,6 +470,7 @@ export function RotationClient({
         </div>
         <FieldTabs fieldId={fieldId} active={2} />
       </header>
+      <LandBanner suitability={suitability} fieldId={fieldId} />
       {agro && (
         <section
           aria-labelledby="agro-status"

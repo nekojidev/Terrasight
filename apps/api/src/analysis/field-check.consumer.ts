@@ -14,6 +14,7 @@ import { AiRecommendationsService } from "./ai-recommendations.service.js";
 import { AlertsService } from "./alerts.service.js";
 import { AnalysisService, STALE_RUNNING_MS, type FieldCheckJob } from "./analysis.service.js";
 import { EvalInputsService } from "./eval-inputs.service.js";
+import { fieldBlocked } from "../suitability/suitability.js";
 import { ScenariosService } from "../scenarios/scenarios.service.js";
 
 const LIVE: RecStatus[] = ["open", "accepted", "snoozed", "in_report", "dismissed"];
@@ -91,6 +92,16 @@ export class FieldCheckConsumer extends JobConsumer<FieldCheckJob> implements On
       select: { asOf: true },
     });
     const asOf = run.asOf.toISOString().slice(0, 10);
+    // Unsuitable land (not overridden): no crop recommendations. Every item the field has (pest, disease, frost and
+    // water-stress alerts all need a crop, rotation, watch-items) leaves the brief; accepted / reported ones stay.
+    if (await fieldBlocked(this.prisma.system, fieldId)) {
+      await this.prisma.system.recommendation.updateMany({
+        where: { fieldId, status: { in: ["open", "snoozed"] } },
+        data: { status: "superseded" },
+      });
+      this.logger.log(`field ${fieldId}: land is unsuitable for crops, crop evaluators skipped`);
+      return { status: "ok" as const, dataDate: null, error: null, created: 0 };
+    }
     const built = await this.inputsService.build(workspaceId, fieldId, asOf);
     const { inputs, stage, due, dataDate, problems } = built;
     const models = this.lib.enabledModels;

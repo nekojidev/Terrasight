@@ -54,10 +54,12 @@ export class FieldsOverviewController {
           lon: number;
           lat: number;
           thumb_geojson: string | null;
+          suitability_status: string | null;
+          suitability_overridden: boolean;
         }>
       >`
         SELECT id, name, area_ha, county_name, admin_code, irrigation, ST_X(centroid) AS lon, ST_Y(centroid) AS lat,
-          thumb_geojson
+          thumb_geojson, suitability->>'status' AS suitability_status, (suitability_override IS NOT NULL) AS suitability_overridden
         FROM fields WHERE workspace_id = ${ws}::uuid AND archived_at IS NULL ORDER BY alias_no`,
     ]);
     const codes = [...new Set(fields.map((r) => r.admin_code).filter((c): c is string => Boolean(c)))];
@@ -87,6 +89,9 @@ export class FieldsOverviewController {
         areaHa: f.area_ha,
         irrigation: f.irrigation,
         lastCropId: lastCrop.get(f.id) ?? null,
+        /** Land suitability status ("unsuitable" / "limited" get a chip) and whether an agronomist overrode it. */
+        suitabilityStatus: f.suitability_status,
+        suitabilityOverridden: f.suitability_overridden,
         lastCrop: this.cropName(lastCrop.get(f.id) ?? null),
         urgency: (item?.urgency ?? "all_good") as keyof typeof rank,
         next: item

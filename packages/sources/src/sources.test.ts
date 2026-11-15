@@ -92,6 +92,30 @@ describe("SSURGO", () => {
     expect(s.awsMm).toBe(190);
     expect(s.hydrologicGroup).toBe("B");
     expect(s.mapUnits[0]).toEqual({ mukey: "1", name: "Ulysses silt loam", share: 0.75 });
+    expect(s.capability).toBeUndefined(); // no capability columns queried: nothing is invented
+    expect(s.bedrockDepthCm).toBeNull();
+  });
+
+  it("area-weights the NRCS land capability class (non-irrigated and irrigated) and bedrock depth", () => {
+    const areas = [
+      ["mukey", "area"],
+      ["1", "3"],
+      ["2", "1"],
+    ];
+    const attrs = [
+      ["mukey", "muname", "aws0150wta", "hydgrpdcd", "niccdcd", "iccdcd", "brockdepmin"],
+      ["1", "Rock outcrop", "2", "D", "7", "", "15"],
+      ["2", "Ulysses silt loam", "20", "B", "2", "1", ""],
+    ];
+    const s = summariseSoil(areas, attrs);
+    expect(s.capability).toEqual({
+      nonIrrigated: [
+        { cls: 2, share: 0.25 },
+        { cls: 7, share: 0.75 },
+      ],
+      irrigated: [{ cls: 1, share: 0.25 }],
+    });
+    expect(s.bedrockDepthCm).toBe(15);
   });
 });
 

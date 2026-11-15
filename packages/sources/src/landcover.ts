@@ -1,3 +1,4 @@
+import type { CdlHistory } from "./cdl.js";
 import { bboxOf, geometryHash, projectPolygons } from "./geo.js";
 import { mapLimit, withRetry, type RetryOptions } from "./http.js";
 import { signHref, stacSearch, type StacItem } from "./planetary.js";
@@ -20,6 +21,60 @@ export interface CroplandSeason {
   /** Share of valid pixels classed "Crops" (0–1). */
   cropShare: number;
   n: number;
+  /** Share of valid pixels per land-cover class (0–1), for the land suitability check. Absent in older cache entries. */
+  shares?: Partial<Record<LandCoverClass, number>>;
+}
+
+export type LandCoverClass = "built" | "water" | "flooded" | "trees" | "bare" | "snow" | "rangeland" | "crops";
+
+/** io-lulc-annual-v02 class values (1 water, 2 trees, 4 flooded vegetation, 5 crops, 7 built area, 8 bare ground, 9 snow / ice, 11 rangeland). */
+const IO_CLASSES: Record<number, LandCoverClass> = {
+  1: "water",
+  2: "trees",
+  4: "flooded",
+  5: "crops",
+  7: "built",
+  8: "bare",
+  9: "snow",
+  11: "rangeland",
+};
+
+/** USDA CDL non-crop class codes → land-cover class (NASS cdl_codes); every other code is a crop. */
+const CDL_CLASSES: Record<number, LandCoverClass> = {
+  111: "water",
+  83: "water",
+  112: "snow",
+  121: "built",
+  122: "built",
+  123: "built",
+  124: "built",
+  82: "built",
+  131: "bare",
+  65: "bare",
+  141: "trees",
+  142: "trees",
+  143: "trees",
+  63: "trees",
+  87: "flooded",
+  190: "flooded",
+  195: "flooded",
+  152: "rangeland",
+  176: "rangeland",
+  64: "rangeland",
+};
+
+/** US fields: land-cover class shares per season from the CDL pixel histogram (the US has no Esri adapter). */
+export function landCoverFromCdl(
+  cdl: CdlHistory,
+): Array<{ year: number; shares: Partial<Record<LandCoverClass, number>> }> {
+  return cdl.seasons.map((s) => {
+    const shares: Partial<Record<LandCoverClass, number>> = {};
+    for (const c of s.classes) {
+      const cls = CDL_CLASSES[c.code] ?? "crops";
+      shares[cls] = Math.round(((shares[cls] ?? 0) + c.share) * 1000) / 1000;
+    }
+    return { year: s.year, shares };
+  });
 }
 
 export interface CroplandHistory {
@@ -34,7 +89,7 @@ export const CROPLAND_LAST_YEAR = 2023;
 
 /** What happened to one season. `failed` is only for real read errors (after retries). */
 export type SeasonOutcome =
-  | { year: number; state: "ok"; cropShare: number; n: number }
+  | { year: number; state: "ok"; cropShare: number; n: number; shares?: Partial<Record<LandCoverClass, number>> }
   | { year: number; state: "nodata" }
   | { year: number; state: "failed"; error: string };
 
@@ -93,7 +148,7 @@ export function summariseCropland(outcomes: SeasonOutcome[]): SourceResult<Cropl
     status: failed.length ? "partial" : "done",
     payload: {
       product: "Esri / Impact Observatory 10 m annual land cover",
-      seasons: ok.map(({ year, cropShare, n }) => ({ year, cropShare, n })),
+      seasons: ok.map(({ year, cropShare, n, shares }) => ({ year, cropShare, n, ...(shares ? { shares } : {}) })),
       ...(noData.length ? { noDataYears: noData } : {}),
     },
     dataDate: `${ok.at(-1)!.year}-12-31`,
@@ -118,50 +173,88 @@ export function utmProj(tileId: string): string | null {
   return `+proj=utm +zone=${Number(m[1])}${north ? "" : " +south"} +datum=WGS84 +units=m +no_defs`;
 }
 
-export function cropShare(values: number[]): { cropShare: number; n: number } | null {
+export function cropShare(values: number[]): {
+  cropShare: number;
+  n: number;
+  shares: Partial<Record<LandCoverClass, number>>;
+} | null {
   const valid = values.filter((v) => v > 0 && v !== 10); // 0 = no data, 10 = clouds
   if (!valid.length) return null;
   const crops = valid.filter((v) => v === IO_CROPS).length;
-  return { cropShare: Math.round((crops / valid.length) * 1000) / 1000, n: valid.length };
+  const counts = new Map<LandCoverClass, number>();
+  for (const v of valid) {
+    const c = IO_CLASSES[v];
+    if (c) counts.set(c, (counts.get(c) ?? 0) + 1);
+  }
+  const shares = Object.fromEntries(
+    [...counts.entries()].map(([c, n]) => [c, Math.round((n / valid.length) * 1000) / 1000]),
+  ) as Partial<Record<LandCoverClass, number>>;
+  return { cropShare: Math.round((crops / valid.length) * 1000) / 1000, n: valid.length, shares };
+}
+
+async function searchTiles(field: FieldGeometry, ctx: FetchContext, datetime?: string): Promise<StacItem[]> {
+  // Only the tiles that intersect the field (a bbox polygon, so a field on a UTM tile border gets both tiles).
+  const [w, s, e, n] = bboxOf(field.polygons);
+  return stacSearch(
+    {
+      collections: ["io-lulc-annual-v02"],
+      ...(datetime ? { datetime } : {}),
+      intersects: {
+        type: "Polygon",
+        coordinates: [
+          [
+            [w, s],
+            [e, s],
+            [e, n],
+            [w, n],
+            [w, s],
+          ],
+        ],
+      },
+    },
+    ctx,
+    100,
+  );
+}
+
+async function readTile(field: FieldGeometry, ctx: FetchContext, it: StacItem): Promise<number[]> {
+  const proj = utmProj(it.id);
+  const href = it.assets.data?.href;
+  if (!proj || !href) throw new SourceError("returned a tile without a readable asset", false);
+  const signal = AbortSignal.any([ctx.signal, AbortSignal.timeout(30_000)]);
+  const px = await readMasked(await signHref(href, ctx), projectPolygons(field.polygons, proj), { nodata: 0, signal });
+  return px.values; // empty when the window lies outside the tile
+}
+
+/**
+ * The add-field preview's quick land-cover check: only the latest season, one STAC search and its tiles, no
+ * caching (a few seconds). Null when the product has nothing for the outline.
+ */
+export async function fetchLatestLandCover(
+  field: FieldGeometry,
+  ctx: FetchContext,
+): Promise<{ year: number; shares: Partial<Record<LandCoverClass, number>>; n: number } | null> {
+  const items = await searchTiles(
+    field,
+    ctx,
+    `${CROPLAND_LAST_YEAR}-01-01T00:00:00Z/${CROPLAND_LAST_YEAR}-12-31T23:59:59Z`,
+  );
+  const values: number[] = [];
+  for (const it of items) {
+    if (itemYear(it) !== CROPLAND_LAST_YEAR) continue;
+    values.push(...(await readTile(field, ctx, it)));
+  }
+  const s = cropShare(values);
+  return s ? { year: CROPLAND_LAST_YEAR, shares: s.shares, n: s.n } : null;
 }
 
 export const cropland: SourceAdapter<CroplandHistory> = {
   id: "cropland",
   appliesTo: (field) => field.country !== null && field.country !== "US",
-  cacheKey: (field, { today }) => `${geometryHash(field.polygons)}:${today.slice(0, 4)}`,
+  cacheKey: (field, { today }) => `${geometryHash(field.polygons)}:${today.slice(0, 4)}:v2`,
   async fetch(field: FieldGeometry, ctx: FetchContext): Promise<SourceResult<CroplandHistory>> {
-    // Only the tiles that intersect the field (a bbox polygon, so a field on a UTM tile border gets both tiles).
-    const [w, s, e, n] = bboxOf(field.polygons);
-    const items = await stacSearch(
-      {
-        collections: ["io-lulc-annual-v02"],
-        intersects: {
-          type: "Polygon",
-          coordinates: [
-            [
-              [w, s],
-              [e, s],
-              [e, n],
-              [w, n],
-              [w, s],
-            ],
-          ],
-        },
-      },
-      ctx,
-      100,
-    );
-    const outcomes = await readSeasons(items, async (it) => {
-      const proj = utmProj(it.id);
-      const href = it.assets.data?.href;
-      if (!proj || !href) throw new SourceError("returned a tile without a readable asset", false);
-      const signal = AbortSignal.any([ctx.signal, AbortSignal.timeout(30_000)]);
-      const px = await readMasked(await signHref(href, ctx), projectPolygons(field.polygons, proj), {
-        nodata: 0,
-        signal,
-      });
-      return px.values; // empty when the window lies outside the tile
-    });
+    const items = await searchTiles(field, ctx);
+    const outcomes = await readSeasons(items, (it) => readTile(field, ctx, it));
     return summariseCropland(outcomes);
   },
 };
