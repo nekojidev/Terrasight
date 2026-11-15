@@ -59,9 +59,24 @@ describe("buildItems", () => {
   it("always offers the ask row, even with no matches", () => {
     expect(buildItems({ ...base, query: "zzz" })).toEqual([{ group: "ask", id: "ask", kind: "ask", text: "zzz" }]);
   });
-  it("empty: recent fields then suggested questions", () => {
-    const items = buildItems({ ...base, query: "" });
-    expect(items.map((i) => i.group)).toEqual(["recent", "suggest"]);
+  it("empty, ask mode: questions first, then recent fields, then pages", () => {
+    const groups = buildItems({ ...base, query: "" }).map((i) => i.group);
+    expect(groups[0]).toBe("suggest");
+    expect(groups).toContain("recent");
+    expect(groups.at(-1)).toBe("pages");
+  });
+  it("empty, go mode: fields and pages first, questions last", () => {
+    const groups = buildItems({ ...base, query: "", mode: "go" }).map((i) => i.group);
+    expect(groups[0]).toBe("recent");
+    expect(groups.at(-1)).toBe("suggest");
+  });
+  it("empty without recents lists the fields", () => {
+    expect(buildItems({ ...base, recent: [], query: "" }).some((i) => i.group === "fields")).toBe(true);
+  });
+  it("go mode typing: ask row last", () => {
+    const items = buildItems({ ...base, query: "pivot", mode: "go" });
+    expect(items.at(-1)).toMatchObject({ group: "ask" });
+    expect(items[0]!.group).toBe("fields");
   });
 });
 

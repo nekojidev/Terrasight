@@ -27,9 +27,38 @@ const num = (v: unknown): number => (typeof v === "number" ? v : 0);
 
 /** Where a notification leads (RFC §15.4): report → /decisions, recommendation → /recommendations/:id, run → /. */
 export function notificationHref(n: Pick<NotificationItem, "kind" | "payload">): string {
-  if (n.kind === "report_answered") return "/decisions";
+  if (n.kind === "report_answered" || n.kind === "decision_asked") return "/decisions";
   if (n.kind === "urgent_recommendation") return `/recommendations/${str(n.payload.recommendationId)}`;
   return "/";
+}
+
+export interface NotificationGroup {
+  key: string;
+  first: NotificationItem;
+  /** How many identical notifications this row stands for. */
+  count: number;
+  /** How many of them are unread. */
+  unread: number;
+  ids: string[];
+}
+
+/** Identical notifications (same text and destination) collapse into one row with a count. */
+export function groupNotifications(
+  items: NotificationItem[],
+  textOf: (n: NotificationItem) => string,
+): NotificationGroup[] {
+  const out = new Map<string, NotificationGroup>();
+  for (const n of items) {
+    const key = `${textOf(n)}|${notificationHref(n)}`;
+    const g = out.get(key);
+    const u = n.readAt ? 0 : 1;
+    if (g) {
+      g.count += 1;
+      g.unread += u;
+      g.ids.push(n.id);
+    } else out.set(key, { key, first: n, count: 1, unread: u, ids: [n.id] });
+  }
+  return [...out.values()];
 }
 
 /** Bell with an unread dot and a small list; the text is built here from kind + payload. */
@@ -88,14 +117,17 @@ export function NotificationsBell({ workspaceId }: { workspaceId: string }) {
       );
     }
     if (n.kind === "urgent_recommendation") return a("notifUrgent", { field });
+    if (n.kind === "decision_asked") return a("notifDecisionAsked", { field });
     if (n.kind === "run_failed")
       return a("notifRunFailed", { failed: num(n.payload.failed), total: num(n.payload.total) });
     return a("notifGeneric");
   };
   const when = (iso: string) => fmt.date(iso, "dateTime");
 
-  const unread = data?.unread ?? 0;
   const items = data?.items ?? [];
+  const groups = groupNotifications(items, text);
+  // The badge counts what the list shows as unread, so the two never disagree.
+  const unread = groups.reduce((sum, g) => sum + g.unread, 0);
 
   return (
     <div ref={box} className="relative">
@@ -141,30 +173,38 @@ export function NotificationsBell({ workspaceId }: { workspaceId: string }) {
             <p className="px-2 py-4 text-body text-ink-2">{a("notifEmpty")}</p>
           ) : (
             <ul className="max-h-96 overflow-y-auto">
-              {items.map((n) => (
-                <li key={n.id}>
-                  <Link
-                    href={notificationHref(n)}
-                    onClick={() => {
-                      if (!n.readAt) read.mutate([n.id]);
-                      setOpen(false);
-                    }}
-                    className="focus-ring flex min-h-tap items-start gap-2 rounded-btn px-2 py-2 hover:bg-surface-2"
-                  >
-                    <span
-                      aria-hidden
-                      className={`mt-2 size-2 shrink-0 rounded-chip ${n.readAt ? "bg-transparent" : "bg-urgent"}`}
-                    />
-                    {!n.readAt && <span className="sr-only">{a("notifUnread")}</span>}
-                    <span className="min-w-0">
-                      <span className={`block text-body text-ink ${n.readAt ? "" : "font-semibold"}`}>
-                        {text(n)}
+              {groups.map((g) => {
+                const n = g.first;
+                const isUnread = g.unread > 0;
+                return (
+                  <li key={g.key}>
+                    <Link
+                      href={notificationHref(n)}
+                      onClick={() => {
+                        const ids = g.ids.filter((id) => items.find((x) => x.id === id && !x.readAt));
+                        if (ids.length) read.mutate(ids);
+                        setOpen(false);
+                      }}
+                      className="focus-ring flex min-h-tap items-start gap-2 rounded-btn px-2 py-2 hover:bg-surface-2"
+                    >
+                      <span
+                        aria-hidden
+                        className={`mt-2 size-2 shrink-0 rounded-chip ${isUnread ? "bg-urgent" : "bg-transparent"}`}
+                      />
+                      {isUnread && <span className="sr-only">{a("notifUnread")}</span>}
+                      <span className="min-w-0 flex-1">
+                        <span className={`block text-body text-ink ${isUnread ? "font-semibold" : ""}`}>{text(n)}</span>
+                        <span className="block text-caption text-ink-3">{when(n.createdAt)}</span>
                       </span>
-                      <span className="block text-caption text-ink-3">{when(n.createdAt)}</span>
-                    </span>
-                  </Link>
-                </li>
-              ))}
+                      {g.count > 1 && (
+                        <span className="shrink-0 rounded-chip bg-muted px-2 text-caption font-semibold text-ink">
+                          {a("notifCount", { n: g.count })}
+                        </span>
+                      )}
+                    </Link>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>

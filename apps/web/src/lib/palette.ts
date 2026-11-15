@@ -63,9 +63,12 @@ export function filterPages(pages: PalettePage[], q: string): PalettePage[] {
   return pages.filter((p) => matches(`${p.label} ${p.keywords ?? ""}`, q));
 }
 
+export type PaletteMode = "ask" | "go";
+
 /**
- * The rows for the current input. Typing: the "Ask the assistant" row is always first, then matching fields, then
- * pages and actions. Empty input: recent fields, then suggested questions.
+ * The rows for the current input; the first group depends on the mode.
+ * Ask mode, typing: the ask row, then matching fields, then pages. Go mode, typing: fields, pages, then the ask row.
+ * Empty input, ask: suggested questions, then recent (or all) fields, then pages. Empty input, go: fields, pages, questions.
  */
 export function buildItems(o: {
   query: string;
@@ -73,19 +76,29 @@ export function buildItems(o: {
   pages: PalettePage[];
   recent: PaletteField[];
   suggestions: string[];
+  mode?: PaletteMode;
 }): PaletteItem[] {
+  const mode = o.mode ?? "ask";
   const q = o.query.trim();
+  const fieldItem = (group: "recent" | "fields") => (field: PaletteField): PaletteItem => ({
+    group,
+    id: `${group}:${field.id}`,
+    kind: "field",
+    field,
+  });
+  const pageItem = (page: PalettePage): PaletteItem => ({ group: "pages", id: `page:${page.id}`, kind: "page", page });
   if (!q) {
-    return [
-      ...o.recent.map((field): PaletteItem => ({ group: "recent", id: `recent:${field.id}`, kind: "field", field })),
-      ...o.suggestions.map((text): PaletteItem => ({ group: "suggest", id: `suggest:${text}`, kind: "ask", text })),
-    ];
+    const fieldRows = o.recent.length
+      ? o.recent.map(fieldItem("recent"))
+      : o.fields.slice(0, 5).map(fieldItem("fields"));
+    const suggest = o.suggestions.map((text): PaletteItem => ({ group: "suggest", id: `suggest:${text}`, kind: "ask", text }));
+    const pages = o.pages.slice(0, 5).map(pageItem);
+    return mode === "ask" ? [...suggest, ...fieldRows, ...pages] : [...fieldRows, ...pages, ...suggest];
   }
-  return [
-    { group: "ask", id: "ask", kind: "ask", text: q },
-    ...filterFields(o.fields, q).map((field): PaletteItem => ({ group: "fields", id: `field:${field.id}`, kind: "field", field })),
-    ...filterPages(o.pages, q).map((page): PaletteItem => ({ group: "pages", id: `page:${page.id}`, kind: "page", page })),
-  ];
+  const askRow: PaletteItem = { group: "ask", id: "ask", kind: "ask", text: q };
+  const fields = filterFields(o.fields, q).map(fieldItem("fields"));
+  const pages = filterPages(o.pages, q).map(pageItem);
+  return mode === "ask" ? [askRow, ...fields, ...pages] : [...fields, ...pages, askRow];
 }
 
 /** ↑/↓ move through the rows and wrap; Home/End jump. Returns the new index, or the same one for other keys. */

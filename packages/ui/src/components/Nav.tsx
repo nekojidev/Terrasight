@@ -1,7 +1,7 @@
 "use client";
 
 import { clsx } from "clsx";
-import { Bell, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
+import { Bell, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Sparkles } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { trapTab } from "./focus";
 
@@ -130,6 +130,8 @@ export interface TopBarProps {
   searchLabel: string;
   /** Shortcut shown in the control ("⌘K" or "Ctrl K"). */
   searchHint?: string;
+  /** Short word shown in the phone pill next to the mark ("Ask"). */
+  askShort?: string;
   onSearch: () => void;
   languages: Array<{ code: string; label: string; active: boolean; onSelect: () => void }>;
   languageGroupLabel: string;
@@ -149,12 +151,15 @@ export function TopBar(p: TopBarProps) {
       <button
         type="button"
         onClick={p.onSearch}
+        aria-label={p.searchLabel}
         aria-haspopup="dialog"
         aria-keyshortcuts="Control+K Meta+K"
-        className="focus-ring flex min-h-tap w-auto max-w-full items-center gap-3 rounded-input border border-line bg-surface px-3 text-left text-body text-ink-3 hover:border-line-strong sm:w-[450px] sm:px-4"
+        data-ask-entry
+        className="focus-ring flex min-h-tap w-auto max-w-full items-center gap-2 rounded-input border border-line-strong bg-surface px-3 text-left text-body text-ink-3 hover:border-ink-3 sm:w-[450px] sm:gap-3 sm:px-4"
       >
-        <Search aria-hidden className="size-5 shrink-0 text-ink-2" strokeWidth={1.7} />
-        <span className="sr-only sm:not-sr-only sm:flex-1 sm:truncate">{p.searchLabel}</span>
+        <Sparkles aria-hidden className="size-5 shrink-0 text-ink" strokeWidth={1.7} />
+        <span className="font-semibold text-ink sm:hidden">{p.askShort ?? p.searchLabel}</span>
+        <span className="hidden sm:block sm:flex-1 sm:truncate">{p.searchLabel}</span>
         {p.searchHint && (
           <kbd
             aria-hidden
@@ -167,7 +172,7 @@ export function TopBar(p: TopBarProps) {
       <div
         role="group"
         aria-label={p.languageGroupLabel}
-        className="flex rounded-input border border-line bg-surface p-1"
+        className="hidden rounded-input border border-line bg-surface p-1 lg:flex"
       >
         {p.languages.map((l) => (
           <button
@@ -298,7 +303,7 @@ export function BottomTabs({ items, label, more }: { items: NavItem[]; label: st
     moreBtn.current?.focus();
   };
   const tab =
-    "focus-ring relative flex h-full w-full flex-col items-center justify-center gap-0.5 text-caption";
+    "focus-ring relative flex h-full w-full min-w-0 flex-col items-center justify-center gap-0.5 text-caption";
   return (
     <>
       <nav
@@ -319,7 +324,7 @@ export function BottomTabs({ items, label, more }: { items: NavItem[]; label: st
                     <span className="absolute -top-1 -right-2 size-2.5 rounded-chip bg-urgent" />
                   ) : null}
                 </span>
-                {it.label}
+                <span className="max-w-full truncate px-0.5 whitespace-nowrap">{it.label}</span>
                 {it.badge ? <span className="sr-only">{it.badge}</span> : null}
               </a>
             </li>

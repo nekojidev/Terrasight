@@ -74,7 +74,7 @@ describe("CommandPalette", () => {
     fireEvent.change(box, { target: { value: "why risk?" } });
     fireEvent.keyDown(box, { key: "Enter" });
     expect(push).toHaveBeenCalledWith(
-      "/assistant?q=why+risk%3F&field=33333333-3333-4333-8333-333333333333",
+      "/assistant?ask=why+risk%3F&field=33333333-3333-4333-8333-333333333333",
     );
   });
 
@@ -91,9 +91,19 @@ describe("CommandPalette", () => {
     expect(onClose).toHaveBeenCalledTimes(2);
   });
 
+  it("ask mode lists questions, fields and pages with labelled groups; go mode puts fields first", async () => {
+    const { box } = setup();
+    expect(screen.getByText("Suggested questions")).toBeTruthy();
+    await waitFor(() => expect(screen.getByText("Your fields")).toBeTruthy());
+    expect(screen.getByText("Go to", { selector: "p" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Go to" }));
+    expect(screen.getAllByRole("option")[0]!.textContent).toContain("Pivot 12");
+    expect(box.getAttribute("placeholder")).toBe("Find a field or a page…");
+  });
+
   it("keeps Tab inside the dialog", () => {
     const { box } = setup();
-    const close = screen.getByRole("button", { name: "Close search" });
+    const close = screen.getByRole("button", { name: "Go to" });
     close.focus();
     fireEvent.keyDown(close, { key: "Tab" });
     expect(document.activeElement).toBe(box);
