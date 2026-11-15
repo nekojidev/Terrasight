@@ -10,6 +10,7 @@ import { LIBRARY } from "../library/library.module.js";
 import { BROKER, type Broker } from "../messaging/broker.js";
 import { JobConsumer } from "../messaging/consumer.js";
 import { QUEUES } from "../messaging/topology.js";
+import { AlertsService } from "./alerts.service.js";
 import { AnalysisService, type FieldCheckJob } from "./analysis.service.js";
 import { EvalInputsService } from "./eval-inputs.service.js";
 import { ScenariosService } from "../scenarios/scenarios.service.js";
@@ -36,6 +37,7 @@ export class FieldCheckConsumer extends JobConsumer<FieldCheckJob> implements On
     private readonly analysis: AnalysisService,
     private readonly inputsService: EvalInputsService,
     private readonly scenarios: ScenariosService,
+    private readonly alerts: AlertsService,
   ) {
     super(broker, { queue: QUEUES.fieldCheck, prefetch: 4, retries: 0 });
   }
@@ -87,6 +89,12 @@ export class FieldCheckConsumer extends JobConsumer<FieldCheckJob> implements On
       const result = evaluate(model, { ...inputs, planningDeadline }, asOf);
       if (await this.upsert(workspaceId, fieldId, runId, model, result, inputs, asOf, built.powerDate))
         created += 1;
+    }
+    // Weather and irrigation items (L-13): frost alert, FAO-56 water stress on irrigated fields.
+    try {
+      created += await this.alerts.run(workspaceId, fieldId, runId, built, asOf);
+    } catch (e) {
+      this.logger.warn(`alerts for ${fieldId} skipped: ${(e as Error).message}`);
     }
     // Rotation item (S-03.08): best-fit option from the scenario engine (cached by inputs hash, so cheap daily).
     try {

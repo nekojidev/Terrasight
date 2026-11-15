@@ -20,7 +20,8 @@
     "lint": "eslint src"
   },
   "dependencies": {
-    "@terrasight/library": "workspace:*"
+    "@terrasight/library": "workspace:*",
+    "@terrasight/simulator": "workspace:*"
   },
   "devDependencies": {}
 }

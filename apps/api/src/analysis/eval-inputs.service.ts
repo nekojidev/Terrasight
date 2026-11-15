@@ -5,9 +5,11 @@ import {
   winterWheatStage,
   type EvalInputs,
   type SeasonStage,
+  type WaterSite,
 } from "@terrasight/evaluators";
 import type { Library, PestModel } from "@terrasight/library";
-import type { DailyWeather as PowerSeries, S2Result } from "@terrasight/sources";
+import type { HydGroup } from "@terrasight/simulator";
+import type { DailyWeather as PowerSeries, S2Result, SoilSummary } from "@terrasight/sources";
 import { RateLimitService } from "../auth/rate-limit.js";
 import { PrismaService } from "../db/prisma.service.js";
 import { GeoService } from "../geo/geo.service.js";
@@ -33,6 +35,8 @@ export interface BuiltInputs {
   dataDate: string | null;
   powerDate: string | null;
   problems: string[];
+  /** Soil and site for the water balance; null when the field is not irrigated or the soil is unknown. */
+  waterSite: WaterSite | null;
   /** Planning deadline per model (next crop, else the model's host crop, else a repeat of the last crop). */
   planningDeadline: (model: PestModel) => string | null;
 }
@@ -53,7 +57,7 @@ export class EvalInputsService {
   async build(workspaceId: string, fieldId: string, asOf: string): Promise<BuiltInputs> {
     const field = await this.prisma.system.field.findUniqueOrThrow({
       where: { id: fieldId },
-      select: { regionId: true, tier: true, country: true },
+      select: { regionId: true, tier: true, country: true, irrigation: true, slopePct: true },
     });
     const geom = await this.geo.fieldGeometry(fieldId);
     const take = async () => {
@@ -87,6 +91,23 @@ export class EvalInputsService {
         select: { recommendation: { select: { subject: true } } },
       }),
     ]);
+    const irrigated = record.irrigated.value ?? (field.irrigation === "irrigated" ? true : null);
+    let waterSite: WaterSite | null = null;
+    if (irrigated === true) {
+      // Soil only for irrigated fields (the water_stress evaluator); SSURGO covers the US (tier A).
+      const soil = await this.sources.fresh<SoilSummary>("ssurgo", geom, asOf, async () => undefined);
+      const s = soil?.result.payload;
+      const aws = s?.aws100Mm ?? (s?.awsMm != null ? (s.awsMm * 2) / 3 : null);
+      waterSite = {
+        latDeg: geom.centroid.lat,
+        elevationM: power?.result.payload?.elevationM ?? 0,
+        awsMmPerM: aws ?? null,
+        awsEstimated: s?.aws100Mm == null && aws !== null,
+        hydGroup: (s?.hydrologicGroup?.[0] as HydGroup | undefined) ?? null,
+        slopePct: field.slopePct ?? 1,
+        irrigated,
+      };
+    }
     const confirmedCrop = record.crop.source === "confirmed" ? record.crop.value : null;
     const nextCrop = plan?.crop ?? confirmedCrop;
     const lastCrop = [...crops].sort((a, b) => b.season - a.season)[0]?.mainCrop ?? null;
@@ -122,6 +143,7 @@ export class EvalInputsService {
       dataDate: observedUntil(weather),
       powerDate: power?.result.dataDate ?? null,
       problems,
+      waterSite,
       planningDeadline: (model) => {
         let d =
           this.seasons.typicalSowing(field.regionId, nextCrop, season) ??
