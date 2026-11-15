@@ -23,6 +23,8 @@ export interface Rotation {
   minPrecipMm?: number;
   minSeasonDays?: number;
   maxSlopePct?: number;
+  /** Where the candidate comes from; absent = library. AI proposals are simulated exactly like library rotations. */
+  source?: "library" | "ai";
 }
 
 export interface CropEconomics {
@@ -81,6 +83,8 @@ export interface SeasonPlan {
 export interface ScenarioResult {
   id: string;
   kind: "current" | "alternative";
+  /** Alternatives only: "ai" for a sequence proposed by the assistant, else "library". */
+  source?: "library" | "ai";
   label?: "baseline" | "detected";
   plan: SeasonPlan[];
   /** Mean gross margin, $/ha/yr, over 5 seasons and all runs (base prices). */
@@ -120,6 +124,8 @@ export interface EngineResult {
   bestFit: string | null;
 }
 
+/** Most AI-proposed options in the result (on top of the 2 library picks). */
+const MAX_AI_SHOWN = 2;
 const MS_DAY = 86_400_000;
 const addDays = (iso: string, n: number) =>
   new Date(Date.parse(`${iso}T00:00:00Z`) + n * MS_DAY).toISOString().slice(0, 10);
@@ -617,12 +623,14 @@ export function runScenarios(engineInput: EngineInput, weights: Weights = EQUAL_
     ),
   );
   const everyone = [cur, ...alts];
+  const aiIds = new Set(input.rotations.filter((r) => r.source === "ai").map((r) => r.id));
   const finish = (s: (typeof everyone)[number], i: number, kind: ScenarioResult["kind"]): ScenarioResult => {
     const { byPrice: _byPrice, ...rest } = s;
     return {
       ...rest,
       kind,
       ...(kind === "current" ? { label: input.current.label } : {}),
+      ...(kind === "alternative" ? { source: aiIds.has(s.id) ? ("ai" as const) : ("library" as const) } : {}),
       priceWins: 0, // set below, among the options actually shown
       relaxed: kind === "alternative" ? relaxed : [],
       delta: {
@@ -639,6 +647,12 @@ export function runScenarios(engineInput: EngineInput, weights: Weights = EQUAL_
   );
   const current = ranked[0]!;
   const alternatives = pickTwo(ranked);
+  // The assistant's two best proposals are always shown (as extra options) so they can be judged on the numbers.
+  const bestAi = ranked
+    .filter((s) => s.kind === "alternative" && aiIds.has(s.id) && !alternatives.some((a) => a.id === s.id))
+    .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+  const shownAi = alternatives.filter((a) => aiIds.has(a.id)).length;
+  alternatives.push(...bestAi.slice(0, Math.max(0, MAX_AI_SHOWN - shownAi)));
   // Price robustness among the shown options: in how many of the 10 price scenarios each has the highest margin.
   const byPriceOf = new Map(everyone.map((e) => [e.id, e.byPrice]));
   const shown = [current, ...alternatives];
@@ -661,4 +675,4 @@ export function runScenarios(engineInput: EngineInput, weights: Weights = EQUAL_
 export { addDays };
 
 /** Bumped whenever the engine or simulator changes results; part of the scenario cache key. */
-export const ENGINE_VERSION = "2026-11-15.2";
+export const ENGINE_VERSION = "2026-11-15.3";
