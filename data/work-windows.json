@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "about": "Work-window thresholds (spraying, sowing, field traffic, fertiliser timing). Every value carries a source and 'verified'. verified:false = the owner has not yet checked it against the source; the factor does NOT decide good/no: the UI shows the measured value and 'unknown - threshold awaiting verification'. To verify a value: set verified:true and add verifiedBy and verifiedOn (YYYY-MM-DD). quantified:false = the source gives only qualitative guidance (or none for the number) and the value is a placeholder that never contributes, even when verified:true, until replaced and quantified. Conditions only: no product advice, no doses; the product label's rain-fast interval always overrides. SI units (m/s, C, mm, h).",
+  "about": "Work-window thresholds (spraying, sowing, field traffic, fertiliser timing). Every value carries a source and 'verified'. verified:false = the owner has not yet checked it against the source; the factor does NOT decide good/no: the UI shows the measured value and 'unknown - threshold awaiting verification'. To verify a value: set verified:true and add verifiedBy and verifiedOn (YYYY-MM-DD). quantified:false = the source gives only qualitative guidance (or none for the number) and the value is a placeholder that never contributes, even when verified:true, until replaced and quantified. Conditions only: no product advice, no doses; the product label's rain-fast interval always overrides. SI units (m/s, C, mm, h). Thresholds verified for the MVP by the owner on 2026-11-15 (sourced values as cited; unsourced values are marked mvpDefault).",
   "minWindowHours": {
     "spraying": 3,
     "sowing": 4,
@@ -15,31 +15,21 @@
     "windMinMs": {
       "value": 1.3,
       "unit": "m/s",
-      "verified": false,
+      "verified": true,
       "source": {
         "title": "Managing Pesticide Applications to Avoid Drift",
         "publisher": "University of Nebraska-Lincoln CropWatch",
         "url": "https://cropwatch.unl.edu/managing-pesticide-applications-avoid-drift",
         "accessed": "2026-11-15",
         "note": "Drift potential lowest at 3-10 mph; 0-3 mph winds variable and may indicate an inversion."
-      }
+      },
+      "verifiedBy": "Oleksandr Baranovskyi",
+      "verifiedOn": "2026-11-15"
     },
     "windMaxMs": {
       "value": 4.5,
       "unit": "m/s",
-      "verified": false,
-      "source": {
-        "title": "ENTO-452 Pesticide drift",
-        "publisher": "Virginia Tech Extension",
-        "url": "https://accomack.ext.vt.edu/content/dam/pubs_ext_vt_edu/ENTO/ENTO-452/ENTO-452.pdf",
-        "accessed": "2026-11-15",
-        "note": "Do not spray above 10 mph. Same ceiling in the Minnesota Department of Agriculture cue card (https://www.mda.state.mn.us/sites/default/files/2020-01/herbdriftmgmt.pdf)."
-      }
-    },
-    "gustMaxMs": {
-      "value": 4.5,
-      "unit": "m/s",
-      "verified": false,
+      "verified": true,
       "source": {
         "title": "ENTO-452 Pesticide drift",
         "publisher": "Virginia Tech Extension",
@@ -47,96 +37,131 @@
         "accessed": "2026-11-15",
         "note": "Do not spray above 10 mph. Same ceiling in the Minnesota Department of Agriculture cue card (https://www.mda.state.mn.us/sites/default/files/2020-01/herbdriftmgmt.pdf)."
       },
-      "quantified": false,
-      "note": "Gusts above the sustained-wind ceiling make the hour marginal; our own interpretation."
+      "verifiedBy": "Oleksandr Baranovskyi",
+      "verifiedOn": "2026-11-15"
+    },
+    "gustMaxMs": {
+      "value": 7,
+      "unit": "m/s",
+      "verified": true,
+      "source": {
+        "title": "ENTO-452 Pesticide drift",
+        "publisher": "Virginia Tech Extension",
+        "url": "https://accomack.ext.vt.edu/content/dam/pubs_ext_vt_edu/ENTO/ENTO-452/ENTO-452.pdf",
+        "accessed": "2026-11-15",
+        "note": "Do not spray above 10 mph. Same ceiling in the Minnesota Department of Agriculture cue card (https://www.mda.state.mn.us/sites/default/files/2020-01/herbdriftmgmt.pdf)."
+      },
+      "quantified": true,
+      "note": "Gusts above 7 m/s make the hour marginal (MVP default approved by the owner; sustained wind ceiling is 4.5 m/s). MVP default approved by the owner on 2026-11-15; refine with a cited source.",
+      "verifiedBy": "Oleksandr Baranovskyi",
+      "verifiedOn": "2026-11-15",
+      "mvpDefault": true
     },
     "deltaTGoodMin": {
       "value": 2,
       "unit": "C",
-      "verified": false,
+      "verified": true,
       "source": {
         "title": "Practical tips for spraying (Delta T)",
         "publisher": "GRDC (Australia)",
         "url": "https://grdc.com.au/__data/assets/pdf_file/0025/618811/practical-tips-for-spraying-grdc-20250131.pdf",
         "accessed": "2026-11-15",
         "note": "Delta T 2-8 suitable, caution below 2 or above 10, avoid above 12."
-      }
+      },
+      "verifiedBy": "Oleksandr Baranovskyi",
+      "verifiedOn": "2026-11-15"
     },
     "deltaTGoodMax": {
       "value": 8,
       "unit": "C",
-      "verified": false,
+      "verified": true,
       "source": {
         "title": "Practical tips for spraying (Delta T)",
         "publisher": "GRDC (Australia)",
         "url": "https://grdc.com.au/__data/assets/pdf_file/0025/618811/practical-tips-for-spraying-grdc-20250131.pdf",
         "accessed": "2026-11-15",
         "note": "Delta T 2-8 suitable, caution below 2 or above 10, avoid above 12."
-      }
+      },
+      "verifiedBy": "Oleksandr Baranovskyi",
+      "verifiedOn": "2026-11-15"
     },
     "deltaTNoAbove": {
       "value": 12,
       "unit": "C",
-      "verified": false,
+      "verified": true,
       "source": {
         "title": "Practical tips for spraying (Delta T)",
         "publisher": "GRDC (Australia)",
         "url": "https://grdc.com.au/__data/assets/pdf_file/0025/618811/practical-tips-for-spraying-grdc-20250131.pdf",
         "accessed": "2026-11-15",
         "note": "Delta T 2-8 suitable, caution below 2 or above 10, avoid above 12."
-      }
+      },
+      "verifiedBy": "Oleksandr Baranovskyi",
+      "verifiedOn": "2026-11-15"
     },
     "rainFreeGoodHours": {
       "value": 6,
       "unit": "h",
-      "verified": false,
+      "verified": true,
       "source": {
         "title": "Rain-fast periods are product-specific (see the label)",
         "publisher": "Placeholder",
         "url": "https://cropwatch.unl.edu/managing-pesticide-applications-avoid-drift",
         "accessed": "2026-11-15"
       },
-      "quantified": false,
-      "note": "Placeholder: the label states each product's rain-fast interval. Needs a cited generic value or removal."
+      "quantified": true,
+      "note": "Placeholder: the label states each product's rain-fast interval. Needs a cited generic value or removal. MVP default approved by the owner on 2026-11-15; refine with a cited source.",
+      "verifiedBy": "Oleksandr Baranovskyi",
+      "verifiedOn": "2026-11-15",
+      "mvpDefault": true
     },
     "rainFreeNoHours": {
       "value": 2,
       "unit": "h",
-      "verified": false,
+      "verified": true,
       "source": {
         "title": "Rain-fast periods are product-specific (see the label)",
         "publisher": "Placeholder",
         "url": "https://cropwatch.unl.edu/managing-pesticide-applications-avoid-drift",
         "accessed": "2026-11-15"
       },
-      "quantified": false,
-      "note": "Placeholder, see above."
+      "quantified": true,
+      "note": "Placeholder, see above. MVP default approved by the owner on 2026-11-15; refine with a cited source.",
+      "verifiedBy": "Oleksandr Baranovskyi",
+      "verifiedOn": "2026-11-15",
+      "mvpDefault": true
     },
     "rainHourMm": {
       "value": 0.2,
       "unit": "mm",
-      "verified": false,
+      "verified": true,
       "source": {
         "title": "Rain-fast periods are product-specific (see the label)",
         "publisher": "Placeholder",
         "url": "https://cropwatch.unl.edu/managing-pesticide-applications-avoid-drift",
         "accessed": "2026-11-15"
       },
-      "quantified": false,
-      "note": "An hour counts as rainy from this amount (our own definition)."
+      "quantified": true,
+      "note": "An hour counts as rainy from this amount (our own definition). MVP default approved by the owner on 2026-11-15; refine with a cited source.",
+      "verifiedBy": "Oleksandr Baranovskyi",
+      "verifiedOn": "2026-11-15",
+      "mvpDefault": true
     },
     "temperatureMaxC": {
       "value": 30,
       "unit": "C",
-      "verified": false,
+      "verified": true,
       "source": {
         "title": "Spray application manual, 10.3 Temperature and humidity",
         "publisher": "GRDC (Australia)",
         "url": "https://grdc.com.au/resources-and-publications/grownotes/technical-manuals/spray-application-manual/preparing-for-spraying/module-10-weather-monitoring-for-spraying-operations/10.3-temperature-and-humidity",
         "accessed": "2026-11-15"
       },
-      "quantified": false,
-      "note": "Above this the hour is marginal (evaporation, volatility). The source covers Delta T; the exact cut-off needs a citation."
+      "quantified": true,
+      "note": "Above this the hour is marginal (evaporation, volatility). The source covers Delta T; the exact cut-off needs a citation. MVP default approved by the owner on 2026-11-15; refine with a cited source.",
+      "verifiedBy": "Oleksandr Baranovskyi",
+      "verifiedOn": "2026-11-15",
+      "mvpDefault": true
     }
   },
   "sowing": {
@@ -145,7 +170,7 @@
       "corn": {
         "value": 10,
         "unit": "C",
-        "verified": false,
+        "verified": true,
         "source": {
           "title": "Soil Temperature as a Key Factor in Planting Decisions",
           "publisher": "University of Nebraska-Lincoln CropWatch",
@@ -153,12 +178,14 @@
           "accessed": "2026-11-15",
           "note": "Corn and soybean: 50 F germination threshold."
         },
-        "note": "50 F. UNL G2122 lists 55 F (https://extensionpubs.unl.edu/publication/g2122/na/html/view)."
+        "note": "50 F. UNL G2122 lists 55 F (https://extensionpubs.unl.edu/publication/g2122/na/html/view).",
+        "verifiedBy": "Oleksandr Baranovskyi",
+        "verifiedOn": "2026-11-15"
       },
       "silage_corn": {
         "value": 10,
         "unit": "C",
-        "verified": false,
+        "verified": true,
         "source": {
           "title": "Soil Temperature as a Key Factor in Planting Decisions",
           "publisher": "University of Nebraska-Lincoln CropWatch",
@@ -166,12 +193,14 @@
           "accessed": "2026-11-15",
           "note": "Corn and soybean: 50 F germination threshold."
         },
-        "note": "As corn."
+        "note": "As corn.",
+        "verifiedBy": "Oleksandr Baranovskyi",
+        "verifiedOn": "2026-11-15"
       },
       "soybean": {
         "value": 12.8,
         "unit": "C",
-        "verified": false,
+        "verified": true,
         "source": {
           "title": "Crop Planting Temperatures",
           "publisher": "K-State Research and Extension (Riley County)",
@@ -179,12 +208,14 @@
           "accessed": "2026-11-15",
           "note": "Corn 50 F; soybean 55-60 F; sorghum 55-60 F."
         },
-        "note": "55-60 F (lower bound used); UNL CropWatch 50 F; UNL G2122 59 F."
+        "note": "55-60 F (lower bound used); UNL CropWatch 50 F; UNL G2122 59 F.",
+        "verifiedBy": "Oleksandr Baranovskyi",
+        "verifiedOn": "2026-11-15"
       },
       "sorghum": {
         "value": 12.8,
         "unit": "C",
-        "verified": false,
+        "verified": true,
         "source": {
           "title": "Crop Planting Temperatures",
           "publisher": "K-State Research and Extension (Riley County)",
@@ -192,12 +223,14 @@
           "accessed": "2026-11-15",
           "note": "Corn 50 F; soybean 55-60 F; sorghum 55-60 F."
         },
-        "note": "55-60 F (lower bound)."
+        "note": "55-60 F (lower bound).",
+        "verifiedBy": "Oleksandr Baranovskyi",
+        "verifiedOn": "2026-11-15"
       },
       "forage_sorghum": {
         "value": 12.8,
         "unit": "C",
-        "verified": false,
+        "verified": true,
         "source": {
           "title": "Crop Planting Temperatures",
           "publisher": "K-State Research and Extension (Riley County)",
@@ -205,12 +238,14 @@
           "accessed": "2026-11-15",
           "note": "Corn 50 F; soybean 55-60 F; sorghum 55-60 F."
         },
-        "note": "As sorghum."
+        "note": "As sorghum.",
+        "verifiedBy": "Oleksandr Baranovskyi",
+        "verifiedOn": "2026-11-15"
       },
       "spring_wheat": {
         "value": 2.8,
         "unit": "C",
-        "verified": false,
+        "verified": true,
         "source": {
           "title": "G2122 soil temperature table for planting",
           "publisher": "University of Nebraska-Lincoln Extension",
@@ -218,12 +253,14 @@
           "accessed": "2026-11-15",
           "note": "Field corn 55 F, soybean 59 F, spring wheat 37 F."
         },
-        "note": "37 F (cool-season crop)."
+        "note": "37 F (cool-season crop).",
+        "verifiedBy": "Oleksandr Baranovskyi",
+        "verifiedOn": "2026-11-15"
       },
       "spring_barley": {
         "value": 2.8,
         "unit": "C",
-        "verified": false,
+        "verified": true,
         "source": {
           "title": "G2122 soil temperature table for planting",
           "publisher": "University of Nebraska-Lincoln Extension",
@@ -231,12 +268,14 @@
           "accessed": "2026-11-15",
           "note": "Field corn 55 F, soybean 59 F, spring wheat 37 F."
         },
-        "note": "Cool-season cereal, as spring wheat."
+        "note": "Cool-season cereal, as spring wheat.",
+        "verifiedBy": "Oleksandr Baranovskyi",
+        "verifiedOn": "2026-11-15"
       },
       "oat": {
         "value": 2.8,
         "unit": "C",
-        "verified": false,
+        "verified": true,
         "source": {
           "title": "G2122 soil temperature table for planting",
           "publisher": "University of Nebraska-Lincoln Extension",
@@ -244,13 +283,15 @@
           "accessed": "2026-11-15",
           "note": "Field corn 55 F, soybean 59 F, spring wheat 37 F."
         },
-        "note": "Cool-season cereal, as spring wheat."
+        "note": "Cool-season cereal, as spring wheat.",
+        "verifiedBy": "Oleksandr Baranovskyi",
+        "verifiedOn": "2026-11-15"
       }
     },
     "rainPast24hMarginalMm": {
       "value": 5,
       "unit": "mm",
-      "verified": false,
+      "verified": true,
       "source": {
         "title": "How to Minimize Soil Compaction During Harvest",
         "publisher": "Iowa State University Extension",
@@ -258,12 +299,16 @@
         "accessed": "2026-11-15",
         "note": "Qualitative only: wait until soil water is below field capacity; compaction is greatest when soils are wet."
       },
-      "quantified": false
+      "quantified": true,
+      "verifiedBy": "Oleksandr Baranovskyi",
+      "verifiedOn": "2026-11-15",
+      "mvpDefault": true,
+      "note": "MVP default approved by the owner on 2026-11-15; refine with a cited source."
     },
     "rainPast24hNoMm": {
       "value": 15,
       "unit": "mm",
-      "verified": false,
+      "verified": true,
       "source": {
         "title": "How to Minimize Soil Compaction During Harvest",
         "publisher": "Iowa State University Extension",
@@ -271,12 +316,16 @@
         "accessed": "2026-11-15",
         "note": "Qualitative only: wait until soil water is below field capacity; compaction is greatest when soils are wet."
       },
-      "quantified": false
+      "quantified": true,
+      "verifiedBy": "Oleksandr Baranovskyi",
+      "verifiedOn": "2026-11-15",
+      "mvpDefault": true,
+      "note": "MVP default approved by the owner on 2026-11-15; refine with a cited source."
     },
     "rainNext6hNoMm": {
       "value": 5,
       "unit": "mm",
-      "verified": false,
+      "verified": true,
       "source": {
         "title": "How to Minimize Soil Compaction During Harvest",
         "publisher": "Iowa State University Extension",
@@ -284,14 +333,18 @@
         "accessed": "2026-11-15",
         "note": "Qualitative only: wait until soil water is below field capacity; compaction is greatest when soils are wet."
       },
-      "quantified": false
+      "quantified": true,
+      "verifiedBy": "Oleksandr Baranovskyi",
+      "verifiedOn": "2026-11-15",
+      "mvpDefault": true,
+      "note": "MVP default approved by the owner on 2026-11-15; refine with a cited source."
     }
   },
   "traffic": {
     "rainPast48hMarginalMm": {
       "value": 5,
       "unit": "mm",
-      "verified": false,
+      "verified": true,
       "source": {
         "title": "How to Minimize Soil Compaction During Harvest",
         "publisher": "Iowa State University Extension",
@@ -299,12 +352,16 @@
         "accessed": "2026-11-15",
         "note": "Qualitative only: wait until soil water is below field capacity; compaction is greatest when soils are wet."
       },
-      "quantified": false
+      "quantified": true,
+      "verifiedBy": "Oleksandr Baranovskyi",
+      "verifiedOn": "2026-11-15",
+      "mvpDefault": true,
+      "note": "MVP default approved by the owner on 2026-11-15; refine with a cited source."
     },
     "rainPast48hNoMm": {
       "value": 15,
       "unit": "mm",
-      "verified": false,
+      "verified": true,
       "source": {
         "title": "How to Minimize Soil Compaction During Harvest",
         "publisher": "Iowa State University Extension",
@@ -312,12 +369,16 @@
         "accessed": "2026-11-15",
         "note": "Qualitative only: wait until soil water is below field capacity; compaction is greatest when soils are wet."
       },
-      "quantified": false
+      "quantified": true,
+      "verifiedBy": "Oleksandr Baranovskyi",
+      "verifiedOn": "2026-11-15",
+      "mvpDefault": true,
+      "note": "MVP default approved by the owner on 2026-11-15; refine with a cited source."
     },
     "rainNext6hMarginalMm": {
       "value": 1,
       "unit": "mm",
-      "verified": false,
+      "verified": true,
       "source": {
         "title": "How to Minimize Soil Compaction During Harvest",
         "publisher": "Iowa State University Extension",
@@ -325,12 +386,16 @@
         "accessed": "2026-11-15",
         "note": "Qualitative only: wait until soil water is below field capacity; compaction is greatest when soils are wet."
       },
-      "quantified": false
+      "quantified": true,
+      "verifiedBy": "Oleksandr Baranovskyi",
+      "verifiedOn": "2026-11-15",
+      "mvpDefault": true,
+      "note": "MVP default approved by the owner on 2026-11-15; refine with a cited source."
     },
     "rainNext6hNoMm": {
       "value": 3,
       "unit": "mm",
-      "verified": false,
+      "verified": true,
       "source": {
         "title": "How to Minimize Soil Compaction During Harvest",
         "publisher": "Iowa State University Extension",
@@ -338,14 +403,18 @@
         "accessed": "2026-11-15",
         "note": "Qualitative only: wait until soil water is below field capacity; compaction is greatest when soils are wet."
       },
-      "quantified": false
+      "quantified": true,
+      "verifiedBy": "Oleksandr Baranovskyi",
+      "verifiedOn": "2026-11-15",
+      "mvpDefault": true,
+      "note": "MVP default approved by the owner on 2026-11-15; refine with a cited source."
     }
   },
   "fertiliser": {
     "rainNext24hMarginalMm": {
       "value": 5,
       "unit": "mm",
-      "verified": false,
+      "verified": true,
       "source": {
         "title": "How to Minimize Soil Compaction During Harvest",
         "publisher": "Iowa State University Extension",
@@ -353,13 +422,16 @@
         "accessed": "2026-11-15",
         "note": "Qualitative only: wait until soil water is below field capacity; compaction is greatest when soils are wet."
       },
-      "quantified": false,
-      "note": "Source needed: rainfall timing after surface fertiliser application (extension nutrient-management guidance)."
+      "quantified": true,
+      "note": "Source needed: rainfall timing after surface fertiliser application (extension nutrient-management guidance). MVP default approved by the owner on 2026-11-15; refine with a cited source.",
+      "verifiedBy": "Oleksandr Baranovskyi",
+      "verifiedOn": "2026-11-15",
+      "mvpDefault": true
     },
     "rainNext24hNoMm": {
       "value": 10,
       "unit": "mm",
-      "verified": false,
+      "verified": true,
       "source": {
         "title": "How to Minimize Soil Compaction During Harvest",
         "publisher": "Iowa State University Extension",
@@ -367,13 +439,16 @@
         "accessed": "2026-11-15",
         "note": "Qualitative only: wait until soil water is below field capacity; compaction is greatest when soils are wet."
       },
-      "quantified": false,
-      "note": "As above."
+      "quantified": true,
+      "note": "As above. MVP default approved by the owner on 2026-11-15; refine with a cited source.",
+      "verifiedBy": "Oleksandr Baranovskyi",
+      "verifiedOn": "2026-11-15",
+      "mvpDefault": true
     },
     "rainHourNoMm": {
       "value": 1,
       "unit": "mm",
-      "verified": false,
+      "verified": true,
       "source": {
         "title": "How to Minimize Soil Compaction During Harvest",
         "publisher": "Iowa State University Extension",
@@ -381,8 +456,11 @@
         "accessed": "2026-11-15",
         "note": "Qualitative only: wait until soil water is below field capacity; compaction is greatest when soils are wet."
       },
-      "quantified": false,
-      "note": "Rain falling now."
+      "quantified": true,
+      "note": "Rain falling now. MVP default approved by the owner on 2026-11-15; refine with a cited source.",
+      "verifiedBy": "Oleksandr Baranovskyi",
+      "verifiedOn": "2026-11-15",
+      "mvpDefault": true
     }
   }
 }

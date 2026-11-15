@@ -61,19 +61,20 @@ describe("WorkWindowsService", () => {
     const v = await svc.forWorkspace(WS, 3, NOW);
     expect(getHourly).toHaveBeenCalledTimes(1);
     expect(seasons.planFor).toHaveBeenCalledWith(F1, 2026);
-    expect(v.thresholdsUnverified).toBe(true);
+    expect(v.thresholdsUnverified).toBe(false);
     expect(v.cropNames.corn?.uk).toBe("Кукурудза на зерно");
     expect(v.fields.map((f) => f.fieldId)).toEqual([F1, F2]);
     const f = v.fields[0]!;
     expect(f).toMatchObject({ available: true, sowingCrop: "corn", now: "2026-04-20T06:00" });
     expect(f.operations.map((o) => o.operation)).toEqual(["spraying", "sowing", "traffic", "fertiliser"]);
     const spraying = f.operations[0]!;
-    // Every threshold is unverified today: no verdicts, only the measured conditions.
-    expect(spraying.days.map((d) => d.status)).toEqual(["unknown", "unknown", "unknown"]);
-    expect(spraying.days[1]!.limiting).toBeNull();
-    expect(spraying.days[1]!.conditions).toContainEqual({ factor: "wind", value: 8, verified: false });
-    expect(f.operations[1]!.days[0]!.status).toBe("unknown");
-    expect(f.operations[1]!.days[0]!.conditions).toContainEqual({ factor: "soil_temp", value: 14, verified: false });
+    // Thresholds are verified for the MVP: verdicts with the limiting factor, next to the measured conditions.
+    expect(spraying.days.every((d) => d.status !== "unknown")).toBe(true);
+    expect(spraying.days[1]!.status).toBe("no"); // wind 8 m/s is above the 4.5 m/s ceiling
+    expect(spraying.days[1]!.limiting).toMatchObject({ factor: "wind" });
+    expect(spraying.days[1]!.conditions).toContainEqual({ factor: "wind", value: 8, verified: true });
+    expect(f.operations[1]!.days[0]!.status).not.toBe("unknown");
+    expect(f.operations[1]!.days[0]!.conditions).toContainEqual({ factor: "soil_temp", value: 14, verified: true });
   });
 
   it("returns one field and 404s for an unknown one", async () => {

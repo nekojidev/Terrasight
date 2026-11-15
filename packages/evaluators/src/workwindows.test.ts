@@ -13,6 +13,19 @@ const rawCfg = JSON.parse(
 ) as WorkWindowsConfig;
 
 /** Test fixture: every threshold treated as verified, so the logic itself is exercised. */
+/** The same config with every threshold unverified (the gate behaviour is tested independently of the data file). */
+function allUnverified(c: WorkWindowsConfig): WorkWindowsConfig {
+  const walk = (n: unknown): unknown => {
+    if (Array.isArray(n)) return n.map(walk);
+    if (!n || typeof n !== "object") return n;
+    const o = { ...(n as Record<string, unknown>) };
+    if (typeof o.verified === "boolean") return { ...o, verified: false };
+    for (const k of Object.keys(o)) o[k] = walk(o[k]);
+    return o;
+  };
+  return walk(c) as WorkWindowsConfig;
+}
+
 function allVerified(c: WorkWindowsConfig): WorkWindowsConfig {
   const walk = (n: unknown): unknown => {
     if (Array.isArray(n)) return n.map(walk);
@@ -156,8 +169,8 @@ describe("traffic and fertiliser", () => {
 });
 
 describe("thresholds file", () => {
-  it("is entirely unverified and every number is sourced", () => {
-    expect(unverifiedThresholds(rawCfg)).toBe(true);
+  it("is verified for the MVP (who and when recorded) and every number keeps its source", () => {
+    expect(unverifiedThresholds(rawCfg)).toBe(false);
     const walk = (n: unknown, path: string): void => {
       if (!n || typeof n !== "object") return;
       const o = n as Record<string, unknown>;
@@ -165,6 +178,8 @@ describe("thresholds file", () => {
         const s = o.source as { url?: string; accessed?: string } | undefined;
         expect(s?.url, path).toMatch(/^https:\/\//);
         expect(s?.accessed, path).toBeTruthy();
+        expect(o.verifiedBy, path).toBeTruthy();
+        expect(o.verifiedOn, path).toMatch(/^\d{4}-\d{2}-\d{2}$/);
         return;
       }
       for (const [k, x] of Object.entries(o)) walk(x, `${path}.${k}`);
@@ -175,8 +190,9 @@ describe("thresholds file", () => {
 
 describe("unverified thresholds do not decide", () => {
   it("shows unknown status and the measured values while every threshold is unverified", () => {
-    expect(unverifiedThresholds(rawCfg)).toBe(true);
-    const r = computeWorkWindows(series(1, () => ({ windMs: 9 })), rawCfg, NOW, { days: 1, sowingCrop: "corn" });
+    const unverified = allUnverified(rawCfg);
+    expect(unverifiedThresholds(unverified)).toBe(true);
+    const r = computeWorkWindows(series(1, () => ({ windMs: 9 })), unverified, NOW, { days: 1, sowingCrop: "corn" });
     for (const o of r.operations) {
       expect(o.days[0]!.status).toBe("unknown");
       expect(o.days[0]!.limiting).toBeNull();
@@ -195,7 +211,7 @@ describe("unverified thresholds do not decide", () => {
     expect(op(r, "spraying").days[0]!.windows.every((w) => w.status === "good")).toBe(true);
   });
   it("lets a verified threshold decide again when flipped", () => {
-    const c: WorkWindowsConfig = JSON.parse(JSON.stringify(rawCfg));
+    const c: WorkWindowsConfig = allUnverified(rawCfg);
     c.spraying.windMaxMs = { ...c.spraying.windMaxMs!, verified: true };
     c.spraying.windMinMs = { ...c.spraying.windMinMs!, verified: true };
     const r = computeWorkWindows(series(1, () => ({ windMs: 9 })), c, NOW, { days: 1 });
