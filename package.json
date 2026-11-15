@@ -19,7 +19,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "golden": "node tools/golden/run.mjs",
-    "demo:video": "node tools/demo-video/build.mjs"
+    "demo:video": "node tools/demo-video/build.mjs",
+    "demo:deck": "node tools/demo-deck/build.mjs"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

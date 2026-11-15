@@ -1,5 +1,10 @@
 # Terrasight
 
+> **AI use.**
+> Code, tests and documentation were written and reviewed with an AI coding assistant (Claude Code) under the team's direction; the team reviewed and owns the result.
+> In the product, the Google Gemini API writes the wording of recommendations and assistant answers; every number comes from the models and is checked against tool results.
+> The demo video's narration is an AI-generated voice (Google Gemini TTS); the screen recordings are of the real application. No AI-generated images, video or data.
+
 An AI assistant for agronomists: daily, explained recommendations per field (pest and disease risk, irrigation, sowing windows, alerts) and 5-season crop rotation planning (2026–2030; the headline is the decision for next season), built on 18 seasons of NASA, USDA and ESA open data. The farmer gets a simple shared report.
 
 Built for the NASA Space Apps Challenge 2026, challenge _"Field Shift: Adapting Farms with NASA Data"_. Languages: Ukrainian and English.

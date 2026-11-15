@@ -2,7 +2,7 @@
 // Every number in an overlay is read from the DOM at record time and asserted: nothing is typed in here.
 import fs from "node:fs";
 import path from "node:path";
-import { OUT } from "./env.mjs";
+import { OUT, ROOT } from "./env.mjs";
 import { settle } from "./take.mjs";
 
 const must = (v, what) => {
@@ -460,9 +460,17 @@ async function endCard(take, cfg, L) {
   const logo = page.locator("header > span").first();
   await logo.waitFor();
   const logoHtml = await logo.evaluate((el) => el.outerHTML);
+  let team = "";
+  try {
+    const t = JSON.parse(fs.readFileSync(path.join(ROOT, "tools/demo-deck/team.json"), "utf8")).teamName;
+    if (t && !/TEAM NAME|PLACEHOLDER/i.test(t)) team = t;
+  } catch {
+    // no team file: the card shows the event line only
+  }
+  const footer = (team ? team + " · " : "") + "NASA Space Apps 2026 · Field Shift";
   await settle(page, 500);
   const t0 = take.mark("ready");
-  await page.evaluate((html) => {
+  await page.evaluate(({ html, footer }) => {
     const card = document.createElement("div");
     card.id = "endcard";
     card.style.cssText = `position:fixed;inset:0;z-index:2147482000;background:var(--ts-bg);color:var(--ts-ink);display:flex;flex-direction:column;
@@ -483,8 +491,12 @@ async function endCard(take, cfg, L) {
       ) +
       row("USDA CDL · USDA NASS", "font-family:var(--ts-mono);font-size:22px;color:var(--ts-ink-2)") +
       row(
-        "NASA Space Apps 2026 · Field Shift",
-        "font-family:var(--ts-mono);font-size:20px;letter-spacing:.08em;text-transform:uppercase;color:var(--ts-ink-3);margin-top:var(--ts-s6)",
+        footer,
+        "font-family:var(--ts-mono);font-size:22px;letter-spacing:.08em;text-transform:uppercase;color:var(--ts-ink-3);margin-top:var(--ts-s6)",
+      ) +
+      row(
+        "Narration: AI-generated voice",
+        "font-family:var(--ts-mono);font-size:22px;letter-spacing:.04em;color:var(--ts-ink-2)",
       );
     document.documentElement.appendChild(card);
     // slow push so the held card never freezes
@@ -508,7 +520,7 @@ async function endCard(take, cfg, L) {
         },
       ),
     );
-  }, logoHtml);
+  }, { html: logoHtml, footer });
   await page.waitForTimeout((L + 0.4) * 1000);
   return { segs: [{ from: t0, to: take.now() }] };
 }

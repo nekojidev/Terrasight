@@ -1,27 +1,27 @@
 1
-00:00:00,100 --> 00:00:06,032
-Forty-five years of NASA weather. One field. Its first frost now comes eight days later.
+00:00:00,100 --> 00:00:05,568
+Forty-five years of NASA weather. One field’s first frost: eight days later.
 
 2
-00:00:06,632 --> 00:00:10,534
+00:00:06,168 --> 00:00:10,071
 So what do you plant? Each morning, Terrasight says what to do first.
 
 3
-00:00:11,832 --> 00:00:16,053
+00:00:10,968 --> 00:00:15,189
 Each rotation faces a hundred and fifty weather runs and ten price scenarios.
 
 4
-00:00:17,032 --> 00:00:20,933
-Ask why. Every number in the answer is checked against the models.
+00:00:15,868 --> 00:00:19,136
+Ask why. Every number is checked against the models.
 
 5
-00:00:21,533 --> 00:00:24,260
+00:00:20,268 --> 00:00:22,995
 And the models are checked against what really happened.
 
 6
-00:00:24,933 --> 00:00:26,746
+00:00:23,668 --> 00:00:25,481
 The owner decides in one tap.
 
 7
-00:00:28,333 --> 00:00:30,703
+00:00:27,068 --> 00:00:29,438
 From NASA data to tomorrow’s decision.
