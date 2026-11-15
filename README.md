@@ -15,6 +15,19 @@ Built for the NASA Space Apps Challenge 2026, challenge _"Field Shift: Adapting 
 - **Roles:** Owner (the company's owner: users, decisions, report links) and Agronomist (field work; asks the owner).
 - **Scouting, owner decisions, zones and work log, work windows**, owner report links without an account.
 
+## Demo and screens
+
+**30-second demo video:** [`demo/terrasight-30s.mp4`](demo/terrasight-30s.mp4) (AI-generated narration, disclosed on the end card and in the file metadata).
+
+All screenshots below are of the running application with real data (fields in Finney County, Kansas). The company and the people shown are a fictional persona.
+
+| | |
+| --- | --- |
+| **Morning brief:** what to do first today, and why<br>![Today](docs/screenshots/today.png) | **Field shift:** how this field's climate has changed (NASA POWER, 1981 to today)<br>![Climate shift](docs/screenshots/climate-shift.png) |
+| **Five-season rotation plan** (2026–2030), compared on weather runs and price scenarios<br>![Rotation plan](docs/screenshots/rotation-plan.png) | **AI assistant:** every number in an answer is checked against the models<br>![Assistant](docs/screenshots/assistant.png) |
+| **How far can you trust this:** the model against official yields and satellite greenness<br>![Trust](docs/screenshots/trust.png) | **The years the model missed**, shown, not hidden<br>![Trust chart](docs/screenshots/trust-chart.png) |
+| **Work windows:** when spraying, sowing, harvest and fertiliser are possible this week<br>![Work windows](docs/screenshots/work-windows.png) | |
+
 ## Quick start
 
 Requirements: Docker, Node 26 (`.nvmrc`), pnpm 10 (`corepack enable`).
