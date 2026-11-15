@@ -23,9 +23,17 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "rea
 import dynamic from "next/dynamic";
 import type { FieldMapHandle } from "@/components/FieldMap";
 import { reasonText, type LandView } from "@/components/LandSuitability";
+import { NoticeStack } from "@/components/NoticeStack";
 import type { LngLat } from "@/lib/map-style";
 import { api, ApiError } from "@/lib/api";
-import { parseCoordinates, ringFromFile, UploadError, type UploadErrorCode } from "@/lib/upload";
+import {
+  parseCoordinates,
+  readAddFieldMode,
+  ringFromFile,
+  UploadError,
+  writeAddFieldMode,
+  type UploadErrorCode,
+} from "@/lib/upload";
 import { useActionToast } from "@/lib/useActionToast";
 import { useFormat } from "@/lib/useFormat";
 
@@ -136,11 +144,12 @@ export function AddFieldClient({
   const fileRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
 
-  const [mode, setMode] = useState<Mode>("draw");
+  const [mode, setMode] = useState<Mode>("file");
   const [ring, setRing] = useState<LngLat[]>([]);
   const [fromFile, setFromFile] = useState(false);
   const [closed, setClosed] = useState(false);
-  const [drawing, setDrawing] = useState(true);
+  const [drawing, setDrawing] = useState(false);
+  const fitAfterShow = useRef<[number, number, number, number] | null>(null);
   const [query, setQuery] = useState("");
   const [preview, setPreview] = useState<Preview | null>(null);
   const [previewing, setPreviewing] = useState(false);
@@ -152,6 +161,30 @@ export function AddFieldClient({
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
   const [pending, setPending] = useState<LngLat[] | null>(null);
+
+  // The last mode of this visit (not saved across visits); read after mount so the server and client agree.
+  useEffect(() => {
+    if (readAddFieldMode() === "draw") {
+      setMode("draw");
+      setDrawing(true);
+    }
+  }, []);
+
+  const showMap = mode === "draw" || ring.length > 0;
+  // A loaded outline appears on a map that was not on screen yet: fit it as soon as the map exists.
+  useEffect(() => {
+    if (!showMap || !fitAfterShow.current) return;
+    const box = fitAfterShow.current;
+    let tries = 0;
+    const id = window.setInterval(() => {
+      if (mapRef.current) {
+        mapRef.current.fitBounds(box);
+        fitAfterShow.current = null;
+        window.clearInterval(id);
+      } else if (++tries > 40) window.clearInterval(id);
+    }, 100);
+    return () => window.clearInterval(id);
+  }, [showMap, ring]);
 
   const geometry =
     closed && ring.length >= 3 ? { type: "Polygon" as const, coordinates: [[...ring, ring[0]!]] } : null;
@@ -215,20 +248,21 @@ export function AddFieldClient({
     setRing((r) => r.slice(0, -1));
     setClosed(false);
     setDrawing(true);
-    setMode("draw");
+    chooseMode("draw");
   }
   function clear() {
     setRing([]);
     setFromFile(false);
     setClosed(false);
     setDrawing(true);
-    setMode("draw");
+    chooseMode("draw");
     setOutlineError(null);
   }
 
   /** Switching never throws points away: drawing resumes where it stopped, a loaded outline stays editable. */
   function chooseMode(m: Mode) {
     setMode(m);
+    writeAddFieldMode(m);
     if (m === "draw") {
       setDrawing(true);
       if (closed) setClosed(false);
@@ -245,7 +279,9 @@ export function AddFieldClient({
     setOutlineError(null);
     const lons = r.map((p) => p[0]);
     const lats = r.map((p) => p[1]);
-    mapRef.current?.fitBounds([Math.min(...lons), Math.min(...lats), Math.max(...lons), Math.max(...lats)]);
+    const box: [number, number, number, number] = [Math.min(...lons), Math.min(...lats), Math.max(...lons), Math.max(...lats)];
+    if (mapRef.current) mapRef.current.fitBounds(box);
+    else fitAfterShow.current = box;
   }
 
   async function upload(file: File | undefined) {
@@ -314,11 +350,15 @@ export function AddFieldClient({
   const limited = suit && (suit.status === "limited" || suit.status === "unsuitable");
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className={`flex flex-col gap-6 ${preview ? "max-lg:pb-24" : ""}`}>
       <div>
         <h1 className="text-h1 text-ink">{t("title")}</h1>
         <p className="mt-2 text-body text-ink-2">{t("sub")}</p>
       </div>
+
+      {outlineError && (
+        <NoticeStack notices={[{ id: "outline", tone: "urgent", title: outlineError }]} />
+      )}
 
       <Segmented
         label={t("mode_label")}
@@ -362,7 +402,17 @@ export function AddFieldClient({
             tabIndex={-1}
             onChange={(e) => void upload(e.target.files?.[0])}
           />
+          {showMap && (
           <div className="relative">
+            {drawing && !closed && mode === "draw" && (
+              <p
+                role="status"
+                className="z-10 mb-2 flex items-center gap-2 rounded-card bg-ink px-4 py-3 text-body text-surface lg:absolute lg:inset-x-0 lg:bottom-6 lg:mx-auto lg:mb-0 lg:w-fit lg:max-w-[calc(100%-2rem)] lg:rounded-chip lg:px-5"
+              >
+                <Info aria-hidden className="size-5 shrink-0 text-signal dark:text-on-signal" strokeWidth={1.7} />
+                {t("hint")}
+              </p>
+            )}
             <FieldMap
               mapRef={mapRef}
               ring={ring}
@@ -431,16 +481,8 @@ export function AddFieldClient({
                 </div>
               )}
             </div>
-            {drawing && !closed && mode === "draw" && (
-              <p
-                role="status"
-                className="absolute inset-x-0 bottom-6 mx-auto flex w-fit max-w-[calc(100%-2rem)] items-center gap-2 rounded-chip bg-ink px-5 py-3 text-body text-surface"
-              >
-                <Info aria-hidden className="size-5 text-signal dark:text-on-signal" strokeWidth={1.7} />
-                {t("hint")}
-              </p>
-            )}
           </div>
+          )}
         </div>
 
         <form ref={formRef} onSubmit={submit} className="h-fit">
@@ -457,75 +499,62 @@ export function AddFieldClient({
                 ) : (
                   <p>{ring.length > 0 ? t("cl_outline_open") : t("cl_outline_todo")}</p>
                 )}
-                {outlineError && (
-                  <p role="alert" className="rounded-input bg-urgent-soft px-3 py-2 text-urgent">
-                    {outlineError}
-                  </p>
-                )}
               </Step>
 
-              <Step state={preview ? "done" : "todo"} title={t("cl_place")}>
+              <Step state={limited ? "warn" : preview ? "done" : "todo"} title={t("cl_check")}>
                 {preview ? (
                   <>
                     {preview.placeLabel && <p className="text-ink">{preview.placeLabel}</p>}
                     <p>{t(`tierLine_${preview.tier}`)}</p>
                     {!preview.hasRotationLibrary && <p className="text-week">{a("noRotationLibrary")}</p>}
+                    {!suit || suit.status === "unknown" ? (
+                      <p>{t("cl_land_unknown")}</p>
+                    ) : limited ? (
+                      <div role="alert" className="flex flex-col gap-2">
+                        <p className="font-semibold text-ink">
+                          {land(`landPreviewTitle_${suit.status as "limited" | "unsuitable"}`)}
+                        </p>
+                        <ul className="flex flex-col gap-2">
+                          {suit.reasons.map((r) => (
+                            <li key={`${r.code}:${r.level}`} className="flex items-start gap-2 text-ink">
+                              <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-week" />
+                              {reasonText(land, r)}
+                            </li>
+                          ))}
+                        </ul>
+                        <p>{land("landPreviewKeep")}</p>
+                      </div>
+                    ) : (
+                      <p>{t("cl_land_ok")}</p>
+                    )}
+                    <fieldset className="flex flex-col gap-2">
+                      <legend className="mb-1 text-small text-ink-2">{t("cl_irr_short")}</legend>
+                      <div className="grid grid-cols-2 gap-2">
+                        {(["yes", "no"] as const).map((v) => (
+                          <button
+                            key={v}
+                            type="button"
+                            aria-pressed={irrigated === v}
+                            onClick={() => setIrrigated(irrigated === v ? "unknown" : v)}
+                            className={`focus-ring flex min-h-13 items-center justify-center gap-2 rounded-btn border text-body font-semibold text-ink ${irrigated === v ? "border-ink bg-muted" : "border-line-control"}`}
+                          >
+                            {v === "yes" ? (
+                              <Droplet aria-hidden className="size-5" strokeWidth={1.7} />
+                            ) : (
+                              <Sun aria-hidden className="size-5" strokeWidth={1.7} />
+                            )}
+                            {t(v)}
+                          </button>
+                        ))}
+                      </div>
+                      <p>{t("cl_irr_todo")}</p>
+                    </fieldset>
                   </>
                 ) : previewing ? (
                   <Skeleton variant="text" rows={2} label={t("cl_checking")} />
                 ) : (
-                  <p>{t("cl_place_todo")}</p>
+                  <p>{t("cl_check_todo")}</p>
                 )}
-              </Step>
-
-              <Step state={limited ? "warn" : preview && suit ? "done" : "todo"} title={t("cl_land")}>
-                {!preview ? (
-                  <p>{previewing ? t("cl_checking") : t("cl_land_todo")}</p>
-                ) : !suit || suit.status === "unknown" ? (
-                  <p>{t("cl_land_unknown")}</p>
-                ) : limited ? (
-                  <div role="alert" className="flex flex-col gap-2">
-                    <p className="font-semibold text-ink">
-                      {land(`landPreviewTitle_${suit.status as "limited" | "unsuitable"}`)}
-                    </p>
-                    <ul className="flex flex-col gap-2">
-                      {suit.reasons.map((r) => (
-                        <li key={`${r.code}:${r.level}`} className="flex items-start gap-2 text-ink">
-                          <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-week" />
-                          {reasonText(land, r)}
-                        </li>
-                      ))}
-                    </ul>
-                    <p>{land("landPreviewKeep")}</p>
-                  </div>
-                ) : (
-                  <p>{t("cl_land_ok")}</p>
-                )}
-              </Step>
-
-              <Step state={irrigated !== "unknown" ? "done" : "todo"} title={t("cl_irr")}>
-                <fieldset className="flex flex-col gap-3">
-                  <legend className="mb-2 text-small text-ink-2">{a("irrOptional")}</legend>
-                  <div className="grid grid-cols-2 gap-2">
-                    {(["yes", "no"] as const).map((v) => (
-                      <button
-                        key={v}
-                        type="button"
-                        aria-pressed={irrigated === v}
-                        onClick={() => setIrrigated(irrigated === v ? "unknown" : v)}
-                        className={`focus-ring flex min-h-13 items-center justify-center gap-2 rounded-btn border text-body font-semibold text-ink ${irrigated === v ? "border-ink bg-muted" : "border-line-control"}`}
-                      >
-                        {v === "yes" ? (
-                          <Droplet aria-hidden className="size-5" strokeWidth={1.7} />
-                        ) : (
-                          <Sun aria-hidden className="size-5" strokeWidth={1.7} />
-                        )}
-                        {t(v)}
-                      </button>
-                    ))}
-                  </div>
-                  <p>{t("cl_irr_todo")}</p>
-                </fieldset>
               </Step>
 
               <Step state={name.trim() ? "done" : "todo"} title={t("cl_name")}>
@@ -560,16 +589,24 @@ export function AddFieldClient({
               </ul>
             </Disclosure>
 
-            <Button
-              type="submit"
-              size={56}
-              icon={<ArrowRight />}
-              className="w-full justify-center"
-              disabled={!preview || busy || !name.trim()}
-              aria-busy={busy}
+            <div
+              className={
+                preview
+                  ? "max-lg:fixed max-lg:inset-x-0 max-lg:bottom-[calc(var(--ts-tabbar)+env(safe-area-inset-bottom))] max-lg:z-30 max-lg:border-t max-lg:border-line max-lg:bg-surface max-lg:p-3 max-lg:shadow-sheet"
+                  : undefined
+              }
             >
-              {t("go")}
-            </Button>
+              <Button
+                type="submit"
+                size={56}
+                icon={<ArrowRight />}
+                className="w-full justify-center"
+                disabled={!preview || busy || !name.trim()}
+                aria-busy={busy}
+              >
+                {t("go")}
+              </Button>
+            </div>
             <Button variant="link" className="self-center" onClick={() => router.push("/")}>
               {t("cancel")}
             </Button>

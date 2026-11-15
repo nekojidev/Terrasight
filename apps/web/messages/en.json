@@ -489,7 +489,19 @@
     "emptyAction": "Add a field",
     "selected": "Showing only {name}",
     "showAll": "Show all",
-    "mapKb": "Tap or focus a pin and press Enter to show only its fields."
+    "mapKb": "Tap or focus a pin and press Enter to show only its fields.",
+    "sumFields": "{n, plural, one {# field} other {# fields}}",
+    "sumUrgent": "{n} urgent",
+    "sumWeek": "{n} this week",
+    "sumOk": "all good",
+    "showMap": "Show the map",
+    "hideMap": "Hide the map",
+    "mapTitle": "Map",
+    "regionMenu": "Region",
+    "regionAll": "Region: All",
+    "nothingWaiting": "Nothing waiting",
+    "needsYou": "Needs you",
+    "restTitle": "All good"
   },
   "Field": {
     "lang_group": "Interface language",
@@ -1424,7 +1436,7 @@
     "user_ini": "O",
     "back": "Today",
     "title": "Add a field",
-    "sub": "Just 3 steps. We'll put together the field's history in about 30 seconds.",
+    "sub": "Outline the field. We build its history in about 30 seconds.",
     "s1": "Find the place",
     "s2": "Outline the field",
     "s3": "Check",
@@ -1482,7 +1494,7 @@
     "client": "Prairie Field Co.",
     "mode_label": "How do you want to add the outline?",
     "mode_file": "Upload a file",
-    "mode_draw": "Trace on the map",
+    "mode_draw": "Draw on the map",
     "file_hint": "GeoJSON, KML or a zipped Shapefile, up to 10 MB.",
     "file_choose": "Choose a file",
     "file_progress": "Reading the outline file",
@@ -1518,7 +1530,10 @@
     "whatUpload": "Load the outline file",
     "whatPreview": "Check the outline",
     "whatCreate": "Add the field",
-    "whatSearch": "Search for the place"
+    "whatSearch": "Search for the place",
+    "cl_check": "Place and land check",
+    "cl_check_todo": "Runs after the outline is done.",
+    "cl_irr_short": "Irrigated? (optional)"
   },
   "Assistant": {
     "lang_group": "Interface language",

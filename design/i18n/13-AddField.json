@@ -15,7 +15,7 @@
     "user_ini": "О",
     "back": "Сьогодні",
     "title": "Додайте поле",
-    "sub": "Лише 3 кроки. Першу історію поля ми зберемо приблизно за 30 секунд.",
+    "sub": "Позначте контур поля. Історію поля ми зберемо приблизно за 30 секунд.",
     "s1": "Знайдіть місце",
     "s2": "Обведіть поле",
     "s3": "Перевірте",
@@ -73,7 +73,7 @@
     "client": "Prairie Field Co.",
     "mode_label": "Як додати контур?",
     "mode_file": "Завантажити файл",
-    "mode_draw": "Обвести на карті",
+    "mode_draw": "Намалювати на карті",
     "file_hint": "GeoJSON, KML або Shapefile у zip, до 10 МБ.",
     "file_choose": "Обрати файл",
     "file_progress": "Читаємо файл контуру",
@@ -109,7 +109,10 @@
     "whatUpload": "Завантажити файл контуру",
     "whatPreview": "Перевірити контур",
     "whatCreate": "Додати поле",
-    "whatSearch": "Знайти місце"
+    "whatSearch": "Знайти місце",
+    "cl_check": "Місце і перевірка землі",
+    "cl_check_todo": "Запуститься, коли контур буде готовий.",
+    "cl_irr_short": "Поле зрошується? (необов’язково)"
   },
   "en": {
     "lang_group": "Interface language",
@@ -127,7 +130,7 @@
     "user_ini": "O",
     "back": "Today",
     "title": "Add a field",
-    "sub": "Just 3 steps. We'll put together the field's history in about 30 seconds.",
+    "sub": "Outline the field. We build its history in about 30 seconds.",
     "s1": "Find the place",
     "s2": "Outline the field",
     "s3": "Check",
@@ -185,7 +188,7 @@
     "client": "Prairie Field Co.",
     "mode_label": "How do you want to add the outline?",
     "mode_file": "Upload a file",
-    "mode_draw": "Trace on the map",
+    "mode_draw": "Draw on the map",
     "file_hint": "GeoJSON, KML or a zipped Shapefile, up to 10 MB.",
     "file_choose": "Choose a file",
     "file_progress": "Reading the outline file",
@@ -221,6 +224,9 @@
     "whatUpload": "Load the outline file",
     "whatPreview": "Check the outline",
     "whatCreate": "Add the field",
-    "whatSearch": "Search for the place"
+    "whatSearch": "Search for the place",
+    "cl_check": "Place and land check",
+    "cl_check_todo": "Runs after the outline is done.",
+    "cl_irr_short": "Irrigated? (optional)"
   }
 }

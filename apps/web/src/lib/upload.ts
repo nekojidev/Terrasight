@@ -112,3 +112,31 @@ export function parseCoordinates(text: string): LngLat | null {
   const lon = Number(m[2]);
   return Math.abs(lat) <= 90 && Math.abs(lon) <= 180 ? [lon, lat] : null;
 }
+
+export type AddFieldMode = "file" | "draw";
+const MODE_KEY = "terrasight.addField.mode";
+
+function visitStore(): Storage | null {
+  try {
+    return typeof sessionStorage === "undefined" ? null : sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
+/** The add-field mode chosen earlier in this visit (session only); "Upload a file" when none, or when storage is blocked. */
+export function readAddFieldMode(store: Pick<Storage, "getItem"> | null = visitStore()): AddFieldMode {
+  try {
+    return store?.getItem(MODE_KEY) === "draw" ? "draw" : "file";
+  } catch {
+    return "file";
+  }
+}
+
+export function writeAddFieldMode(mode: AddFieldMode, store: Pick<Storage, "setItem"> | null = visitStore()): void {
+  try {
+    store?.setItem(MODE_KEY, mode);
+  } catch {
+    /* private window or blocked storage: the default applies next time */
+  }
+}

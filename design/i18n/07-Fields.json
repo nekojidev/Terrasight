@@ -125,7 +125,19 @@
     "emptyAction": "Додати поле",
     "selected": "Показано лише: {name}",
     "showAll": "Показати всі",
-    "mapKb": "Торкніться позначки або виберіть її з клавіатури й натисніть Enter, щоб показати лише її поля."
+    "mapKb": "Торкніться позначки або виберіть її з клавіатури й натисніть Enter, щоб показати лише її поля.",
+    "sumFields": "{n, plural, one {# поле} few {# поля} many {# полів} other {# поля}}",
+    "sumUrgent": "{n} термінових",
+    "sumWeek": "{n} цього тижня",
+    "sumOk": "усе добре",
+    "showMap": "Показати карту",
+    "hideMap": "Сховати карту",
+    "mapTitle": "Карта",
+    "regionMenu": "Регіон",
+    "regionAll": "Регіон: усі",
+    "nothingWaiting": "Нічого не очікує",
+    "needsYou": "Потребують уваги",
+    "restTitle": "Усе добре"
   },
   "en": {
     "lang_group": "Interface language",
@@ -253,6 +265,18 @@
     "emptyAction": "Add a field",
     "selected": "Showing only {name}",
     "showAll": "Show all",
-    "mapKb": "Tap or focus a pin and press Enter to show only its fields."
+    "mapKb": "Tap or focus a pin and press Enter to show only its fields.",
+    "sumFields": "{n, plural, one {# field} other {# fields}}",
+    "sumUrgent": "{n} urgent",
+    "sumWeek": "{n} this week",
+    "sumOk": "all good",
+    "showMap": "Show the map",
+    "hideMap": "Hide the map",
+    "mapTitle": "Map",
+    "regionMenu": "Region",
+    "regionAll": "Region: All",
+    "nothingWaiting": "Nothing waiting",
+    "needsYou": "Needs you",
+    "restTitle": "All good"
   }
 }
