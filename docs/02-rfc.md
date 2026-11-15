@@ -85,7 +85,7 @@ flowchart TB
     end
 
     MQ[["RabbitMQ<br/>jobs · terrasight.events"]]
-    EXT["NASA POWER · MODIS · SMAP · GPM<br/>Sentinel-2 · CDL · SSURGO · OpenET · SoilGrids"]
+    EXT["NASA POWER · MODIS · GPM<br/>Sentinel-2 · CDL · SSURGO · OpenET · SoilGrids"]
     FC["Open-Meteo · NOAA NWS"]
     LLM["Google Gemini API"]
 
@@ -509,7 +509,7 @@ An **analysis run** is one check of a set of fields. It has two triggers and one
 ```mermaid
 flowchart LR
     T["Run created<br/>schedule or manual"] --> J["One field.check job<br/>per field"]
-    J --> D["Refresh per grid cell<br/>POWER recent days · forecast<br/>NDVI (new composite) · SMAP"]
+    J --> D["Refresh per grid cell<br/>POWER recent days · forecast<br/>NDVI (new composite)"]
     D --> SR["Season state<br/>crop · stage · sowing date<br/>water balance"]
     SR --> E["Evaluators for this season<br/>pest · disease (P1) · irrigation (P1)"]
     E --> U["Compare with existing<br/>upsert · level history"]
