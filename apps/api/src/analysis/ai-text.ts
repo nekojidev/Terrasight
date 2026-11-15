@@ -9,6 +9,7 @@ import {
 } from "@terrasight/assistant-core";
 import { stableStringify } from "@terrasight/evaluators";
 import { promptVersionOf } from "../ai/trace.js";
+import { hasForeignScript } from "../recommendations/text-script.js";
 
 /**
  * AI-written recommendation texts (Product Definition v2.11). The evaluators stay the source of risk levels, key
@@ -86,6 +87,7 @@ export function textProblem(w: WrittenText, allowed: AllowedSet, safety: SafetyF
       if (!s) return `missing ${field}.${lang}`;
       if (s.length > LIMITS[field]) return `${field}.${lang} too long`;
       if (/[{}<>]|```/.test(s)) return `${field}.${lang} has markup`;
+      if (hasForeignScript(s, lang)) return `${field}.${lang} has letters of another script`;
       if (safety.sentence(s, lang).blocked) return `${field}.${lang} names a product or dose`;
       for (const sentence of splitSentences(s, lang)) {
         const c = checkSentence(sentence, allowed, lang);
@@ -191,6 +193,7 @@ export function validateSummary(
     const s = text[lang];
     if (!s) return { problem: `missing ${lang}` };
     if (s.length > 240) return { problem: `${lang} too long` };
+    if (hasForeignScript(s, lang)) return { problem: `${lang} has letters of another script` };
     if (safety.sentence(s, lang).blocked) return { problem: `${lang} names a product or dose` };
     const sentences = splitSentences(s, lang);
     if (sentences.length > 2) return { problem: `${lang} is not one sentence` };

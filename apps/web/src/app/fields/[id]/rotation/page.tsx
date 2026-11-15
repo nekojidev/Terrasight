@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { AppShell } from "@/components/AppShell";
 import { SessionRefresher } from "@/components/SessionRefresher";
+import { canDoFieldWork } from "@/lib/permissions";
 import { activeWorkspace, serverGet, type Me } from "@/lib/server-api";
 import { RotationClient } from "./RotationClient";
 
@@ -47,7 +48,7 @@ export default async function RotationPage({ params }: { params: Promise<{ id: s
         thumb={field.data.thumb ?? null}
         crop={lastCrop}
         units={ws.data.units}
-        canSave
+        canSave={canDoFieldWork(ws.data.role)}
       />
     </AppShell>
   );

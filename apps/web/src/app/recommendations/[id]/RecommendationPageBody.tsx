@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { AppShell } from "@/components/AppShell";
 import { SessionRefresher } from "@/components/SessionRefresher";
+import { canDoFieldWork } from "@/lib/permissions";
 import { activeWorkspace, serverGet, type Me } from "@/lib/server-api";
 import { RecommendationClient, type RecView } from "./RecommendationClient";
 
@@ -39,7 +40,7 @@ export async function RecommendationPageBody({ id, canonical }: { id: string; ca
       <RecommendationClient
         workspaceId={ws.data.id}
         timeZone={ws.data.timeZone}
-        canAct
+        canAct={canDoFieldWork(ws.data.role)}
         canAsk={ws.data.role !== "owner"}
         initial={rec.data}
       />

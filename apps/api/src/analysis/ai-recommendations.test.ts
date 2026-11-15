@@ -55,6 +55,15 @@ describe("validateBatch (number check, safety filter, watch rules)", () => {
     expect(v.rejected[0]?.reason).toMatch(/number not in facts/);
   });
 
+  it("rejects letters of another script (stray Japanese in an English action)", () => {
+    const bad = good({
+      action: txt("Discuss resistant hybrids with道の seed supplier.", "Обговоріть стійкі гібриди з постачальником."),
+    });
+    const v = validateBatch({ items: [{ ref: "r1", ...bad }] }, facts, shared, new Map(), safety);
+    expect(v.items.size).toBe(0);
+    expect(v.rejected[0]?.reason).toMatch(/another script/);
+  });
+
   it("rejects a product name or a dose", () => {
     const product = good({ action: txt("Spray glyphosate now.", "Обробіть гліфосатом.") });
     const dose = good({ action: txt("Apply 2 L/ha in spring.", "Внесіть 2 л/га навесні.") });

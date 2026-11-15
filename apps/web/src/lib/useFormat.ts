@@ -5,6 +5,7 @@ import { useMemo } from "react";
 import {
   dayShift,
   formatArea,
+  moneyPerArea,
   formatDayOfYear,
   formatDate,
   formatDateRelative,
@@ -55,6 +56,11 @@ export function useFormat(options: UseFormatOptions = {}) {
         formatDateRelative(d, opts?.now ?? Date.now(), locale, opts?.style, opts?.timeZone ? { timeZone: opts.timeZone } : {}),
       moneyPerArea: (amountPerHa: number, currency: "USD" | "UAH") => moneyPerArea(amountPerHa, currency, units, locale),
       area: (hectares: number) => formatArea(hectares, units, locale),
+      moneyPerArea: (
+        amountPerHa: number,
+        currency: "USD" | "UAH",
+        opts?: { compact?: boolean; maximumFractionDigits?: number },
+      ) => moneyPerArea(amountPerHa, currency, units, locale, opts),
       distance: (metres: number) => formatDistance(metres, units, locale),
       yield: (tPerHa: number) => formatYield(tPerHa, units, locale),
       temp: (celsius: number, digits?: number) => formatTemp(celsius, units, locale, digits),
