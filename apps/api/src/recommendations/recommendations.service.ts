@@ -158,7 +158,7 @@ export class RecommendationsService {
    */
   async get(workspaceId: string, id: string) {
     const rec = await this.load(workspaceId, id);
-    const crops = await this.prisma.system.cropSeason.findMany({
+    const crops = await this.prisma.db.cropSeason.findMany({
       where: { fieldId: rec.fieldId, season: { lt: rec.season } },
       orderBy: { season: "desc" },
       take: 4,

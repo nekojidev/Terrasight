@@ -66,7 +66,7 @@ export class FieldsOverviewController {
           SELECT code, name, ST_AsGeoJSON(ST_SimplifyPreserveTopology(geom, 0.05), 3) AS geojson FROM admin_areas WHERE code = ANY(${codes})`
       : [];
     const areaName = new Map(states.map((x) => [x.code, x.name]));
-    const crops = await this.prisma.system.cropSeason.findMany({
+    const crops = await this.prisma.db.cropSeason.findMany({
       where: { fieldId: { in: fields.map((f) => f.id) } },
       orderBy: { season: "desc" },
     });
@@ -165,25 +165,25 @@ export class FieldOverviewController {
     });
     if (!field) throw new ProblemException(404, "not-found");
     const [checks, scouting, items, plans] = await Promise.all([
-      this.prisma.system.analysisRunField.findMany({
+      this.prisma.db.analysisRunField.findMany({
         where: { fieldId, status: { in: ["ok", "stale", "failed"] } },
         orderBy: { updatedAt: "desc" },
         take: 10,
         include: { run: { select: { trigger: true, requestedBy: true } } },
       }),
-      this.prisma.system.scoutingTask.findMany({
+      this.prisma.db.scoutingTask.findMany({
         where: { fieldId, status: "sent" },
         orderBy: { sentAt: "desc" },
         take: 10,
         include: { recommendation: { select: { subject: true } } },
       }),
-      this.prisma.system.reportItem.findMany({
-        where: { recommendation: { fieldId } },
+      this.prisma.db.reportItem.findMany({
+        where: { workspaceId: req.workspaceId!, recommendation: { fieldId } },
         orderBy: { committedAt: "desc" },
         take: 10,
         include: { answers: { orderBy: { createdAt: "desc" } } },
       }),
-      this.prisma.system.plan.findMany({ where: { fieldId }, orderBy: { savedAt: "desc" }, take: 5 }),
+      this.prisma.db.plan.findMany({ where: { fieldId }, orderBy: { savedAt: "desc" }, take: 5 }),
     ]);
     const entries: Array<{ kind: string; at: Date; source: string; data: Record<string, unknown> }> = [
       // Routine checks with nothing new are noise: keep the latest one and those that found or failed something.
