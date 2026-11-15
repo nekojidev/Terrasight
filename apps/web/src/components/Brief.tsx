@@ -3,19 +3,22 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   BottomSheet,
+  Button,
   Chip,
   ErrorCard,
   HeroItem,
   QueueRow,
   RailCard,
+  FactorRows,
   FieldThumb,
   SeasonStrip,
   Skeleton,
   type Factor,
 } from "@terrasight/ui";
-import { Clock, MessageCircleQuestion, ShieldCheck, Snowflake } from "lucide-react";
+import { CloudRain, Clock, MessageCircleQuestion, Plus, ShieldCheck, Snowflake, Sun } from "lucide-react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { AnalysisCard } from "@/components/AnalysisCard";
 import { api } from "@/lib/api";
@@ -92,6 +95,7 @@ export function Brief({
   const f = useTranslations("Field");
   const locale = useLocale() as "en" | "uk";
   const client = useQueryClient();
+  const router = useRouter();
   const key = ["brief", workspaceId];
   useWorkspaceEvents(workspaceId, ["brief", "analysis"]);
   const brief = useQuery({ queryKey: key, queryFn: () => api<Brief>(`/api/w/${workspaceId}/brief`) });
@@ -210,68 +214,107 @@ export function Brief({
       : undefined;
   };
 
-  const rows = [...b.urgent, ...b.thisWeek];
+  // The hero is the first Urgent item only (design 04); a This-week item the API promoted to hero goes back to the list.
+  const hero = b.hero?.urgency === "urgent" ? b.hero : null;
+  const rows = [...b.urgent, ...(b.hero && !hero ? [b.hero] : []), ...b.thisWeek];
+  const condition = (w: Brief["rail"]["weather"][number]) => {
+    const d = w.today;
+    if (!d) return null;
+    if (d.tminC !== null && d.tminC <= 0) return { icon: <Snowflake />, text: t("wx_frost") };
+    if ((d.precipMm ?? 0) >= 1) return { icon: <CloudRain />, text: t("wx_rain") };
+    if (d.precipMm === null) return null;
+    return { icon: <Sun />, text: t("wx_dry") };
+  };
   return (
     <div className="grid gap-8 xl:grid-cols-[1fr_340px]">
       <div className="flex min-w-0 flex-col gap-8">
-        <header className="flex flex-col gap-2">
-          <p className="font-mono text-small tracking-wide text-ink-2 uppercase">
-            {t("kicker", {
-              date: fmt(b.date, { weekday: "long", day: "numeric", month: "long" }),
-              time: "06:00",
-            })}
-          </p>
-          <h1 className="text-h1 text-ink">{t(hello, { name: firstName })}</h1>
-          <p className="text-body text-ink-2">
-            {t("daySummary", { urgent: b.counts.urgent, week: b.counts.thisWeek, fine: b.counts.allGood })}
-          </p>
+        <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+          <div className="flex min-w-0 flex-col gap-2">
+            <p className="font-mono text-small tracking-wide text-ink-2 uppercase max-sm:hidden">
+              {t("kicker", {
+                date: fmt(b.date, { weekday: "long", day: "numeric", month: "long" }),
+                time: "06:00",
+              })}
+            </p>
+            <h1 className="text-h1 text-ink">{t(hello, { name: firstName })}</h1>
+            <p className="flex flex-wrap gap-2 sm:hidden">
+              <Chip tone="neutral" className="font-mono">
+                {t("phoneKicker", { n: b.rail.today.checked ?? 0 })}
+              </Chip>
+              <Chip tone="neutral" className="font-mono">
+                {m("neutral")}
+              </Chip>
+            </p>
+            <p className="text-body text-ink-2 max-sm:hidden">
+              {t("daySummary", { urgent: b.counts.urgent, week: b.counts.thisWeek, fine: b.counts.allGood })}
+            </p>
+          </div>
+          {canAct && (
+            <Button
+              variant="link"
+              icon={<Plus />}
+              onClick={() => router.push("/fields/new")}
+              className="font-semibold max-sm:hidden"
+            >
+              {t("addField")}
+            </Button>
+          )}
         </header>
-        <AnalysisCard workspaceId={workspaceId} timeZone={b.timeZone} canRun={canAct} />
+        {/* One Analyze fields button: beside the header on desktop, at the bottom on a phone (design 05). */}
+        <div className="order-last sm:order-none">
+          <AnalysisCard workspaceId={workspaceId} timeZone={b.timeZone} canRun={canAct} />
+        </div>
 
-        {b.hero ? (
+        {hero ? (
           <HeroItem
             chip={
               <Chip tone="signal" icon={<Clock />}>
                 {t("startHere")}
-                {b.hero.deadline ? ` · ${due(b.hero)}` : ""}
+                {hero.deadline ? ` · ${due(hero)}` : ""}
               </Chip>
             }
             field={
               <Link
-                href={`/fields/${b.hero.fieldId}`}
+                href={`/fields/${hero.fieldId}`}
                 className="flex items-center gap-3 text-small text-ink-2 hover:underline"
               >
                 <FieldThumb
-                  name={b.hero.fieldName}
-                  outline={b.hero.thumb ?? null}
-                  crop={b.hero.seasons.at(-1)?.crop ?? null}
+                  name={hero.fieldName}
+                  outline={hero.thumb ?? null}
+                  crop={hero.seasons.at(-1)?.crop ?? null}
                   size={40}
                 />
-                <span className="text-body font-semibold text-ink">{b.hero.fieldName}</span>
-                {strip(b.hero.seasons)}
-                {b.hero.more > 0 && <span>{t("more", { n: b.hero.more })}</span>}
+                <span className="text-body font-semibold text-ink">{hero.fieldName}</span>
+                {strip(hero.seasons)}
+                {hero.more > 0 && <span>{t("more", { n: hero.more })}</span>}
               </Link>
             }
-            title={b.hero.text.title[locale]}
-            numbers={numbers(b.hero)}
-            confidence={conf(b.hero)}
+            why={<FactorRows factors={factors(hero).slice(0, 3)} />}
+            title={hero.text.title[locale]}
+            numbers={numbers(hero)}
+            confidence={conf(hero)}
             labels={{ accept: m("acc4"), snooze: m("snooze"), details: m("details") }}
-            detailsHref={`/recommendations/${b.hero.id}`}
-            onAccept={() => canAct && void act(b.hero!, "accept")}
-            onSnooze={() => canAct && void act(b.hero!, "snooze")}
-            {...(doneRow(b.hero.id) ? { done: doneRow(b.hero.id)! } : {})}
+            detailsHref={`/recommendations/${hero.id}`}
+            onAccept={() => canAct && void act(hero!, "accept")}
+            onSnooze={() => canAct && void act(hero!, "snooze")}
+            {...(doneRow(hero.id) ? { done: doneRow(hero.id)! } : {})}
           />
         ) : (
           <p className="rounded-card border border-line bg-surface p-6 text-body text-ink-2">
-            {t("noItems")}
+            {rows.length === 0 ? t("noItems") : t("noUrgent")}
           </p>
         )}
 
-        {rows.length > 0 && (
+        {(rows.length > 0 || hero) && (
           <section className="flex flex-col gap-3">
             <h2 className="text-h2 text-ink">
               {m("next_t")} <span className="text-ink-3">{rows.length}</span>
             </h2>
+            {rows.length === 0 && (
+              <p className="rounded-card border border-line bg-surface p-4 text-small text-ink-2">
+                {t("noWeek")}
+              </p>
+            )}
             {rows.map((i) => (
               <QueueRow
                 key={i.id}
@@ -339,7 +382,7 @@ export function Brief({
           </section>
         )}
 
-        <p className="flex items-center gap-2 text-small text-ink-3">
+        <p className="flex items-center gap-2 text-small text-ink-3 max-sm:hidden">
           <ShieldCheck aria-hidden className="size-4" strokeWidth={1.7} />
           {m("neutral")}
         </p>
@@ -366,12 +409,17 @@ export function Brief({
           <ul className="flex flex-col gap-2">
             {b.rail.weather.map((w) => (
               <li key={`${w.county}${w.region}`} className="flex justify-between gap-3 text-small text-ink">
-                <span>
+                <span className="flex items-center gap-2">
+                  <span aria-hidden className="inline-flex text-ink-2 [&>svg]:size-4 [&>svg]:stroke-[1.7]">
+                    {condition(w)?.icon}
+                  </span>
                   {w.county}
                   {w.region ? `, ${w.region.split("-")[1]}` : ""}
                 </span>
                 <span className="font-mono text-ink-2">
-                  {w.today ? `${temp(w.today.tminC)} / ${temp(w.today.tmaxC)}` : t("noForecast")}
+                  {w.today
+                    ? `${temp(w.today.tminC)} / ${temp(w.today.tmaxC)}${condition(w) ? ` · ${condition(w)!.text}` : ""}`
+                    : t("noForecast")}
                 </span>
               </li>
             ))}
@@ -401,11 +449,22 @@ export function Brief({
               <MessageCircleQuestion aria-hidden className="mt-1 size-4 shrink-0" strokeWidth={1.7} />
               <span>
                 “{b.rail.ownerQuestion.text}”
-                <span className="block text-small text-ink-2">{b.rail.ownerQuestion.fieldName}</span>
+                <span className="block text-small text-ink-2">
+                  {b.rail.ownerQuestion.fieldName} ·{" "}
+                  {dateShort(b.rail.ownerQuestion.at.slice(0, 10))}
+                </span>
               </span>
             </p>
           ) : (
             <p className="text-small text-ink-2">{t("noQuestion")}</p>
+          )}
+          {b.rail.ownerQuestion && (
+            <Link
+              href="/reports"
+              className="focus-ring mt-4 flex min-h-tap items-center justify-center gap-2 rounded-btn bg-muted px-4 text-body font-semibold text-ink hover:brightness-95"
+            >
+              {t("replyLink")}
+            </Link>
           )}
         </RailCard>
       </aside>

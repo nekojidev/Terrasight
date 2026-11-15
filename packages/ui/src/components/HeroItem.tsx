@@ -20,6 +20,8 @@ export interface HeroItemProps {
   detailsHref: string;
   onAccept: () => void;
   onSnooze: () => void;
+  /** Phone only (design 05): a "Why" factors block shown instead of the three big numbers. */
+  why?: ReactNode;
   /** When set, the hero shows the done row with Undo instead of its actions. */
   done?: Omit<DoneRowProps, "className">;
   className?: string;
@@ -28,13 +30,14 @@ export interface HeroItemProps {
 /** The first Urgent item at display size (design 04, RFC §10.5). One per screen. */
 export function HeroItem(p: HeroItemProps) {
   return (
-    <article className={clsx("animate-rise rounded-hero bg-surface p-8 shadow-hero", p.className)}>
-      <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
+    <article className={clsx("animate-rise rounded-hero bg-surface p-5 shadow-hero sm:p-8", p.className)}>
+      <header className="mb-4 flex flex-wrap sm:mb-6 items-start justify-between gap-4">
         {p.chip}
         {p.field}
       </header>
-      <h2 className="text-display mb-8 max-w-[20ch] text-ink">{p.title}</h2>
-      <div className="mb-8 grid grid-cols-1 gap-6 sm:grid-cols-3">
+      <h2 className="text-h1 sm:text-display mb-5 max-w-[20ch] text-ink sm:mb-8">{p.title}</h2>
+      {p.why && <div className="mb-5 rounded-input bg-surface-2 p-4 sm:hidden">{p.why}</div>}
+      <div className={clsx("mb-8 grid grid-cols-1 gap-6 sm:grid-cols-3", p.why && "max-sm:hidden")}>
         {p.numbers.slice(0, 3).map((n) => (
           <BigNumber key={n.label} {...n} />
         ))}
@@ -42,7 +45,7 @@ export function HeroItem(p: HeroItemProps) {
       {p.done ? (
         <DoneRow {...p.done} />
       ) : (
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3 max-sm:[&>button]:flex-1">
           <Button size={56} icon={<Check />} onClick={p.onAccept}>
             {p.labels.accept}
           </Button>
