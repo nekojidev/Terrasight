@@ -266,6 +266,7 @@
     "verifyInvalid": "This link has expired or was already used. Sign in and ask for a new one.",
     "verifyContinue": "Continue",
     "verifyBanner": "Verify your email to accept invitations and keep your account safe.",
+    "verifyDismiss": "Hide for 30 days",
     "verifyResend": "Send the link again",
     "verifyResent": "Link sent. Check your inbox.",
     "inviteVerifyFirst": "Verify your email first: open the link we sent you, then accept the invitation.",
