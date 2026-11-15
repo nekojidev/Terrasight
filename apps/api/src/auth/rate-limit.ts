@@ -70,5 +70,11 @@ export class RateLimitService {
   }
 }
 
-/** Sign-in and sign-up: 10 attempts burst, then one every 6 s, per IP and per email. */
-export const AUTH_BUCKET: BucketSpec = { capacity: 10, refillPerSec: 1 / 6 };
+/**
+ * Sign-in and sign-up: 10 attempts burst, then one every 6 s, per IP and per email. AUTH_RATE_BURST raises the burst
+ * for the contract test run only (many sign-ins from one IP); production keeps the default.
+ */
+export const AUTH_BUCKET: BucketSpec = {
+  capacity: Math.max(1, Number(process.env.AUTH_RATE_BURST) || 10),
+  refillPerSec: 1 / 6,
+};

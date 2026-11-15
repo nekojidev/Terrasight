@@ -74,6 +74,8 @@ jobs:
       REDIS_URL: redis://localhost:6379
       JWT_SECRET: ci-only-secret-0123456789abcdefghijklmnop
       NODE_ENV: test
+      # The collection signs in many times from one IP; production keeps the default burst of 10.
+      AUTH_RATE_BURST: "100"
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
