@@ -1,7 +1,7 @@
 import { classifyUrgency } from "@terrasight/evaluators";
 
 /** Notification kinds (RFC §15.4); the client builds the text from kind + payload. */
-export type NotificationKind = "report_answered" | "urgent_recommendation" | "run_failed";
+export type NotificationKind = "report_answered" | "decision_asked" | "urgent_recommendation" | "run_failed";
 
 export interface NotificationDraft {
   userId: string;
@@ -29,6 +29,20 @@ export function planReportAnswered(
       userId,
       kind: "report_answered" as const,
       payload: { reportItemId: e.reportItemId, answer: e.answer, fieldName: e.fieldName },
+    }));
+}
+
+/** A decision was asked: tell the Viewers (the company owner / manager who answers it). */
+export function planDecisionAsked(
+  members: Member[],
+  e: { decisionId: string; recommendationId: string; fieldName: string },
+): NotificationDraft[] {
+  return members
+    .filter((m) => m.role === "viewer")
+    .map((m) => ({
+      userId: m.userId,
+      kind: "decision_asked" as const,
+      payload: { decisionId: e.decisionId, recommendationId: e.recommendationId, fieldName: e.fieldName },
     }));
 }
 

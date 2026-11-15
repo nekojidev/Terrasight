@@ -9,7 +9,7 @@ import { OutboxService } from "../messaging/outbox.service.js";
 import { QUEUES } from "../messaging/topology.js";
 import { RecommendationsService, type CommitJob } from "./recommendations.service.js";
 
-/** Commits an accepted item to the Owner report when its 8 s Undo window has closed (RFC §10.4). */
+/** Commits an accept (final) or an ask-owner (creates the Decision) when its 8 s Undo window has closed (RFC §10.4). */
 @Injectable()
 export class CommitConsumer extends JobConsumer<CommitJob & { note?: string }> implements OnModuleInit {
   constructor(

@@ -9,12 +9,13 @@ import { loadEnv } from "../src/config/config.js";
 import { PrismaService } from "../src/db/prisma.service.js";
 import { FakeBroker } from "../src/messaging/fake-broker.js";
 import { OutboxService } from "../src/messaging/outbox.service.js";
+import { NotificationsService } from "../src/notifications/notifications.service.js";
 import { QUEUES } from "../src/messaging/topology.js";
 import { RecommendationsService, type CommitJob } from "../src/recommendations/recommendations.service.js";
 
 /**
- * Commit / Undo race (S-04.04; one of the three integration suites kept in the hackathon): an accepted item reaches
- * the Owner report only after 8 s, Undo within 8 s returns it to Open, and the two can never both win.
+ * Commit / Undo race (S-04.04; one of the three integration suites kept in the hackathon): an accept never reaches the
+ * owner; an "ask the owner" becomes a Decision only after 8 s, Undo within 8 s cancels it, and the two can never both win.
  */
 const MIGRATIONS = fileURLToPath(new URL("../../../prisma/migrations/", import.meta.url));
 const DATA_DIR = fileURLToPath(new URL("../../../data/", import.meta.url));
@@ -79,9 +80,11 @@ beforeAll(async () => {
     FIXTURES_DIR: "/nonexistent/fixtures",
   });
   prisma = new PrismaService(env);
+  const outbox = new OutboxService(prisma, new FakeBroker(), env);
   recs = new RecommendationsService(
     prisma,
-    new OutboxService(prisma, new FakeBroker(), env),
+    outbox,
+    new NotificationsService(prisma, outbox),
     loadLibrary(DATA_DIR),
   );
   ws = (
@@ -112,8 +115,8 @@ function clock(at: number) {
   vi.setSystemTime(at);
 }
 
-describe("accept → 8 s → Owner report", () => {
-  it("Undo within 8 s returns the item to Open and nothing reaches the report", async () => {
+describe("accept → 8 s (never reaches the owner)", () => {
+  it("Undo within 8 s returns the item to Open and nothing is committed", async () => {
     const id = await openItem();
     const t0 = Date.now();
     clock(t0);
@@ -128,7 +131,7 @@ describe("accept → 8 s → Owner report", () => {
     expect(await reportItems(id)).toBe(0);
   });
 
-  it("after 8 s Undo is refused (409) and the commit writes one report item", async () => {
+  it("after 8 s Undo is refused (409) and the commit finalises the accept without a decision", async () => {
     const id = await openItem();
     const t0 = Date.now();
     clock(t0);
@@ -139,9 +142,7 @@ describe("accept → 8 s → Owner report", () => {
     expect(await recs.commit(job)).toBe("committed");
     expect(await recs.commit(job)).toBe("skipped"); // redelivery is harmless
     expect(await status(id)).toBe("in_report");
-    const item = await prisma.system.reportItem.findFirstOrThrow({ where: { recommendationId: id } });
-    expect(item.note).toBe("Please check this week");
-    expect(item.text).toMatchObject({ fieldName: "Pivot 14", level: "high", deadline: "2026-11-18" });
+    expect(await reportItems(id)).toBe(0);
   });
 
   it("a commit delivered early does nothing (the consumer re-queues it)", async () => {
@@ -170,7 +171,7 @@ describe("accept → 8 s → Owner report", () => {
     expect(await status(id)).toBe("accepted");
     clock(t0 + 10_100);
     expect(await recs.commit(second)).toBe("committed");
-    expect(await reportItems(id)).toBe(1);
+    expect(await reportItems(id)).toBe(0);
   });
 
   it("Undo and commit racing at the boundary: exactly one wins", async () => {
@@ -181,6 +182,109 @@ describe("accept → 8 s → Owner report", () => {
       await recs.accept(ws, user, id, {});
       const job = await commitJob(id);
       clock(t0 + 8_000 + (i % 2)); // right on the edge of the window
+      const [undo, commit] = await Promise.allSettled([recs.undo(ws, user, id), recs.commit(job)]);
+      const undone = undo.status === "fulfilled";
+      const committed = commit.status === "fulfilled" && commit.value === "committed";
+      expect(undone !== committed).toBe(true);
+      expect(await reportItems(id)).toBe(0);
+      expect(await status(id)).toBe(committed ? "in_report" : "open");
+    }
+  });
+});
+
+describe("ask the owner → 8 s → Decision", () => {
+  it("from Open: accept implied, Undo within 8 s cancels everything", async () => {
+    const id = await openItem();
+    const t0 = Date.now();
+    clock(t0);
+    const asked = await recs.askOwner(ws, user, id, { note: "Needs your OK" });
+    expect(asked.status).toBe("accepted");
+    expect(asked.decisionPending).toBe(true);
+    expect(new Date(asked.undoUntil!).getTime()).toBe(t0 + 8_000);
+    const job = await commitJob(id);
+    clock(t0 + 3_000);
+    const undone = await recs.undo(ws, user, id);
+    expect(undone.status).toBe("open");
+    expect(undone.decisionPending).toBe(false);
+    clock(t0 + 8_500);
+    expect(await recs.commit(job)).toBe("skipped");
+    expect(await reportItems(id)).toBe(0);
+  });
+
+  it("after 8 s the commit creates the decision with the note; redelivery and a second ask are harmless", async () => {
+    const id = await openItem();
+    const t0 = Date.now();
+    clock(t0);
+    await recs.askOwner(ws, user, id, { note: "Needs your OK" });
+    const job = await commitJob(id);
+    clock(t0 + 7_000);
+    expect(await recs.commit(job)).toBe("early");
+    clock(t0 + 8_100);
+    await expect(recs.undo(ws, user, id)).rejects.toMatchObject({ status: 409 });
+    expect(await recs.commit(job)).toBe("committed");
+    expect(await recs.commit(job)).toBe("skipped");
+    expect(await status(id)).toBe("in_report");
+    const again = await recs.askOwner(ws, user, id, { note: "again" }); // idempotent
+    expect(again.decisionPending).toBe(false);
+    expect(await reportItems(id)).toBe(1);
+    const item = await prisma.system.reportItem.findFirstOrThrow({ where: { recommendationId: id } });
+    expect(item.note).toBe("Needs your OK");
+    expect(item.askedBy).toBe(user);
+    expect(item.text).toMatchObject({ fieldName: "Pivot 14", level: "high", deadline: "2026-11-18" });
+    const audit = await prisma.system.auditLog.count({
+      where: { target: id, action: "recommendation.ask_owner" },
+    });
+    expect(audit).toBe(1);
+  });
+
+  it("from an already committed accept: creates the decision, Undo keeps the accept", async () => {
+    const id = await openItem();
+    const t0 = Date.now();
+    clock(t0);
+    await recs.accept(ws, user, id, {});
+    clock(t0 + 8_100);
+    expect(await recs.commit(await commitJob(id))).toBe("committed");
+    expect(await reportItems(id)).toBe(0);
+    clock(t0 + 20_000);
+    const asked = await recs.askOwner(ws, user, id, {});
+    expect(asked.status).toBe("in_report");
+    expect(asked.decisionPending).toBe(true);
+    clock(t0 + 22_000);
+    const undone = await recs.undo(ws, user, id);
+    expect(undone.status).toBe("in_report");
+    expect(undone.decisionPending).toBe(false);
+    clock(t0 + 30_000);
+    await recs.askOwner(ws, user, id, { note: "n" });
+    const job = await commitJob(id);
+    clock(t0 + 38_100);
+    expect(await recs.commit(job)).toBe("committed");
+    expect(await reportItems(id)).toBe(1);
+    expect(await status(id)).toBe("in_report");
+  });
+
+  it("asking during the accept window supersedes the plain accept job", async () => {
+    const id = await openItem();
+    const t0 = Date.now();
+    clock(t0);
+    await recs.accept(ws, user, id, {});
+    const accept = await commitJob(id);
+    clock(t0 + 2_000);
+    await recs.askOwner(ws, user, id, {});
+    clock(t0 + 8_500);
+    expect(await recs.commit(accept)).toBe("skipped");
+    clock(t0 + 10_100);
+    expect(await recs.commit(await commitJob(id))).toBe("committed");
+    expect(await reportItems(id)).toBe(1);
+  });
+
+  it("Undo and the ask commit racing at the boundary: exactly one wins", async () => {
+    for (let i = 0; i < 5; i++) {
+      const id = await openItem();
+      const t0 = Date.now();
+      clock(t0);
+      await recs.askOwner(ws, user, id, {});
+      const job = await commitJob(id);
+      clock(t0 + 8_000 + (i % 2));
       const [undo, commit] = await Promise.allSettled([recs.undo(ws, user, id), recs.commit(job)]);
       const undone = undo.status === "fulfilled";
       const committed = commit.status === "fulfilled" && commit.value === "committed";
