@@ -1,25 +1,23 @@
 {
   "version": 1,
-  "about": "Land suitability thresholds: can a field be cropped at all. Every value carries a source and 'verified'. verified:true is allowed only for a value with a cited source, or for an MVP default the owner approved (then mvpDefault:true: the number has no source and must be refined). Conditions only; the check never says which crop. 'unsuitable' stops crop recommendations for the field until an agronomist overrides it; 'limited' only warns; 'unknown' never blocks. Land capability class (LCC) is the US NRCS system, classes I-VIII. Thresholds verified for the MVP by the owner on 2026-11-15 (sourced values as cited; unsourced values are marked mvpDefault).",
+  "about": "Land suitability thresholds: can a field be cropped at all. Every value carries a source and 'verified'. verified:true is allowed only for a value with a cited source, or for an MVP default the owner approved (then mvpDefault:true: the number has no source and must be refined). Conditions only; the check never says which crop. 'unsuitable' stops crop recommendations for the field until an agronomist overrides it; 'limited' only warns; 'unknown' never blocks. Land capability class (LCC) is the US NRCS system, classes I-VIII. Not yet reviewed by the owner: every value is verified:false; sourced values cite their source, unsourced values are marked mvpDefault.",
   "lcc": {
     "notSuitedFromClass": {
       "value": 5,
       "unit": "class",
-      "verified": true,
+      "verified": false,
       "source": {
         "title": "National Soil Survey Handbook, Part 622 (Interpretive Groups): land capability classification",
         "publisher": "USDA NRCS",
         "url": "https://www.nrcs.usda.gov/resources/guides-and-instructions/national-soil-survey-handbook",
         "accessed": "2026-11-15",
         "note": "Classes I-IV are suited to cultivation; classes V-VIII (V: wetness, flooding, stoniness; VI-VII: steep or shallow, pasture / forest; VIII: recreation, wildlife, water supply) are not suited to cultivated crops."
-      },
-      "verifiedBy": "Oleksandr Baranovskyi",
-      "verifiedOn": "2026-11-15"
+      }
     },
     "unsuitableShare": {
       "value": 0.6,
       "unit": "share of the outline",
-      "verified": true,
+      "verified": false,
       "source": {
         "title": "National Soil Survey Handbook, Part 622 (Interpretive Groups): land capability classification",
         "publisher": "USDA NRCS",
@@ -27,15 +25,13 @@
         "accessed": "2026-11-15",
         "note": "Share of the outline in class V-VIII at or above which the whole field is unsuitable (area-weighted over map units)."
       },
-      "verifiedBy": "Oleksandr Baranovskyi",
-      "verifiedOn": "2026-11-15",
       "mvpDefault": true,
-      "note": "MVP default approved by the owner on 2026-11-15; refine with a cited source."
+      "note": "MVP default without a source; awaiting the owner's review."
     },
     "limitedShare": {
       "value": 0.3,
       "unit": "share of the outline",
-      "verified": true,
+      "verified": false,
       "source": {
         "title": "National Soil Survey Handbook, Part 622 (Interpretive Groups): land capability classification",
         "publisher": "USDA NRCS",
@@ -43,17 +39,15 @@
         "accessed": "2026-11-15",
         "note": "Share of the outline in class V-VIII at or above which the field is limited."
       },
-      "verifiedBy": "Oleksandr Baranovskyi",
-      "verifiedOn": "2026-11-15",
       "mvpDefault": true,
-      "note": "MVP default approved by the owner on 2026-11-15; refine with a cited source."
+      "note": "MVP default without a source; awaiting the owner's review."
     }
   },
   "landCover": {
     "unsuitableShare": {
       "value": 0.6,
       "unit": "share of the outline",
-      "verified": true,
+      "verified": false,
       "source": {
         "title": "Esri / Impact Observatory 10 m Annual Land Use Land Cover (io-lulc-annual-v02)",
         "publisher": "Esri / Impact Observatory (Microsoft Planetary Computer)",
@@ -61,15 +55,13 @@
         "accessed": "2026-11-15",
         "note": "Built area, water, flooded vegetation, trees and bare ground together (average of the latest seasons; US fields use the USDA Cropland Data Layer's developed, water, wetland, forest and barren classes). Rangeland and crops do not count."
       },
-      "verifiedBy": "Oleksandr Baranovskyi",
-      "verifiedOn": "2026-11-15",
       "mvpDefault": true,
-      "note": "MVP default approved by the owner on 2026-11-15; refine with a cited source."
+      "note": "MVP default without a source; awaiting the owner's review."
     },
     "limitedShare": {
       "value": 0.3,
       "unit": "share of the outline",
-      "verified": true,
+      "verified": false,
       "source": {
         "title": "Esri / Impact Observatory 10 m Annual Land Use Land Cover (io-lulc-annual-v02)",
         "publisher": "Esri / Impact Observatory (Microsoft Planetary Computer)",
@@ -77,15 +69,13 @@
         "accessed": "2026-11-15",
         "note": "Same classes: at or above this share the field is limited (check the boundary)."
       },
-      "verifiedBy": "Oleksandr Baranovskyi",
-      "verifiedOn": "2026-11-15",
       "mvpDefault": true,
-      "note": "MVP default approved by the owner on 2026-11-15; refine with a cited source."
+      "note": "MVP default without a source; awaiting the owner's review."
     },
     "seasons": {
       "value": 3,
       "unit": "seasons",
-      "verified": true,
+      "verified": false,
       "source": {
         "title": "Esri / Impact Observatory 10 m Annual Land Use Land Cover (io-lulc-annual-v02)",
         "publisher": "Esri / Impact Observatory (Microsoft Planetary Computer)",
@@ -93,17 +83,15 @@
         "accessed": "2026-11-15",
         "note": "Number of latest seasons averaged, so one misclassified year does not decide."
       },
-      "verifiedBy": "Oleksandr Baranovskyi",
-      "verifiedOn": "2026-11-15",
       "mvpDefault": true,
-      "note": "MVP default approved by the owner on 2026-11-15; refine with a cited source."
+      "note": "MVP default without a source; awaiting the owner's review."
     }
   },
   "slope": {
     "limitedPct": {
       "value": 15,
       "unit": "%",
-      "verified": true,
+      "verified": false,
       "source": {
         "title": "A Framework for Land Evaluation (FAO Soils Bulletin 32) and Land Evaluation for Rainfed Agriculture (FAO Soils Bulletin 52)",
         "publisher": "FAO",
@@ -111,15 +99,13 @@
         "accessed": "2026-11-15",
         "note": "Mean slope above 15 % limits tillage and erosion control; NRCS capability classes put slopes over about 15 % in class IV-VI. Rounded working value."
       },
-      "verifiedBy": "Oleksandr Baranovskyi",
-      "verifiedOn": "2026-11-15",
       "mvpDefault": true,
-      "note": "MVP default approved by the owner on 2026-11-15; refine with a cited source."
+      "note": "MVP default without a source; awaiting the owner's review."
     },
     "unsuitablePct": {
       "value": 25,
       "unit": "%",
-      "verified": true,
+      "verified": false,
       "source": {
         "title": "A Framework for Land Evaluation (FAO Soils Bulletin 32) and Land Evaluation for Rainfed Agriculture (FAO Soils Bulletin 52)",
         "publisher": "FAO",
@@ -127,31 +113,27 @@
         "accessed": "2026-11-15",
         "note": "Mean slope above 25 % is not suited to tillage (FAO land evaluation slope limitation, NRCS class VI-VII)."
       },
-      "verifiedBy": "Oleksandr Baranovskyi",
-      "verifiedOn": "2026-11-15",
       "mvpDefault": true,
-      "note": "MVP default approved by the owner on 2026-11-15; refine with a cited source."
+      "note": "MVP default without a source; awaiting the owner's review."
     }
   },
   "coarseFragments": {
     "limitedPct": {
       "value": 35,
       "unit": "% by volume",
-      "verified": true,
+      "verified": false,
       "source": {
         "title": "Soil Survey Manual (Agriculture Handbook 18), ch. 3",
         "publisher": "USDA NRCS",
         "url": "https://www.nrcs.usda.gov/resources/guides-and-instructions/soil-survey-manual",
         "accessed": "2026-11-15",
         "note": "Soil Survey Manual rock-fragment modifiers: 35 % or more by volume is 'very gravelly' (or very cobbly / stony); tillage and water holding suffer."
-      },
-      "verifiedBy": "Oleksandr Baranovskyi",
-      "verifiedOn": "2026-11-15"
+      }
     },
     "unsuitablePct": {
       "value": 70,
       "unit": "% by volume",
-      "verified": true,
+      "verified": false,
       "source": {
         "title": "Soil Survey Manual (Agriculture Handbook 18), ch. 3",
         "publisher": "USDA NRCS",
@@ -159,61 +141,53 @@
         "accessed": "2026-11-15",
         "note": "Far beyond 'extremely gravelly' (60 % or more): not cultivable."
       },
-      "verifiedBy": "Oleksandr Baranovskyi",
-      "verifiedOn": "2026-11-15",
       "mvpDefault": true,
-      "note": "MVP default approved by the owner on 2026-11-15; refine with a cited source."
+      "note": "MVP default without a source; awaiting the owner's review."
     }
   },
   "ph": {
     "limitedBelow": {
       "value": 4.5,
       "unit": "pH",
-      "verified": true,
+      "verified": false,
       "source": {
         "title": "Soil Survey Manual (Agriculture Handbook 18), ch. 3",
         "publisher": "USDA NRCS",
         "url": "https://www.nrcs.usda.gov/resources/guides-and-instructions/soil-survey-manual",
         "accessed": "2026-11-15",
         "note": "Soil Survey Manual reaction classes: below 4.5 is 'extremely acid'."
-      },
-      "verifiedBy": "Oleksandr Baranovskyi",
-      "verifiedOn": "2026-11-15"
+      }
     },
     "limitedAbove": {
       "value": 9,
       "unit": "pH",
-      "verified": true,
+      "verified": false,
       "source": {
         "title": "Soil Survey Manual (Agriculture Handbook 18), ch. 3",
         "publisher": "USDA NRCS",
         "url": "https://www.nrcs.usda.gov/resources/guides-and-instructions/soil-survey-manual",
         "accessed": "2026-11-15",
         "note": "Soil Survey Manual reaction classes: above 9.0 is 'very strongly alkaline'."
-      },
-      "verifiedBy": "Oleksandr Baranovskyi",
-      "verifiedOn": "2026-11-15"
+      }
     }
   },
   "sand": {
     "sandMinPct": {
       "value": 85,
       "unit": "%",
-      "verified": true,
+      "verified": false,
       "source": {
         "title": "Soil Survey Manual (Agriculture Handbook 18), ch. 3",
         "publisher": "USDA NRCS",
         "url": "https://www.nrcs.usda.gov/resources/guides-and-instructions/soil-survey-manual",
         "accessed": "2026-11-15",
         "note": "USDA texture classes: 85 % sand or more is the 'sand' class."
-      },
-      "verifiedBy": "Oleksandr Baranovskyi",
-      "verifiedOn": "2026-11-15"
+      }
     },
     "socMaxGPerKg": {
       "value": 5,
       "unit": "g/kg",
-      "verified": true,
+      "verified": false,
       "source": {
         "title": "Soil Survey Manual (Agriculture Handbook 18), ch. 3",
         "publisher": "USDA NRCS",
@@ -221,33 +195,29 @@
         "accessed": "2026-11-15",
         "note": "Topsoil organic carbon (SoilGrids 0-30 cm) below this is very low."
       },
-      "verifiedBy": "Oleksandr Baranovskyi",
-      "verifiedOn": "2026-11-15",
       "mvpDefault": true,
-      "note": "MVP default approved by the owner on 2026-11-15; refine with a cited source."
+      "note": "MVP default without a source; awaiting the owner's review."
     }
   },
   "depth": {
     "limitedBelowCm": {
       "value": 25,
       "unit": "cm",
-      "verified": true,
+      "verified": false,
       "source": {
         "title": "Soil Survey Manual (Agriculture Handbook 18), ch. 3",
         "publisher": "USDA NRCS",
         "url": "https://www.nrcs.usda.gov/resources/guides-and-instructions/soil-survey-manual",
         "accessed": "2026-11-15",
         "note": "Soil Survey Manual depth classes: depth to bedrock under 25 cm is 'very shallow' (SSURGO, US only)."
-      },
-      "verifiedBy": "Oleksandr Baranovskyi",
-      "verifiedOn": "2026-11-15"
+      }
     }
   },
   "ndvi": {
     "cropPeak": {
       "value": 0.4,
       "unit": "NDVI",
-      "verified": true,
+      "verified": false,
       "source": {
         "title": "Esri / Impact Observatory 10 m Annual Land Use Land Cover (io-lulc-annual-v02)",
         "publisher": "Esri / Impact Observatory (Microsoft Planetary Computer)",
@@ -255,15 +225,13 @@
         "accessed": "2026-11-15",
         "note": "A season whose NDVI peak stays below this does not look like a growing crop (the same 0.4 the history uses to call a season fallow)."
       },
-      "verifiedBy": "Oleksandr Baranovskyi",
-      "verifiedOn": "2026-11-15",
       "mvpDefault": true,
-      "note": "MVP default approved by the owner on 2026-11-15; refine with a cited source."
+      "note": "MVP default without a source; awaiting the owner's review."
     },
     "minSeasons": {
       "value": 5,
       "unit": "seasons",
-      "verified": true,
+      "verified": false,
       "source": {
         "title": "Esri / Impact Observatory 10 m Annual Land Use Land Cover (io-lulc-annual-v02)",
         "publisher": "Esri / Impact Observatory (Microsoft Planetary Computer)",
@@ -271,10 +239,8 @@
         "accessed": "2026-11-15",
         "note": "At least this many seasons with an NDVI peak are needed before 'never looked like cropland' is claimed."
       },
-      "verifiedBy": "Oleksandr Baranovskyi",
-      "verifiedOn": "2026-11-15",
       "mvpDefault": true,
-      "note": "MVP default approved by the owner on 2026-11-15; refine with a cited source."
+      "note": "MVP default without a source; awaiting the owner's review."
     }
   }
 }

@@ -427,7 +427,15 @@ export class AnalysisService implements OnModuleInit {
     const row = await this.prisma.system.analysisRunField.findFirst({
       where: { runId, fieldId, run: { workspaceId } },
     });
-    if (!row) throw new ProblemException(404, "not-found");
+    if (!row) {
+      // The field may still be attached to another run's check (it has no row of its own until that check ends).
+      const run = await this.prisma.system.analysisRun.findFirst({
+        where: { id: runId, workspaceId },
+        select: { summary: true },
+      });
+      if (!(run?.summary as RunningSummary | null)?.attached?.includes(fieldId))
+        throw new ProblemException(404, "not-found");
+    }
     return this.start(workspaceId, "manual", userId, asOf, [fieldId]);
   }
 }

@@ -12,14 +12,13 @@ const cover = (shares: Record<string, number>, n = 3) => ({
 });
 
 describe("data/land-suitability.json", () => {
-  it("every threshold has a source and is verified by the owner; unsourced ones are mvpDefault", () => {
+  it("every threshold has a source; none claims a review the owner has not done; unsourced ones are mvpDefault", () => {
     const walk = (n: unknown, path: string): void => {
       if (!n || typeof n !== "object") return;
       const o = n as Record<string, unknown>;
       if (typeof o.verified === "boolean") {
-        expect(o.verified, path).toBe(true);
-        expect(o.verifiedBy, path).toBe("Oleksandr Baranovskyi");
-        expect(o.verifiedOn, path).toBe("2026-11-15");
+        expect(o.verified, path).toBe(false);
+        expect(o.verifiedBy, path).toBeUndefined();
         expect((o.source as { url?: string }).url, path).toMatch(/^https:/);
         return;
       }
@@ -152,7 +151,7 @@ describe("landSuitability", () => {
       const r = landSuitability({ slopePct: 18, soil: { ph: 4 } }, cfg);
       const slope = r.reasons.find((x) => x.code === "slope_steep")!;
       const ph = r.reasons.find((x) => x.code === "ph_low")!;
-      expect(slope).toMatchObject({ mvpDefault: true, verified: true });
+      expect(slope).toMatchObject({ mvpDefault: true, verified: false });
       expect(slope.source).toContain("FAO");
       expect(ph.mvpDefault).toBe(false);
       expect(ph.sourceUrl).toMatch(/^https:/);
