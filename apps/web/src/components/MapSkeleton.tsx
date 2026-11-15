@@ -10,7 +10,7 @@ export function MapSkeleton({ className = "h-[46dvh] min-h-64" }: { className?: 
       role="status"
       aria-busy="true"
       aria-label={t("mapLoading")}
-      className={`w-full animate-pulse rounded-hero border border-line bg-muted ${className}`}
+      className={`w-full motion-safe:animate-pulse rounded-hero border border-line bg-muted ${className}`}
     />
   );
 }

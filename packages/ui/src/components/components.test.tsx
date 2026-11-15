@@ -2,7 +2,21 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   BigNumber,
+  BottomSheet,
   Button,
+  Chip,
+  ConfirmDialog,
+  Disclosure,
+  Kicker,
+  Menu,
+  PageContainer,
+  ProgressBar,
+  Skeleton,
+  StatusDot,
+  Surface,
+  Tabs,
+  ToastProvider,
+  useToast,
   DoneRow,
   FieldThumb,
   InfoHint,
@@ -211,5 +225,205 @@ describe("Sidebar", () => {
     const label = screen.getAllByText("Today")[0]!;
     expect(label.className).not.toContain("sr-only");
     expect(screen.getByRole("button", { name: "Collapse sidebar" }).getAttribute("aria-expanded")).toBe("true");
+  });
+});
+
+describe("Surface and Kicker", () => {
+  it("renders the card recipe, an inset tone and a custom element", () => {
+    render(
+      <Surface as="section" tone="inset" pad="lg" data-testid="s">
+        x
+      </Surface>,
+    );
+    const el = screen.getByTestId("s");
+    expect(el.tagName).toBe("SECTION");
+    expect(el.className).toContain("bg-surface-2");
+    expect(el.className).toContain("p-6");
+  });
+  it("Kicker uses the kicker utility", () => {
+    render(<Kicker>Source</Kicker>);
+    expect(screen.getByText("Source").className).toContain("kicker");
+  });
+});
+
+describe("ProgressBar, StatusDot, PageContainer", () => {
+  it("exposes progressbar semantics and clamps the width", () => {
+    render(<ProgressBar value={150} label="Analysed" />);
+    const bar = screen.getByRole("progressbar", { name: "Analysed" });
+    expect(bar.getAttribute("aria-valuenow")).toBe("150");
+    expect(bar.getAttribute("aria-valuemax")).toBe("100");
+    expect((bar.firstElementChild as HTMLElement).style.width).toBe("100%");
+  });
+  it("StatusDot always has a text label", () => {
+    render(<StatusDot tone="urgent" label="Urgent" />);
+    expect(screen.getByText("Urgent").className).toContain("sr-only");
+  });
+  it("PageContainer picks the narrow width", () => {
+    const { container } = render(<PageContainer width="narrow">x</PageContainer>);
+    expect((container.firstElementChild as HTMLElement).className).toContain("--ts-page-narrow");
+  });
+});
+
+describe("Tabs", () => {
+  const items = [
+    { id: "a", label: "One", count: 2 },
+    { id: "b", label: "Two" },
+    { id: "c", label: "Three" },
+  ];
+  it("uses ARIA tabs with a roving tabindex and arrow keys", () => {
+    const onChange = vi.fn();
+    render(<Tabs items={items} value="a" onChange={onChange} label="Sections" />);
+    expect(screen.getByRole("tablist", { name: "Sections" })).toBeTruthy();
+    const [a, b] = screen.getAllByRole("tab");
+    expect(a!.getAttribute("aria-selected")).toBe("true");
+    expect(a!.getAttribute("tabindex")).toBe("0");
+    expect(b!.getAttribute("tabindex")).toBe("-1");
+    fireEvent.keyDown(a!, { key: "ArrowRight" });
+    expect(onChange).toHaveBeenLastCalledWith("b");
+    fireEvent.keyDown(a!, { key: "ArrowLeft" });
+    expect(onChange).toHaveBeenLastCalledWith("c");
+    fireEvent.keyDown(a!, { key: "End" });
+    expect(onChange).toHaveBeenLastCalledWith("c");
+    fireEvent.keyDown(a!, { key: "Home" });
+    expect(onChange).toHaveBeenLastCalledWith("a");
+  });
+});
+
+describe("Disclosure", () => {
+  it("toggles aria-expanded", () => {
+    render(<Disclosure summary="Details">Body</Disclosure>);
+    const btn = screen.getByRole("button", { name: "Details" });
+    expect(btn.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(btn);
+    expect(btn.getAttribute("aria-expanded")).toBe("true");
+  });
+});
+
+describe("Menu", () => {
+  it("opens, moves with arrows, selects, and closes with Escape returning focus", () => {
+    const onSelect = vi.fn();
+    render(
+      <Menu
+        label="More actions"
+        items={[
+          { id: "a", label: "Edit", onSelect },
+          { id: "b", label: "Delete", danger: true, onSelect: () => {} },
+        ]}
+      />,
+    );
+    const trigger = screen.getByRole("button", { name: "More actions" });
+    expect(trigger.getAttribute("aria-haspopup")).toBe("menu");
+    fireEvent.click(trigger);
+    const menu = screen.getByRole("menu");
+    const [edit, del] = screen.getAllByRole("menuitem");
+    expect(document.activeElement).toBe(edit);
+    fireEvent.keyDown(menu, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(del);
+    fireEvent.keyDown(menu, { key: "Escape" });
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
+    expect(onSelect).toHaveBeenCalledOnce();
+  });
+  it("closes on a click outside", () => {
+    render(
+      <div>
+        <Menu label="More" items={[{ id: "a", label: "Edit", onSelect: () => {} }]} />
+        <p>elsewhere</p>
+      </div>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "More" }));
+    fireEvent.pointerDown(screen.getByText("elsewhere"));
+    expect(screen.queryByRole("menu")).toBeNull();
+  });
+});
+
+describe("Skeleton", () => {
+  it("renders the requested number of rows", () => {
+    const { container } = render(<Skeleton label="Loading" variant="rows" rows={4} />);
+    expect(screen.getByRole("status", { name: "Loading" })).toBeTruthy();
+    expect(container.querySelectorAll(".rounded-card").length).toBe(4);
+  });
+});
+
+describe("Chip", () => {
+  it("is a button with a bigger tap area only when interactive", () => {
+    const onClick = vi.fn();
+    render(
+      <Chip onClick={onClick} pressed>
+        Filter
+      </Chip>,
+    );
+    const btn = screen.getByRole("button", { name: "Filter" });
+    expect(btn.getAttribute("aria-pressed")).toBe("true");
+    expect(btn.className).toContain("after:h-11");
+    fireEvent.click(btn);
+    expect(onClick).toHaveBeenCalledOnce();
+    cleanup();
+    render(<Chip>Static</Chip>);
+    expect(screen.queryByRole("button")).toBeNull();
+  });
+});
+
+describe("Toast", () => {
+  function Trigger({ tone }: { tone: "error" | "info" }) {
+    const toast = useToast();
+    return <button onClick={() => toast.show("Boom", tone, { action: { label: "Retry", onClick: onAction } })}>go</button>;
+  }
+  const onAction = vi.fn();
+  it("keeps errors until dismissed, runs the action, and auto-dismisses info", () => {
+    vi.useFakeTimers();
+    render(
+      <ToastProvider dismissLabel="Dismiss">
+        <Trigger tone="error" />
+      </ToastProvider>,
+    );
+    fireEvent.click(screen.getByText("go"));
+    act(() => {
+      vi.advanceTimersByTime(20_000);
+    });
+    expect(screen.getByRole("alert").textContent).toContain("Boom");
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(onAction).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("alert")).toBeNull();
+    cleanup();
+    render(
+      <ToastProvider dismissLabel="Dismiss">
+        <Trigger tone="info" />
+      </ToastProvider>,
+    );
+    fireEvent.click(screen.getByText("go"));
+    expect(screen.getByRole("status")).toBeTruthy();
+    act(() => {
+      vi.advanceTimersByTime(6_100);
+    });
+    expect(screen.queryByRole("status")).toBeNull();
+    vi.useRealTimers();
+  });
+});
+
+describe("focus trap", () => {
+  it("BottomSheet wraps Tab from the last button to the first", () => {
+    render(
+      <BottomSheet open title="T" primaryLabel="OK" cancelLabel="Cancel" onPrimary={() => {}} onClose={() => {}}>
+        body
+      </BottomSheet>,
+    );
+    const buttons = screen.getAllByRole("button");
+    const first = buttons.find((b) => screen.getByRole("dialog").contains(b))!;
+    const last = buttons.at(-1)!;
+    last.focus();
+    fireEvent.keyDown(document, { key: "Tab" });
+    expect(document.activeElement).toBe(first);
+    fireEvent.keyDown(document, { key: "Tab", shiftKey: true });
+    expect(document.activeElement).toBe(last);
+  });
+  it("ConfirmDialog keeps focus inside on Shift+Tab from the dialog", () => {
+    render(
+      <ConfirmDialog open title="Sure?" confirmLabel="Yes" cancelLabel="No" onConfirm={() => {}} onCancel={() => {}} />,
+    );
+    fireEvent.keyDown(document, { key: "Tab", shiftKey: true });
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Yes" }));
   });
 });

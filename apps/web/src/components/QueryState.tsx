@@ -1,6 +1,6 @@
 "use client";
 
-import { EmptyState, ErrorCard, Skeleton } from "@terrasight/ui";
+import { EmptyState, ErrorCard, Skeleton, type SkeletonVariant } from "@terrasight/ui";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 
@@ -24,6 +24,8 @@ export function QueryState<T>({
   empty,
   silent = false,
   className,
+  skeletonVariant,
+  what,
 }: {
   query: QueryLike<T>;
   children: (data: T) => ReactNode;
@@ -33,6 +35,10 @@ export function QueryState<T>({
   empty?: { text: string; actionLabel: string; onAction: () => void };
   silent?: boolean;
   className?: string;
+  /** Shape of the default loading placeholder (card by default). */
+  skeletonVariant?: SkeletonVariant;
+  /** Short name of what failed ("Fields"); shown in the error title when given. */
+  what?: string;
 }) {
   const t = useTranslations("App");
   if (query.data !== undefined) {
@@ -51,12 +57,18 @@ export function QueryState<T>({
   if (query.isError)
     return (
       <ErrorCard
-        title={t("qsErrTitle")}
+        title={what ? t("qsErrWhat", { what }) : t("qsErrTitle")}
         body={t("qsErrBody")}
         retryLabel={t("retry")}
         onRetry={() => void query.refetch()}
         {...(className ? { className } : {})}
       />
     );
-  return skeleton ? <>{skeleton}</> : <Skeleton label={t("loading")} className={className ?? "w-full"} />;
+  return skeleton ? <>{skeleton}</> : (
+    <Skeleton
+      label={t("loading")}
+      className={className ?? "w-full"}
+      {...(skeletonVariant ? { variant: skeletonVariant } : {})}
+    />
+  );
 }

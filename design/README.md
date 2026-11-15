@@ -1,4 +1,4 @@
-# Terrasight — design handoff (v4 "Morning brief")
+# Terrasight — design handoff (v5 foundation, "Morning brief")
 
 > **For Claude Code:** this folder is the design source for the frontend.
 > - Read this file first.
@@ -60,6 +60,72 @@
 | Nav | sidebar (active item: muted fill + lime inset bar), top bar (⌘K search, UA/EN, notifications), bottom tabs (phone) | |
 | Skeleton, ErrorCard, Toast/DoneRow, EmptyState | as on the States board | |
 
+## 3a. v5 foundation: tokens, components, states, motion
+
+v5 adds a shared foundation; screens are redesigned on top of it. Nothing from v4 was removed (old motion tokens are aliases).
+
+### Tokens added
+
+| Token | Value | Use |
+| --- | --- | --- |
+| `--ts-dur-instant` / `fast` / `base` / `slow` | 100 / 160 / 240 / 420 ms | Motion scale (Tailwind: `duration-instant` … `duration-slow`) |
+| `--ts-ease-standard` | `cubic-bezier(.2,.7,.2,1)` | Default; `--ts-ease` is an alias (`ease-ts`) |
+| `--ts-ease-enter` / `exit` / `emphasis` | `(0,0,.2,1)` / `(.4,0,1,1)` / `(.2,.9,.3,1.2)` | Things entering, leaving, and small overshoot (`ease-enter`, `ease-exit`, `ease-emphasis`) |
+| `--ts-stagger` | 60 ms | Delay step for siblings (`stagger` utility with `style={{ "--i": n }}`) |
+| `--ts-line-control` | light `#8C8576`, dark `#7D766A` | Border of every control (inputs, selects, outline and icon buttons, segmented options) |
+| `--ts-scrim` | light `rgba(25,23,20,.45)`, dark `rgba(0,0,0,.6)` | Backdrop of sheets and dialogs (`bg-scrim`) |
+| `--ts-shadow-hero`, `--ts-shadow-sheet` | dark theme overrides, black-based | Depth that is visible on dark surfaces |
+| `--ts-tabbar` | 64 px | Phone bottom tab bar height; add it to bottom offsets of fixed elements |
+| `--ts-page`, `--ts-page-narrow` | 1120 px, 720 px | Page column widths (`PageContainer`) |
+| `--ts-pad-card` | 20 px | Card padding (`Surface pad="md"`) |
+
+**Line rule (WCAG 1.4.11).** A border that identifies a control must reach 3:1 against both `--ts-bg` and `--ts-surface`: use `--ts-line-control` (`border-line-control`). `--ts-line-strong` (about 1.4:1) is for decorative dividers only, never for a control's edge.
+
+New type utilities: `text-caption` (13/18, the smallest size for readable labels), `kicker` (uppercase mono label in `ink-3`; `text-micro` stays the bare recipe).
+
+### New and extended components (`@terrasight/ui`)
+
+| Component | One-line usage |
+| --- | --- |
+| `Surface` | `<Surface tone="card\|inset\|hero" pad="none\|sm\|md\|lg" as="section">` — the one card recipe |
+| `Kicker` | `<Kicker>Source</Kicker>` — uppercase mono label |
+| `ProgressBar` | `<ProgressBar value={3} max={5} label="Fields analysed" tone="ok" />` — `role="progressbar"`, width animates |
+| `StatusDot` | `<StatusDot tone="urgent" label="Urgent" />` — dot plus screen-reader text; pair with visible text when space allows |
+| `PageContainer` | `<PageContainer width="wide\|narrow">` — centred column with page padding |
+| `Tabs` | `<Tabs items value onChange label />` — ARIA tabs, arrow/Home/End keys, 44 px, scrolls sideways on phone |
+| `Disclosure` | `<Disclosure summary="Why">…</Disclosure>` — `aria-expanded`, rotating chevron, height animates |
+| `Menu` | `<Menu label="More actions" items={[{ id, label, icon?, danger?, onSelect }]} align="end" />` — "⋯" overflow menu |
+| `Skeleton` | `variant="card\|rows\|map\|number\|text"`, `rows={n}`; shimmer under `motion-safe:` |
+| `Toast` | `useToast().show(message, tone?, { action: { label, onClick } })`; errors persist, info closes after 6 s |
+| `BottomSheet`, `ConfirmDialog` | Tab focus trap, `bg-scrim` + `animate-fade` backdrop; the dialog uses `animate-pop` |
+| `Chip` | `onClick` (and `pressed`) makes it a 44 px button; non-interactive chips are unchanged |
+| `DoneRow` | The countdown bar is a CSS animation (`animate-countdown`); a timer only ends the Undo window |
+
+In `apps/web`: `lib/format.ts` and `useFormat()` (dates, numbers, money, units, plurals; never hand-build "$12k" or "12 ha"), `useActionToast().fail(error, what, retry?)`, `QueryState` props `skeletonVariant` and `what`.
+
+### State rules
+
+- Say what happened, what you still see, and give one action. Example: "Couldn't load weather. Showing the last check from 06:00. [Retry]".
+- Never colour alone: status always has text (a label, an icon with a name, or `StatusDot`'s screen-reader label).
+- Errors persist until dismissed; only confirmations and info disappear on their own (6 s).
+- Data already on screen stays on screen when a background refresh fails.
+- Loading uses a skeleton of the final shape (`Skeleton variant`), never a bare spinner on a page.
+
+### Motion rules
+
+| What | Duration | Easing |
+| --- | --- | --- |
+| Press, hover, colour changes | `instant` 100 ms | `standard` |
+| Popovers, menus, dialogs, toasts (`animate-pop`) | `fast` 160 ms | `emphasis` |
+| Backdrop fade, disclosure height, chevron (`animate-fade`) | `base` 240 ms | `enter` / `standard` |
+| Blocks rising in (`animate-rise`, optional `stagger`) | `slow` 420 ms | `standard` |
+| Progress and weight bars | 300 ms (`duration-bar`) | `standard` |
+| Skeleton sheen (`animate-shimmer`) | 1.4 s loop | linear |
+| Just-changed row (`animate-flash`) | 900 ms once | `standard` |
+| Undo countdown (`animate-countdown`) | `--ts-undo` (8 s) | linear |
+
+Only state changes animate; nothing moves for decoration. Looping animations (spinner, shimmer, pulse) use `motion-safe:`. Under `prefers-reduced-motion: reduce`, `tokens.css` sets animation and transition duration to 0.01 ms, one iteration, and `scroll-behavior: auto`, so end states are kept and nothing flashes.
+
 ## 4. Behaviour that must match the RFC
 
 - **Accept / Snooze (RFC §10.4):**
@@ -85,14 +151,15 @@
 
 - Body text ≥ 15 px. All text passes WCAG AA on its background; lime is never used as a text colour.
 - Tap targets ≥ 44 px. Visible focus. `aria-live` on the analysis panel, done rows and the scouting counter.
-- Reduced motion turns animations off (see `tokens.css`).
+- Reduced motion collapses animations to their end state (see `tokens.css` and §3a).
+- Control borders use `--ts-line-control` (3:1, WCAG 1.4.11); status is never colour alone; smallest readable label is `text-caption` (13 px).
 
 ## 6. Folder
 
 ```
 design/
   README.md        this file
-  tokens.css       colours (light + dark), type, spacing, radii, shadows, motion
+  tokens.css       colours (light + dark), type, spacing, radii, shadows, layout, motion
   screens/*.png    17 screens, UA, at design width (1440 desktop, 390 phone)
   i18n/*.json      UI copy per screen: { "uk": {...}, "en": {...} }
   canvas/*.dc.html original mock-ups (reference only)

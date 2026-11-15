@@ -22,16 +22,18 @@ export interface DoneRowProps {
  */
 export function DoneRow({ label, undoLabel, undoUntil, onUndo, now = Date.now, className }: DoneRowProps) {
   const end = new Date(undoUntil).getTime();
-  const [remaining, setRemaining] = useState(() => Math.max(0, end - now()));
-  const total = 8_000;
+  const [initial] = useState(() => Math.max(0, end - now()));
+  const [open, setOpen] = useState(initial > 0);
 
+  // The bar is a CSS animation; this timer only flips the row when the server's window ends.
   useEffect(() => {
-    if (remaining <= 0) return;
-    const t = setInterval(() => setRemaining(Math.max(0, end - now())), 100);
+    if (!open) return;
+    const t = setInterval(() => {
+      if (end - now() <= 0) setOpen(false);
+    }, 100);
     return () => clearInterval(t);
-  }, [end, now, remaining]);
+  }, [end, now, open]);
 
-  const open = remaining > 0;
   return (
     <div className={clsx("flex flex-col gap-2", className)}>
       <div
@@ -59,11 +61,8 @@ export function DoneRow({ label, undoLabel, undoUntil, onUndo, now = Date.now, c
       {open && (
         <span aria-hidden className="block h-1 overflow-hidden rounded-chip bg-line">
           <span
-            className="block h-full origin-left bg-ok"
-            style={{
-              transform: `scaleX(${Math.min(1, remaining / total)})`,
-              transition: "transform 100ms linear",
-            }}
+            className="animate-countdown block h-full bg-ok"
+            style={{ animationDuration: `${initial}ms` }}
           />
         </span>
       )}
