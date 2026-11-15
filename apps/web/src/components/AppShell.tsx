@@ -22,7 +22,7 @@ export interface ShellWorkspace {
 
 export interface ShellUser {
   name: string;
-  role: "owner" | "admin" | "agronomist" | "viewer";
+  role: "owner" | "agronomist";
 }
 
 function initials(name: string): string {
@@ -53,8 +53,8 @@ export function AppShell({
   const path = usePathname();
   const { collapsed, toggle } = useSidebarState();
 
-  // Owners (and Viewers) answer decisions: the nav shows how many need them (PD v2.9).
-  const answers = user.role === "owner" || user.role === "viewer";
+  // Owners answer decisions: the nav shows how many need them (PD v2.9).
+  const answers = user.role === "owner";
   const open = useQuery({
     queryKey: ["decisions", workspace.id, "all"],
     queryFn: () => api<DecisionList>(`/api/w/${workspace.id}/decisions?state=all`),
@@ -74,7 +74,7 @@ export function AppShell({
       active: path.startsWith("/decisions"),
       ...(needYou > 0 ? { badge: needYou } : {}),
     },
-    ...(user.role === "owner" || user.role === "admin"
+    ...(user.role === "owner"
       ? [
           {
             href: "/settings/team",

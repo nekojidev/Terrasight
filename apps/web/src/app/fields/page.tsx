@@ -27,7 +27,7 @@ export default async function FieldsPage() {
     serverGet<FieldsOverviewData>(`/api/w/${active.id}/fields-overview`),
   ]);
   if (!ws.ok) redirect("/");
-  if (ws.data.fieldCount === 0 && ws.data.role !== "viewer") redirect("/fields/new");
+  if (ws.data.fieldCount === 0) redirect("/fields/new");
   const t = await getTranslations("App");
   return (
     <AppShell
@@ -36,7 +36,7 @@ export default async function FieldsPage() {
       crumb={t("fieldsTitle")}
     >
       {fields.ok ? (
-        <FieldsOverview data={fields.data} units={ws.data.units} canEdit={ws.data.role !== "viewer"} />
+        <FieldsOverview data={fields.data} units={ws.data.units} canEdit />
       ) : (
         <p className="text-body text-urgent">{t("errGeneric")}</p>
       )}

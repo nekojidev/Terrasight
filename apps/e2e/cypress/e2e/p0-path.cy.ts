@@ -1,26 +1,53 @@
 /**
- * The P0 path (S-09.04): sign up → onboarding → add field → history → Analyze fields → brief → Accept + Undo + Accept →
- * Ask the owner → assistant "why?" → rotation Save to the 2026 plan → scouting Send → Owner decision answered via link.
+ * The P0 path (S-09.04, PD v2.10 two roles): sign up (becomes Owner) → onboarding (add an agronomist → read the setup link)
+ * → sign out → open the setup link, set a password (signed in as the Agronomist) → add field → history → Analyze fields →
+ * Accept + Undo + Accept → Ask the owner → assistant "why?" → rotation Save → scouting Send → sign out → sign in as the
+ * Owner → /decisions → Approve.
  * The field reuses the Garden City pivot's outline so its sources come from the cache (no multi-minute gather).
  */
 const run = Date.now().toString(36);
 const email = `e2e-${run}@example.com`;
+const agronomistEmail = `e2e-agro-${run}@example.com`;
 const password = "correct horse battery";
+const agronomistPassword = "another long password";
+
+const signOut = () => {
+  cy.get('button[aria-label="Sign out"]').click();
+  cy.location("pathname", { timeout: 20_000 }).should("eq", "/login");
+};
 
 describe("P0 path", () => {
-  it("goes from sign-up to the owner's answer", () => {
+  it("goes from the owner's sign-up, through the agronomist's work, to the owner's answer", () => {
     // Sign up and create the company.
     cy.visit("/login");
     cy.contains("button", "Create a company").click();
-    cy.get('input[name="name"]').type("E2E Agronomist");
+    cy.get('input[name="name"]').type("E2E Owner");
     cy.get('input[name="email"]').type(email);
     cy.get('input[name="password"]').type(password);
     cy.get('button[type="submit"]').click();
     cy.location("pathname", { timeout: 20_000 }).should("eq", "/onboarding");
     cy.get('input[name="name"]').clear().type(`E2E Farms ${run}`);
     cy.get('button[type="submit"]').click();
-    cy.contains("button", "Skip").click();
+
+    // Step 2: add the agronomist and read the one-time setup link.
+    cy.contains("h1", "Add your agronomist");
+    cy.get('input[name="agname"]').type("E2E Agronomist");
+    cy.get('input[name="email"]').type(agronomistEmail);
+    cy.get('button[type="submit"]').click();
+    cy.get("input[readonly]", { timeout: 20_000 })
+      .invoke("val")
+      .then((url) => cy.wrap(new URL(String(url)).pathname).as("setupPath"));
+    cy.contains("button", "Continue").click();
     cy.location("pathname").should("eq", "/");
+    cy.contains("Owner");
+    signOut();
+
+    // The agronomist opens the setup link, chooses a password and is signed in.
+    cy.get("@setupPath").then((path) => cy.visit(String(path)));
+    cy.get('input[name="password"]').type(agronomistPassword);
+    cy.get('button[type="submit"]').click();
+    cy.location("pathname", { timeout: 20_000 }).should("eq", "/");
+    cy.contains("Agronomist");
 
     // Add a field by uploading its outline.
     cy.visit("/fields/new");
@@ -82,16 +109,19 @@ describe("P0 path", () => {
     cy.contains("Check summary", { timeout: 20_000 });
     cy.contains("5%");
 
-    // Owner decisions: the asked item waits for the owner; create a link and answer through it.
+    // The agronomist cannot answer decisions: no Approve button on their Decisions page.
     cy.visit("/decisions");
     cy.contains("Waiting for the owner", { timeout: 30_000 });
-    cy.contains("button", "Create a link").click();
-    cy.get("code")
-      .invoke("text")
-      .then((url) => {
-        cy.visit(new URL(url).pathname);
-        cy.contains("button", "Approve").click();
-        cy.contains("You approved on");
-      });
+    cy.contains("button", "Approve").should("not.exist");
+    signOut();
+
+    // The owner signs in and answers the asked item.
+    cy.get('input[name="email"]').type(email);
+    cy.get('input[name="password"]').type(password);
+    cy.get('button[type="submit"]').click();
+    cy.location("pathname", { timeout: 20_000 }).should("eq", "/");
+    cy.visit("/decisions");
+    cy.contains("button", "Approve", { timeout: 30_000 }).click();
+    cy.contains("You approved on");
   });
 });

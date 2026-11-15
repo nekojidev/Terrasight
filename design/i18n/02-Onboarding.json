@@ -19,15 +19,14 @@
   "u_ac": "Акри, °F, дюйми",
   "lang": "Мова звітів для власника",
   "next": "Далі",
-  "s2t": "Запросіть власника або менеджера",
-  "s2s": "Він бачитиме лише звіт: що зробити на полях і чому. Відповідає одним дотиком — Зроблено, Ще ні або Питання.",
-  "email": "Email або телефон",
-  "role": "Роль: Читач",
-  "role_s": "Без доступу до налаштувань і асистента",
+  "s2t": "Додайте свого агронома",
+  "s2s": "Агроном працює на полях: перевіряє поля, приймає поради й питає вас, коли потрібне рішення. Ви отримаєте посилання, щоб він сам обрав пароль.",
+  "email": "Електронна пошта",
   "skip": "Пропустити",
-  "invite": "Запросити й продовжити",
+  "invite": "Додати й отримати посилання",
   "back": "Назад",
-  "later": "Запросити можна й пізніше на сторінці «Звіти»."
+  "later": "Людей можна додати й пізніше на сторінці «Команда».",
+  "agname": "Ім’я агронома"
  },
  "en": {
   "lang_group": "Interface language",
@@ -49,14 +48,13 @@
   "u_ac": "Acres, °F, inches",
   "lang": "Language of owner reports",
   "next": "Next",
-  "s2t": "Invite the owner or manager",
-  "s2s": "They only see the report: what to do on the fields and why. They reply with one tap — Done, Not yet or Question.",
-  "email": "Email or phone",
-  "role": "Role: Viewer",
-  "role_s": "No access to settings or the assistant",
+  "s2t": "Add your agronomist",
+  "s2s": "The agronomist does the field work: checks the fields, accepts advice and asks you when a decision is needed. You get a link so they can choose their own password.",
+  "email": "Email",
   "skip": "Skip",
-  "invite": "Invite and continue",
+  "invite": "Add and get the link",
   "back": "Back",
-  "later": "You can also invite later on the Reports page."
+  "later": "You can add people later on the Team page.",
+  "agname": "Agronomist's name"
  }
 }

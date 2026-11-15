@@ -39,7 +39,7 @@ export async function RecommendationPageBody({ id, canonical }: { id: string; ca
       <RecommendationClient
         workspaceId={ws.data.id}
         timeZone={ws.data.timeZone}
-        canAct={ws.data.role !== "viewer"}
+        canAct
         canAsk={ws.data.role !== "owner"}
         initial={rec.data}
       />

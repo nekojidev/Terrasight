@@ -64,7 +64,7 @@ Design source: `design/README.md` (screens, components, behaviour), `design/toke
 - Pest and disease library: `data/pests.json` (62 entries, EN/UA). Risk, not diagnosis; never pesticide products or doses. A model threshold is used only after it is verified against a cited source.
 - AI assistant: Google Gemini API with function calling over our tools; every number in an answer must match a tool result.
 - Forecast: Open-Meteo (paid), NOAA NWS as US fallback.
-- One workspace = one farming company with many fields, possibly in several regions. Roles: Owner, Admin, Agronomist (Editor), Viewer; the company owner/manager reads the report as a Viewer. Platform admin is internal to Terrasight.
+- One workspace = one farming company with many fields, possibly in several regions. Roles: Owner, Agronomist (the Owner answers decisions and manages users; the Agronomist does the field work and asks the owner). Platform admin is internal to Terrasight.
 - All fields are re-checked every morning at 06:00 and on demand ("Analyze fields"); checks depend on the season.
 - Demo field: a pivot-irrigated field near Garden City, Kansas (2022 = record drought).
 

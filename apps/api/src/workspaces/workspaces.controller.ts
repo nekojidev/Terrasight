@@ -15,14 +15,14 @@ const WorkspacePatch = WorkspaceBody.partial().refine((v) => Object.keys(v).leng
 const InviteBody = z.object({
   // Design 02 says "Email or phone"; phone invites are not supported in v2.
   email: z.string().trim().toLowerCase().pipe(z.email("enter an email address").max(254)),
-  role: z.enum(["owner", "admin", "agronomist", "viewer"]).default("viewer"),
+  role: z.enum(["owner", "agronomist"]).default("agronomist"),
 });
 const CreateUserBody = z.object({
   name: z.string().trim().min(1).max(100),
   email: z.string().trim().toLowerCase().pipe(z.email("enter an email address").max(254)),
-  role: z.enum(["owner", "admin", "agronomist", "viewer"]),
+  role: z.enum(["owner", "agronomist"]),
 });
-const RoleBody = z.object({ role: z.enum(["owner", "admin", "agronomist", "viewer"]) });
+const RoleBody = z.object({ role: z.enum(["owner", "agronomist"]) });
 
 /** Routes without a workspace in the path. */
 @Controller()

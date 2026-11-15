@@ -8,7 +8,7 @@ import { InviteAccept } from "./InviteAccept";
 interface InvitationInfo {
   workspaceName: string;
   email: string;
-  role: "owner" | "admin" | "agronomist" | "viewer";
+  role: "owner" | "agronomist";
   status: "open" | "accepted" | "expired";
 }
 

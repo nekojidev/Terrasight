@@ -98,26 +98,26 @@ describe("refresh token rotation (Tech Design §14.1)", () => {
 });
 
 describe("permission matrix (Tech Design §14.1)", () => {
-  const roles = ["owner", "admin", "agronomist", "viewer"] as const;
+  const roles = ["owner", "agronomist"] as const;
   const expected: Record<Permission, string> = {
-    "workspace.delete": "O...",
-    billing: "O...",
-    "workspace.settings": "OA..",
-    "members.manage": "OA..",
-    "reportLinks.manage": "OA..",
-    "fields.write": "OAG.",
-    "analysis.run": "OAG.",
-    "recommendations.act": "OAG.",
-    "outcomes.record": "OAG.",
-    "scouting.use": "OAG.",
-    "assistant.use": "OAG.",
-    "plans.save": "OAG.",
-    "brief.read": "OAG.",
-    "fields.read": "OAG.",
-    "scenarios.explore": "OAGV",
-    "report.read": "OAGV",
-    "report.answer": "O..V",
-    "workspace.read": "OAGV",
+    "workspace.delete": "O.",
+    billing: "O.",
+    "workspace.settings": "O.",
+    "members.manage": "O.",
+    "reportLinks.manage": "O.",
+    "report.answer": "O.",
+    "fields.write": "OG",
+    "analysis.run": "OG",
+    "recommendations.act": "OG",
+    "outcomes.record": "OG",
+    "scouting.use": "OG",
+    "assistant.use": "OG",
+    "plans.save": "OG",
+    "brief.read": "OG",
+    "fields.read": "OG",
+    "scenarios.explore": "OG",
+    "report.read": "OG",
+    "workspace.read": "OG",
   };
 
   it("covers every permission", () => {
@@ -125,7 +125,7 @@ describe("permission matrix (Tech Design §14.1)", () => {
   });
 
   it.each(Object.entries(expected))("%s → %s", (permission, mask) => {
-    const got = roles.map((r, i) => (can(r, permission as Permission) ? "OAGV"[i] : ".")).join("");
+    const got = roles.map((r, i) => (can(r, permission as Permission) ? "OG"[i] : ".")).join("");
     expect(got).toBe(mask);
   });
 });

@@ -11,12 +11,11 @@ export interface NotificationDraft {
 
 export interface Member {
   userId: string;
-  role: "owner" | "admin" | "agronomist" | "viewer";
+  role: "owner" | "agronomist";
 }
 
-/** Who works on recommendations: everyone except Viewers (the company owner / manager reads the report). */
-export const staff = (members: Member[]): string[] =>
-  members.filter((m) => m.role !== "viewer").map((m) => m.userId);
+/** Who works on recommendations: everyone (the Owner may do field work too). */
+export const staff = (members: Member[]): string[] => members.map((m) => m.userId);
 
 /** The owner answered a report item: tell the staff, except the person who did it (none for a report link). */
 export function planReportAnswered(
@@ -32,13 +31,13 @@ export function planReportAnswered(
     }));
 }
 
-/** A decision was asked: tell the Owners and Viewers (the company owner / manager who answer it). */
+/** A decision was asked: tell the Owners (who answer it). */
 export function planDecisionAsked(
   members: Member[],
   e: { decisionId: string; recommendationId: string; fieldName: string },
 ): NotificationDraft[] {
   return members
-    .filter((m) => m.role === "viewer" || m.role === "owner")
+    .filter((m) => m.role === "owner")
     .map((m) => ({
       userId: m.userId,
       kind: "decision_asked" as const,

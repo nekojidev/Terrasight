@@ -35,12 +35,7 @@ export default async function FieldPage({ params }: { params: Promise<{ id: stri
       user={{ name: me.data.name, role: ws.data.role }}
       crumb={field.data.name}
     >
-      <FieldClient
-        workspaceId={ws.data.id}
-        units={ws.data.units}
-        canEdit={ws.data.role !== "viewer"}
-        initial={field.data}
-      />
+      <FieldClient workspaceId={ws.data.id} units={ws.data.units} canEdit initial={field.data} />
     </AppShell>
   );
 }

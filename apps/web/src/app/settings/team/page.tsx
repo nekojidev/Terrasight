@@ -12,7 +12,7 @@ interface WorkspaceDetail {
   role: Me["workspaces"][number]["role"];
 }
 
-/** Team (PD v2.9): the Owner / Admin creates the company's users and shares one-time setup links. */
+/** Team (PD v2.9): the Owner creates the company's users and shares one-time setup links. */
 export default async function TeamPage() {
   const me = await serverGet<Me>("/api/me");
   if (!me.ok) {
@@ -23,7 +23,7 @@ export default async function TeamPage() {
   if (!active) redirect("/onboarding");
   const ws = await serverGet<WorkspaceDetail>(`/api/w/${active.id}`);
   if (!ws.ok) redirect("/");
-  if (ws.data.role !== "owner" && ws.data.role !== "admin") redirect("/");
+  if (ws.data.role !== "owner") redirect("/");
   const t = await getTranslations("App");
   return (
     <AppShell
@@ -31,7 +31,7 @@ export default async function TeamPage() {
       user={{ name: me.data.name, role: ws.data.role }}
       crumb={t("navTeam")}
     >
-      <TeamClient workspaceId={ws.data.id} role={ws.data.role} meId={me.data.id} />
+      <TeamClient workspaceId={ws.data.id} meId={me.data.id} />
     </AppShell>
   );
 }

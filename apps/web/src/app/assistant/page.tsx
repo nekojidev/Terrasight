@@ -28,7 +28,6 @@ export default async function AssistantPage({
   if (!active) redirect("/onboarding");
   const ws = await serverGet<WorkspaceDetail>(`/api/w/${active.id}`);
   if (!ws.ok) redirect("/");
-  if (ws.data.role === "viewer") redirect("/");
   const t = await getTranslations("Assistant");
   return (
     <AppShell

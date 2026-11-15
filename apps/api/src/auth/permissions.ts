@@ -5,24 +5,26 @@ import type { Role } from "../generated/prisma/enums.js";
  * read the Owner report and answer items.
  */
 export const PERMISSIONS = {
+  // Owner only: the company, its people, report links, decisions.
   "workspace.delete": ["owner"],
   billing: ["owner"],
-  "workspace.settings": ["owner", "admin"],
-  "members.manage": ["owner", "admin"],
-  "reportLinks.manage": ["owner", "admin"],
-  "fields.write": ["owner", "admin", "agronomist"],
-  "analysis.run": ["owner", "admin", "agronomist"],
-  "recommendations.act": ["owner", "admin", "agronomist"],
-  "outcomes.record": ["owner", "admin", "agronomist"],
-  "scouting.use": ["owner", "admin", "agronomist"],
-  "assistant.use": ["owner", "admin", "agronomist"],
-  "plans.save": ["owner", "admin", "agronomist"],
-  "brief.read": ["owner", "admin", "agronomist"],
-  "fields.read": ["owner", "admin", "agronomist"],
-  "scenarios.explore": ["owner", "admin", "agronomist", "viewer"],
-  "report.read": ["owner", "admin", "agronomist", "viewer"],
-  "report.answer": ["owner", "viewer"],
-  "workspace.read": ["owner", "admin", "agronomist", "viewer"],
+  "workspace.settings": ["owner"],
+  "members.manage": ["owner"],
+  "reportLinks.manage": ["owner"],
+  "report.answer": ["owner"],
+  // Field work: the Agronomist, and the Owner too.
+  "fields.write": ["owner", "agronomist"],
+  "analysis.run": ["owner", "agronomist"],
+  "recommendations.act": ["owner", "agronomist"],
+  "outcomes.record": ["owner", "agronomist"],
+  "scouting.use": ["owner", "agronomist"],
+  "assistant.use": ["owner", "agronomist"],
+  "plans.save": ["owner", "agronomist"],
+  "brief.read": ["owner", "agronomist"],
+  "fields.read": ["owner", "agronomist"],
+  "scenarios.explore": ["owner", "agronomist"],
+  "report.read": ["owner", "agronomist"],
+  "workspace.read": ["owner", "agronomist"],
 } as const satisfies Record<string, readonly Role[]>;
 
 export type Permission = keyof typeof PERMISSIONS;
