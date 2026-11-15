@@ -11,6 +11,8 @@ const TextBody = z
   .refine((v) => v.title || v.action, "nothing to change");
 const AcceptBody = z.object({ note: z.string().trim().max(1000).optional(), text: TextBody.optional() });
 
+const AskOwnerBody = z.object({ note: z.string().trim().max(1000).optional() });
+
 function uuid(id: string): string {
   if (!UUID.test(id)) throw new ProblemException(404, "not-found");
   return id;
@@ -37,6 +39,17 @@ export class RecommendationsController {
     @Req() req: AuthedRequest,
   ) {
     return this.recs.accept(req.workspaceId!, req.user!.id, uuid(id), body);
+  }
+
+  @Post(":id/ask-owner")
+  @HttpCode(200)
+  @Requires("recommendations.act")
+  askOwner(
+    @Param("id") id: string,
+    @Body(new ZodPipe(AskOwnerBody)) body: z.infer<typeof AskOwnerBody>,
+    @Req() req: AuthedRequest,
+  ) {
+    return this.recs.askOwner(req.workspaceId!, req.user!.id, uuid(id), body);
   }
 
   @Post(":id/snooze")

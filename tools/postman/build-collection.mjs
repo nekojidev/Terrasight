@@ -219,7 +219,7 @@ const collection = {
           tests: problem(403),
         }),
         req("Viewer can open the event stream topic list (read)", "GET", "/api/w/{{ws}}/events?topics=nope", {
-          tests: problem(400),
+          tests: problem(422),
         }),
       ],
     },
@@ -519,12 +519,51 @@ const collection = {
           "/api/scouting-photos/00000000-0000-4000-8000-000000000000?exp=1&sig=x",
           { tests: problem(403) },
         ),
-        req("Owner report (S-08.02)", "GET", "/api/w/{{ws}}/report", {
+        req("Owner decisions (PD v2.7)", "GET", "/api/w/{{ws}}/decisions?state=all", {
           tests: [
             status(200),
-            `pm.test("shape", () => { const r = pm.response.json(); pm.expect(r.fields).to.be.an("array"); pm.expect(r.counts).to.have.property("items"); });`,
+            `pm.test("shape", () => { const r = pm.response.json(); pm.expect(r.items).to.be.an("array"); pm.expect(r.recipients).to.be.an("array"); pm.expect(r.counts).to.have.keys("waiting", "question", "decided"); pm.expect(["en", "uk"]).to.include(r.language); });`,
           ],
         }),
+        req("An unknown decision state is refused", "GET", "/api/w/{{ws}}/decisions?state=bogus", {
+          tests: problem(422),
+        }),
+        req(
+          "Ask the owner needs an existing recommendation",
+          "POST",
+          "/api/w/{{ws}}/recommendations/00000000-0000-4000-8000-000000000000/ask-owner",
+          { body: { note: "Please approve" }, tests: problem(404) },
+        ),
+        req(
+          "Unknown decision cannot be answered",
+          "POST",
+          "/api/w/{{ws}}/decisions/00000000-0000-4000-8000-000000000000/answer",
+          { body: { answer: "approve" }, tests: problem(404) },
+        ),
+        req(
+          "An answer must be approve, not_now or question",
+          "POST",
+          "/api/w/{{ws}}/decisions/00000000-0000-4000-8000-000000000000/answer",
+          { body: { answer: "done" }, tests: problem(422) },
+        ),
+        req(
+          "Unknown decision has no replies",
+          "POST",
+          "/api/w/{{ws}}/decisions/00000000-0000-4000-8000-000000000000/replies",
+          { body: { text: "Hello" }, tests: problem(404) },
+        ),
+        req(
+          "Unknown decision has no reply draft",
+          "POST",
+          "/api/w/{{ws}}/decisions/00000000-0000-4000-8000-000000000000/reply-draft",
+          { body: {}, tests: problem(404) },
+        ),
+        req(
+          "Unknown decision cannot be republished",
+          "POST",
+          "/api/w/{{ws}}/decisions/00000000-0000-4000-8000-000000000000/republish",
+          { body: {}, tests: problem(404) },
+        ),
         req("Notifications, unread (L-06)", "GET", "/api/w/{{ws}}/notifications?unread=1", {
           tests: [
             status(200),
@@ -545,9 +584,18 @@ const collection = {
             `const l = pm.response.json(); pm.collectionVariables.set("linkToken", l.token); pm.collectionVariables.set("linkId", l.id); pm.test("token shown once", () => pm.expect(l.token.length).to.be.above(30));`,
           ],
         }),
-        req("The report through the link, in its language", "GET", "/api/r/{{linkToken}}", {
-          tests: [status(200), `pm.test("uk", () => pm.expect(pm.response.json().language).to.eql("uk"));`],
+        req("The decisions through the link, in its language", "GET", "/api/r/{{linkToken}}", {
+          tests: [
+            status(200),
+            `pm.test("shape", () => { const r = pm.response.json(); pm.expect(r.language).to.eql("uk"); pm.expect(r.items).to.be.an("array"); });`,
+          ],
         }),
+        req(
+          "An unknown decision cannot be answered through the link",
+          "POST",
+          "/api/r/{{linkToken}}/decisions/00000000-0000-4000-8000-000000000000/answer",
+          { body: { answer: "approve" }, tests: problem(404) },
+        ),
         req("A wrong token reaches nothing", "GET", "/api/r/not-a-real-token", { tests: problem(404) }),
         req("Revoke the link", "DELETE", "/api/w/{{ws}}/report-links/{{linkId}}", { tests: [status(204)] }),
         req("A revoked link stops working at once", "GET", "/api/r/{{linkToken}}", { tests: problem(404) }),

@@ -16,13 +16,15 @@ import { AuthGuard, Requires, UUID, WorkspaceGuard, type AuthedRequest } from ".
 import { RateLimitService } from "../auth/rate-limit.js";
 import { ProblemException } from "../http/problem.js";
 import { ZodPipe } from "../http/zod.js";
+import { DecisionsService } from "./decisions.service.js";
 import { ReportsService } from "./reports.service.js";
 
 const AnswerBody = z.object({
-  answer: z.enum(["done", "not_yet", "question"]),
+  answer: z.enum(["approve", "not_now", "question"]),
   text: z.string().max(1000).optional(),
 });
 const ReplyBody = z.object({ text: z.string().trim().min(1).max(2000) });
+const StateQuery = z.enum(["waiting", "question", "decided", "all"]);
 const LinkBody = z.object({
   language: z.enum(["uk", "en"]),
   expiresAt: z.string().datetime().nullable().optional(),
@@ -34,49 +36,57 @@ function uuid(id: string): string {
   return id;
 }
 
-/** Owner report in the app (S-08.01–S-08.06; Tech Design §14). */
+/** Owner decisions in the app and report links (PD v2.7; Tech Design §14). */
 @Controller("w/:ws")
 @UseGuards(AuthGuard, WorkspaceGuard)
 export class ReportsController {
-  constructor(private readonly reports: ReportsService) {}
+  constructor(
+    private readonly reports: ReportsService,
+    private readonly decisions: DecisionsService,
+  ) {}
 
-  @Get("report")
+  @Get("decisions")
   @Requires("report.read")
-  report(@Query("field") field: string | undefined, @Req() req: AuthedRequest) {
-    return this.reports.report(req.workspaceId!, undefined, field ? uuid(field) : undefined);
+  list(@Query("state") state: string | undefined, @Req() req: AuthedRequest) {
+    const parsed = StateQuery.safeParse(state ?? "all");
+    if (!parsed.success) throw new ProblemException(422, "invalid-input", "Unknown state");
+    return this.decisions.list(req.workspaceId!, parsed.data);
   }
 
-  @Post("report-items/:id/answers")
+  @Post("decisions/:id/answer")
+  @HttpCode(200)
   @Requires("report.answer")
   answer(
     @Param("id") id: string,
     @Body(new ZodPipe(AnswerBody)) body: z.infer<typeof AnswerBody>,
     @Req() req: AuthedRequest,
   ) {
-    return this.reports.answer(req.workspaceId!, uuid(id), body, { userId: req.user!.id });
+    return this.decisions.answer(req.workspaceId!, uuid(id), body, { userId: req.user!.id });
   }
 
-  @Post("report-items/:id/republish")
+  @Post("decisions/:id/republish")
+  @HttpCode(200)
   @Requires("recommendations.act")
   republish(@Param("id") id: string, @Req() req: AuthedRequest) {
-    return this.reports.republish(req.workspaceId!, req.user!.id, uuid(id));
+    return this.decisions.republish(req.workspaceId!, req.user!.id, uuid(id));
   }
 
-  @Post("report-items/:id/reply-draft")
+  @Post("decisions/:id/reply-draft")
   @HttpCode(200)
   @Requires("recommendations.act")
   draft(@Param("id") id: string, @Req() req: AuthedRequest) {
-    return this.reports.replyDraft(req.workspaceId!, uuid(id));
+    return this.decisions.replyDraft(req.workspaceId!, uuid(id));
   }
 
-  @Post("report-items/:id/replies")
+  @Post("decisions/:id/replies")
+  @HttpCode(200)
   @Requires("recommendations.act")
   reply(
     @Param("id") id: string,
     @Body(new ZodPipe(ReplyBody)) body: z.infer<typeof ReplyBody>,
     @Req() req: AuthedRequest,
   ) {
-    return this.reports.reply(req.workspaceId!, req.user!.id, uuid(id), body.text);
+    return this.decisions.reply(req.workspaceId!, req.user!.id, uuid(id), body.text);
   }
 
   @Get("report-links")
@@ -99,11 +109,12 @@ export class ReportsController {
   }
 }
 
-/** The report through a link (`/r/:token`): read and answer only; rate-limited (RFC §14.1). */
+/** The decisions through a link (`/r/:token`): read and answer only; rate-limited (RFC §14.1). */
 @Controller("r")
 export class ReportLinkController {
   constructor(
     private readonly reports: ReportsService,
+    private readonly decisions: DecisionsService,
     private readonly limits: RateLimitService,
   ) {}
 
@@ -116,10 +127,11 @@ export class ReportLinkController {
   @Get(":token")
   async report(@Param("token") token: string, @Ip() ip: string) {
     const link = await this.guard(token, ip);
-    return this.reports.report(link.workspaceId, link.language);
+    return this.decisions.publicView(link.workspaceId, link.language);
   }
 
-  @Post(":token/items/:id/answers")
+  @Post(":token/decisions/:id/answer")
+  @HttpCode(200)
   async answer(
     @Param("token") token: string,
     @Param("id") id: string,
@@ -127,6 +139,6 @@ export class ReportLinkController {
     @Ip() ip: string,
   ) {
     const link = await this.guard(token, ip);
-    return this.reports.answer(link.workspaceId, uuid(id), body, { link: true });
+    return this.decisions.answer(link.workspaceId, uuid(id), body, { link: true });
   }
 }

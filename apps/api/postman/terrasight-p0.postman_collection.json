@@ -826,7 +826,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"status 422\", () => pm.response.to.have.status(422));",
                   "pm.test(\"problem+json\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"));"
                 ]
               }
@@ -1884,7 +1884,7 @@
           }
         },
         {
-          "name": "Owner report (S-08.02)",
+          "name": "Owner decisions (PD v2.7)",
           "event": [
             {
               "listen": "test",
@@ -1892,7 +1892,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
-                  "pm.test(\"shape\", () => { const r = pm.response.json(); pm.expect(r.fields).to.be.an(\"array\"); pm.expect(r.counts).to.have.property(\"items\"); });"
+                  "pm.test(\"shape\", () => { const r = pm.response.json(); pm.expect(r.items).to.be.an(\"array\"); pm.expect(r.recipients).to.be.an(\"array\"); pm.expect(r.counts).to.have.keys(\"waiting\", \"question\", \"decided\"); pm.expect([\"en\", \"uk\"]).to.include(r.language); });"
                 ]
               }
             }
@@ -1905,7 +1905,288 @@
                 "value": "XMLHttpRequest"
               }
             ],
-            "url": "{{baseUrl}}/api/w/{{ws}}/report"
+            "url": "{{baseUrl}}/api/w/{{ws}}/decisions?state=all"
+          }
+        },
+        {
+          "name": "An unknown decision state is refused",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 422\", () => pm.response.to.have.status(422));",
+                  "pm.test(\"problem+json\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/decisions?state=bogus"
+          }
+        },
+        {
+          "name": "Ask the owner needs an existing recommendation",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"problem+json\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/recommendations/00000000-0000-4000-8000-000000000000/ask-owner",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"note\": \"Please approve\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Unknown decision cannot be answered",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"problem+json\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/decisions/00000000-0000-4000-8000-000000000000/answer",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"answer\": \"approve\"\n}"
+            }
+          }
+        },
+        {
+          "name": "An answer must be approve, not_now or question",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 422\", () => pm.response.to.have.status(422));",
+                  "pm.test(\"problem+json\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/decisions/00000000-0000-4000-8000-000000000000/answer",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"answer\": \"done\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Unknown decision has no replies",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"problem+json\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/decisions/00000000-0000-4000-8000-000000000000/replies",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"Hello\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Unknown decision has no reply draft",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"problem+json\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/decisions/00000000-0000-4000-8000-000000000000/reply-draft",
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          }
+        },
+        {
+          "name": "Unknown decision cannot be republished",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"problem+json\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/decisions/00000000-0000-4000-8000-000000000000/republish",
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          }
+        },
+        {
+          "name": "Notifications, unread (L-06)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"shape\", () => { const r = pm.response.json(); pm.expect(r.unread).to.be.a(\"number\"); pm.expect(r.items).to.be.an(\"array\"); pm.expect(r.items.length).to.be.at.most(30); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/notifications?unread=1"
+          }
+        },
+        {
+          "name": "Mark all notifications as read (L-06)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"shape\", () => pm.expect(pm.response.json().updated).to.be.a(\"number\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/notifications/read",
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
           }
         },
         {
@@ -1942,7 +2223,7 @@
           }
         },
         {
-          "name": "The report through the link, in its language",
+          "name": "The decisions through the link, in its language",
           "event": [
             {
               "listen": "test",
@@ -1950,7 +2231,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
-                  "pm.test(\"uk\", () => pm.expect(pm.response.json().language).to.eql(\"uk\"));"
+                  "pm.test(\"shape\", () => { const r = pm.response.json(); pm.expect(r.language).to.eql(\"uk\"); pm.expect(r.items).to.be.an(\"array\"); });"
                 ]
               }
             }
@@ -1964,6 +2245,39 @@
               }
             ],
             "url": "{{baseUrl}}/api/r/{{linkToken}}"
+          }
+        },
+        {
+          "name": "An unknown decision cannot be answered through the link",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"problem+json\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/r/{{linkToken}}/decisions/00000000-0000-4000-8000-000000000000/answer",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"answer\": \"approve\"\n}"
+            }
           }
         },
         {

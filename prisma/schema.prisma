@@ -483,6 +483,10 @@ model Recommendation {
   acceptedAt      DateTime?   @map("accepted_at") @db.Timestamptz(3)
   acceptedBy      String?     @map("accepted_by") @db.Uuid
   committedAt     DateTime?   @map("committed_at") @db.Timestamptz(3)
+  askOwnerAt      DateTime?   @map("ask_owner_at") @db.Timestamptz(3)
+  askOwnerBy      String?     @map("ask_owner_by") @db.Uuid
+  askNote         String?     @map("ask_note")
+  askCommittedAt  DateTime?   @map("ask_committed_at") @db.Timestamptz(3)
   dismissedAt     DateTime?   @map("dismissed_at") @db.Timestamptz(3)
   createdAt       DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt       DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -583,6 +587,7 @@ model ReportItem {
   recommendationId String    @map("recommendation_id") @db.Uuid
   text             Json
   note             String?
+  askedBy          String?   @map("asked_by") @db.Uuid
   committedAt      DateTime  @map("committed_at") @db.Timestamptz(3)
   supersededBy     String?   @map("superseded_by") @db.Uuid
 

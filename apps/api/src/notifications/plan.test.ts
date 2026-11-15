@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { planReportAnswered, planRunFailed, planUrgent, type Member } from "./plan.js";
+import { planDecisionAsked, planReportAnswered, planRunFailed, planUrgent, type Member } from "./plan.js";
 
 const members: Member[] = [
   { userId: "o", role: "owner" },
@@ -28,6 +28,17 @@ describe("notification producers (RFC §15.4)", () => {
     expect(
       planReportAnswered(members, { reportItemId: "i", answer: "done", fieldName: "F", actorId: null }),
     ).toHaveLength(3);
+  });
+
+  it("an asked decision notifies the Viewers only", () => {
+    const d = planDecisionAsked(members, { decisionId: "d", recommendationId: "r", fieldName: "Pivot 12" });
+    expect(d).toEqual([
+      {
+        userId: "v",
+        kind: "decision_asked",
+        payload: { decisionId: "d", recommendationId: "r", fieldName: "Pivot 12" },
+      },
+    ]);
   });
 
   it("only Urgent new recommendations notify", () => {

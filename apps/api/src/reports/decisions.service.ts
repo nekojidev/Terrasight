@@ -1,0 +1,359 @@
+import { Injectable } from "@nestjs/common";
+import type {
+  AnswerBody,
+  Decision,
+  DecisionAnswer,
+  DecisionList,
+  DecisionState,
+  PublicDecisions,
+  ThreadEntry,
+} from "@terrasight/shared";
+import { EventKeys } from "@terrasight/shared";
+import { PrismaService } from "../db/prisma.service.js";
+import type { Prisma } from "../generated/prisma/client.js";
+import type { OwnerAnswerKind } from "../generated/prisma/enums.js";
+import { ProblemException } from "../http/problem.js";
+import { eventRow } from "../messaging/outbox.js";
+import { OutboxService } from "../messaging/outbox.service.js";
+import { NotificationsService } from "../notifications/notifications.service.js";
+import { planReportAnswered } from "../notifications/plan.js";
+import { RecommendationsService } from "../recommendations/recommendations.service.js";
+
+type Localised = { en: string; uk: string };
+/** The snapshot written by the commit (Tech Design §10.3): a decision never changes by itself. */
+interface ItemText {
+  fieldName: string;
+  title: Localised;
+  action: Localised;
+  why: Localised;
+  scout: Localised | null;
+  level: string;
+  confidence: string;
+  deadline: string | null;
+  keyNumbers: Array<{ id: string; value: number | string; unit?: string }>;
+  edited: boolean;
+}
+
+/** Decided items older than this drop off the public (link) view. */
+export const PUBLIC_DECIDED_DAYS = 30;
+
+const TO_DB: Record<DecisionAnswer, OwnerAnswerKind> = {
+  approve: "done",
+  not_now: "not_yet",
+  question: "question",
+};
+const FROM_DB: Record<OwnerAnswerKind, DecisionAnswer> = {
+  done: "approve",
+  not_yet: "not_now",
+  question: "question",
+};
+
+const include = {
+  answers: { orderBy: { createdAt: "asc" } },
+  replies: { orderBy: { createdAt: "asc" } },
+  recommendation: { include: { field: { select: { name: true, aliasNo: true } } } },
+} satisfies Prisma.ReportItemInclude;
+type Row = Prisma.ReportItemGetPayload<{ include: typeof include }>;
+
+/**
+ * State from the thread: no answer → waiting; latest answer question with no reply after it → question (a replied
+ * question is waiting again); latest approve → approved; latest not_now → not_now.
+ */
+export function decisionState(
+  answers: Array<{ answer: DecisionAnswer; at: Date }>,
+  replies: Array<{ at: Date }>,
+): DecisionState {
+  const latest = answers.reduce<(typeof answers)[number] | null>(
+    (m, a) => (!m || a.at.getTime() >= m.at.getTime() ? a : m),
+    null,
+  );
+  if (!latest) return "waiting";
+  if (latest.answer === "approve") return "approved";
+  if (latest.answer === "not_now") return "not_now";
+  return replies.some((r) => r.at.getTime() > latest.at.getTime()) ? "waiting" : "question";
+}
+
+/** Owner decisions (PD v2.7, contract packages/shared/src/decisions.ts): list, answer, replies, republish, links. */
+@Injectable()
+export class DecisionsService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly outbox: OutboxService,
+    private readonly recs: RecommendationsService,
+    private readonly notifications: NotificationsService,
+  ) {}
+
+  private async names(ids: Array<string | null>): Promise<Map<string, string>> {
+    const unique = [...new Set(ids.filter((x): x is string => !!x))];
+    const users = unique.length
+      ? await this.prisma.system.user.findMany({
+          where: { id: { in: unique } },
+          select: { id: true, name: true },
+        })
+      : [];
+    return new Map(users.map((u) => [u.id, u.name]));
+  }
+
+  private build(i: Row, names: Map<string, string>): Decision {
+    const text = i.text as unknown as ItemText;
+    const rec = i.recommendation;
+    const current = this.recs.view(rec);
+    const changed =
+      current.level !== text.level ||
+      current.deadline !== text.deadline ||
+      current.text.title.en !== text.title.en ||
+      current.text.action.en !== text.action.en;
+    const asker = (i.askedBy && names.get(i.askedBy)) || "";
+    const thread: ThreadEntry[] = [];
+    if (i.note)
+      thread.push({
+        id: `${i.id}:note`,
+        kind: "note",
+        author: { name: asker, role: "agronomist" },
+        text: i.note,
+        at: i.committedAt.toISOString(),
+      });
+    for (const a of i.answers)
+      thread.push({
+        id: a.id,
+        kind: "answer",
+        author: {
+          name: a.via === "link" ? "link" : ((a.userId && names.get(a.userId)) ?? ""),
+          role: "owner",
+        },
+        answer: FROM_DB[a.answer],
+        text: a.text,
+        at: a.createdAt.toISOString(),
+        via: a.via,
+      });
+    for (const r of i.replies)
+      thread.push({
+        id: r.id,
+        kind: "reply",
+        author: { name: names.get(r.userId) ?? "", role: "agronomist" },
+        text: r.text,
+        at: r.createdAt.toISOString(),
+      });
+    thread.sort((a, b) => a.at.localeCompare(b.at));
+    return {
+      id: i.id,
+      recommendationId: rec.id,
+      fieldId: rec.fieldId,
+      fieldName: text.fieldName,
+      title: text.title,
+      action: text.action,
+      why: text.why,
+      deadline: text.deadline,
+      keyNumbers: text.keyNumbers,
+      askedAt: i.committedAt.toISOString(),
+      askedBy: { name: asker },
+      state: decisionState(
+        i.answers.map((a) => ({ answer: FROM_DB[a.answer], at: a.createdAt })),
+        i.replies.map((r) => ({ at: r.createdAt })),
+      ),
+      changedSinceAsked: changed && rec.status !== "superseded",
+      thread,
+    };
+  }
+
+  private async decisions(workspaceId: string): Promise<Decision[]> {
+    const rows = await this.prisma.system.reportItem.findMany({
+      where: { workspaceId, supersededBy: null },
+      orderBy: { committedAt: "desc" },
+      include,
+    });
+    const names = await this.names(
+      rows.flatMap((r) => [r.askedBy, ...r.answers.map((a) => a.userId), ...r.replies.map((x) => x.userId)]),
+    );
+    return rows.map((r) => this.build(r, names));
+  }
+
+  private async one(workspaceId: string, id: string): Promise<Decision> {
+    const row = await this.prisma.system.reportItem.findFirst({ where: { id, workspaceId }, include });
+    if (!row) throw new ProblemException(404, "not-found");
+    const names = await this.names([
+      row.askedBy,
+      ...row.answers.map((a) => a.userId),
+      ...row.replies.map((r) => r.userId),
+    ]);
+    return this.build(row, names);
+  }
+
+  private async item(workspaceId: string, id: string) {
+    const i = await this.prisma.system.reportItem.findFirst({ where: { id, workspaceId } });
+    if (!i) throw new ProblemException(404, "not-found");
+    return i;
+  }
+
+  /** The staff view: all live decisions, counts per state, the Viewers who receive them. */
+  async list(workspaceId: string, state: "waiting" | "question" | "decided" | "all"): Promise<DecisionList> {
+    const ws = await this.prisma.system.workspace.findUniqueOrThrow({
+      where: { id: workspaceId },
+      select: { name: true, reportLanguage: true },
+    });
+    const all = await this.decisions(workspaceId);
+    const decided = (d: Decision) => d.state === "approved" || d.state === "not_now";
+    const viewers = await this.prisma.system.membership.findMany({
+      where: { workspaceId, role: "viewer" },
+      orderBy: { createdAt: "asc" },
+      select: { user: { select: { name: true } } },
+    });
+    return {
+      workspaceName: ws.name,
+      language: ws.reportLanguage,
+      counts: {
+        waiting: all.filter((d) => d.state === "waiting").length,
+        question: all.filter((d) => d.state === "question").length,
+        decided: all.filter(decided).length,
+      },
+      recipients: viewers.map((v) => v.user.name),
+      items: all.filter((d) => state === "all" || (state === "decided" ? decided(d) : d.state === state)),
+    };
+  }
+
+  /** The owner's view through a report link: live decisions, without long-decided ones. */
+  async publicView(workspaceId: string, language: "en" | "uk"): Promise<PublicDecisions> {
+    const ws = await this.prisma.system.workspace.findUniqueOrThrow({
+      where: { id: workspaceId },
+      select: { name: true },
+    });
+    const cutoff = Date.now() - PUBLIC_DECIDED_DAYS * 864e5;
+    const items = (await this.decisions(workspaceId)).filter((d) => {
+      if (d.state !== "approved" && d.state !== "not_now") return true;
+      const last = d.thread.filter((t) => t.kind === "answer").at(-1);
+      return !last || new Date(last.at).getTime() >= cutoff;
+    });
+    return { workspaceName: ws.name, language, items };
+  }
+
+  /** One-tap answer (Approve / Not now / Ask…); all answers are kept, the latest decides the state. */
+  async answer(workspaceId: string, id: string, body: AnswerBody, by: { userId: string } | { link: true }) {
+    const item = await this.item(workspaceId, id);
+    if (item.supersededBy)
+      throw new ProblemException(409, "superseded", "This decision was replaced by a newer one");
+    await this.prisma.system.ownerAnswer.create({
+      data: {
+        reportItemId: id,
+        answer: TO_DB[body.answer],
+        text: body.text?.trim() || null,
+        via: "link" in by ? "link" : "user",
+        userId: "userId" in by ? by.userId : null,
+      },
+    });
+    await this.outbox.add(this.prisma.system, [
+      eventRow(EventKeys.brief(workspaceId), "report.answered", workspaceId, {
+        id,
+        answer: TO_DB[body.answer],
+      }),
+    ]);
+    // Notify the staff (RFC §15.4); a failure here must not lose the owner's answer.
+    try {
+      await this.notifications.create(
+        this.prisma.system,
+        workspaceId,
+        planReportAnswered(await this.notifications.members(workspaceId), {
+          reportItemId: id,
+          answer: TO_DB[body.answer],
+          fieldName: (item.text as unknown as ItemText).fieldName,
+          actorId: "userId" in by ? by.userId : null,
+        }),
+      );
+    } catch {
+      /* best effort */
+    }
+    return this.one(workspaceId, id);
+  }
+
+  async reply(workspaceId: string, userId: string, id: string, text: string) {
+    await this.item(workspaceId, id);
+    await this.prisma.system.reportReply.create({
+      data: { reportItemId: id, text: text.trim(), userId },
+    });
+    await this.prisma.db.auditLog.create({
+      data: { workspaceId, userId, action: "decision.reply", target: id },
+    });
+    return this.one(workspaceId, id);
+  }
+
+  /**
+   * Reply draft (RFC §12.6, S-08.05): a template from the decision (what was recommended, why, the deadline, next
+   * step) in the report language, phrased as a reply to the owner's latest unanswered question or as a summary.
+   */
+  async replyDraft(workspaceId: string, id: string) {
+    const d = await this.one(workspaceId, id);
+    const ws = await this.prisma.system.workspace.findUniqueOrThrow({
+      where: { id: workspaceId },
+      select: { reportLanguage: true },
+    });
+    const L = ws.reportLanguage;
+    const date = d.deadline
+      ? new Intl.DateTimeFormat(L === "uk" ? "uk-UA" : "en-US", {
+          timeZone: "UTC",
+          day: "numeric",
+          month: "long",
+        }).format(new Date(`${d.deadline}T12:00:00Z`))
+      : null;
+    const q = d.state === "question" ? d.thread.filter((t) => t.kind === "answer").at(-1) : undefined;
+    const question = q?.answer === "question" ? q.text?.trim() : null;
+    const lines =
+      L === "uk"
+        ? [
+            question ? `Щодо вашого запитання «${question}»:` : "",
+            `${d.fieldName}: ${d.title.uk}.`,
+            d.action.uk,
+            `Чому: ${d.why.uk}.`,
+            date ? `Вирішити до ${date}.` : "",
+            "Якщо зручно, обговоримо деталі.",
+          ]
+        : [
+            question ? `On your question “${question}”:` : "",
+            `${d.fieldName}: ${d.title.en}.`,
+            d.action.en,
+            `Why: ${d.why.en}.`,
+            date ? `Decide by ${date}.` : "",
+            "Happy to talk it through.",
+          ];
+    return { draft: lines.filter(Boolean).join(" "), language: L };
+  }
+
+  /** Republish: a new snapshot from the current recommendation supersedes the old decision (agronomist decides). */
+  async republish(workspaceId: string, userId: string, id: string) {
+    const old = await this.item(workspaceId, id);
+    if (old.supersededBy) throw new ProblemException(409, "superseded", "This item was already republished");
+    const rec = await this.prisma.system.recommendation.findUniqueOrThrow({
+      where: { id: old.recommendationId },
+      include: { field: { select: { name: true, aliasNo: true } } },
+    });
+    const view = this.recs.view(rec);
+    const text: ItemText = {
+      fieldName: rec.field.name,
+      title: view.text.title,
+      action: view.text.action,
+      why: view.text.why,
+      scout: view.text.scout,
+      level: rec.level,
+      confidence: rec.confidence,
+      deadline: view.deadline,
+      keyNumbers: rec.keyNumbers as ItemText["keyNumbers"],
+      edited: view.edited,
+    };
+    const created = await this.prisma.system.$transaction(async (tx) => {
+      const n = await tx.reportItem.create({
+        data: {
+          workspaceId,
+          recommendationId: rec.id,
+          text: text as unknown as Prisma.InputJsonValue,
+          note: old.note,
+          askedBy: old.askedBy,
+          committedAt: new Date(),
+        },
+      });
+      await tx.reportItem.update({ where: { id: old.id }, data: { supersededBy: n.id } });
+      await tx.auditLog.create({
+        data: { workspaceId, userId, action: "decision.republish", target: `${old.id}->${n.id}` },
+      });
+      return n;
+    });
+    return this.one(workspaceId, created.id);
+  }
+}
