@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { AppShell } from "@/components/AppShell";
-import { FieldsOverview, type FieldsOverviewData } from "./FieldsOverview";
+import { FieldsLoadError, FieldsOverview, type FieldsOverviewData } from "./FieldsOverview";
 import { SessionRefresher } from "@/components/SessionRefresher";
 import { activeWorkspace, serverGet, type Me } from "@/lib/server-api";
 
@@ -46,7 +46,7 @@ export default async function FieldsPage() {
           workspaceId={ws.data.id}
         />
       ) : (
-        <p className="text-body text-urgent">{t("errGeneric")}</p>
+        <FieldsLoadError />
       )}
     </AppShell>
   );

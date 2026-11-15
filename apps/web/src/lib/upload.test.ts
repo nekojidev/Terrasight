@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseCoordinates, ringFromFile, selfIntersects, UploadError } from "./upload";
+import { parseCoordinates, readAddFieldMode, ringFromFile, selfIntersects, UploadError, writeAddFieldMode } from "./upload";
 
 describe("parseCoordinates", () => {
   it("reads 'lat, lon' into [lon, lat]", () => {
@@ -77,5 +77,35 @@ describe("selfIntersects", () => {
   it("is false for a square and true for a bow-tie", () => {
     expect(selfIntersects([[0, 0], [1, 0], [1, 1], [0, 1]])).toBe(false);
     expect(selfIntersects([[0, 0], [1, 1], [1, 0], [0, 1]])).toBe(true);
+  });
+});
+
+describe("add-field mode memory", () => {
+  const store = () => {
+    const m = new Map<string, string>();
+    return { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => void m.set(k, v) };
+  };
+  it("opens on 'Upload a file' by default", () => {
+    expect(readAddFieldMode(store())).toBe("file");
+    expect(readAddFieldMode(null)).toBe("file");
+  });
+  it("remembers the last mode within the visit", () => {
+    const s = store();
+    writeAddFieldMode("draw", s);
+    expect(readAddFieldMode(s)).toBe("draw");
+    writeAddFieldMode("file", s);
+    expect(readAddFieldMode(s)).toBe("file");
+  });
+  it("survives blocked storage", () => {
+    const bad = {
+      getItem: () => {
+        throw new Error("blocked");
+      },
+      setItem: () => {
+        throw new Error("blocked");
+      },
+    };
+    expect(() => writeAddFieldMode("draw", bad)).not.toThrow();
+    expect(readAddFieldMode(bad)).toBe("file");
   });
 });

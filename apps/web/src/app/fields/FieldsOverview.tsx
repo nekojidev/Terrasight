@@ -1,14 +1,15 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Chip, FieldThumb, Surface, Tabs } from "@terrasight/ui";
-import { CheckCircle2, ChevronRight, Clock, MapPin, OctagonAlert, Plus } from "lucide-react";
+import { Chip, ErrorCard, FieldThumb, Surface, Tabs } from "@terrasight/ui";
+import { CheckCircle2, ChevronRight, Clock, Map as MapIcon, MapPin, OctagonAlert, Plus } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
-import { useMemo, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import { LandChip, type LandStatus } from "@/components/LandSuitability";
 import { QueryState } from "@/components/QueryState";
+import { TrustLine } from "@/components/TrustLine";
 import { api } from "@/lib/api";
 import { useFormat } from "@/lib/useFormat";
 
@@ -95,12 +96,12 @@ export const tierOf = (country: string): "A" | "B" | "C" =>
 /** Fields (design 07, S-04.08): county chips, a schematic map with one pin per county, the list grouped by county. */
 export function FieldsOverview({
   data: initial,
-  units,
   canEdit,
   workspaceId,
 }: {
   data: FieldsOverviewData;
-  units: "metric" | "imperial";
+  /** Workspace setting; not used here: each field shows the units of its own country. */
+  units?: "metric" | "imperial";
   canEdit: boolean;
   workspaceId: string;
 }) {
@@ -121,29 +122,42 @@ export function FieldsOverview({
       isEmpty={(d) => d.counties.length === 0}
       empty={{ text: f("emptyText"), actionLabel: f("emptyAction"), onAction: () => router.push("/fields/new") }}
     >
-      {(data) => <Body data={data} units={units} canEdit={canEdit} />}
+      {(data) => <Body data={data} canEdit={canEdit} />}
     </QueryState>
   );
 }
 
-function Body({
-  data,
-  units,
-  canEdit,
-}: {
-  data: FieldsOverviewData;
-  units: "metric" | "imperial";
-  canEdit: boolean;
-}) {
+/** Load error for the page (the server could not fetch the list): the unified error card with Retry. */
+export function FieldsLoadError() {
+  const t = useTranslations("App");
+  const f = useTranslations("Fields");
+  const router = useRouter();
+  return (
+    <ErrorCard
+      title={t("qsErrWhat", { what: f("loadWhat") })}
+      body={t("qsErrBody")}
+      retryLabel={t("retry")}
+      onRetry={() => router.refresh()}
+    />
+  );
+}
+
+function Body({ data, canEdit }: { data: FieldsOverviewData; canEdit: boolean }) {
   const t = useTranslations("App");
   const f = useTranslations("Fields");
   const router = useRouter();
   const locale = useLocale() as "en" | "uk";
-  const fmt = useFormat({ units });
+  // Units follow each field's own country (US: ac, °F, in; everywhere else: ha, °C, mm), not the workspace setting.
+  const fmtUS = useFormat({ units: "imperial" });
+  const fmtMetric = useFormat({ units: "metric" });
+  const fmtFor = (cc: string) => (cc === "US" ? fmtUS : fmtMetric);
   const [filter, setFilter] = useState<string | null>(null);
-  const area = fmt.area;
-  const temp = (c: number | null) => (c === null ? "—" : fmt.temp(c));
-  const date = (iso: string) => fmt.date(`${iso}T12:00:00Z`, "dayMonth", { timeZone: "UTC" });
+  const [mapOpen, setMapOpen] = useState(false);
+  // Open on a laptop only when the company works in 3 or more regions; closed on a phone.
+  useEffect(() => {
+    if (data.counties.length >= 3 && window.matchMedia("(min-width: 1024px)").matches) setMapOpen(true);
+  }, [data.counties.length]);
+  const date = (iso: string) => fmtUS.dateRel(`${iso}T12:00:00Z`, { timeZone: "UTC", style: "short" });
   const countryName = (cc: string) => {
     try {
       return new Intl.DisplayNames(locale === "uk" ? "uk-UA" : "en-US", { type: "region" }).of(cc) ?? cc;
@@ -163,8 +177,11 @@ function Body({
   const label = (c: FieldsOverviewData["counties"][number]) =>
     countryOf(c) === "UA" ? oblast(c.state, c.county) : `${areaName(c.state)} · ${c.county}`;
   const stateName = (code: string, name: string) => (code.startsWith("UA-") ? oblast(code, name) : name);
-  const weatherText = (w: NonNullable<FieldsOverviewData["counties"][number]["weather"]>) =>
-    [
+  const weatherText = (c: FieldsOverviewData["counties"][number]) => {
+    const w = c.weather!;
+    const fmt = fmtFor(countryOf(c));
+    const temp = (v: number | null) => (v === null ? "—" : fmt.temp(v));
+    return [
       `${temp(w.tminC)} / ${temp(w.tmaxC)}`,
       w.precipMm == null
         ? null
@@ -174,6 +191,7 @@ function Body({
     ]
       .filter(Boolean)
       .join(", ");
+  };
   const countries = [...new Set(data.counties.map(countryOf))];
   const [mapCountry, setMapCountry] = useState<string | null>(null);
   const activeCountry =
@@ -284,6 +302,25 @@ function Body({
   }, [data, activeCountry, locale]);
 
   const shown = data.counties.filter((c) => !filter || c.key === filter);
+  const rank: Record<Urgency, number> = { urgent: 0, this_week: 1, all_good: 2 };
+  const attention = shown
+    .flatMap((c) => c.fields.filter((fl) => fl.urgency !== "all_good").map((fl) => ({ fl, c })))
+    .sort((x, y) => rank[x.fl.urgency] - rank[y.fl.urgency] || x.fl.name.localeCompare(y.fl.name));
+  const calm = shown
+    .map((c) => ({ c, fields: c.fields.filter((fl) => fl.urgency === "all_good") }))
+    .filter((g) => g.fields.length > 0);
+  const counts = {
+    urgent: data.counties.reduce((a, c) => a + c.fields.filter((fl) => fl.urgency === "urgent").length, 0),
+    week: data.counties.reduce((a, c) => a + c.fields.filter((fl) => fl.urgency === "this_week").length, 0),
+  };
+  const summary = [
+    f("sumFields", { n }),
+    counts.urgent > 0 ? f("sumUrgent", { n: counts.urgent }) : null,
+    counts.week > 0 ? f("sumWeek", { n: counts.week }) : null,
+    counts.urgent + counts.week === 0 ? f("sumOk") : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
   const selected = data.counties.find((c) => c.key === filter) ?? null;
   const statusText = (u: Urgency) => f(STATUS_KEY[u]);
   const pinKey = (c: FieldsOverviewData["counties"][number]) => (e: KeyboardEvent) => {
@@ -299,9 +336,7 @@ function Body({
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-h1 text-ink">{t("fieldsTitle")}</h1>
-          <p className="text-body text-ink-2">
-            {t("fpSub", { n, c: data.counties.length, area: area(data.totalHa) })}
-          </p>
+          <p className="text-body text-ink-2">{summary}</p>
         </div>
         {canEdit && (
           <Link
@@ -314,23 +349,44 @@ function Body({
         )}
       </header>
 
-      <div role="group" aria-label={f("regionLabel")} className="flex flex-wrap gap-2">
-        <Chip pressed={!filter} onClick={() => setFilter(null)}>
-          {t("fpAll", { n })}
-        </Chip>
-        {data.counties.map((c) => (
-          <Chip key={c.key} pressed={filter === c.key} onClick={() => setFilter(filter === c.key ? null : c.key)}>
-            {label(c)}
-          </Chip>
-        ))}
+      <div className="flex flex-wrap items-center gap-3">
+        {data.counties.length > 1 && (
+          <select
+            aria-label={f("regionMenu")}
+            value={filter ?? ""}
+            onChange={(e) => setFilter(e.target.value || null)}
+            className="focus-ring min-h-tap rounded-btn border border-line-control bg-surface px-3 text-body text-ink"
+          >
+            <option value="">{f("regionAll")}</option>
+            {data.counties.map((c) => (
+              <option key={c.key} value={c.key}>
+                {label(c)}
+              </option>
+            ))}
+          </select>
+        )}
+        {map && (
+          <button
+            type="button"
+            aria-expanded={mapOpen}
+            onClick={() => setMapOpen((o) => !o)}
+            className="focus-ring inline-flex min-h-tap items-center gap-2 rounded-btn border border-line-control bg-surface px-4 text-body font-semibold text-ink"
+          >
+            <MapIcon aria-hidden className="size-5" strokeWidth={1.7} />
+            {mapOpen ? f("hideMap") : f("showMap")}
+          </button>
+        )}
       </div>
       {selected && (
-        <p role="status" className="-mt-3 text-small text-ink-2">
+        <p role="status" className="-mt-3 flex flex-wrap items-center gap-2 text-small text-ink-2">
           {f("selected", { name: label(selected) })}
+          <button type="button" onClick={() => setFilter(null)} className="focus-ring min-h-tap font-semibold text-ink underline underline-offset-4">
+            {f("showAll")}
+          </button>
         </p>
       )}
 
-      {map && (
+      {map && mapOpen && (
         <Surface as="section" pad="lg" className="grid gap-6 lg:grid-cols-[1fr_260px]">
           <div>
             {countries.length > 1 && !filter && (
@@ -427,8 +483,7 @@ function Body({
             {map.states.length === 0 && <p className="text-small text-ink-2">{t("fpNoOutline")}</p>}
           </div>
           <div>
-            <h2 className="text-h2 text-ink">{t("fpMap")}</h2>
-            <p className="mb-3 text-small text-ink-2">{f("mapKb")}</p>
+            <h2 className="mb-3 text-h2 text-ink">{f("mapTitle")}</h2>
             {(["urgent", "this_week", "all_good"] as const).map((u) => {
               const Icon = STATUS_ICON[u];
               return (
@@ -446,69 +501,84 @@ function Body({
         </Surface>
       )}
 
-      {shown.map((c) => {
-        const tier = tierOf(countryOf(c));
-        return (
-          <section key={c.key} className="flex flex-col gap-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="flex items-center gap-2 text-h2 text-ink">
-                <MapPin aria-hidden className="size-5" strokeWidth={1.7} />
-                {label(c)}
-                <span className="text-small font-normal text-ink-2">
-                  {c.fields.length} · {area(c.areaHa)}
-                </span>
-              </h2>
-              {c.weather && <Chip tone="neutral">{t("fpToday", { t: weatherText(c.weather) })}</Chip>}
-            </div>
-            {c.fields.map((fl) => {
-              const Icon = STATUS_ICON[fl.urgency];
-              const open = fl.next && !fl.next.plan ? 1 + fl.next.more : 0;
-              return (
-                <Link
-                  key={fl.fieldId}
-                  href={`/fields/${fl.fieldId}`}
-                  style={{ "--i": rowNo++ } as React.CSSProperties}
-                  className="stagger animate-rise focus-ring flex min-h-tap flex-wrap items-center gap-4 rounded-card border border-line bg-surface p-4 hover:bg-muted"
-                >
-                  <FieldThumb name={fl.name} outline={fl.thumb ?? null} crop={fl.lastCropId ?? null} size={40} />
-                  <span className="min-w-48 flex-1">
-                    <span className="block text-body font-semibold text-ink">{fl.name}</span>
-                    <span className="block text-small text-ink-2">
-                      {[fl.lastCrop?.[locale], area(fl.areaHa)].filter(Boolean).join(" · ")}
-                    </span>
-                    <span className="block text-caption text-ink-2">{f(`tier${tier}`)}</span>
-                  </span>
-                  <span className="min-w-64 flex-1 text-small">
-                    {fl.next ? (
-                      <>
-                        <span className="block font-semibold text-ink">{fl.next.title[locale]}</span>
-                        {fl.next.deadline && (
-                          <span className={TONE[fl.urgency] === "urgent" ? "text-urgent" : "text-ink-2"}>
-                            {t("fpBy", { date: date(fl.next.deadline) })}
-                          </span>
-                        )}
-                      </>
-                    ) : (
-                      <span className="text-ink-2">{t("fpNothing")}</span>
-                    )}
-                    <span className="block text-ink-2">{open > 0 ? f("openRecs", { n: open }) : f("noRecs")}</span>
-                  </span>
-                  <span className="flex flex-wrap items-center gap-2">
-                    <Chip tone={TONE[fl.urgency]} icon={<Icon />}>
-                      {statusText(fl.urgency)}
-                    </Chip>
-                    <LandChip
-                      status={fl.suitabilityStatus ?? null}
-                      overridden={fl.suitabilityOverridden ?? false}
-                    />
-                  </span>
-                  <ChevronRight aria-hidden className="size-5 text-ink-3" />
-                </Link>
-              );
-            })}
-          </section>
-        );
-      })}
+      {attention.length > 0 && (
+        <section aria-label={f("needsYou")} className="flex flex-col gap-3">
+          {attention.map(({ fl, c }) => (
+            <FieldRow key={fl.fieldId} fl={fl} c={c} no={rowNo++} showRegion />
+          ))}
+        </section>
+      )}
+      {calm.map(({ c, fields }) => (
+        <section key={c.key} className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="flex flex-wrap items-center gap-x-2 text-h2 text-ink">
+              <MapPin aria-hidden className="size-5" strokeWidth={1.7} />
+              {label(c)}
+              <span className="text-small font-normal text-ink-2">
+                {fields.length} · {fmtFor(countryOf(c)).area(c.areaHa)}
+                {c.weather && ` · ${t("fpToday", { t: weatherText(c) })}`}
+              </span>
+            </h2>
+          </div>
+          {fields.map((fl) => (
+            <FieldRow key={fl.fieldId} fl={fl} c={c} no={rowNo++} />
+          ))}
+        </section>
+      ))}
     </div>
   );
+
+  function FieldRow({
+    fl,
+    c,
+    no,
+    showRegion,
+  }: {
+    fl: Row;
+    c: FieldsOverviewData["counties"][number];
+    no: number;
+    showRegion?: boolean;
+  }) {
+    const cc = countryOf(c);
+    const fmt = fmtFor(cc);
+    const tier = tierOf(cc);
+    const Icon = STATUS_ICON[fl.urgency];
+    return (
+      <Link
+        href={`/fields/${fl.fieldId}`}
+        style={{ "--i": no } as React.CSSProperties}
+        className="stagger animate-rise focus-ring flex min-h-tap flex-wrap items-center gap-x-4 gap-y-2 rounded-card border border-line bg-surface p-4 hover:bg-muted"
+      >
+        <FieldThumb name={fl.name} outline={fl.thumb ?? null} crop={fl.lastCropId ?? null} size={40} />
+        <span className="min-w-48 flex-1">
+          <span className="block text-body font-semibold text-ink">{fl.name}</span>
+          <span className="block text-small text-ink-2">
+            {[fl.lastCrop?.[locale], fmt.area(fl.areaHa), showRegion ? label(c) : null].filter(Boolean).join(" · ")}
+          </span>
+          <TrustLine compact dataLevel={tier} estimate={tier === "C"} className="!min-h-0" />
+        </span>
+        <span className="min-w-56 flex-1 text-small">
+          {fl.next ? (
+            <>
+              <span className="block font-semibold text-ink">{fl.next.title[locale]}</span>
+              {fl.next.deadline && (
+                <span className={fl.urgency === "urgent" ? "text-urgent" : "text-ink-2"}>
+                  {t("fpBy", { date: date(fl.next.deadline) })}
+                </span>
+              )}
+            </>
+          ) : (
+            <span className="text-ink-2">{f("nothingWaiting")}</span>
+          )}
+        </span>
+        <span className="flex flex-wrap items-center gap-2">
+          <Chip tone={TONE[fl.urgency]} icon={<Icon />}>
+            {statusText(fl.urgency)}
+          </Chip>
+          <LandChip status={fl.suitabilityStatus ?? null} overridden={fl.suitabilityOverridden ?? false} />
+        </span>
+        <ChevronRight aria-hidden className="size-5 text-ink-3" />
+      </Link>
+    );
+  }
 }
