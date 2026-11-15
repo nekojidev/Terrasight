@@ -17,6 +17,7 @@ import {
   Calendar,
   Check,
   Eye,
+  MessageCircleQuestion,
   Pencil,
   RefreshCw,
   ShieldCheck,
@@ -28,6 +29,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useState, type FormEvent } from "react";
+import type { AskOwnerBody } from "@terrasight/shared";
+import { AskOwnerSheet } from "@/components/AskOwnerSheet";
 import { api } from "@/lib/api";
 
 type Localised = { en: string; uk: string };
@@ -284,7 +287,8 @@ export function RecommendationClient({
     initialData: initial,
   });
   const [editing, setEditing] = useState(false);
-  const [note, setNote] = useState("");
+  const [asking, setAsking] = useState(false);
+  const [asked, setAsked] = useState(false);
   const router = useRouter();
   async function startCheck() {
     const task = await api<{ id: string }>(
@@ -358,8 +362,10 @@ export function RecommendationClient({
   });
   const heat = inputs.find((e) => (e.series?.length ?? 0) > 1);
 
-  async function act(action: "accept" | "snooze" | "dismiss" | "undo", note?: string) {
-    const next = await api<RecView>(`${base}/${action}`, { body: note ? { note } : {} });
+  async function act(action: "accept" | "snooze" | "dismiss" | "undo" | "ask-owner", note?: string) {
+    const body: AskOwnerBody = action === "ask-owner" && note ? { note } : {};
+    const next = await api<RecView>(`${base}/${action}`, { body });
+    setAsked(action === "ask-owner");
     client.setQueryData(key, { ...r, ...next });
     void client.invalidateQueries({ queryKey: ["brief", workspaceId] });
     if (next.undoUntil)
@@ -461,7 +467,13 @@ export function RecommendationClient({
           )}
           {r.undoUntil ? (
             <DoneRow
-              label={r.status === "accepted" ? m("acc_done") : m("snz_done")}
+              label={
+                asked || r.status === "in_report"
+                  ? t("askDone")
+                  : r.status === "accepted"
+                    ? t("accDone")
+                    : m("snz_done")
+              }
               undoLabel={m("undo")}
               undoUntil={r.undoUntil}
               onUndo={() => void act("undo")}
@@ -470,8 +482,11 @@ export function RecommendationClient({
             canAct &&
             r.status === "open" && (
               <div className="flex flex-wrap items-center gap-2 md:flex-nowrap">
-                <Button icon={<Check />} onClick={() => void act("accept", note.trim() || undefined)}>
-                  {r9("accept")}
+                <Button icon={<Check />} onClick={() => void act("accept")}>
+                  {t("acceptBtn")}
+                </Button>
+                <Button variant="outline" icon={<MessageCircleQuestion />} onClick={() => setAsking(true)}>
+                  {t("askBtn")}
                 </Button>
                 <Button variant="outline" onClick={() => void act("snooze")}>
                   {m("snooze")}
@@ -688,21 +703,13 @@ export function RecommendationClient({
           </p>
           {canAct && !editing && (
             <div className="mt-3 flex flex-col gap-3">
-              {r.status === "open" && !r.undoUntil && (
-                <TextField
-                  label={t("rcNote")}
-                  name="note"
-                  value={note}
-                  onChange={(e) => setNote(e.currentTarget.value)}
-                />
-              )}
               <div className="flex flex-wrap gap-2">
                 <Button variant="outline" icon={<Pencil />} onClick={() => setEditing(true)}>
                   {r9("edit")}
                 </Button>
-                {r.status === "open" && !r.undoUntil && (
-                  <Button icon={<Check />} onClick={() => void act("accept", note.trim() || undefined)}>
-                    {r9("to_report")}
+                {(r.status === "open" || r.status === "accepted") && !r.undoUntil && (
+                  <Button icon={<MessageCircleQuestion />} onClick={() => setAsking(true)}>
+                    {t("askBtn")}
                   </Button>
                 )}
               </div>
@@ -771,6 +778,27 @@ export function RecommendationClient({
           </p>
         </section>
       </aside>
+      <AskOwnerSheet
+        preview={
+          asking
+            ? {
+                fieldName: r.fieldName,
+                title: r.text.title[locale],
+                action: r.text.action[locale],
+                deadline: r.deadline ? date(r.deadline) : "",
+                numbers: r.keyNumbers.slice(0, 3).map((k) => ({
+                  label: label(k.id),
+                  value: `${isoOrText(String(k.value))}${k.unit && k.unit !== "seasons" ? ` ${k.unit}` : ""}`,
+                })),
+              }
+            : null
+        }
+        onClose={() => setAsking(false)}
+        onSend={(note) => {
+          setAsking(false);
+          void act("ask-owner", note || undefined);
+        }}
+      />
     </div>
   );
 }

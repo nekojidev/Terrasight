@@ -5,7 +5,7 @@ import { Check } from "lucide-react";
 import { useEffect, useState } from "react";
 
 export interface DoneRowProps {
-  /** "Added to the owner report" / "Snoozed until tomorrow 06:00". */
+  /** "Asked the owner" / "Snoozed until tomorrow 06:00". */
   label: string;
   undoLabel: string;
   /** Server-sent end of the Undo window (RFC §10.4: action time + 8 s). */

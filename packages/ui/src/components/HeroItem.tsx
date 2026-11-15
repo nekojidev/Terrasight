@@ -1,7 +1,7 @@
 "use client";
 
 import { clsx } from "clsx";
-import { Check, ShieldCheck } from "lucide-react";
+import { Check, MessageCircleQuestion, ShieldCheck } from "lucide-react";
 import type { ReactNode } from "react";
 import { BigNumber, type BigNumberProps } from "./BigNumber";
 import { Button } from "./Button";
@@ -18,10 +18,12 @@ export interface HeroItemProps {
   confidence: string;
   /** Optional `InfoHint` explaining confidence, data tier and the key numbers. */
   confidenceHint?: ReactNode;
-  labels: { accept: string; snooze: string; details: string };
+  labels: { accept: string; snooze: string; details: string; ask?: string };
   detailsHref: string;
   onAccept: () => void;
   onSnooze: () => void;
+  /** "Ask the owner": shown as a second action when set (together with `labels.ask`). */
+  onAsk?: () => void;
   /** Phone only (design 05): a "Why" factors block shown instead of the three big numbers. */
   why?: ReactNode;
   /** When set, the hero shows the done row with Undo instead of its actions. */
@@ -51,6 +53,11 @@ export function HeroItem(p: HeroItemProps) {
           <Button size={56} icon={<Check />} onClick={p.onAccept}>
             {p.labels.accept}
           </Button>
+          {p.onAsk && p.labels.ask && (
+            <Button size={56} variant="outline" icon={<MessageCircleQuestion />} onClick={p.onAsk}>
+              {p.labels.ask}
+            </Button>
+          )}
           <Button size={56} variant="outline" onClick={p.onSnooze}>
             {p.labels.snooze}
           </Button>

@@ -12,11 +12,11 @@ because MODIS NDVI gathering takes about 2 minutes (budget 60 s) — add the fie
 | 1 | "Every morning at 06:00 Terrasight checks every field." Open the home page of the company. | «Щоранку о 06:00 Terrasight перевіряє всі поля.» Відкрийте головну сторінку компанії. | Already signed in as the agronomist in a second tab. |
 | 2 | The brief: **Start here** — barley yellow dwarf on Pivot 14, urgent before the first frost. Show the 3 numbers. | Бриф: **Почніть з цього** — жовта карликовість на Півоті 14, терміново до першого морозу. | If the forecast has no frost, the item shows the 7-day scouting window instead — say so. |
 | 3 | **Details**: why (sown 5 September, before K-State's 10 September planting date), the citation, what we don't know. | **Деталі**: чому (посіяно 5 вересня, раніше дати K-State 10 вересня), джерело, чого не знаємо. | Screenshot of the recommendation page in the deck. |
-| 4 | **Accept** → the 8-second Undo → let it go: "the owner gets it only after 8 seconds". | **Прийняти** → 8 секунд на Undo → «власник отримає це лише після 8 секунд». | — |
+| 4 | **Accept** (into your plan) → the 8-second Undo → then **Ask the owner**: "the owner gets it only when you ask, after 8 seconds". | **Прийняти** → 8 секунд на Undo → потім **Запитати власника**: «власник отримує це лише коли ви запитаєте, після 8 секунд». | — |
 | 5 | **Why?** → the assistant answers; "N numbers checked against the models". Ask "What if we sow alfalfa?" | **Чому так?** → асистент відповідає; «N чисел звірено з моделями». «А якщо люцерна?» | No network / quota: "Assistant unavailable" — show a golden-question recording (`tools/golden/recordings`). |
 | 6 | Pivot 12 → **Rotation**: 3 options over 2026–2030, the priority picker re-ranks instantly, **Save to the 2026 plan**. | Півот 12 → **Сівозміна**: 3 варіанти на 2026–2030, вибір пріоритету, **Зберегти в план на 2026**. | Cached runs make this instant; sliders re-run in ~3 s. |
 | 7 | On a phone: **Start a check** → 5 points on a W → counts → **Send**; the item's confidence lifts. | На телефоні: **Почати огляд** → 5 точок буквою W → кількість → **Надіслати**. | Use the browser's device mode on the laptop. |
-| 8 | **Reports** → the owner's question and the reply draft; open the report link on a phone and tap **Done**. | **Звіти** → питання власника й чернетка відповіді; посилання на телефоні → **Зроблено**. | — |
+| 8 | **Owner decisions** → the owner's question and the reply draft; open the link on a phone and tap **Approve**. | **Рішення власника** → питання власника й чернетка відповіді; посилання на телефоні → **Погодити**. | — |
 
 ## Laptop fallback (S-09.06)
 
