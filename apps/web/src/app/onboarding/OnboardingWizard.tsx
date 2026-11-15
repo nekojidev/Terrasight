@@ -14,9 +14,8 @@ interface CreatedWorkspace {
 }
 interface CreatedAgronomist {
   name: string;
-  /** Absent when the person already had an account and was just added. */
-  setupUrl?: string;
-  expiresAt?: string;
+  setupUrl: string;
+  expiresAt: string;
 }
 
 /** Design 02: create the company, then add your agronomist (PD v2.10) in two steps (RFC §14.2). */
@@ -74,15 +73,11 @@ export function OnboardingWizard() {
     setBusy(true);
     setError(null);
     try {
-      const r = await api<{ userId: string; setupUrl?: string; expiresAt?: string }>(
+      const r = await api<{ userId: string; setupUrl: string; expiresAt: string }>(
         `/api/w/${workspaceId}/members`,
         { body: { name, email, role: "agronomist" } },
       );
-      setAgronomist({
-        name,
-        ...(r.setupUrl ? { setupUrl: r.setupUrl } : {}),
-        ...(r.expiresAt ? { expiresAt: r.expiresAt } : {}),
-      });
+      setAgronomist({ name, setupUrl: r.setupUrl, expiresAt: r.expiresAt });
     } catch (err) {
       setError(err instanceof ApiError ? err : null);
     } finally {
@@ -94,7 +89,7 @@ export function OnboardingWizard() {
     router.replace("/");
     router.refresh();
   };
-  const setupUrl = agronomist?.setupUrl ? `${window.location.origin}${agronomist.setupUrl}` : "";
+  const setupUrl = agronomist ? `${window.location.origin}${agronomist.setupUrl}` : "";
 
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-[560px] flex-col gap-6 px-4 py-10">
@@ -112,7 +107,13 @@ export function OnboardingWizard() {
       <section className="animate-rise rounded-card border border-line bg-surface p-8">
         {error && (
           <p role="alert" className="mb-5 rounded-input bg-urgent-soft px-4 py-3 text-body text-urgent">
-            {error.code === "invalid-input" ? a("errInvalid") : a("errGeneric")}
+            {error.code === "invalid-input"
+              ? a("errInvalid")
+              : error.code === "email-in-use"
+                ? a("teamErrEmailInUse")
+                : error.code === "one-company"
+                  ? a("errOneCompany")
+                  : a("errGeneric")}
           </p>
         )}
 
@@ -173,34 +174,28 @@ export function OnboardingWizard() {
         ) : agronomist ? (
           <div className="flex flex-col gap-5">
             <h1 className="text-h2 text-ink">{a("teamLinkTitle", { name: agronomist.name })}</h1>
-            {setupUrl ? (
-              <>
-                <p className="text-body text-ink-2">
-                  {a("teamLinkOnce", {
-                    name: agronomist.name,
-                    date: new Date(agronomist.expiresAt ?? Date.now()).toLocaleDateString(locale),
-                  })}
-                </p>
-                <div className="flex gap-2">
-                  <input
-                    readOnly
-                    value={setupUrl}
-                    aria-label={a("teamCopyLink")}
-                    className="min-h-13 w-full rounded-input border border-line bg-surface-2 px-4 font-mono text-small"
-                  />
-                  <Button
-                    variant="outline"
-                    size={52}
-                    icon={<Copy />}
-                    onClick={() => void navigator.clipboard.writeText(setupUrl).then(() => setCopied(true))}
-                  >
-                    {copied ? a("teamCopied") : a("teamCopyLink")}
-                  </Button>
-                </div>
-              </>
-            ) : (
-              <p className="text-body text-ink-2">{a("teamExisting", { name: agronomist.name })}</p>
-            )}
+            <p className="text-body text-ink-2">
+              {a("teamLinkOnce", {
+                name: agronomist.name,
+                date: new Date(agronomist.expiresAt).toLocaleDateString(locale),
+              })}
+            </p>
+            <div className="flex gap-2">
+              <input
+                readOnly
+                value={setupUrl}
+                aria-label={a("teamCopyLink")}
+                className="min-h-13 w-full rounded-input border border-line bg-surface-2 px-4 font-mono text-small"
+              />
+              <Button
+                variant="outline"
+                size={52}
+                icon={<Copy />}
+                onClick={() => void navigator.clipboard.writeText(setupUrl).then(() => setCopied(true))}
+              >
+                {copied ? a("teamCopied") : a("teamCopyLink")}
+              </Button>
+            </div>
             <Button size={56} className="w-full justify-center" onClick={finish}>
               {a("continue")}
             </Button>

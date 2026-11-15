@@ -51,7 +51,7 @@ export const EnvSchema = z.object({
   RETENTION_LEVEL_DAYS: z.coerce.number().int().min(1).default(180),
   RETENTION_RUN_FIELD_DAYS: z.coerce.number().int().min(1).default(90),
   RETENTION_NOTIFICATION_DAYS: z.coerce.number().int().min(1).default(90),
-  /** Outgoing email (verification, password reset, invitations). SMTP_URL: smtp[s]://user:pass@host:port (an SES SMTP endpoint works). */
+  /** Outgoing email (password reset). SMTP_URL: smtp[s]://user:pass@host:port (an SES SMTP endpoint works). */
   SMTP_URL: z.string().url().optional(),
   EMAIL_FROM: z.string().min(3).max(200).default("Terrasight <no-reply@terrasight.app>"),
   /** Overrides the key derived (HKDF) from JWT_SECRET that signs local scouting-photo URLs. At least 32 characters. */
@@ -64,7 +64,6 @@ export const EnvSchema = z.object({
   PHOTO_MAX_PER_POINT: z.coerce.number().int().positive().default(6),
   PHOTO_MAX_PER_TASK: z.coerce.number().int().positive().default(30),
   /** Cost limits: a user creates at most this many companies; a company holds at most this many active fields. */
-  MAX_WORKSPACES_PER_USER: z.coerce.number().int().positive().default(5),
   MAX_FIELDS_PER_WORKSPACE: z.coerce.number().int().positive().default(200),
   /** Exposes GET /api/test/outbox so contract and E2E runs can read their emails. Refused in production. */
   AUTH_TEST_HOOKS: z.enum(["0", "1"]).default("0"),
@@ -87,7 +86,7 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
   const env = parsed.data;
   const problems: string[] = [];
   if (env.NODE_ENV === "production" && !env.SMTP_URL)
-    problems.push("SMTP_URL: required in production (verification and reset emails)");
+    problems.push("SMTP_URL: required in production (password reset emails)");
   if (env.NODE_ENV === "production" && env.AUTH_TEST_HOOKS === "1")
     problems.push("AUTH_TEST_HOOKS: must not be 1 in production");
   if (problems.length) throw new Error(`Invalid environment:\n${problems.map((l) => `  - ${l}`).join("\n")}`);

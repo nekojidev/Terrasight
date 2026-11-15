@@ -844,7 +844,7 @@ erDiagram
 | Viewer | Read-only: the Owner report and passports; one-tap answers. Usually the company owner or manager, and farm staff |
 
 - Whoever pays holds the Owner role; the company owner who only reads the report is a Viewer. One person can be both.
-- An agronomist who works for several companies has a membership in each workspace and switches between them.
+- One user = one company (PD v2.12): a user belongs to exactly one workspace; an agronomist who works for several companies has a separate account for each. There are no invitations.
 - **Report link (optional):** a secret, revocable link to the Owner report, with an optional expiry, for staff without an account. It shows what a Viewer sees; answers through it are recorded as "via report link".
 - Every query is filtered by workspace. The assistant's tool executor applies the same filter (§12.3).
 - **County** is derived from the field's centroid (US Census county boundaries) and shown in the UI; the agronomic region from `rotations.json` is used by the models (product definition §9, Fields page).

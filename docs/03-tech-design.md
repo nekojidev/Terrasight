@@ -133,7 +133,7 @@ Shared rules: ESLint + Prettier, `tsc --noEmit` in CI, Conventional Commits, one
 | --- | --- | --- |
 | `auth` | Sign up / sign in (email + password), JWT access cookie, refresh rotation, CSRF | §16 |
 | `workspaces` | Create the company (onboarding), settings (time zone, units, report language), demo copy | §14 |
-| `members` | Memberships, roles (Owner, Agronomist), invitations, create-user with setup link, permission guard | §14.1 |
+| `members` | Memberships (one per user), roles (Owner, Agronomist), create-user with setup link, permission guard | §14.1 |
 | `library` | Loads and validates library files at boot; exposes versions; region matching | §6.3, §11.1 |
 | `geo` | Reverse geocoding (ISO 3166-2, US county) from local PostGIS boundary tables | §6.3, §14.1 |
 | `fields` | CRUD, PostGIS geometry, area, centroid, county, region, aliases for the LLM | D1 |
@@ -164,7 +164,6 @@ PostgreSQL + PostGIS (versions pinned at kickoff). Prisma for schema and most qu
 erDiagram
     USER ||--o{ MEMBERSHIP : holds
     WORKSPACE ||--o{ MEMBERSHIP : has
-    WORKSPACE ||--o{ INVITATION : sends
     WORKSPACE ||--o| REPORT_LINK : shares
     WORKSPACE ||--o{ FIELD : owns
     FIELD ||--o{ CROP_SEASON : history
@@ -196,7 +195,6 @@ erDiagram
 | `refresh_tokens` | id, user_id, family_id, token_hash, expires_at, revoked_at, replaced_by | Rotation with family revocation |
 | `workspaces` | id, name, slug, time_zone (IANA), units (`metric`/`imperial`), report_language (`uk`/`en`), currency, is_demo, demo_template_id, created_at | One workspace = one company |
 | `memberships` | workspace_id, user_id, role (`owner`/`agronomist`) | PK (workspace_id, user_id) |
-| `invitations` | id, workspace_id, email, role, token_hash, expires_at, accepted_at | Optional; users are normally created by the Owner |
 | `report_links` | id, workspace_id, token_hash, language, expires_at, revoked_at | Optional link for staff without an account |
 | `fields` | id, workspace_id, name, alias_no (int, per workspace), geom (`MultiPolygon, 4326`), centroid, area_ha, admin_code (ISO 3166-2), country, county_name, region_id (library) or null, tier, irrigation (`irrigated`/`dryland`/`unknown`), irrigation_source, slope_pct, thumbnail_key, created_by, archived_at | GIST index on geom |
 | `crop_seasons` | field_id, season (harvest year), main_crop, second_crop, confidence, source (`cdl`/`lpis`/`ndvi`/`user`), is_override | PK (field_id, season) |
@@ -528,9 +526,9 @@ REST under `/api`, JSON, zod-validated (nestjs-zod), errors as `application/prob
 
 | Area | Endpoints | Roles |
 | --- | --- | --- |
-| Auth | `POST /auth/signup`, `/auth/login`, `/auth/refresh`, `/auth/logout`, `GET /me` | — |
+| Auth | `POST /auth/signup`, `/auth/login`, `/auth/refresh`, `/auth/logout`, `/auth/forgot`, `/auth/reset/:token`, `GET/POST /auth/setup/:token`, `GET /me` | — |
 | Workspaces | `POST /workspaces` (onboarding), `GET/PATCH /w/:ws`, `POST /w/:ws/demo-copy` | Owner for PATCH |
-| Members | `GET /w/:ws/members`, `POST /w/:ws/invitations`, `POST /invitations/:token/accept`, `PATCH/DELETE /w/:ws/members/:userId` | Owner |
+| Members | `GET /w/:ws/members`, `POST /w/:ws/members` (create user; 409 `email-in-use`), `POST /w/:ws/members/:userId/setup-link`, `PATCH/DELETE /w/:ws/members/:userId` (delete removes the account) | Owner |
 | Fields | `GET/POST /w/:ws/fields`, `GET/PATCH/DELETE /w/:ws/fields/:id`, `POST /w/:ws/fields/preview` (area, county, region before saving) | Agronomist, Owner |
 | History | `GET /w/:ws/fields/:id/history`, `PUT /w/:ws/fields/:id/crop-seasons/:season` (override), `PUT …/season-records/:season`, `POST …/irrigation/confirm` | Agronomist+ |
 | Gather | `GET /w/:ws/fields/:id/gather`, `POST …/gather/sources/:source/retry` | Agronomist+ |
@@ -561,7 +559,7 @@ REST under `/api`, JSON, zod-validated (nestjs-zod), errors as `application/prob
 | Read brief, fields, history, scenarios, decisions | ✓ | ✓ | |
 | Read the decisions through the link | | | ✓ |
 
-Two roles only (PD v2.10). The Owner may do field work, but the UI never shows them "Ask the owner". Migration `20261115200000_two_roles` maps `admin` and `viewer` to `owner` in memberships and invitations.
+Two roles only (PD v2.10). The Owner may do field work, but the UI never shows them "Ask the owner". Migration `20261115200000_two_roles` maps `admin` and `viewer` to `owner` in memberships and invitations. One user = one company (PD v2.12): `POST /workspaces` is 409 `one-company` for a user with a membership; the rule is enforced in the service, not by a unique index, so databases that already hold multi-company users still migrate.
 
 Every row has an API test (§16).
 
@@ -733,3 +731,4 @@ All resolved on 2026-11-14.
 | 2026-11-15 | Owner creates users: `POST /w/:ws/members` creates the account (no password) + a one-time setup token (hash stored, 7 days) → `/setup/:token` sets the password; existing email → membership only. Decision recipients = Owner + Viewer; "Ask the owner" hidden for Owners | Owner feedback: the Owner is the farm owner, not the agronomist who signed up (product definition v2.9) |
 | 2026-11-15 | Two roles only, Owner and Agronomist: enum `Role` loses `admin` and `viewer`; migration maps both to `owner`; `report.answer`, `members.manage`, `workspace.settings`, `reportLinks.manage`, billing and workspace delete are Owner only; decision recipients and `decision_asked` notifications = Owners; onboarding step 2 creates an agronomist with a setup link | Owner feedback: Admin and Viewer add nothing; Owner and Agronomist are enough (product definition v2.10) |
 | 2026-11-15 | AI-written recommendation text, watch-items and day summary (`AI_RECOMMENDATIONS`): after the evaluators run, `AiRecommendationsService` makes one batched Gemini call per field check (changed items + up to 2 watch-item proposals), validates with the assistant number check and safety filter, stores `recommendations.ai_text` (`source: ai` or `template` + facts hash) and `ai_suggested` watch-items (level `unknown`, never in Urgent; brief group `worthALook`); the day summary is generated in the background per brief facts hash and pushed with `brief.changed` | Owner request; the rules hold because levels, numbers and deadlines stay deterministic, every number in the text must be among the facts, and the template text (`text.ts`) is always the fallback. Cost: facts-hash skip, cross-field text cache, 15 s timeout, circuit breaker after 3 failures (product definition v2.11) |
+| 2026-11-15 | One user = one company: invitations, the `invitations` table, the invitation email, `/invite/[token]` and email verification (`/auth/verify`, `resend-verification`, banner, `email_verified_at`, `verify_*` columns) are removed (migration `20261116120000_one_company_per_user`, destructive, applied with the normal deploy). `POST /w/:ws/members` for an email that already has an account is 409 `email-in-use` (nothing is added or sent); `POST /workspaces` is 409 `one-company`; `MAX_WORKSPACES_PER_USER` is gone; removing a member deletes the user (sessions cascade). Sign-up stays a uniform 202 with no session and no verification email (new address: account created; existing: "you already have an account" email); the web app then signs in with the same credentials, which fails like a wrong password for an existing address (no enumeration). Password reset stays (SMTP still required in production) | The owner decided an agronomist works in only one company, so invitations make no sense; verification existed only to protect accepting them. Returning the session from sign-up would reveal whether an address is new, so the sign-in is a second, generic call | Invitation flow with verified email (v2.9–v2.11); sign-up that returns cookies for new addresses only (enumeration side channel) |

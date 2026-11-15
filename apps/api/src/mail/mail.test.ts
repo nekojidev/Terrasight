@@ -36,16 +36,14 @@ describe("config", () => {
     expect(() =>
       loadEnv({ ...base, NODE_ENV: "production", SMTP_URL: "smtps://u:p@h:465", AUTH_TEST_HOOKS: "1" }),
     ).toThrow(/AUTH_TEST_HOOKS/);
-    expect(loadEnv({ ...base, NODE_ENV: "production", SMTP_URL: "smtps://u:p@h:465" }).MAX_WORKSPACES_PER_USER).toBe(5);
+    expect(loadEnv({ ...base, NODE_ENV: "production", SMTP_URL: "smtps://u:p@h:465" }).NODE_ENV).toBe("production");
   });
 });
 
 describe("templates", () => {
   it("have EN and UK copy that carry the link", () => {
     for (const lang of ["en", "uk"] as const) {
-      expect(templates.verify(lang, "Ira", "https://x/verify/t").text).toContain("https://x/verify/t");
       expect(templates.reset(lang, "https://x/reset/t").text).toContain("https://x/reset/t");
-      expect(templates.invitation(lang, "Co", "https://x/invite/t").text).toContain("https://x/invite/t");
       expect(templates.alreadyRegistered(lang, "https://x/login").text).not.toMatch(/verify/);
     }
     expect(templates.reset("uk", "l").subject).toMatch(/пароля/);

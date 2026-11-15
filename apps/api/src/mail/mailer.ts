@@ -68,7 +68,7 @@ export class Mailer {
   }
 }
 
-/** The first URL in an email body (the verification / reset / invitation link). */
+/** The first URL in an email body (the password-reset link). */
 export function linkIn(text: string): string | null {
   return /https?:\/\/\S+/.exec(text)?.[0] ?? null;
 }

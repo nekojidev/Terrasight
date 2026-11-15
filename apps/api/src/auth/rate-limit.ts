@@ -118,11 +118,10 @@ export const AUTH_BUCKET: BucketSpec = {
   refillPerSec: 1 / 6,
 };
 
-/** Emails sent to one address (sign-up, reset, resend): a burst of 6, then one per 5 minutes. Over it, emails are skipped silently. */
+/** Emails sent to one address (sign-up, reset): a burst of 6, then one per 5 minutes. Over it, emails are skipped silently. */
 export const MAIL_BUCKET: BucketSpec = { capacity: 6, refillPerSec: 1 / 300 };
-/** "Forgot password" per IP + email, and the resend endpoint per user. */
+/** "Forgot password" per IP + email. */
 export const FORGOT_BUCKET: BucketSpec = { capacity: 6, refillPerSec: 1 / 120 };
-export const RESEND_BUCKET: BucketSpec = { capacity: 6, refillPerSec: 1 / 60 };
 
 /** Per-user cost limits for expensive endpoints (burst, then steady rate). Capacities are halved without Redis. */
 export const COST_BUCKETS = {

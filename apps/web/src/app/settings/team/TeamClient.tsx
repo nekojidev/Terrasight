@@ -34,7 +34,6 @@ export function TeamClient({ workspaceId, meId }: { workspaceId: string; meId: s
   });
   const [fresh, setFresh] = useState<Fresh | null>(null);
   const [copied, setCopied] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [removing, setRemoving] = useState<Member | null>(null);
@@ -56,8 +55,8 @@ export function TeamClient({ workspaceId, meId }: { workspaceId: string; meId: s
   const fail = (e: unknown) => {
     const code = e instanceof ApiError ? e.code : "";
     setError(
-      code === "already-member"
-        ? t("teamErrAlready")
+      code === "email-in-use"
+        ? t("teamErrEmailInUse")
         : code === "owner-only"
           ? t("teamErrOwnerOnly")
           : code === "last-owner"
@@ -78,17 +77,12 @@ export function TeamClient({ workspaceId, meId }: { workspaceId: string; meId: s
     e.preventDefault();
     setBusy(true);
     setError(null);
-    setNotice(null);
     try {
-      const r = await api<{ userId: string; setupUrl?: string; expiresAt?: string; existing?: true }>(
+      const r = await api<{ userId: string; setupUrl: string; expiresAt: string }>(
         `/api/w/${workspaceId}/members`,
         { body: form },
       );
-      if (r.setupUrl && r.expiresAt) show(form.name, { setupUrl: r.setupUrl, expiresAt: r.expiresAt });
-      else {
-        setFresh(null);
-        setNotice(t("teamExisting", { name: form.name }));
-      }
+      show(form.name, r);
       setForm({ ...form, name: "", email: "" });
       void client.invalidateQueries({ queryKey: key });
     } catch (err) {
@@ -99,7 +93,6 @@ export function TeamClient({ workspaceId, meId }: { workspaceId: string; meId: s
 
   async function newLink(m: Member) {
     setError(null);
-    setNotice(null);
     try {
       show(
         m.name,
@@ -159,11 +152,6 @@ export function TeamClient({ workspaceId, meId }: { workspaceId: string; meId: s
       {error && (
         <p role="alert" className="rounded-input bg-urgent-soft px-4 py-3 text-body text-urgent">
           {error}
-        </p>
-      )}
-      {notice && (
-        <p role="status" className="rounded-input bg-surface-2 px-4 py-3 text-body text-ink">
-          {notice}
         </p>
       )}
       {fresh && (

@@ -26,17 +26,7 @@ describe("P0 path", () => {
     cy.get('input[name="password"]').type(password);
     cy.get('button[type="submit"]').click();
 
-    // Sign-up answers the same for every address and opens no session: open the emailed verification link
-    // (read from the dev outbox through the test hook; the API needs AUTH_TEST_HOOKS=1), then sign in.
-    cy.contains("h1", "Check your email", { timeout: 20_000 });
-    cy.request(`/api/test/outbox?to=${encodeURIComponent(email)}`).then((r) => {
-      cy.visit(new URL(String(r.body.link)).pathname);
-    });
-    cy.contains("Your email is verified", { timeout: 20_000 });
-    cy.visit("/login");
-    cy.get('input[name="email"]').type(email);
-    cy.get('input[name="password"]').type(password);
-    cy.get('button[type="submit"]').click();
+    // No email verification (PD v2.12): the new account signs in straight away and lands on onboarding.
     cy.location("pathname", { timeout: 20_000 }).should("eq", "/onboarding");
     cy.get('input[name="name"]').clear().type(`E2E Farms ${run}`);
     cy.get('button[type="submit"]').click();

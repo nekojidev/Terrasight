@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 // Builds the P0 API contract collection (Tech Design §14, §16; hackathon: P0 endpoints only, §1.1).
 //   node tools/postman/build-collection.mjs  →  apps/api/postman/terrasight-p0.postman_collection.json
-// The API under test needs AUTH_TEST_HOOKS=1 (never in production; the API refuses that) and no SMTP_URL: sign-up now
-// sends a verification email, which the run reads through GET /api/test/outbox (the dev outbox), so verification is
-// really exercised instead of being bypassed. Raise AUTH_RATE_BURST for the many sign-ins of one run.
+// The API under test needs AUTH_TEST_HOOKS=1 (never in production; the API refuses that) and no SMTP_URL: the
+// password-reset email is read through GET /api/test/outbox (the dev outbox), so reset is really exercised instead of
+// being bypassed. One user = one company (PD v2.12): no invitations, no email verification. Raise AUTH_RATE_BURST for
+// the many sign-ins of one run.
 // Run: postman collection run apps/api/postman/terrasight-p0.postman_collection.json --env-var baseUrl=http://localhost:4000
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -82,7 +83,7 @@ const collection = {
           tests: [
             status(202),
             `pm.test("uniform answer, no session", () => {`,
-            `  pm.expect(pm.response.json()).to.eql({ status: "verification-sent" });`,
+            `  pm.expect(pm.response.json()).to.eql({ status: "ok" });`,
             `  const set = pm.response.headers.filter((h) => h.key.toLowerCase() === "set-cookie");`,
             `  pm.expect(set).to.have.length(0);`,
             `});`,
@@ -91,19 +92,6 @@ const collection = {
             `  pm.expect(pm.response.headers.get("Content-Security-Policy")).to.include("frame-ancestors 'none'");`,
             `});`,
           ],
-        }),
-        req("Read the verification email (test hook)", "GET", "/api/test/outbox?to={{ownerEmail}}", {
-          tests: [
-            status(200),
-            `const l = pm.response.json().link; pm.test("verify link", () => pm.expect(l).to.match(/\\/verify\\/[\\w-]{43}$/));`,
-            `pm.collectionVariables.set("ownerVerifyToken", l.split("/").pop());`,
-          ],
-        }),
-        req("Verify the email", "POST", "/api/auth/verify/{{ownerVerifyToken}}", {
-          tests: [status(200), `pm.test("verified", () => pm.expect(pm.response.json().verified).to.eql(true));`],
-        }),
-        req("A verification link works once", "POST", "/api/auth/verify/{{ownerVerifyToken}}", {
-          tests: problem(410, "verify-link-invalid"),
         }),
         req("Sign in before the first workspace", "POST", "/api/auth/login", {
           body: { email: "{{ownerEmail}}", password: "correct horse battery" },
@@ -115,9 +103,9 @@ const collection = {
             `  pm.expect(set).to.match(/ts_rt=[^;]+;.*Path=\\/api\\/auth.*HttpOnly/i);`,
             `  pm.expect(set).to.match(/SameSite=Lax/i);`,
             `});`,
-            `pm.test("returns the verified user without workspaces", () => {`,
+            `pm.test("returns the user without workspaces", () => {`,
             `  const b = pm.response.json(); pm.expect(b.email).to.eql(pm.collectionVariables.get("ownerEmail"));`,
-            `  pm.expect(b.emailVerified).to.eql(true);`,
+            `  pm.expect(b).to.not.have.property("emailVerified");`,
             `  pm.expect(b.workspaces).to.eql([]); pm.expect(b).to.not.have.property("passwordHash");`,
             `});`,
           ],
@@ -131,7 +119,7 @@ const collection = {
           body: { email: "{{ownerEmail}}", password: "another long password", name: "X" },
           tests: [
             status(202),
-            `pm.test("same body as a new address", () => pm.expect(pm.response.json()).to.eql({ status: "verification-sent" }));`,
+            `pm.test("same body as a new address", () => pm.expect(pm.response.json()).to.eql({ status: "ok" }));`,
           ],
         }),
         req("Short password is invalid", "POST", "/api/auth/signup", {
@@ -184,9 +172,9 @@ const collection = {
             `pm.test("settings stored", () => { pm.expect(b.timeZone).to.eql("America/Chicago"); pm.expect(b.units).to.eql("imperial"); });`,
           ],
         }),
-        req("Ukrainian time zone name is accepted", "POST", "/api/workspaces", {
+        req("One user = one company: a second company is refused", "POST", "/api/workspaces", {
           body: { name: "Агро Степ", timeZone: "Europe/Kyiv", units: "metric", reportLanguage: "uk" },
-          tests: [status(201)],
+          tests: problem(409, "one-company"),
         }),
         req("Read the workspace", "GET", "/api/w/{{ws}}", {
           tests: [
@@ -207,51 +195,46 @@ const collection = {
       ],
     },
     {
-      name: "Invite an agronomist; the Agronomist role is limited (S-01.03, S-01.04, PD v2.10)",
+      name: "Owner adds an agronomist; the Agronomist role is limited (S-01.03, S-01.04, PD v2.10, v2.12)",
       item: [
-        req("Invite by email", "POST", "/api/w/{{ws}}/invitations", {
-          body: { email: "{{agronomistEmail}}", role: "agronomist" },
-          tests: [status(201), `pm.collectionVariables.set("inviteToken", pm.response.json().token);`],
-        }),
-        req("The retired roles admin and viewer are refused", "POST", "/api/w/{{ws}}/invitations", {
-          body: { email: "retired-{{run}}@example.com", role: "viewer" },
-          tests: problem(422),
-        }),
-        req("Phone numbers are not accepted", "POST", "/api/w/{{ws}}/invitations", {
-          body: { email: "+1 620 555 0100" },
-          tests: problem(422),
-        }),
-        req("Invitation info is public", "GET", "/api/invitations/{{inviteToken}}", {
+        req("Create the agronomist: a one-time setup link", "POST", "/api/w/{{ws}}/members", {
+          body: { name: "John Miller", email: "{{agronomistEmail}}", role: "agronomist" },
           tests: [
-            status(200),
-            `pm.test("open, for the agronomist", () => { const b = pm.response.json(); pm.expect(b.status).to.eql("open"); pm.expect(b.role).to.eql("agronomist"); pm.expect(b.workspaceName).to.eql("Prairie Field Co."); });`,
+            status(201),
+            `pm.collectionVariables.set("agroSetupToken", pm.response.json().setupUrl.split("/").pop());`,
           ],
+        }),
+        req("The retired roles admin and viewer are refused", "POST", "/api/w/{{ws}}/members", {
+          body: { name: "Retired", email: "retired-{{run}}@example.com", role: "viewer" },
+          tests: problem(422),
+        }),
+        req("Phone numbers are not accepted", "POST", "/api/w/{{ws}}/members", {
+          body: { name: "Phone", email: "+1 620 555 0100", role: "agronomist" },
+          tests: problem(422),
+        }),
+        req("An email that already has an account is refused (one user = one company)", "POST", "/api/w/{{ws}}/members", {
+          body: { name: "Olena again", email: "{{ownerEmail}}", role: "agronomist" },
+          tests: [
+            ...problem(409, "email-in-use"),
+            `pm.test("clear message", () => pm.expect(pm.response.json().detail).to.eql("This email is already used by another account"));`,
+          ],
+        }),
+        req("The invitation endpoints are gone", "POST", "/api/w/{{ws}}/invitations", {
+          body: { email: "x-{{run}}@example.com", role: "agronomist" },
+          tests: problem(404),
         }),
         req("Sign out", "POST", "/api/auth/logout", { tests: [status(204)] }),
         req("Signed out: me is 401", "GET", "/api/me", { tests: problem(401) }),
-        req("Sign up the invited agronomist", "POST", "/api/auth/signup", {
-          body: { email: "{{agronomistEmail}}", password: "agronomist long password", name: "John Miller" },
-          tests: [status(202)],
-        }),
-        req("The invitation needs a verified email", "POST", "/api/auth/login", {
-          body: { email: "{{agronomistEmail}}", password: "agronomist long password" },
-          tests: [status(200)],
-        }),
-        req("Accepting before verifying is refused", "POST", "/api/invitations/{{inviteToken}}/accept", {
-          tests: problem(403, "email-unverified"),
-        }),
-        req("Read the agronomist's verification email (test hook)", "GET", "/api/test/outbox?to={{agronomistEmail}}", {
-          tests: [status(200), `pm.collectionVariables.set("agroVerifyToken", pm.response.json().link.split("/").pop());`],
-        }),
-        req("Verify the agronomist's email", "POST", "/api/auth/verify/{{agroVerifyToken}}", { tests: [status(200)] }),
-        req("Accept the invitation", "POST", "/api/invitations/{{inviteToken}}/accept", {
+        req("The agronomist sets a password from the link", "POST", "/api/auth/setup/{{agroSetupToken}}", {
+          body: { password: "agronomist long password" },
           tests: [
             status(200),
-            `pm.test("joined as agronomist", () => pm.expect(pm.response.json().role).to.eql("agronomist"));`,
+            `pm.test("signed in as the agronomist", () => { const b = pm.response.json(); pm.expect(b.workspaces).to.have.length(1); pm.expect(b.workspaces[0].role).to.eql("agronomist"); });`,
           ],
         }),
-        req("An invitation works once", "POST", "/api/invitations/{{inviteToken}}/accept", {
-          tests: problem(410, "invitation-used"),
+        req("An agronomist cannot create another company", "POST", "/api/workspaces", {
+          body: { name: "Second", timeZone: "UTC", units: "metric", reportLanguage: "en" },
+          tests: problem(409, "one-company"),
         }),
         req("Agronomist can read the workspace", "GET", "/api/w/{{ws}}", {
           tests: [
@@ -264,10 +247,6 @@ const collection = {
           tests: problem(403),
         }),
         req("Agronomist cannot see members", "GET", "/api/w/{{ws}}/members", { tests: problem(403) }),
-        req("Agronomist cannot invite", "POST", "/api/w/{{ws}}/invitations", {
-          body: { email: "x-{{run}}@example.com" },
-          tests: problem(403),
-        }),
         req("Agronomist cannot create users", "POST", "/api/w/{{ws}}/members", {
           body: { name: "X", email: "x-{{run}}@example.com", role: "agronomist" },
           tests: problem(403),
@@ -318,7 +297,17 @@ const collection = {
           body: { role: "owner" },
           tests: [status(200)],
         }),
-        req("Remove the member", "DELETE", "/api/w/{{ws}}/members/{{agronomistId}}", { tests: [status(204)] }),
+        req("Remove the member (the account is deleted)", "DELETE", "/api/w/{{ws}}/members/{{agronomistId}}", {
+          tests: [status(204)],
+        }),
+        req("The removed user can no longer sign in", "POST", "/api/auth/login", {
+          body: { email: "{{agronomistEmail}}", password: "agronomist long password" },
+          tests: problem(401, "bad-credentials"),
+        }),
+        req("The removed email can be used for a new user again", "POST", "/api/w/{{ws}}/members", {
+          body: { name: "John Miller", email: "{{agronomistEmail}}", role: "agronomist" },
+          tests: [status(201)],
+        }),
       ],
     },
     {
@@ -333,9 +322,9 @@ const collection = {
             `pm.collectionVariables.set("newUserId", pm.response.json().userId);`,
           ],
         }),
-        req("The same email is already a member", "POST", "/api/w/{{ws}}/members", {
+        req("The same email is already used", "POST", "/api/w/{{ws}}/members", {
           body: { name: "Ira Agro", email: "ira-{{run}}@example.com", role: "agronomist" },
-          tests: problem(409, "already-member"),
+          tests: problem(409, "email-in-use"),
         }),
         req("Members list shows who has not set a password", "GET", "/api/w/{{ws}}/members", {
           tests: [
@@ -815,10 +804,7 @@ const collection = {
         }),
         req("The new password works", "POST", "/api/auth/login", {
           body: { email: "forgetful-{{run}}@example.com", password: "second long password" },
-          tests: [status(200), `pm.test("reset verified the email", () => pm.expect(pm.response.json().emailVerified).to.eql(true));`],
-        }),
-        req("Resend verification for a verified account is a no-op", "POST", "/api/auth/resend-verification", {
-          tests: [status(200), `pm.test("already verified", () => pm.expect(pm.response.json().alreadyVerified).to.eql(true));`],
+          tests: [status(200)],
         }),
       ],
     },

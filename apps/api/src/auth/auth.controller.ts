@@ -6,7 +6,7 @@ import { ProblemException } from "../http/problem.js";
 import { ZodPipe } from "../http/zod.js";
 import { AuthService, type Session } from "./auth.service.js";
 import { AuthGuard, type AuthedRequest } from "./current-user.js";
-import { AUTH_BUCKET, FORGOT_BUCKET, MAIL_BUCKET, RESEND_BUCKET, RateLimitService } from "./rate-limit.js";
+import { AUTH_BUCKET, FORGOT_BUCKET, MAIL_BUCKET, RateLimitService } from "./rate-limit.js";
 import { ACCESS_COOKIE, hashToken, ACCESS_TTL_S, REFRESH_COOKIE, REFRESH_TTL_S } from "./tokens.js";
 
 const Email = z.string().trim().toLowerCase().pipe(z.email().max(254));
@@ -57,30 +57,19 @@ export class AuthController {
     if (!a || !b) throw new ProblemException(429, "rate-limited", "Too many attempts; try again in a minute");
   }
 
-  /** Uniform answer for new and existing addresses: no session, "check your email". */
+  /**
+   * Uniform answer for new and existing addresses (no account enumeration): 202, no session cookies. A new address
+   * just gets its account (no verification step, PD v2.12); the web app then signs in with the same credentials via
+   * /auth/login, which fails the same way for an existing address. An existing address is emailed "you already have
+   * an account".
+   */
   @Post("signup")
   @HttpCode(202)
   async signup(@Body(new ZodPipe(SignupBody)) body: z.infer<typeof SignupBody>, @Req() req: Request) {
     await this.limit(req, body.email);
     const mailOk = await this.limits.take(`mail:${body.email}`, MAIL_BUCKET);
     await this.auth.signup(body, mailOk);
-    return { status: "verification-sent" };
-  }
-
-  @Post("verify/:token")
-  @HttpCode(200)
-  async verify(@Param("token") token: string, @Req() req: Request) {
-    await this.limit(req, `verify:${hashToken(token).slice(0, 16)}`);
-    await this.auth.verifyEmail(token);
-    return { verified: true };
-  }
-
-  @Post("resend-verification")
-  @HttpCode(200)
-  @UseGuards(AuthGuard)
-  async resend(@Req() req: AuthedRequest) {
-    await this.limits.enforce(`resend:${req.user!.id}`, RESEND_BUCKET);
-    return this.auth.resendVerification(req.user!.id);
+    return { status: "ok" };
   }
 
   /** Uniform answer whether or not the address has an account. */
