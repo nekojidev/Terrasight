@@ -60,6 +60,12 @@ export class FieldsOverviewController {
           ST_AsGeoJSON(ST_SimplifyPreserveTopology(geom, GREATEST(ST_XMax(geom) - ST_XMin(geom), ST_YMax(geom) - ST_YMin(geom)) / 40), 6) AS thumb_geojson
         FROM fields WHERE workspace_id = ${ws}::uuid AND archived_at IS NULL ORDER BY alias_no`,
     ]);
+    const codes = [...new Set(fields.map((r) => r.admin_code).filter((c): c is string => Boolean(c)))];
+    const states = codes.length
+      ? await this.prisma.system.$queryRaw<Array<{ code: string; name: string; geojson: string }>>`
+          SELECT code, name, ST_AsGeoJSON(ST_SimplifyPreserveTopology(geom, 0.05), 3) AS geojson FROM admin_areas WHERE code = ANY(${codes})`
+      : [];
+    const areaName = new Map(states.map((x) => [x.code, x.name]));
     const crops = await this.prisma.system.cropSeason.findMany({
       where: { fieldId: { in: fields.map((f) => f.id) } },
       orderBy: { season: "desc" },
@@ -82,7 +88,9 @@ export class FieldsOverviewController {
           : good?.plan
             ? { id: good.plan.id, title: good.plan.title, deadline: good.plan.deadline, more: 0, plan: true }
             : null,
-        county: f.county_name ?? f.admin_code ?? "—",
+        // Weather is keyed by the raw county / code; the label falls back to the admin area (oblast) name where there are no counties (Ukraine).
+        weatherKey: f.county_name ?? f.admin_code ?? "—",
+        county: f.county_name ?? (f.admin_code ? areaName.get(f.admin_code) : null) ?? f.admin_code ?? "—",
         state: f.admin_code,
         lon: f.lon,
         lat: f.lat,
@@ -95,15 +103,10 @@ export class FieldsOverviewController {
         counties.get(`${r.state}|${r.county}`) ??
         counties.set(`${r.state}|${r.county}`, []).get(`${r.state}|${r.county}`)!
       ).push(r);
-    const codes = [...new Set(rows.map((r) => r.state).filter((c): c is string => Boolean(c)))];
-    const states = codes.length
-      ? await this.prisma.system.$queryRaw<Array<{ code: string; name: string; geojson: string }>>`
-          SELECT code, name, ST_AsGeoJSON(ST_SimplifyPreserveTopology(geom, 0.05), 3) AS geojson FROM admin_areas WHERE code = ANY(${codes})`
-      : [];
     return {
       totalHa: rows.reduce((s, r) => s + r.areaHa, 0),
       counties: [...counties.values()].map((list) => {
-        const w = b.rail.weather.find((x) => x.county === list[0]!.county && x.region === list[0]!.state);
+        const w = b.rail.weather.find((x) => x.county === list[0]!.weatherKey && x.region === list[0]!.state);
         return {
           key: `${list[0]!.state}|${list[0]!.county}`,
           county: list[0]!.county,
@@ -116,7 +119,7 @@ export class FieldsOverviewController {
           ),
           areaHa: list.reduce((s, r) => s + r.areaHa, 0),
           weather: w?.today ?? null,
-          fields: list,
+          fields: list.map(({ weatherKey: _w, ...r }) => r),
         };
       }),
       states: states.map((s) => ({ code: s.code, name: s.name, geometry: JSON.parse(s.geojson) as unknown })),
