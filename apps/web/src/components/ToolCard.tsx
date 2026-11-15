@@ -18,12 +18,16 @@ export const TOOL_NAMES = [
   "run_risk_model",
   "compare",
   "get_pest_info",
+  "get_climate_shift",
+  "get_year_set_ranking",
 ] as const;
 
 /** Fields that are bookkeeping, never worth a labelled row. */
-const HIDDEN = new Set(["id", "region", "state", "provider", "saved", "hasVerifiedModel", "source", "regions", "kind", "issuedAt"]);
+const HIDDEN = new Set(["id", "region", "state", "provider", "saved", "hasVerifiedModel", "source", "regions", "kind", "issuedAt", "dataset"]);
 /** Numbers that are years or counters: shown without a thousands separator. */
-const PLAIN_NUMBER = new Set(["season", "since", "stressYearCount"]);
+const PLAIN_NUMBER = new Set(["season", "since", "stressYearCount", "from", "to", "baselineFrom", "baselineTo", "recentFrom", "recentTo", "firstYear", "lastYear", "yearsUsed", "rank"]);
+/** Model-facing caveats and machine reasons: never shown as rows. */
+const SKIP = new Set(["note", "kind", "reason"]);
 const MAX_ROWS = 40;
 
 export interface CardRow {
@@ -53,7 +57,8 @@ export function formatQuantity(value: number, unit: string, fmt: Fmt, t: Transla
     case "mm":
       return fmt.rain(value);
     case "°C":
-      return fmt.temp(value);
+      // As many decimals as the tool result carries (at most 2), so the card shows the numbers the answer quotes.
+      return fmt.temp(value, Math.min(2, (String(value).split(".")[1] ?? "").length));
     case "ha":
       return fmt.area(value);
     case "share":
@@ -62,6 +67,12 @@ export function formatQuantity(value: number, unit: string, fmt: Fmt, t: Transla
       return `${fmt.number(value, { maximumFractionDigits: 1 })} %`;
     case "days":
       return `${fmt.number(value)} ${t("days")}`;
+    case "km":
+      return `${fmt.number(value)} ${t("unit_km")}`;
+    case "degree-days":
+      return `${fmt.number(value)} ${t("unit_degreeDays")}`;
+    case "day of year":
+      return `${t("unit_dayOfYear")} ${fmt.number(value)}`;
     case "":
       return fmt.number(value);
     default:
@@ -155,6 +166,7 @@ export function buildCard(
       if (typeof o.value === "number" && "unit" in o) return place(key, formatQuantity(o.value, String(o.unit ?? ""), fmt, t), title);
       const sub = title ?? (key && known(key) ? label(key) : key ? humanize(key) : null);
       for (const [k, v] of Object.entries(o)) {
+        if (SKIP.has(k)) continue;
         // A field name that is only a flag ("source") hides in details even if nested.
         walk(v, k, sub);
       }

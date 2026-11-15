@@ -5,6 +5,7 @@
 //                                          the safety filter against the recorded tool results; prints the report
 //   node tools/golden/run.mjs --live       ask a running API (GOLDEN_API; GOLDEN_EMAIL + GOLDEN_PASSWORD or GOLDEN_COOKIE_JAR),
 //                                          record answers + tool results to tools/golden/recordings/<lang>.json
+//   expect.tools / say / sayAny / never (EP-10): a required tool, required wording, forbidden wording (see en.yaml)
 //   options: --lang en|uk  --limit N  --min 0.9 (share of answers shown without fallback; default 0.9)
 //
 // Recordings hold the demo company's derived data only (aliases F<n>, tool results); no customer data (RFC §12.7).
@@ -150,6 +151,21 @@ function evaluate(lang, answers) {
     if (a.expect.refusal && !refused) problems.push("expected a refusal");
     if (!a.expect.refusal && refused) problems.push("unexpected refusal");
     if (TEN_YEARS.test(a.answer ?? "")) problems.push("says 10 years");
+    // EP-10 checks: required tools, required and forbidden wording (a forbidden word inside a denial is allowed).
+    if (!a.error && !refused) {
+      const e = a.expect;
+      const body = (a.answer ?? "").replace(/Showing the data directly\.|Показуємо дані напряму\./, "");
+      const re = (p) => new RegExp(p, "iu");
+      if (e.tools && !a.tools.some((t) => e.tools.includes(t.tool)))
+        problems.push(`expected tool: ${e.tools.join(" or ")}`);
+      for (const p of e.say ?? []) if (!re(p).test(body)) problems.push(`expected wording: ${p}`);
+      if (e.sayAny && !e.sayAny.some((p) => re(p).test(body)))
+        problems.push(`expected wording (any): ${e.sayAny.join(" | ")}`);
+      for (const rule of e.never ?? [])
+        for (const s of core.splitSentences(body, lang))
+          if (re(rule.pattern).test(s) && !(rule.unless && re(rule.unless).test(s)))
+            problems.push(`forbidden wording /${rule.pattern}/ in "${s.trim()}"`);
+    }
     if (a.error) problems.push(`unavailable: ${a.error}`);
     return { ...a, refused, problems };
   });
@@ -188,7 +204,13 @@ for (const lang of langs) {
   // Recordings must stay consistent with the current number check and filters; live runs must meet the demo bar.
   const hard = r.rows.some((x) =>
     x.problems.some(
-      (p) => p.startsWith("number check") || p === "expected a refusal" || p === "says 10 years",
+      (p) =>
+        p.startsWith("number check") ||
+        p === "expected a refusal" ||
+        p === "says 10 years" ||
+        p.startsWith("expected tool") ||
+        p.startsWith("expected wording") ||
+        p.startsWith("forbidden wording"),
     ),
   );
   if (hard || r.shownWithoutFallback < minShown) failed = true;

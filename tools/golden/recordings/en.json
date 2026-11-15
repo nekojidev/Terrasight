@@ -1,6 +1,6 @@
 {
   "lang": "en",
-  "recordedAt": "2026-11-14T22:56:58.683Z",
+  "recordedAt": "2026-11-15T11:17:01.273Z",
   "answers": [
     {
       "id": "en-01",
@@ -5079,6 +5079,375 @@
         }
       ],
       "ms": 2050
+    },
+    {
+      "id": "en-34",
+      "category": "climate_shift",
+      "question": "Has the climate of F1 changed?",
+      "expect": {
+        "tools": [
+          "get_climate_shift"
+        ],
+        "say": [
+          "no clear trend"
+        ],
+        "never": [
+          {
+            "pattern": "\\bforecast",
+            "unless": "\\b(not|isn'?t|no|never|cannot|can'?t)\\b[^.]*\\bforecast|\\bforecast[^.]*\\b(not|isn'?t)\\b"
+          },
+          {
+            "pattern": "\\bwill\\s+(be|get|become|rise|warm|turn|stay|keep)\\b",
+            "unless": "\\b(cannot|can'?t|not|unable)\\b[^.]*\\b(predict|forecast|say|know|tell|promise)\\b|\\b(if|whether)\\b[^.]*\\bwill\\b"
+          },
+          {
+            "pattern": "\\bprojection",
+            "unless": "\\b(not|isn'?t|no|never)\\b[^.]*\\bprojection"
+          }
+        ]
+      },
+      "answer": "Based on the NASA POWER record (1981 to 2025), F1 shows a clear upward trend in growing-season temperature, increasing by 0.71 °C from a baseline of 21.51 °C to a recent value of 22.22 °C. Growing degree days also show a clear trend, increasing by 114 degree-days to 2247 degree-days. Growing-season rainfall and the longest dry spell show no clear trend. NASA POWER numbers belong to a grid cell of about 55 km, so neighbouring fields share them.",
+      "error": null,
+      "checked": true,
+      "fallback": false,
+      "numbersChecked": 8,
+      "tools": [
+        {
+          "tool": "get_climate_shift",
+          "args": {
+            "field": "F1"
+          },
+          "result": {
+            "field": "F1",
+            "periods": {
+              "baselineFrom": 1981,
+              "baselineTo": 2000,
+              "recentFrom": 2006,
+              "recentTo": 2025
+            },
+            "growingSeason": {
+              "from": "04-15",
+              "to": "10-15"
+            },
+            "crop": null,
+            "floweringWindow": {
+              "from": "06-01",
+              "to": "08-31",
+              "threshold": {
+                "value": 35,
+                "unit": "°C"
+              },
+              "thresholdVerified": false,
+              "genericWindow": true
+            },
+            "metrics": [
+              {
+                "title": "Growing-season temperature",
+                "baseline": {
+                  "value": 21.51,
+                  "unit": "°C"
+                },
+                "recent": {
+                  "value": 22.22,
+                  "unit": "°C"
+                },
+                "change": {
+                  "value": 0.71,
+                  "unit": "°C"
+                },
+                "slopePerDecade": null,
+                "trend": "clear_trend"
+              },
+              {
+                "title": "Growing degree days",
+                "baseline": {
+                  "value": 2133,
+                  "unit": "degree-days"
+                },
+                "recent": {
+                  "value": 2247,
+                  "unit": "degree-days"
+                },
+                "change": {
+                  "value": 114,
+                  "unit": "degree-days"
+                },
+                "slopePerDecade": null,
+                "trend": "clear_trend"
+              },
+              {
+                "title": "First autumn frost",
+                "baseline": null,
+                "recent": null,
+                "change": {
+                  "value": 8,
+                  "unit": "days"
+                },
+                "slopePerDecade": null,
+                "trend": "clear_trend"
+              },
+              {
+                "title": "Growing-season rainfall",
+                "baseline": {
+                  "value": 375,
+                  "unit": "mm"
+                },
+                "recent": {
+                  "value": 363,
+                  "unit": "mm"
+                },
+                "change": {
+                  "value": -12,
+                  "unit": "mm"
+                },
+                "slopePerDecade": null,
+                "trend": "no_clear_trend"
+              },
+              {
+                "title": "Longest dry spell",
+                "baseline": {
+                  "value": 17.6,
+                  "unit": "days"
+                },
+                "recent": {
+                  "value": 18,
+                  "unit": "days"
+                },
+                "change": {
+                  "value": 0.4,
+                  "unit": "days"
+                },
+                "slopePerDecade": null,
+                "trend": "no_clear_trend"
+              }
+            ],
+            "skippedYears": [],
+            "source": {
+              "dataset": "NASA POWER",
+              "from": "1981-01-01",
+              "lastDate": "2026-11-12",
+              "resolution": {
+                "value": 55,
+                "unit": "km"
+              },
+              "note": "NASA POWER numbers belong to a grid cell of about 55 km; neighbouring fields in the same cell share them."
+            },
+            "gpmCheck": null,
+            "note": "This describes the past (1981–2025), not a forecast. A metric with trend \"no_clear_trend\" shows no clear trend and must not be described as a change."
+          }
+        }
+      ],
+      "ms": 0
+    },
+    {
+      "id": "en-36",
+      "category": "climate_shift",
+      "question": "Is the recommended rotation on F1 still the best in the recent climate?",
+      "expect": {
+        "horizon": true,
+        "tools": [
+          "get_year_set_ranking"
+        ],
+        "sayAny": [
+          "sensitivity",
+          "not available",
+          "isn'?t available",
+          "unavailable"
+        ],
+        "never": [
+          {
+            "pattern": "\\bforecast",
+            "unless": "\\b(not|isn'?t|no|never|cannot|can'?t)\\b[^.]*\\bforecast|\\bforecast[^.]*\\b(not|isn'?t)\\b"
+          },
+          {
+            "pattern": "\\bwill\\s+(be|get|become|rise|warm|turn|stay|keep)\\b",
+            "unless": "\\b(cannot|can'?t|not|unable)\\b[^.]*\\b(predict|forecast|say|know|tell|promise)\\b|\\b(if|whether)\\b[^.]*\\bwill\\b"
+          },
+          {
+            "pattern": "\\bprojection",
+            "unless": "\\b(not|isn'?t|no|never)\\b[^.]*\\bprojection"
+          }
+        ]
+      },
+      "answer": "The year-set ranking is not available for F1 yet, so we cannot determine how the rotation options change with the weather years used.",
+      "error": null,
+      "checked": true,
+      "fallback": false,
+      "numbersChecked": 0,
+      "tools": [
+        {
+          "tool": "get_year_set_ranking",
+          "args": {
+            "field": "F1"
+          },
+          "result": {
+            "field": "F1",
+            "status": "not_available",
+            "note": "The comparison across weather years is not available for this field yet; say so and do not estimate it."
+          }
+        }
+      ],
+      "ms": 0
+    },
+    {
+      "id": "en-35",
+      "category": "climate_shift",
+      "question": "Will it get hotter on F1 by 2030?",
+      "expect": {
+        "sayAny": [
+          "not a (climate )?forecast",
+          "cannot (predict|forecast)",
+          "can'?t (predict|forecast)",
+          "no forecast",
+          "past"
+        ],
+        "never": [
+          {
+            "pattern": "\\bforecast",
+            "unless": "\\b(not|isn'?t|no|never|cannot|can'?t)\\b[^.]*\\bforecast|\\bforecast[^.]*\\b(not|isn'?t)\\b"
+          },
+          {
+            "pattern": "\\bwill\\s+(be|get|become|rise|warm|turn|stay|keep)\\b",
+            "unless": "\\b(cannot|can'?t|not|unable)\\b[^.]*\\b(predict|forecast|say|know|tell|promise)\\b|\\b(if|whether)\\b[^.]*\\bwill\\b"
+          },
+          {
+            "pattern": "\\bprojection",
+            "unless": "\\b(not|isn'?t|no|never)\\b[^.]*\\bprojection"
+          }
+        ]
+      },
+      "answer": "The climate shift describes the past in the NASA POWER record (1981 to 2025), not a forecast, so we cannot predict if it will get hotter by 2030. These NASA POWER numbers belong to a grid cell of about 55 km, so neighbouring fields share them. In the past record for F1, the growing-season temperature had a baseline of 21.51 °C and a recent value of 22.22 °C, with a clear upward trend of 0.71 °C.",
+      "error": null,
+      "checked": true,
+      "fallback": false,
+      "numbersChecked": 7,
+      "tools": [
+        {
+          "tool": "get_climate_shift",
+          "args": {
+            "field": "F1"
+          },
+          "result": {
+            "field": "F1",
+            "periods": {
+              "baselineFrom": 1981,
+              "baselineTo": 2000,
+              "recentFrom": 2006,
+              "recentTo": 2025
+            },
+            "growingSeason": {
+              "from": "04-15",
+              "to": "10-15"
+            },
+            "crop": null,
+            "floweringWindow": {
+              "from": "06-01",
+              "to": "08-31",
+              "threshold": {
+                "value": 35,
+                "unit": "°C"
+              },
+              "thresholdVerified": false,
+              "genericWindow": true
+            },
+            "metrics": [
+              {
+                "title": "Growing-season temperature",
+                "baseline": {
+                  "value": 21.51,
+                  "unit": "°C"
+                },
+                "recent": {
+                  "value": 22.22,
+                  "unit": "°C"
+                },
+                "change": {
+                  "value": 0.71,
+                  "unit": "°C"
+                },
+                "slopePerDecade": null,
+                "trend": "clear_trend"
+              },
+              {
+                "title": "Growing degree days",
+                "baseline": {
+                  "value": 2133,
+                  "unit": "degree-days"
+                },
+                "recent": {
+                  "value": 2247,
+                  "unit": "degree-days"
+                },
+                "change": {
+                  "value": 114,
+                  "unit": "degree-days"
+                },
+                "slopePerDecade": null,
+                "trend": "clear_trend"
+              },
+              {
+                "title": "First autumn frost",
+                "baseline": null,
+                "recent": null,
+                "change": {
+                  "value": 8,
+                  "unit": "days"
+                },
+                "slopePerDecade": null,
+                "trend": "clear_trend"
+              },
+              {
+                "title": "Growing-season rainfall",
+                "baseline": {
+                  "value": 375,
+                  "unit": "mm"
+                },
+                "recent": {
+                  "value": 363,
+                  "unit": "mm"
+                },
+                "change": {
+                  "value": -12,
+                  "unit": "mm"
+                },
+                "slopePerDecade": null,
+                "trend": "no_clear_trend"
+              },
+              {
+                "title": "Longest dry spell",
+                "baseline": {
+                  "value": 17.6,
+                  "unit": "days"
+                },
+                "recent": {
+                  "value": 18,
+                  "unit": "days"
+                },
+                "change": {
+                  "value": 0.4,
+                  "unit": "days"
+                },
+                "slopePerDecade": null,
+                "trend": "no_clear_trend"
+              }
+            ],
+            "skippedYears": [],
+            "source": {
+              "dataset": "NASA POWER",
+              "from": "1981-01-01",
+              "lastDate": "2026-11-12",
+              "resolution": {
+                "value": 55,
+                "unit": "km"
+              },
+              "note": "NASA POWER numbers belong to a grid cell of about 55 km; neighbouring fields in the same cell share them."
+            },
+            "gpmCheck": null,
+            "note": "This describes the past (1981–2025), not a forecast. A metric with trend \"no_clear_trend\" shows no clear trend and must not be described as a change."
+          }
+        }
+      ],
+      "ms": 0
     }
   ]
 }

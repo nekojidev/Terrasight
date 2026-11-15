@@ -67,6 +67,71 @@ describe("ToolCard", () => {
   });
 });
 
+describe("ToolCard: climate shift and year-set ranking", () => {
+  const climate = {
+    field: "F1",
+    periods: { baselineFrom: 1981, baselineTo: 2000, recentFrom: 2006, recentTo: 2025 },
+    metrics: [
+      {
+        title: "Growing-season temperature",
+        baseline: { value: 21.51, unit: "°C" },
+        recent: { value: 22.22, unit: "°C" },
+        change: { value: 0.71, unit: "°C" },
+        slopePerDecade: null,
+        trend: "clear_trend",
+      },
+      {
+        title: "Growing-season rainfall",
+        baseline: { value: 375, unit: "mm" },
+        recent: { value: 363, unit: "mm" },
+        change: { value: -12, unit: "mm" },
+        trend: "no_clear_trend",
+      },
+    ],
+    source: { lastDate: "2026-11-12", resolution: { value: 55, unit: "km" }, note: "x" },
+    note: "internal caveat",
+  };
+
+  it("shows plain titles, labelled rows and units in both languages, never raw keys", () => {
+    for (const locale of ["en", "uk"] as const) {
+      cleanup();
+      const { container } = show("get_climate_shift", climate, locale);
+      const text = container.textContent ?? "";
+      expect(text).toContain(locale === "en" ? "How the climate here changed" : "Зміна клімату поля");
+      expect(text).toContain(locale === "en" ? "No clear trend" : "Немає чіткого тренду");
+      expect(text).toContain(locale === "en" ? "Clear trend" : "Є чіткий тренд");
+      expect(text).toContain(locale === "en" ? "55 km" : "55 км");
+      expect(text).toContain("1981");
+      expect(text).toContain(locale === "en" ? "21.51" : "21,51");
+      expect(text).not.toContain("internal caveat");
+      expect(text).not.toMatch(/get_climate_shift|no_clear_trend|clear_trend|baselineFrom|seasonTemp/);
+    }
+  });
+
+  it("year-set ranking: plain title, ranks and money rows", () => {
+    const { container } = show("get_year_set_ranking", {
+      field: "F1",
+      mode: "money",
+      currency: "USD",
+      sets: [
+        {
+          title: "Last 15 years",
+          firstYear: 2011,
+          lastYear: 2025,
+          yearsUsed: 15,
+          best: "Corn–soy",
+          options: [{ title: "Corn–soy (Last 15 years)", rank: 1, marginPerHaPerYear: { value: 410, unit: "USD" } }],
+        },
+      ],
+    });
+    const text = container.textContent ?? "";
+    expect(text).toContain("Rotation ranking across weather years");
+    expect(text).toContain("Margin per ha per year");
+    expect(text).toContain("In money");
+    expect(text).not.toMatch(/get_year_set_ranking|marginPerHaPerYear|yearsUsed/);
+  });
+});
+
 describe("humanize", () => {
   it("turns keys into words", () => {
     expect(humanize("meanTemperature")).toBe("Mean temperature");
