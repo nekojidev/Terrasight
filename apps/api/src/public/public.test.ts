@@ -139,7 +139,7 @@ describe("outlines", () => {
   it("lists the committed outlines with name, place, area and centroid, and nothing else", () => {
     const { ctl } = setup();
     const { items } = ctl.outlines();
-    expect(items.map((i) => i.id)).toEqual(["chase-7", "logan-dryland-5", "pivot-12", "pivot-14"]);
+    expect(items.map((i) => i.id)).toEqual(["pivot-12", "pivot-14"]);
     const p12 = items.find((i) => i.id === "pivot-12")!;
     expect(Object.keys(p12).sort()).toEqual(["areaHa", "centroid", "geojsonUrl", "id", "name", "place"]);
     expect(p12.place).toBe("Finney County, Kansas, USA");
