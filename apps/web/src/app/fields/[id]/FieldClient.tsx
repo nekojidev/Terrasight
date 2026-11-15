@@ -7,6 +7,7 @@ import {
   CalendarDays,
   Check,
   Droplet,
+  Info,
   Leaf,
   Loader2,
   Minus,
@@ -449,7 +450,7 @@ function HistoryCard({ history }: { history: History }) {
   );
 }
 
-/** Irrigation is detected, then confirmed by the agronomist (RFC §6.2, S-02.06). */
+/** Irrigation: one compact row. Detected, then optionally confirmed or changed (RFC §6.2, S-02.06). */
 function IrrigationCard({
   history,
   field,
@@ -465,28 +466,48 @@ function IrrigationCard({
 }) {
   const t = useTranslations("App");
   const client = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [info, setInfo] = useState(false);
   const set = useMutation({
     mutationFn: (irrigation: "irrigated" | "dryland") => api(base, { method: "PATCH", body: { irrigation } }),
-    onSuccess: () => void client.invalidateQueries({ queryKey: ["field", workspaceId, field.id] }),
+    onSuccess: () => {
+      setOpen(false);
+      void client.invalidateQueries({ queryKey: ["field", workspaceId, field.id] });
+    },
   });
-  if (field.irrigationSource === "confirmed") return null;
   const d = history.irrigation.detection;
-  const detected = field.irrigation !== "unknown" && d;
+  const known = field.irrigation !== "unknown";
+  const confirmed = field.irrigationSource === "confirmed";
+  const value = known ? t(field.irrigation as "irrigated" | "dryland") : "";
+  const summary = !known
+    ? t("irrRowUnknown")
+    : confirmed || !d
+      ? t("irrRowConfirmed", { value })
+      : t("irrRowDetected", { value, confidence: Math.round(d.confidence * 100) });
   return (
-    <section className="rounded-card border border-line bg-surface p-5">
-      <h2 className="text-h2 text-ink">{t("irrigationTitle")}</h2>
-      <p className="mt-2 text-body text-ink-2">
-        {detected
-          ? t("irrigationDetected", {
-              value: t(field.irrigation as "irrigated" | "dryland"),
-              method: d.method === "openet" ? "OpenET" : "MODIS NDVI",
-              confidence: Math.round(d.confidence * 100),
-            })
-          : t("irrigationAsk")}
-      </p>
-      {canEdit && (
-        <div className="mt-4 flex flex-wrap gap-2">
-          {detected && (
+    <section className="rounded-card border border-line bg-surface px-5 py-3">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <h2 className="text-body font-semibold text-ink">{t("irrigationTitle")}</h2>
+        <p className="text-body text-ink-2">{summary}</p>
+        <button
+          type="button"
+          aria-label={t("irrInfoLabel")}
+          aria-expanded={info}
+          onClick={() => setInfo(!info)}
+          className="focus-ring inline-flex size-8 items-center justify-center rounded-chip text-ink-2"
+        >
+          <Info aria-hidden className="size-4" strokeWidth={1.7} />
+        </button>
+        {canEdit && (
+          <Button variant="outline" onClick={() => setOpen(!open)} aria-expanded={open}>
+            {t("irrChange")}
+          </Button>
+        )}
+      </div>
+      {info && <p className="mt-2 text-small text-ink-2">{t("irrInfo")}</p>}
+      {canEdit && open && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {known && !confirmed && (
             <Button
               icon={<Check />}
               onClick={() => set.mutate(field.irrigation as "irrigated" | "dryland")}
@@ -496,7 +517,7 @@ function IrrigationCard({
             </Button>
           )}
           {(["irrigated", "dryland"] as const)
-            .filter((v) => !detected || v !== field.irrigation)
+            .filter((v) => !known || confirmed || v !== field.irrigation)
             .map((v) => (
               <Button
                 key={v}
