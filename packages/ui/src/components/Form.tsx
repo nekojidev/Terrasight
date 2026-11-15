@@ -2,7 +2,7 @@
 
 import { clsx } from "clsx";
 import { ChevronDown } from "lucide-react";
-import { useId, type InputHTMLAttributes, type SelectHTMLAttributes } from "react";
+import { useId, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from "react";
 
 const control =
   "focus-ring block w-full min-h-13 rounded-input border border-line-strong bg-surface px-4 text-body text-ink placeholder:text-ink-3 aria-[invalid=true]:border-urgent";
@@ -11,10 +11,12 @@ export interface TextFieldProps extends InputHTMLAttributes<HTMLInputElement> {
   label: string;
   hint?: string;
   error?: string;
+  /** Optional control inside the field's right edge (e.g. a show-password button). */
+  trailing?: ReactNode;
 }
 
 /** Labelled input with hint and error (design 01, 02). */
-export function TextField({ label, hint, error, className, id, ...rest }: TextFieldProps) {
+export function TextField({ label, hint, error, trailing, className, id, ...rest }: TextFieldProps) {
   const auto = useId();
   const inputId = id ?? auto;
   const hintId = `${inputId}-hint`;
@@ -23,13 +25,16 @@ export function TextField({ label, hint, error, className, id, ...rest }: TextFi
       <label htmlFor={inputId} className="text-small font-semibold text-ink">
         {label}
       </label>
-      <input
-        id={inputId}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={hint || error ? hintId : undefined}
-        className={control}
-        {...rest}
-      />
+      <span className="relative block">
+        <input
+          id={inputId}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={hint || error ? hintId : undefined}
+          className={clsx(control, trailing && "pr-14")}
+          {...rest}
+        />
+        {trailing && <span className="absolute inset-y-0 right-1 flex items-center">{trailing}</span>}
+      </span>
       {(error || hint) && (
         <p id={hintId} className={clsx("text-small", error ? "text-urgent" : "text-ink-2")}>
           {error ?? hint}
