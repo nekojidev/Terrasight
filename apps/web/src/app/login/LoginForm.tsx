@@ -5,7 +5,10 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useState, type FormEvent } from "react";
+import { FormAlert } from "@/components/FormAlert";
+import { PASSWORD_MIN, PasswordField } from "@/components/PasswordField";
 import { api, ApiError } from "@/lib/api";
+import { authErrorKind, isEmail, RATE_LIMIT_MINUTES } from "@/lib/auth-errors";
 
 type Mode = "signin" | "signup";
 
@@ -19,14 +22,27 @@ export function LoginForm() {
   const next = safeNext(params.get("next"));
   const [mode, setMode] = useState<Mode>(params.get("mode") === "signup" ? "signup" : "signin");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<ApiError | null>(null);
+  const [fields, setFields] = useState<{ name?: string; email?: string; password?: string }>({});
+  const [formError, setFormError] = useState<string | null>(null);
   const [sentTo, setSentTo] = useState<string | null>(null);
 
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
+    const found: typeof fields = {};
+    const name = String(form.get("name") ?? "").trim();
+    const email = String(form.get("email") ?? "");
+    const password = String(form.get("password") ?? "");
+    if (mode === "signup" && !name) found.name = t("errNameEmpty");
+    if (!email.trim()) found.email = t("errEmailEmpty");
+    else if (!isEmail(email)) found.email = t("errEmailFormat");
+    if (!password) found.password = t("errPassEmpty");
+    else if (mode === "signup" && password.length < PASSWORD_MIN)
+      found.password = t("errPassShort", { n: PASSWORD_MIN });
+    setFields(found);
+    setFormError(null);
+    if (Object.keys(found).length) return;
     setBusy(true);
-    setError(null);
     try {
       if (mode === "signup") {
         await api("/api/auth/signup", {
@@ -63,23 +79,21 @@ export function LoginForm() {
       router.replace(next);
       router.refresh();
     } catch (err) {
-      setError(err instanceof ApiError ? err : null);
+      const kind = authErrorKind(err);
+      if (kind === "bad") setFields({ password: t("errBad") });
+      else if (kind === "taken") setFields({ email: t("errTaken") });
+      else if (kind === "invalid")
+        setFields(
+          mode === "signup"
+            ? { password: t("errPassShort", { n: PASSWORD_MIN }) }
+            : { password: t("errBad") },
+        );
+      else if (kind === "rate") setFormError(t("errRate", { n: RATE_LIMIT_MINUTES }));
+      else if (kind === "net") setFormError(t("errNet"));
+      else setFormError(t("errServer"));
       setBusy(false);
     }
   }
-
-  const message =
-    error?.code === "bad-credentials"
-      ? a("errBadCredentials")
-      : error?.code === "email-taken"
-        ? a("errEmailTaken")
-        : error?.code === "rate-limited"
-          ? a("errRateLimited")
-          : error?.code === "invalid-input"
-            ? a("errInvalid")
-            : error
-              ? a("errGeneric")
-              : null;
 
   if (sentTo)
     return (
@@ -102,67 +116,70 @@ export function LoginForm() {
 
   return (
     <form onSubmit={submit} noValidate className="flex w-full max-w-[560px] flex-col gap-5">
-      <h1 className="text-h1 text-ink">{mode === "signin" ? t("title") : a("signupTitle")}</h1>
-      {mode === "signup" && <p className="-mt-3 text-body text-ink-2">{a("signupSub")}</p>}
-      {params.get("expired") === "1" && !message && (
+      <div className="flex flex-col gap-2">
+        <h1 className="text-h1 text-ink">{mode === "signin" ? t("title") : t("signupTitle")}</h1>
+        {mode === "signup" && <p className="text-body text-ink-2">{t("signupSub")}</p>}
+      </div>
+      {params.get("expired") === "1" && !formError && (
         <p role="status" className="rounded-input bg-week-soft px-4 py-3 text-body text-week">
           {a("sessionExpired")}
         </p>
       )}
-      {message && (
-        <p role="alert" className="rounded-input bg-urgent-soft px-4 py-3 text-body text-urgent">
-          {message}
-        </p>
-      )}
+      {formError && <FormAlert>{formError}</FormAlert>}
       {mode === "signup" && (
         <TextField
-          label={a("name")}
+          label={t("name")}
           name="name"
           autoComplete="name"
           required
           maxLength={100}
-          error={error?.field("name")}
+          error={fields.name}
         />
       )}
       <TextField
         label={t("email")}
         name="email"
         type="email"
+        inputMode="email"
         autoComplete="email"
         required
-        error={error?.field("email")}
+        error={fields.email}
       />
-      <TextField
+      <PasswordField
         label={t("pass")}
         name="password"
-        type="password"
         autoComplete={mode === "signin" ? "current-password" : "new-password"}
         required
-        minLength={mode === "signup" ? 10 : undefined}
-        hint={mode === "signup" ? a("passHint") : undefined}
-        error={error?.field("password")}
+        rules={mode === "signup"}
+        error={fields.password}
       />
       {mode === "signin" && (
-        <Link href="/forgot" className="focus-ring -mt-2 self-start text-body font-semibold text-ink-2">
-          {a("forgotLink")}
+        <Link
+          href="/forgot"
+          className="focus-ring -mt-2 inline-flex min-h-tap items-center self-start text-body font-semibold text-ink-2 underline underline-offset-4"
+        >
+          {t("forgot")}
         </Link>
       )}
       <Button type="submit" size={56} className="mt-2 w-full justify-center" disabled={busy} aria-busy={busy}>
-        {mode === "signin" ? t("go") : a("createAccount")}
+        {mode === "signin" ? t("go") : t("createGo")}
       </Button>
-      <p className="text-center text-body text-ink-2">
-        {mode === "signin" ? t("noacc") : a("haveAccount")}{" "}
-        <button
+      <div className="flex flex-col items-center gap-2 border-t border-line pt-5">
+        <p className="text-body text-ink-2">{mode === "signin" ? t("noacc") : t("haveAcc")}</p>
+        <Button
           type="button"
-          className="focus-ring font-semibold text-ink"
+          variant="outline"
+          size={48}
+          className="w-full justify-center"
           onClick={() => {
             setMode(mode === "signin" ? "signup" : "signin");
-            setError(null);
+            setFields({});
+            setFormError(null);
           }}
         >
-          {mode === "signin" ? t("create") : a("signIn")}
-        </button>
-      </p>
+          {mode === "signin" ? t("create") : t("signinLink")}
+        </Button>
+      </div>
     </form>
   );
 }

@@ -1,15 +1,16 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, Segmented, SelectField, TextField } from "@terrasight/ui";
+import { Button, Segmented, Surface, TextField, useToast } from "@terrasight/ui";
 import { ArchiveRestore, Download } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useLocale, useTranslations } from "next-intl";
-import { useMemo, useState, type FormEvent } from "react";
+import { useTranslations } from "next-intl";
+import { useState, type FormEvent } from "react";
 import { QueryState } from "@/components/QueryState";
-import { useErrorText, useReportError } from "@/components/useReportError";
+import { TimeZoneField } from "@/components/TimeZoneField";
 import { api, ApiError } from "@/lib/api";
-import { zoneLabel } from "@/lib/time-zone";
+import { useActionToast } from "@/lib/useActionToast";
+import { useFormat } from "@/lib/useFormat";
 
 interface Settings {
   name: string;
@@ -26,36 +27,34 @@ interface ArchivedField {
 }
 
 /** Owner: company settings, a data export and the archived fields (restore). */
-export function WorkspaceSettingsClient({ workspaceId, initial }: { workspaceId: string; initial: Settings }) {
+export function WorkspaceSettingsClient({
+  workspaceId,
+  initial,
+}: {
+  workspaceId: string;
+  initial: Settings;
+}) {
   const t = useTranslations("App");
   const o = useTranslations("Onboarding");
-  const locale = useLocale();
+  const s = useTranslations("Settings");
+  const f = useFormat();
+  const toast = useToast();
   const router = useRouter();
   const client = useQueryClient();
-  const report = useReportError();
-  const errorText = useErrorText();
+  const action = useActionToast();
   const [form, setForm] = useState<Settings>(initial);
-  const [saved, setSaved] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
-
-  const zones = useMemo(() => {
-    const all = typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : [];
-    return Array.from(new Set([initial.timeZone, ...all, "UTC"]));
-  }, [initial.timeZone]);
 
   const save = useMutation({
     mutationFn: (body: Settings) => api(`/api/w/${workspaceId}`, { method: "PATCH", body }),
-    onMutate: () => {
-      setSaved(false);
-      setError(null);
-    },
+    onMutate: () => setError(null),
     onSuccess: () => {
-      setSaved(true);
+      toast.show(s("companySaved"), "info");
       router.refresh();
     },
-    onError: (e) => {
+    onError: (e, body) => {
       if (e instanceof ApiError && e.problem.status === 422) setError(e);
-      else report(e);
+      else action.fail(e, s("companyFail"), () => save.mutate(body));
     },
   });
   const submit = (e: FormEvent) => {
@@ -68,24 +67,19 @@ export function WorkspaceSettingsClient({ workspaceId, initial }: { workspaceId:
     queryFn: () => api<ArchivedField[]>(`/api/w/${workspaceId}/fields/archived`),
   });
   const restore = useMutation({
-    mutationFn: (id: string) => api(`/api/w/${workspaceId}/fields/${id}/restore`, { method: "POST", body: {} }),
+    mutationFn: (id: string) =>
+      api(`/api/w/${workspaceId}/fields/${id}/restore`, { method: "POST", body: {} }),
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: ["fields-archived", workspaceId] });
       void client.invalidateQueries({ queryKey: ["fields", workspaceId] });
       router.refresh();
     },
-    onError: report,
+    onError: (e, id) => action.fail(e, s("restoreFail"), () => restore.mutate(id)),
   });
-  const day = (iso: string) =>
-    new Intl.DateTimeFormat(locale === "uk" ? "uk-UA" : "en-US", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-    }).format(new Date(iso));
 
   return (
-    <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,520px)_minmax(0,1fr)]">
-      <section aria-labelledby="ws-form" className="h-fit rounded-card border border-line bg-surface p-5">
+    <div className="flex min-w-0 flex-col gap-6">
+      <Surface as="section" aria-labelledby="ws-form">
         <h2 id="ws-form" className="mb-1 text-h3 text-ink">
           {t("setWorkspaceTitle")}
         </h2>
@@ -101,12 +95,7 @@ export function WorkspaceSettingsClient({ workspaceId, initial }: { workspaceId:
             onChange={(e) => setForm({ ...form, name: e.target.value })}
             error={error?.field("name")}
           />
-          <SelectField
-            label={o("tz")}
-            value={form.timeZone}
-            onChange={(e) => setForm({ ...form, timeZone: e.target.value })}
-            options={zones.map((z) => ({ value: z, label: zoneLabel(z, locale) }))}
-          />
+          <TimeZoneField value={form.timeZone} onChange={(timeZone) => setForm({ ...form, timeZone })} />
           <Segmented
             label={o("units")}
             value={form.units}
@@ -126,75 +115,68 @@ export function WorkspaceSettingsClient({ workspaceId, initial }: { workspaceId:
               { value: "en", label: "EN" },
             ]}
           />
-          {error && !error.field("name") && (
-            <p role="alert" className="text-small text-urgent">
-              {errorText(error)}
-            </p>
-          )}
-          <div className="flex items-center gap-3">
-            <Button type="submit" size={48} disabled={save.isPending || !form.name.trim()} aria-busy={save.isPending}>
+          <div>
+            <Button
+              type="submit"
+              size={48}
+              disabled={save.isPending || !form.name.trim()}
+              aria-busy={save.isPending}
+            >
               {t("save")}
             </Button>
-            {saved && (
-              <span role="status" className="text-small text-ok">
-                {t("saved")}
-              </span>
-            )}
           </div>
         </form>
-      </section>
+      </Surface>
 
-      <div className="flex min-w-0 flex-col gap-6">
-        <section aria-labelledby="ws-export" className="rounded-card border border-line bg-surface p-5">
-          <h2 id="ws-export" className="mb-1 text-h3 text-ink">
-            {t("setExportTitle")}
-          </h2>
-          <p className="mb-4 text-small text-ink-2">{t("setExportSub")}</p>
-          <a
-            href={`/api/w/${workspaceId}/export`}
-            download
-            className="focus-ring inline-flex h-12 items-center gap-2 rounded-btn border border-line-strong bg-surface px-5 text-body font-semibold text-ink hover:bg-surface-2"
-          >
-            <Download aria-hidden className="size-5" />
-            {t("setExportGo")}
-          </a>
-        </section>
+      <Surface as="section" aria-labelledby="ws-export">
+        <h2 id="ws-export" className="mb-1 text-h3 text-ink">
+          {t("setExportTitle")}
+        </h2>
+        <p className="mb-4 text-small text-ink-2">{t("setExportSub")}</p>
+        <a
+          href={`/api/w/${workspaceId}/export`}
+          download
+          className="focus-ring inline-flex min-h-12 items-center gap-2 rounded-btn border border-line-control bg-surface px-5 text-body font-semibold text-ink hover:bg-surface-2"
+        >
+          <Download aria-hidden className="size-5" />
+          {t("setExportGo")}
+        </a>
+      </Surface>
 
-        <section aria-labelledby="ws-archived" className="rounded-card border border-line bg-surface p-5">
-          <h2 id="ws-archived" className="mb-1 text-h3 text-ink">
-            {t("setArchivedTitle")}
-          </h2>
-          <p className="mb-4 text-small text-ink-2">{t("setArchivedSub")}</p>
-          <QueryState query={archived}>
-            {(rows) =>
-              rows.length === 0 ? (
-                <p className="text-small text-ink-2">{t("setArchivedEmpty")}</p>
-              ) : (
-                <ul className="flex flex-col divide-y divide-line">
-                  {rows.map((f) => (
-                    <li key={f.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
-                      <span className="min-w-0">
-                        <span className="block truncate text-body font-semibold text-ink">{f.name}</span>
-                        <span className="text-small text-ink-2">
-                          {t("setArchivedOn", { date: day(f.archivedAt) })}
-                        </span>
+      <Surface as="section" aria-labelledby="ws-archived">
+        <h2 id="ws-archived" className="mb-1 text-h3 text-ink">
+          {t("setArchivedTitle")}
+        </h2>
+        <p className="mb-4 text-small text-ink-2">{t("setArchivedSub")}</p>
+        <QueryState query={archived} skeletonVariant="rows" what={t("setArchivedTitle")}>
+          {(rows) =>
+            rows.length === 0 ? (
+              <p className="text-small text-ink-2">{t("setArchivedEmpty")}</p>
+            ) : (
+              <ul className="flex flex-col divide-y divide-line">
+                {rows.map((row) => (
+                  <li key={row.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                    <span className="min-w-0">
+                      <span className="block truncate text-body font-semibold text-ink">{row.name}</span>
+                      <span className="text-small text-ink-2">
+                        {t("setArchivedOn", { date: f.date(row.archivedAt, "full") })}
                       </span>
-                      <Button
-                        variant="outline"
-                        icon={<ArchiveRestore />}
-                        disabled={restore.isPending}
-                        onClick={() => restore.mutate(f.id)}
-                      >
-                        {t("setRestore")}
-                      </Button>
-                    </li>
-                  ))}
-                </ul>
-              )
-            }
-          </QueryState>
-        </section>
-      </div>
+                    </span>
+                    <Button
+                      variant="outline"
+                      icon={<ArchiveRestore />}
+                      disabled={restore.isPending}
+                      onClick={() => restore.mutate(row.id)}
+                    >
+                      {t("setRestore")}
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )
+          }
+        </QueryState>
+      </Surface>
     </div>
   );
 }

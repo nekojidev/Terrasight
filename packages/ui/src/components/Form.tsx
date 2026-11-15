@@ -1,7 +1,7 @@
 "use client";
 
 import { clsx } from "clsx";
-import { ChevronDown } from "lucide-react";
+import { AlertCircle, ChevronDown } from "lucide-react";
 import { useId, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from "react";
 
 const control =
@@ -36,8 +36,13 @@ export function TextField({ label, hint, error, trailing, className, id, ...rest
         {trailing && <span className="absolute inset-y-0 right-1 flex items-center">{trailing}</span>}
       </span>
       {(error || hint) && (
-        <p id={hintId} className={clsx("text-small", error ? "text-urgent" : "text-ink-2")}>
-          {error ?? hint}
+        <p
+          id={hintId}
+          role={error ? "alert" : undefined}
+          className={clsx("text-small", error ? "flex items-start gap-2 text-urgent" : "text-ink-2")}
+        >
+          {error && <AlertCircle aria-hidden className="mt-0.5 size-4 shrink-0" />}
+          <span>{error ?? hint}</span>
         </p>
       )}
     </div>
