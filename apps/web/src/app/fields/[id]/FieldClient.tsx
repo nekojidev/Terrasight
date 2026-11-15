@@ -398,7 +398,7 @@ function StatCards({
 
 const TASK_ICON: Record<TaskStatus, React.ReactNode> = {
   queued: <Minus aria-hidden className="size-4 text-ink-3" />,
-  running: <Loader2 aria-hidden className="size-4 animate-spin text-ink" />,
+  running: <Loader2 aria-hidden className="size-4 motion-safe:animate-spin text-ink" />,
   done: <Check aria-hidden className="size-4 text-ok" />,
   cached: <Check aria-hidden className="size-4 text-ok" />,
   partial: <AlertTriangle aria-hidden className="size-4 text-week" />,

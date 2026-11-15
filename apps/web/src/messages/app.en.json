@@ -1038,6 +1038,9 @@
     "fpBy": "by {date}",
     "bsCancel": "Cancel",
     "errOneCompany": "Your account already belongs to a company.",
-    "teamErrEmailInUse": "This email is already used by another account."
+    "teamErrEmailInUse": "This email is already used by another account.",
+    "actionFailed": "{what}: {reason}",
+    "actionFailedUnknown": "Something went wrong. Try again.",
+    "qsErrWhat": "Couldn't load {what}"
   }
 }

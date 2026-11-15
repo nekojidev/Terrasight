@@ -1038,6 +1038,9 @@
     "fpBy": "до {date}",
     "bsCancel": "Скасувати",
     "errOneCompany": "Ваш акаунт уже належить компанії.",
-    "teamErrEmailInUse": "Ця пошта вже використовується іншим акаунтом."
+    "teamErrEmailInUse": "Ця пошта вже використовується іншим акаунтом.",
+    "actionFailed": "{what}: {reason}",
+    "actionFailedUnknown": "Щось пішло не так. Спробуйте ще раз.",
+    "qsErrWhat": "Не вдалося завантажити: {what}"
   }
 }

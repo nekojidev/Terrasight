@@ -3,6 +3,7 @@
 import { clsx } from "clsx";
 import { useEffect, useId, useRef, type ReactNode } from "react";
 import { Button } from "./Button";
+import { trapTab } from "./focus";
 
 export interface BottomSheetProps {
   open: boolean;
@@ -24,7 +25,10 @@ export function BottomSheet(p: BottomSheetProps) {
     if (!p.open) return;
     const previous = document.activeElement as HTMLElement | null;
     ref.current?.focus();
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && p.onClose();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") p.onClose();
+      else trapTab(e, ref.current);
+    };
     document.addEventListener("keydown", onKey);
     return () => {
       document.removeEventListener("keydown", onKey);
@@ -38,7 +42,7 @@ export function BottomSheet(p: BottomSheetProps) {
       <button
         type="button"
         aria-label={p.cancelLabel}
-        className="absolute inset-0 bg-ink/40 dark:bg-bg/70"
+        className="animate-fade absolute inset-0 bg-scrim"
         onClick={p.onClose}
       />
       <div

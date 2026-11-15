@@ -14,6 +14,8 @@
   --color-muted: var(--ts-muted);
   --color-line: var(--ts-line);
   --color-line-strong: var(--ts-line-strong);
+  --color-line-control: var(--ts-line-control);
+  --color-scrim: var(--ts-scrim);
   --color-ink: var(--ts-ink);
   --color-ink-2: var(--ts-ink-2);
   --color-ink-3: var(--ts-ink-3);
@@ -76,6 +78,16 @@
   letter-spacing: 0.07em;
   text-transform: uppercase;
 }
+@utility text-caption {
+  font: 400 13px/18px var(--ts-font);
+}
+/* Uppercase mono label: same recipe as text-micro, tertiary ink. */
+@utility kicker {
+  font: 600 var(--ts-micro) var(--ts-mono);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ts-ink-3);
+}
 @utility text-big-number {
   font: 600 var(--ts-big-number) var(--ts-mono);
   letter-spacing: -0.03em;
@@ -89,6 +101,27 @@
 }
 @utility duration-sheet {
   transition-duration: var(--ts-sheet);
+}
+@utility duration-instant {
+  transition-duration: var(--ts-dur-instant);
+}
+@utility duration-fast {
+  transition-duration: var(--ts-dur-fast);
+}
+@utility duration-base {
+  transition-duration: var(--ts-dur-base);
+}
+@utility duration-slow {
+  transition-duration: var(--ts-dur-slow);
+}
+@utility ease-enter {
+  transition-timing-function: var(--ts-ease-enter);
+}
+@utility ease-exit {
+  transition-timing-function: var(--ts-ease-exit);
+}
+@utility ease-emphasis {
+  transition-timing-function: var(--ts-ease-emphasis);
 }
 
 /* Visible focus everywhere (design/README §5): 2 px ink ring, 2 px offset. */
@@ -131,4 +164,62 @@
 }
 @utility animate-sheet-in {
   animation: ts-sheet-in var(--ts-sheet) var(--ts-ease) both;
+}
+
+@keyframes ts-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes ts-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes ts-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+@keyframes ts-flash {
+  from {
+    background-color: color-mix(in srgb, var(--ts-signal) 35%, transparent);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
+@utility animate-fade {
+  animation: ts-fade var(--ts-dur-base) var(--ts-ease-enter) both;
+}
+@utility animate-pop {
+  animation: ts-pop var(--ts-dur-fast) var(--ts-ease-emphasis) both;
+}
+/* Skeleton sheen moving left to right; apply to the grey blocks (wrap in motion-safe:). */
+@utility animate-shimmer {
+  background-image: linear-gradient(90deg, var(--ts-muted) 0%, var(--ts-surface-2) 50%, var(--ts-muted) 100%);
+  background-size: 200% 100%;
+  animation: ts-shimmer 1.4s linear infinite;
+}
+@utility animate-flash {
+  animation: ts-flash 900ms var(--ts-ease-standard) both;
+}
+@utility animate-countdown {
+  transform-origin: left;
+  animation: ts-countdown var(--ts-undo) linear forwards;
+}
+@utility stagger {
+  animation-delay: calc(var(--i, 0) * var(--ts-stagger));
 }

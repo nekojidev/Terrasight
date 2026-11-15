@@ -5,7 +5,7 @@ import { ChevronDown } from "lucide-react";
 import { useId, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from "react";
 
 const control =
-  "focus-ring block w-full min-h-13 rounded-input border border-line-strong bg-surface px-4 text-body text-ink placeholder:text-ink-3 aria-[invalid=true]:border-urgent";
+  "focus-ring block w-full min-h-13 rounded-input border border-line-control bg-surface px-4 text-body text-ink placeholder:text-ink-3 aria-[invalid=true]:border-urgent";
 
 export interface TextFieldProps extends InputHTMLAttributes<HTMLInputElement> {
   label: string;
@@ -144,7 +144,7 @@ export function Segmented<T extends string>({
                 variant === "wide"
                   ? clsx(
                       "rounded-btn border",
-                      checked ? "border-ink bg-muted text-ink" : "border-line-strong bg-surface text-ink",
+                      checked ? "border-ink bg-muted text-ink" : "border-line-control bg-surface text-ink",
                     )
                   : clsx("rounded-btn px-4", checked ? "bg-surface text-ink shadow-sm" : "text-ink-2"),
               )}

@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, type ReactNode } from "react";
 import { Button } from "./Button";
+import { trapTab } from "./focus";
 
 export interface ConfirmDialogProps {
   open: boolean;
@@ -22,7 +23,10 @@ export function ConfirmDialog(p: ConfirmDialogProps) {
     if (!p.open) return;
     const previous = document.activeElement as HTMLElement | null;
     ref.current?.focus();
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && p.onCancel();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") p.onCancel();
+      else trapTab(e, ref.current);
+    };
     document.addEventListener("keydown", onKey);
     return () => {
       document.removeEventListener("keydown", onKey);
@@ -35,7 +39,7 @@ export function ConfirmDialog(p: ConfirmDialogProps) {
       <button
         type="button"
         aria-label={p.cancelLabel}
-        className="absolute inset-0 bg-ink/40 dark:bg-bg/70"
+        className="animate-fade absolute inset-0 bg-scrim"
         onClick={p.onCancel}
       />
       <div
@@ -44,7 +48,7 @@ export function ConfirmDialog(p: ConfirmDialogProps) {
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="relative w-full max-w-[440px] rounded-card bg-surface p-6 shadow-sheet outline-none"
+        className="animate-pop relative w-full max-w-[440px] rounded-card bg-surface p-6 shadow-sheet outline-none"
       >
         <h2 id={titleId} className="text-h2 mb-3 text-ink">
           {p.title}

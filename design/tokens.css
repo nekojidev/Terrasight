@@ -1,4 +1,4 @@
-/* Terrasight design tokens — v4 "Morning brief". Source of truth for colours, type, spacing, radii and motion.
+/* Terrasight design tokens — v5 "Morning brief" (foundation). Source of truth for colours, type, spacing, radii, depth, layout and motion.
    Use these variables in Tailwind (theme.extend) or CSS modules; never hard-code hex values in components. */
 
 :root {
@@ -8,7 +8,8 @@
   --ts-surface-2: #FAF8F4;   /* inset panels ("Why", drafts) */
   --ts-muted: #F0EDE6;       /* chips, secondary buttons, skeleton base */
   --ts-line: #E6E1D6;        /* borders, dividers */
-  --ts-line-strong: #CFC8BA; /* input borders, outline buttons */
+  --ts-line-strong: #CFC8BA; /* decorative strong dividers only (not for controls: 1.4:1) */
+  --ts-line-control: #8C8576; /* input / outline-button / segmented borders: >= 3:1 on bg and surface (WCAG 1.4.11) */
   --ts-ink: #191714;         /* text, primary button */
   --ts-ink-2: #4F4A43;       /* secondary text */
   --ts-ink-3: #6B645A;       /* tertiary text (AA on surface and bg) */
@@ -47,13 +48,30 @@
   /* depth — only the hero and sheets are raised */
   --ts-shadow-hero: 0 1px 2px rgba(25,23,20,.04), 0 18px 40px -18px rgba(25,23,20,.18);
   --ts-shadow-sheet: 0 -12px 30px -14px rgba(25,23,20,.35);
+  --ts-scrim: rgba(25,23,20,.45);   /* backdrop behind sheets and dialogs */
 
-  /* motion */
-  --ts-ease: cubic-bezier(.2,.7,.2,1);
-  --ts-rise: 420ms;     /* blocks rise in, staggered 80–90 ms */
+  /* motion — durations and easings (see design/README "Motion") */
+  --ts-dur-instant: 100ms;  /* press feedback, colour changes */
+  --ts-dur-fast: 160ms;     /* popovers, dialogs, toasts */
+  --ts-dur-base: 240ms;     /* fades, disclosure height */
+  --ts-dur-slow: 420ms;     /* blocks rising in */
+  --ts-ease-standard: cubic-bezier(.2,.7,.2,1);
+  --ts-ease-enter: cubic-bezier(0,0,.2,1);
+  --ts-ease-exit: cubic-bezier(.4,0,1,1);
+  --ts-ease-emphasis: cubic-bezier(.2,.9,.3,1.2);   /* small overshoot: dialogs, popovers */
+  --ts-stagger: 60ms;   /* delay step between siblings that rise in */
+  /* aliases kept from v4 */
+  --ts-ease: var(--ts-ease-standard);
+  --ts-rise: var(--ts-dur-slow);
   --ts-bar: 300ms;      /* weight bars grow */
   --ts-sheet: 280ms;    /* bottom sheet slides in */
   --ts-undo: 8s;        /* Accept / Snooze undo window (RFC §10.4) */
+
+  /* layout */
+  --ts-tabbar: 64px;        /* phone bottom tab bar height */
+  --ts-page: 1120px;        /* page content max width */
+  --ts-page-narrow: 720px;  /* forms, reports */
+  --ts-pad-card: 20px;
 
   /* sizes */
   --ts-tap: 44px;       /* minimum tap target */
@@ -63,6 +81,10 @@
 [data-theme="dark"] {
   --ts-bg: #12110F; --ts-surface: #1A1916; --ts-surface-2: #1F1D19; --ts-muted: #26231F;
   --ts-line: #2E2B26; --ts-line-strong: #4A453E;
+  --ts-line-control: #7D766A;   /* 4.2:1 on bg, 3.9:1 on surface */
+  --ts-shadow-hero: 0 1px 2px rgba(0,0,0,.4), 0 18px 40px -16px rgba(0,0,0,.7);
+  --ts-shadow-sheet: 0 -12px 30px -12px rgba(0,0,0,.7);
+  --ts-scrim: rgba(0,0,0,.6);
   --ts-ink: #F3F0E8; --ts-ink-2: #CEC7BA; --ts-ink-3: #A9A193;
   --ts-urgent: #FF8A7A; --ts-urgent-soft: #3A1E1A;
   --ts-week: #F2B45A;   --ts-week-soft: #352813;
@@ -71,6 +93,12 @@
   /* the primary button turns light: background var(--ts-ink), text var(--ts-surface) */
 }
 
+/* Reduced motion: keep end states, drop the movement (nothing flashes, nothing is left half-way). */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation: none !important; transition: none !important; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

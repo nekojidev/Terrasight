@@ -24,10 +24,10 @@ const VARIANT: Record<ButtonVariant, string> = {
   primary: "bg-ink text-surface hover:opacity-90 active:opacity-80",
   // Signal: lime fill with ink text, only for "Save to the 2026 plan" on the ink banner (design/README §3).
   signal: "bg-signal text-on-signal hover:brightness-95 active:brightness-90",
-  outline: "border border-line-strong bg-surface text-ink hover:bg-surface-2 active:bg-muted",
+  outline: "border border-line-control bg-surface text-ink hover:bg-surface-2 active:bg-muted",
   ghost: "bg-muted text-ink hover:brightness-95 active:brightness-90",
   link: "h-auto px-0 text-ink underline underline-offset-4 hover:text-ink-2",
-  icon: "size-11 px-0 justify-center border border-line-strong bg-surface text-ink hover:bg-surface-2",
+  icon: "size-11 px-0 justify-center border border-line-control bg-surface text-ink hover:bg-surface-2",
 };
 
 export function Button({
