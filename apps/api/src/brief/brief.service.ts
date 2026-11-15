@@ -230,7 +230,9 @@ export class BriefService {
       },
     };
     const ai = this.daySummary.lookup(workspaceId, facts, names);
-    return ai ? { text: ai, source: "ai" as const } : null;
+    return ai
+      ? { text: ai, source: "ai" as const, meta: this.daySummary.metaFor(workspaceId, facts) }
+      : null;
   }
 
   /** Today's forecast and the next frost per county, from cached forecasts only (no network in the request path). */

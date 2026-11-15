@@ -208,6 +208,9 @@ export class ScenariosService {
       if (e.price.value == null || pick.variableCost == null || pick.yieldRef == null) continue;
       prices[crop] = { price: e.price.value, variableCost: pick.variableCost, yieldRef: pick.yieldRef };
     }
+    // Pumping cost only once verified (CLAUDE.md: thresholds and inputs are used after verification).
+    const ic = this.lib.prices.irrigationCostPerMm;
+    const irrCost = ic?.verified && ic.value != null && ic.value > 0 ? ic.value : undefined;
     const pestModels = this.lib.enabledModels.flatMap((m) => {
       const tree = m.tree as { kind?: string; host?: string[]; seasons?: { ref?: string } };
       if (tree.kind !== "host_repeat" || !tree.host) return [];
@@ -227,6 +230,7 @@ export class ScenariosService {
       ),
       sowing: this.seasons.sowingCalendar(field.regionId),
       prices,
+      ...(irrCost ? { irrigationCostPerMm: irrCost } : {}),
       soilCarbon: DEFAULT_SOIL_C,
       ...(o.waterCapMm !== undefined ? { waterCapMm: o.waterCapMm } : {}),
       ...(o.deltaT ? { deltaT: o.deltaT } : {}),
@@ -524,7 +528,9 @@ export class ScenariosService {
     const proposed = new Map(ai.proposals.map((p) => [p.id, p]));
     // Names and reasons of the assistant's options; all their numbers are already in the engine result.
     const decorate = <T extends { id: string }>(s: T) =>
-      proposed.has(s.id) ? { ...s, source: "ai" as const, rationale: proposed.get(s.id)!.rationale } : s;
+      proposed.has(s.id)
+        ? { ...s, source: "ai" as const, rationale: proposed.get(s.id)!.rationale, aiMeta: proposed.get(s.id)!.meta ?? null }
+        : s;
     return {
       id,
       noLibrary: false as const,

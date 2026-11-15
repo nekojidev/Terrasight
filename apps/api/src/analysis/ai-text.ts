@@ -8,6 +8,7 @@ import {
   type SafetyFilter,
 } from "@terrasight/assistant-core";
 import { stableStringify } from "@terrasight/evaluators";
+import { promptVersionOf } from "../ai/trace.js";
 
 /**
  * AI-written recommendation texts (Product Definition v2.11). The evaluators stay the source of risk levels, key
@@ -206,3 +207,8 @@ export function validateSummary(
   const named = (s: string) => s.replace(/\bF\d+\b/g, (r) => names.get(r) ?? r);
   return { text: { en: named(text.en), uk: named(text.uk) } };
 }
+
+/** Version of the recommendation prompt and schemas (changes when either is edited). */
+export const RECS_PROMPT_VERSION = promptVersionOf(SYSTEM, batchSchema(true), batchSchema(false));
+/** Version of the day-summary prompt and schema. */
+export const SUMMARY_PROMPT_VERSION = promptVersionOf(SUMMARY_SYSTEM, summarySchema);

@@ -11,7 +11,7 @@ import {
   type WeatherDay,
 } from "@terrasight/simulator";
 import { priceScenarios } from "./prices.js";
-import { rotationEffect } from "./rotation-effects.js";
+import { repeatPenaltyUnmodelled, rotationEffect } from "./rotation-effects.js";
 import { Pcg32, seedFrom } from "./random.js";
 import { bootstrapRuns, SEASONS, stressRuns, type WeatherRun } from "./weather-runs.js";
 
@@ -69,6 +69,11 @@ export interface EngineInput {
   /** Main crops of the latest past seasons, oldest first (for host repeats across the 2026 boundary). */
   history?: string[];
   runs?: number;
+  /**
+   * Pumping cost, $ per ha per mm of irrigation. Pass it only when it is verified (prices.json irrigationCostPerMm);
+   * without it the water cost is only inside the per-hectare budget and every irrigated result carries a caveat.
+   */
+  irrigationCostPerMm?: number;
 }
 
 export type Metric = "margin" | "water" | "soil" | "drought";
@@ -109,6 +114,11 @@ export interface ScenarioResult {
   /** Extra yield loss from the cap: mean margin with cap − without, $/ha/yr (0 when no cap or not capped). */
   capLoss: number;
   pestPressure: Array<{ pest: string; seasons: number }>;
+  /**
+   * Honest limits of this result, as stable codes: "unverified-crop-parameters:<crop>",
+   * "irrigation-cost-in-budget", "repeat-penalty-not-modelled:<crop>".
+   */
+  caveats: string[];
   relaxed: string[];
   /** Differences from the current rotation (current = 0). */
   delta: Record<Metric, number>;
@@ -246,6 +256,7 @@ function simulateRun(
       cost += e?.variableCost ?? 0;
       residue += tonnes * (CROPS[c.crop]?.residueC ?? 0.3);
     }
+    if (input.irrigationCostPerMm) cost += res.irrigationMm * input.irrigationCostPerMm;
     if (!res.crops.length) {
       cost += input.prices.fallow?.variableCost ?? 0;
       alfalfaYears = 0;
@@ -260,6 +271,21 @@ function simulateRun(
   });
   out.carbonChange = carbon.young + carbon.old - start;
   return out;
+}
+
+/** Caveat codes for a plan (see ScenarioResult.caveats). */
+export function planCaveats(input: EngineInput, plan: SeasonPlan[], history: string[]): string[] {
+  const out = new Set<string>();
+  plan.forEach((p, k) => {
+    const previous = k > 0 ? plan[k - 1]!.crops : history.slice(-1);
+    for (const c of p.crops) {
+      if (c === "fallow") continue;
+      if (CROPS[c]?.adapted) out.add(`unverified-crop-parameters:${c}`);
+      if (repeatPenaltyUnmodelled(c, previous)) out.add(`repeat-penalty-not-modelled:${c}`);
+    }
+  });
+  if (input.irrigated && !input.irrigationCostPerMm) out.add("irrigation-cost-in-budget");
+  return [...out].sort();
 }
 
 const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
@@ -337,6 +363,7 @@ function evaluateRotation(
     capped,
     capLoss,
     pestPressure: pestPressure(plan, history, input.pestModels),
+    caveats: planCaveats(input, plan, history),
     byPrice,
   };
 }
@@ -473,6 +500,8 @@ export interface YieldRange {
   runs: number;
   /** No verified pest-loss term exists: the range is weather and water only. */
   pestLossIncluded: false;
+  /** Caveat codes that apply to this crop and season (see ScenarioResult.caveats). */
+  caveats: string[];
 }
 
 /** Linear-interpolated percentile of a sorted array, q in [0, 1]. */
@@ -519,6 +548,9 @@ export function yieldRange(
     unit: "t/ha",
     runs: ys.length,
     pestLossIncluded: false,
+    caveats: planCaveats(input, plan.slice(0, seasonIndex + 1), input.history ?? []).filter(
+      (c) => !c.includes(":") || c.endsWith(`:${crop}`),
+    ),
   };
 }
 
@@ -675,4 +707,4 @@ export function runScenarios(engineInput: EngineInput, weights: Weights = EQUAL_
 export { addDays };
 
 /** Bumped whenever the engine or simulator changes results; part of the scenario cache key. */
-export const ENGINE_VERSION = "2026-11-15.3";
+export const ENGINE_VERSION = "2026-11-15.4";

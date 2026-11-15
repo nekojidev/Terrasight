@@ -120,6 +120,72 @@ describe("frost_alert", () => {
   });
 });
 
+describe("frost_alert for winter cereals in dormancy", () => {
+  const WINTER = "2026-12-10";
+  const wheat = (over: Partial<EvalInputs> = {}) =>
+    base({
+      record: {
+        crop: { value: "winter_wheat", source: "confirmed" },
+        sowingDate: { value: "2026-10-05", source: "confirmed" },
+        emergenceDate: { value: "2026-10-20", source: "confirmed" },
+      },
+      ...over,
+    });
+  /** Observed days before `asOf` with `past(i)` minimum, then 10 forecast days with `fc(i)`. */
+  function w(asOf: string, past: (d: string) => number, fc: (i: number) => number): DailyWeather[] {
+    const out: DailyWeather[] = [];
+    for (let k = 90; k >= 1; k--) {
+      const d = addDays(asOf, -k);
+      out.push({ date: d, tminC: past(d), tmaxC: 8, tmeanC: 3, precipMm: 0, origin: "power" });
+    }
+    for (let i = 0; i < 10; i++)
+      out.push({ date: addDays(asOf, i), tminC: fc(i), tmaxC: 5, tmeanC: 1, precipMm: 0, origin: "forecast", forecastDay: i + 1 });
+    return out;
+  }
+
+  it("reports the first frost of the autumn once, as information (level low, not an item)", () => {
+    const r = frostAlert(wheat({ weather: w(WINTER, () => 5, (i) => (i >= 2 ? -4 : 3)) }), WINTER)!;
+    expect(r.level).toBe("low");
+    expect(r.unknowns.join(" ")).toContain("Information only");
+    expect(r.unknowns.join(" ")).toContain("crop-specific damage thresholds are not modelled");
+  });
+  it("says nothing more once a frost has been observed this autumn", () => {
+    const r = frostAlert(
+      wheat({ weather: w(WINTER, (d) => (d === "2026-11-20" ? -6 : 4), () => -8) }),
+      WINTER,
+    )!;
+    expect(r.level).toBe("none");
+    expect(r.keyNumbers).toEqual([]);
+    expect(r.deadline).toBeNull();
+  });
+  it("is not daily noise: three consecutive days give one informational item, then none", () => {
+    const weather = w(WINTER, () => 4, () => -3);
+    const day1 = frostAlert(wheat({ weather }), WINTER)!;
+    expect(day1.level).toBe("low");
+    const next = addDays(WINTER, 1);
+    const day2 = frostAlert(
+      wheat({ weather: w(next, (d) => (d >= WINTER ? -3 : 4), () => -3) }),
+      next,
+    )!;
+    expect(day2.level).toBe("none");
+  });
+  it("still reports a moderate frost for other crops and for winter wheat outside dormancy", () => {
+    const corn = frostAlert(base({ weather: w("2026-12-10", () => 5, () => -4) }), "2026-12-10")!;
+    expect(corn.level).toBe("moderate");
+    const spring = frostAlert(
+      wheat({ weather: w("2027-04-10", () => 5, () => -4) }),
+      "2027-04-10",
+    )!;
+    expect(spring.level).toBe("moderate");
+  });
+  it("shifts the dormancy window by six months in the southern hemisphere", () => {
+    const south = (asOf: string) =>
+      frostAlert(wheat({ southernHemisphere: true, weather: w(asOf, () => 5, () => -4) }), asOf)!;
+    expect(south("2027-06-20").level).toBe("low");
+    expect(south("2026-12-10").level).toBe("moderate");
+  });
+});
+
 const SITE: WaterSite = {
   latDeg: 37.9,
   elevationM: 840,

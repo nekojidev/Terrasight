@@ -8,6 +8,7 @@ import { stableStringify } from "@terrasight/evaluators";
 import type { Library } from "@terrasight/library";
 import { ENGINE_VERSION, pestPressure, planSeasons, type EngineInput, type Rotation } from "@terrasight/scenario-engine";
 import { CROPS } from "@terrasight/simulator";
+import { aiMeta, promptVersionOf, type AiMeta } from "../ai/trace.js";
 import { ENV, type Env } from "../config/config.js";
 
 /**
@@ -64,6 +65,8 @@ export interface Proposal {
   name: Text;
   sequence: Rotation["sequence"];
   rationale: Text;
+  /** Model, prompt version and safety-list version that wrote it (set when generated). */
+  meta?: AiMeta;
 }
 
 export interface Dropped {
@@ -303,6 +306,10 @@ export class AiRotationsService {
     this.safety = createSafetyFilter(actives);
   }
 
+  private meta(): AiMeta {
+    return aiMeta(this.env, ROTATIONS_PROMPT_VERSION());
+  }
+
   /** On when AI_ROTATIONS=1, or by default when a Gemini key is set (AI_ROTATIONS=0 turns it off). */
   enabled(): boolean {
     return this.env.AI_ROTATIONS ? this.env.AI_ROTATIONS === "1" && !!this.client : !!this.client;
@@ -310,7 +317,7 @@ export class AiRotationsService {
 
   private key(ctx: ProposalContext): string {
     return createHash("sha256")
-      .update(stableStringify({ ctx, engine: ENGINE_VERSION, model: this.env.GEMINI_MODEL }))
+      .update(stableStringify({ ctx, engine: ENGINE_VERSION, ...this.meta() }))
       .digest("hex");
   }
 
@@ -382,9 +389,13 @@ export class AiRotationsService {
       this.log.log(
         `AI rotations ${ctx.regionId}: ${valid.length} kept, ${dropped.length} dropped; tokens in ${usage?.promptTokenCount ?? "?"} out ${usage?.candidatesTokenCount ?? "?"} thoughts ${usage?.thoughtsTokenCount ?? 0}`,
       );
-      return valid;
+      const meta = this.meta();
+      return valid.map((p) => ({ ...p, meta }));
     } finally {
       clearTimeout(timer);
     }
   }
 }
+
+/** Version of the rotation prompt and response schema (computed lazily: the schema is a function). */
+const ROTATIONS_PROMPT_VERSION = (): string => promptVersionOf(SYSTEM, schema());

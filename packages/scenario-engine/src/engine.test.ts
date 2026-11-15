@@ -341,3 +341,69 @@ describe("Ukraine (tier C) inputs", () => {
     expect(barley).toHaveLength(1);
   });
 });
+
+describe("caveats and unverified inputs", () => {
+  const caveatsOf = (over: Partial<EngineInput>, ids: string[]) => {
+    const r = runScenarios(input({ rotations: rotations.filter((x) => ids.includes(x.id)), ...over }));
+    return r.alternatives[0]!.caveats;
+  };
+  it("flags adapted crop parameters (UA proxy) on scenarios and yield ranges", () => {
+    const rot: Rotation = { id: "barley-wheat", sequence: ["winter_barley", "winter_wheat"], irrigation: "none" };
+    const p = { ...prices, winter_barley: { price: 190, variableCost: 450, yieldRef: 5 } };
+    const sow = { ...sowing, winter_barley: "10-01" };
+    const i = input({ rotations: [rot], prices: p, sowing: sow, irrigated: false, runs: 20 });
+    const r = runScenarios(i);
+    expect(r.alternatives[0]!.caveats).toContain("unverified-crop-parameters:winter_barley");
+    // winter wheat's own p is adapted too (dormancy), so it is flagged as well; corn is not
+    expect(r.alternatives[0]!.caveats).toContain("unverified-crop-parameters:winter_wheat");
+    expect(caveatsOf({ runs: 20 }, ["continuous-corn"]).some((c) => c.startsWith("unverified-crop"))).toBe(false);
+    const yr = yieldRange(i, planSeasons(rot.sequence, 0, 2026), weatherRuns(i).slice(0, 10), 0);
+    expect(yr!.caveats).toEqual(["unverified-crop-parameters:winter_barley"]);
+  });
+  it("irrigated results say water cost is inside the budget unless a verified cost is passed", () => {
+    expect(caveatsOf({ runs: 20 }, ["corn-soy-wheat"])).toContain("irrigation-cost-in-budget");
+    expect(caveatsOf({ runs: 20, irrigated: false }, ["wheat-fallow"])).not.toContain("irrigation-cost-in-budget");
+    expect(caveatsOf({ runs: 20, irrigationCostPerMm: 0.5 }, ["corn-soy-wheat"])).not.toContain(
+      "irrigation-cost-in-budget",
+    );
+  });
+  it("prices irrigation water per mm when a verified cost is given", () => {
+    const free = runScenarios(input({ runs: 30 })).current;
+    const paid = runScenarios(input({ runs: 30, irrigationCostPerMm: 1 })).current;
+    expect(paid.margin).toBeLessThan(free.margin);
+    expect(free.margin - paid.margin).toBeCloseTo(free.water, 0);
+  });
+  it("says the repeat penalty is not modelled for unverified repeats", () => {
+    const rot: Rotation = { id: "soy-soy", sequence: ["soybean"], irrigation: "optional" };
+    const r = runScenarios(input({ rotations: [rot], history: ["soybean"], runs: 20 }));
+    expect(r.alternatives[0]!.caveats).toContain("repeat-penalty-not-modelled:soybean");
+    const c = runScenarios(input({ rotations: [rotations[1]!], runs: 20 }));
+    expect(c.alternatives[0]!.caveats).not.toContain("repeat-penalty-not-modelled:corn");
+  });
+});
+
+describe("unverified rotation effects", () => {
+  it("are not applied and are cited", async () => {
+    const { rotationEffect, ROTATION_EFFECTS, repeatPenaltyUnmodelled } = await import("./rotation-effects.js");
+    for (const crop of ["soybean", "sunflower", "winter_canola", "spring_canola", "sugar_beet"]) {
+      const e = ROTATION_EFFECTS.find((x) => x.crop === crop)!;
+      expect(e.verified).toBe(false);
+      expect(e.sources!.length).toBeGreaterThan(0);
+      expect(e.sources!.every((s) => s.url.startsWith("https://"))).toBe(true);
+      expect(rotationEffect(crop, e.after, true)).toBe(1);
+      expect(repeatPenaltyUnmodelled(crop, e.after)).toBe(true);
+    }
+    expect(repeatPenaltyUnmodelled("corn", ["corn"])).toBe(false);
+    expect(repeatPenaltyUnmodelled("soybean", ["corn"])).toBe(false);
+  });
+  it("apply once verified", async () => {
+    const { rotationEffect, ROTATION_EFFECTS } = await import("./rotation-effects.js");
+    const e = ROTATION_EFFECTS.find((x) => x.crop === "soybean")!;
+    e.verified = true;
+    try {
+      expect(rotationEffect("soybean", ["soybean"], true)).toBe(0.93);
+    } finally {
+      e.verified = false;
+    }
+  });
+});

@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { InfoHint, seasonHintText } from "@terrasight/ui";
 import { useLocale, useTranslations } from "next-intl";
+import { CaveatNotes } from "@/components/CaveatNotes";
 import { api } from "@/lib/api";
 
 interface YieldRangeView {
@@ -18,6 +19,7 @@ interface YieldRangeView {
     unit: "t/ha";
     runs: number;
     pestLossIncluded: false;
+    caveats?: string[];
   } | null;
   yieldRef?: number | null;
 }
@@ -128,6 +130,7 @@ export function YieldCard({
       </p>
       <p className="mt-1 text-small text-ink-2">{t("ycNoPest")}</p>
       <p className="mt-1 text-small text-ink-2">{t("ycIrrHint")}</p>
+      <CaveatNotes caveats={d.range.caveats} cropName={() => name} className="mt-1" />
     </section>
   );
 }

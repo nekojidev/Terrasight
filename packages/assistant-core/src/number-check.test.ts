@@ -38,7 +38,8 @@ const RESULTS = [
 function allowed(question = "", lang: Lang = "en"): AllowedSet {
   const a = new AllowedSet();
   for (const r of RESULTS) a.addResult(r);
-  a.addText(question, lang);
+  void question; // numbers in the question are not allowed back
+  void lang;
   return a;
 }
 
@@ -51,7 +52,7 @@ const PASS: Array<[Lang, string, string?]> = [
   ["en", "That is 11.2 in of rain."],
   ["en", "The mean temperature was 15.4 °C."],
   ["en", "In Fahrenheit that is 59.6 °F."],
-  ["en", "It was warmer than 92% of years since 1981.", "since 1981"],
+  ["en", "It was warmer than 92% of years."],
   ["en", "Decide by April 25, 2027."],
   ["en", "Decide by 25 April."],
   ["en", "Frost is expected on Nov 20."],
@@ -64,14 +65,13 @@ const PASS: Array<[Lang, string, string?]> = [
   ["en", "1. Change the crop for next season."],
   ["en", "There are two options worth comparing."],
   ["en", "The slope is 0.8%."],
-  ["en", "You asked about 3 fields, here is F2.", "What about my 3 fields?"],
   ["en", "The window ran from 2022-04-01 to 2022-09-30."],
   ["en", "Use USDA CDL and Sentinel-2 to check the history."],
   ["en", "Seasons 2024–2025 were both corn."],
   ["en", "Scout to confirm before acting."],
   ["en", "The crop for 2026 is not known yet."],
   ["en", "Corn has grown 1 season in a row, in 2019."],
-  ["en", "F12 is not in this answer but F1 is.", "F12"],
+  ["en", "F12 is not in this answer but F1 is."],
   ["uk", "На F1 кукурудза росте 2 сезони поспіль."],
   ["uk", "Кукурудза була у 2024 і 2025 роках."],
   ["uk", "Площа поля 47,6 га."],
@@ -92,6 +92,19 @@ const PASS: Array<[Lang, string, string?]> = [
 ];
 
 const FAIL: Array<[Lang, string]> = [
+  // numbers only from the user's question, or hidden behind a source name, or spelled out beyond twenty
+  ["en", "You asked about 3 fields, here is F2."],
+  ["en", "NASA 2025 data show 300 mm."],
+  ["en", "USDA 450 records say so."],
+  ["en", "FAO 99 says to irrigate."],
+  ["en", "It rained thirty days in a row."],
+  ["en", "The field covers forty-eight ha."],
+  ["en", "Soil heat reached six hundred °C·d."],
+  ["en", "There were two hundred and ten mm."],
+  ["uk", "Площа поля п'ятдесят га."],
+  ["uk", "Випало двісті мм опадів."],
+  ["uk", "Тривало двадцять п'ять днів."],
+  ["uk", "NASA 2031 каже інакше."],
   ["en", "F1 has had corn for 3 seasons in a row."],
   ["en", "The field covers 48 ha."],
   ["en", "Summer 2022 brought 300 mm of rain."],
@@ -197,5 +210,32 @@ describe("tool schemas", () => {
     expect(d.map((x) => x.name)).toContain("get_field_history");
     expect(parseArgs("get_field_summary", { field: "F3" }).ok).toBe(true);
     expect(parseArgs("get_field_summary", { field: "Pivot 12" }).ok).toBe(false);
+  });
+});
+
+describe("number words beyond twenty and source names", () => {
+  it("combines tens and hundreds", () => {
+    const v = (s: string, lang: Lang = "en") => extractNumbers(s, lang).map((e) => e.value);
+    expect(v("twenty-five days")).toEqual([25]);
+    expect(v("two hundred and ten mm")).toEqual([210]);
+    expect(v("one hundred")).toEqual([100]);
+    expect(v("thirty, five")).toEqual([30, 5]);
+    expect(v("двадцять п'ять днів", "uk")).toEqual([25]);
+    expect(v("двісті десять мм", "uk")).toEqual([210]);
+    expect(v("сто двадцять", "uk")).toEqual([120]);
+  });
+  it("lets spelled-out numbers through when a tool result has them", () => {
+    const a = new AllowedSet();
+    a.addResult({ days: 25, mm: 210 });
+    expect(checkSentence("It rained twenty-five days.", a, "en").ok).toBe(true);
+    expect(checkSentence("Випало двісті десять мм.", a, "uk").ok).toBe(true);
+    expect(checkSentence("Випало двісті мм.", a, "uk").ok).toBe(false);
+  });
+  it("only hides digits of known identifiers", () => {
+    const a = new AllowedSet();
+    expect(checkSentence("FAO-56, SCS-CN and USDA CDL are the methods.", a, "en").ok).toBe(true);
+    expect(checkSentence("FAO-33 gives the yield response.", a, "en").ok).toBe(true);
+    expect(checkSentence("NASA POWER weather and Sentinel-2 imagery.", a, "en").ok).toBe(true);
+    expect(checkSentence("NASA 2025 reports it.", a, "en").ok).toBe(false);
   });
 });

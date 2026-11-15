@@ -6,7 +6,8 @@ import { ENV, type Env } from "../config/config.js";
 import { PrismaService } from "../db/prisma.service.js";
 import { eventRow } from "../messaging/outbox.js";
 import { OutboxService } from "../messaging/outbox.service.js";
-import { hashOf, SUMMARY_SYSTEM, summarySchema, validateSummary, type Text2 } from "./ai-text.js";
+import { aiMeta, type AiMeta } from "../ai/trace.js";
+import { hashOf, SUMMARY_PROMPT_VERSION, SUMMARY_SYSTEM, summarySchema, validateSummary, type Text2 } from "./ai-text.js";
 
 const CACHE_TTL_MS = 24 * 3600_000;
 const RETRY_AFTER_FAILURE_MS = 10 * 60_000;
@@ -15,6 +16,8 @@ const CACHE_MAX = 200;
 interface Entry {
   at: number;
   text: Text2 | null;
+  /** Model, prompt version and safety-list version that produced (or failed to produce) the text. */
+  meta: AiMeta;
 }
 
 /**
@@ -50,7 +53,9 @@ export class AiDaySummaryService {
    */
   lookup(workspaceId: string, facts: unknown, names: Map<string, string>): Text2 | null {
     if (!this.enabled()) return null;
-    const key = `${workspaceId}:${hashOf({ facts, model: this.env.GEMINI_MODEL })}`;
+    const meta = aiMeta(this.env, SUMMARY_PROMPT_VERSION);
+    // The prompt and safety-list versions are part of the key: editing either regenerates the sentence.
+    const key = `${workspaceId}:${hashOf({ facts, ...meta })}`;
     const hit = this.cache.get(key);
     const age = hit ? Date.now() - hit.at : Infinity;
     if (hit?.text && age < CACHE_TTL_MS) return hit.text;
@@ -60,6 +65,12 @@ export class AiDaySummaryService {
       void this.generate(workspaceId, key, facts, names).finally(() => this.inflight.delete(key));
     }
     return null;
+  }
+
+  /** Metadata of the cached sentence for these facts (traceability), or null. */
+  metaFor(workspaceId: string, facts: unknown): AiMeta | null {
+    const meta = aiMeta(this.env, SUMMARY_PROMPT_VERSION);
+    return this.cache.get(`${workspaceId}:${hashOf({ facts, ...meta })}`)?.meta ?? null;
   }
 
   /** Exposed for tests: runs the generation and resolves when it is cached. */
@@ -82,7 +93,7 @@ export class AiDaySummaryService {
       this.stats.failed += 1;
       this.log.warn(`AI day summary unavailable: ${(e as Error).message}`);
     }
-    this.cache.set(key, { at: Date.now(), text });
+    this.cache.set(key, { at: Date.now(), text, meta: aiMeta(this.env, SUMMARY_PROMPT_VERSION) });
     if (this.cache.size > CACHE_MAX) this.cache.delete(this.cache.keys().next().value!);
     if (text)
       await this.outbox

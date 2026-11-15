@@ -377,7 +377,7 @@ export class AssistantService implements OnModuleInit, OnModuleDestroy {
     // Number check, then the safety filter, sentence by sentence (RFC §12.4–§12.5).
     const allowed = new AllowedSet();
     for (const r of runs) allowed.addResult(r.result);
-    allowed.addText(question, lang);
+    // Numbers the user typed are not allowed back unless a tool result carries them.
     // The planning horizon comes from the system rules: 5 seasons, 2026–2030 (RFC §7.7).
     allowed.addText("5 seasons 2026 2027 2028 2029 2030", "en");
     const shown: string[] = [];

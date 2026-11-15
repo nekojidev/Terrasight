@@ -183,10 +183,24 @@ export const CropPrice = z.object({
   verifiedBy: z.string().nullable().default(null),
 });
 
+/** Irrigation pumping cost per mm (energy and labour), used only when verified. */
+export const IrrigationCost = z.object({
+  /** $ per ha per mm applied; null until a source is found. */
+  value: z.number().nullable(),
+  unit: z.string().min(1),
+  source: z.string().min(1),
+  asOf: z.string().min(4).nullable().default(null),
+  urls: z.array(z.string()).default([]),
+  note: z.string().optional(),
+  verified: z.boolean().default(false),
+  verifiedBy: z.string().nullable().default(null),
+});
+
 export const PricesFile = z.object({
   version: z.number(),
   about: z.string().optional(),
   currency: z.string().length(3),
+  irrigationCostPerMm: IrrigationCost.optional(),
   regions: z.record(z.string(), z.object({ crops: z.record(z.string(), CropPrice) })),
   fallback: z.object({
     source: z.string(),

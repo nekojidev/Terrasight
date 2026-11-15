@@ -18,6 +18,7 @@ import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import { CaveatNotes } from "@/components/CaveatNotes";
 import { FieldTabs } from "../Overview";
 
 type Localised = { en: string; uk: string };
@@ -417,6 +418,7 @@ export function RotationClient({
         {t("rotNote", { n: run.data.result.candidates + 1 })}
         {run.data.regionVerify && <span className="ml-2 text-week">{t("rotVerify")}</span>}
       </p>
+      <CaveatNotes caveats={pick?.caveats} cropName={cropName} only={["crop", "repeat"]} className="" />
       {run.data.aiStatus === "unavailable" && <p className="text-small text-ink-2">{t("rotAiUnavailable")}</p>}
       {run.data.soilBasis === "soilgrids" && <p className="text-small text-ink-2">{t("rotSoilEstimate")}</p>}
       {(run.data.unmodelledCrops?.length ?? 0) > 0 && (
@@ -491,6 +493,7 @@ export function RotationClient({
                   <p className="text-small text-ink-2">
                     {s.plan.map((p) => p.crops.map(cropName).join(" + ")).join(" → ")}
                   </p>
+                  <CaveatNotes caveats={s.caveats} cropName={cropName} only={["crop", "repeat"]} />
                 </div>
                 <SeasonStrip
                   seasons={s.plan.map((p) => ({
@@ -767,6 +770,12 @@ export function RotationClient({
       <section className="rounded-card border border-line bg-surface p-6">
         <h2 className="text-h2 text-ink">{t("rot2022")}</h2>
         <p className="mb-4 text-small text-ink-2">{t("rot2022Sub")}</p>
+        <CaveatNotes
+          caveats={[...new Set(scenarios.flatMap((s) => s.caveats ?? []))]}
+          cropName={cropName}
+          only={["water"]}
+          className="mb-4"
+        />
         <div className="grid gap-4 sm:grid-cols-3">
           {scenarios.map((s, i) => {
             const pct =

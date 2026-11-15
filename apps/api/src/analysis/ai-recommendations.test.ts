@@ -1,3 +1,6 @@
+import { appendFileSync, cpSync, mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createSafetyFilter } from "@terrasight/assistant-core";
 import { loadLibrary } from "@terrasight/library";
@@ -285,5 +288,48 @@ describe("AiRecommendationsService", () => {
     svc.gemini.client = { models: { generateContent: generate } } as never;
     await svc.enrich("f1", built, "2026-11-14");
     expect(generate).not.toHaveBeenCalled();
+  });
+
+  it("stores model, promptVersion and safetyListVersion, and regenerates when the safety list changes", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "terrasight-data-"));
+    cpSync(DATA_DIR, dir, { recursive: true });
+    const env2 = loadEnv({
+      DATABASE_URL: "postgres://x@localhost/x",
+      RABBITMQ_URL: "amqp://localhost:5672",
+      JWT_SECRET: "unit-test-secret-0123456789abcdef0123",
+      NODE_ENV: "test",
+      DATA_DIR: dir,
+      GEMINI_API_KEY: "test-key",
+    });
+    const rows = [rootworm()];
+    const svc = new AiRecommendationsService(env2, lib, fakeDb(rows));
+    const generate = vi.fn(async (args: { contents: string }) => ({
+      text: JSON.stringify({ items: (JSON.parse(args.contents).items as Array<{ ref: string }>).map((i) => ({ ref: i.ref, ...good() })), watch: [] }),
+      usageMetadata: { promptTokenCount: 1, candidatesTokenCount: 1, thoughtsTokenCount: 0 },
+    }));
+    svc.gemini.client = { models: { generateContent: generate } } as never;
+    await svc.enrich("f1", built, "2026-11-14");
+    const first = rows[0]!.aiText as { model: string; promptVersion: string; safetyListVersion: string; hash: string };
+    expect(first.model).toBe(env2.GEMINI_MODEL);
+    expect(first.promptVersion).toMatch(/^[0-9a-f]{12}$/);
+    expect(first.safetyListVersion).toMatch(/^[0-9a-f]{12}$/);
+    // Same facts and lists: no new call.
+    await svc.enrich("f1", built, "2026-11-14");
+    expect(generate).toHaveBeenCalledTimes(1);
+    // A new name in actives.txt changes safetyListVersion, so the text is regenerated.
+    appendFileSync(join(dir, "safety", "actives.txt"), "\nnewactivexyz\n");
+    await svc.enrich("f1", built, "2026-11-14");
+    expect(generate).toHaveBeenCalledTimes(2);
+    const second = rows[0]!.aiText as { safetyListVersion: string; hash: string };
+    expect(second.safetyListVersion).not.toBe(first.safetyListVersion);
+    expect(second.hash).not.toBe(first.hash);
+  });
+
+  it("prompt versions are content hashes of the prompts", async () => {
+    const { RECS_PROMPT_VERSION, SUMMARY_PROMPT_VERSION } = await import("./ai-text.js");
+    const { promptVersionOf } = await import("../ai/trace.js");
+    expect(RECS_PROMPT_VERSION).not.toBe(SUMMARY_PROMPT_VERSION);
+    expect(promptVersionOf("a", { x: 1 })).toBe(promptVersionOf("a", { x: 1 }));
+    expect(promptVersionOf("a", { x: 1 })).not.toBe(promptVersionOf("b", { x: 1 }));
   });
 });

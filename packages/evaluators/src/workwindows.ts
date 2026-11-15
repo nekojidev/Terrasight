@@ -3,7 +3,8 @@
 
 export type Operation = "spraying" | "sowing" | "traffic" | "fertiliser";
 export const OPERATIONS: Operation[] = ["spraying", "sowing", "traffic", "fertiliser"];
-export type WindowStatus = "good" | "marginal" | "no";
+/** "unknown" = no verified threshold decides this hour or day: only the measured conditions are shown. */
+export type WindowStatus = "good" | "marginal" | "no" | "unknown";
 
 /** One forecast hour. `time` is local to the forecast cell, "YYYY-MM-DDTHH:00". Past hours are included. */
 export interface HourlyPoint {
@@ -27,6 +28,7 @@ export type Factor =
   | "soil_temp"
   | "rain_past"
   | "rain_next"
+  | "rain_day"
   | "daylight"
   | "no_threshold";
 
@@ -36,10 +38,18 @@ export interface Limiting {
   value: number | null;
 }
 
+/** A measured value of a day, shown next to the verdict. `verified:false` = no verified threshold judges it. */
+export interface Condition extends Limiting {
+  verified: boolean;
+}
+
 export interface Threshold {
   value: number;
   unit: string;
+  /** Only a verified, quantified threshold may decide good/no. Verifying = verified:true plus verifiedBy and verifiedOn. */
   verified: boolean;
+  verifiedBy?: string;
+  verifiedOn?: string;
   quantified?: boolean;
 }
 
@@ -72,6 +82,8 @@ export interface DayWindows {
   /** Why the day is not good (most common limiting factor in daytime), null for a good day. */
   limiting: Limiting | null;
   windows: WindowSpan[];
+  /** Measured daytime values that matter for this operation (wind, rain, Delta T, soil temperature ...). */
+  conditions: Condition[];
 }
 
 export interface OperationWindows {
@@ -82,7 +94,7 @@ export interface OperationWindows {
   days: DayWindows[];
 }
 
-const RANK: Record<WindowStatus, number> = { good: 0, marginal: 1, no: 2 };
+const RANK: Record<WindowStatus, number> = { unknown: 0, good: 0, marginal: 1, no: 2 };
 
 /** Wet-bulb temperature (Stull 2011, valid for RH 5–99 %, −20…50 °C). */
 export function wetBulbC(tC: number, rh: number): number {
@@ -109,13 +121,20 @@ const v = (c: Record<string, Threshold>, k: string): number => {
   return t.value;
 };
 
+/** A threshold may decide a verdict only when it is verified and quantified (placeholders never count). */
+export const usable = (t: Threshold | undefined): t is Threshold => !!t && t.verified === true && t.quantified !== false;
+const isUsable = (c: Record<string, Threshold>, k: string): boolean => usable(c[k]);
+
 const sum = (xs: HourlyPoint[], from: number, to: number): number => {
   let s = 0;
   for (let i = Math.max(0, from); i < Math.min(xs.length, to); i++) s += xs[i]!.precipMm ?? 0;
   return s;
 };
 
-/** Hour-by-hour evaluation of one operation. `crop` only matters for sowing. */
+/**
+ * Hour-by-hour evaluation of one operation. `crop` only matters for sowing. A factor whose threshold is not verified
+ * (or is a quantified:false placeholder) never decides; an hour no verified factor judges is "unknown".
+ */
 export function evaluateHours(
   op: Operation,
   hours: HourlyPoint[],
@@ -123,82 +142,147 @@ export function evaluateHours(
   crop: string | null = null,
 ): HourResult[] | null {
   const isRain = (i: number, mm: number) => (hours[i]?.precipMm ?? 0) >= mm;
-  return hours.map((h, i): Ev => {
+  return hours.map((h, i): HourResult => {
+    const evs: Ev[] = [];
+    let decided = false;
+    /** True (and marks the hour as judged) when every named threshold is usable. */
+    const ok = (c: Record<string, Threshold>, ...keys: string[]): boolean => {
+      if (!keys.every((k) => isUsable(c, k))) return false;
+      decided = true;
+      return true;
+    };
     if (op === "spraying") {
       const c = cfg.spraying;
-      const evs: Ev[] = [];
-      if (h.windMs !== null) {
+      if (h.windMs !== null && ok(c, "windMaxMs", "windMinMs")) {
         if (h.windMs > v(c, "windMaxMs")) evs.push({ status: "no", limiting: { factor: "wind", value: h.windMs } });
         else if (h.windMs < v(c, "windMinMs"))
           evs.push({ status: "marginal", limiting: { factor: "wind_low", value: h.windMs } });
       }
-      if (h.gustMs !== null && (h.windMs ?? 0) <= v(c, "windMaxMs") && h.gustMs > v(c, "gustMaxMs"))
+      if (h.gustMs !== null && ok(c, "gustMaxMs", "windMaxMs") && (h.windMs ?? 0) <= v(c, "windMaxMs") && h.gustMs > v(c, "gustMaxMs"))
         evs.push({ status: "marginal", limiting: { factor: "gust", value: h.gustMs } });
       // Hours until the next rainy hour (this hour = 0); data ends at the horizon, so no rain is assumed beyond it.
-      const rainMm = v(c, "rainHourMm");
-      let wait: number | null = null;
-      for (let j = i; j < hours.length; j++)
-        if (isRain(j, rainMm)) {
-          wait = j - i;
-          break;
+      if (ok(c, "rainHourMm", "rainFreeNoHours", "rainFreeGoodHours")) {
+        const rainMm = v(c, "rainHourMm");
+        let wait: number | null = null;
+        for (let j = i; j < hours.length; j++)
+          if (isRain(j, rainMm)) {
+            wait = j - i;
+            break;
+          }
+        if (wait !== null) {
+          if (wait === 0) evs.push({ status: "no", limiting: { factor: "rain_now", value: h.precipMm } });
+          else if (wait <= v(c, "rainFreeNoHours")) evs.push({ status: "no", limiting: { factor: "rain_soon", value: wait } });
+          else if (wait < v(c, "rainFreeGoodHours"))
+            evs.push({ status: "marginal", limiting: { factor: "rain_soon", value: wait } });
         }
-      if (wait !== null) {
-        if (wait === 0) evs.push({ status: "no", limiting: { factor: "rain_now", value: h.precipMm } });
-        else if (wait <= v(c, "rainFreeNoHours")) evs.push({ status: "no", limiting: { factor: "rain_soon", value: wait } });
-        else if (wait < v(c, "rainFreeGoodHours"))
-          evs.push({ status: "marginal", limiting: { factor: "rain_soon", value: wait } });
       }
-      if (h.tempC !== null && h.tempC > v(c, "temperatureMaxC"))
+      if (h.tempC !== null && ok(c, "temperatureMaxC") && h.tempC > v(c, "temperatureMaxC"))
         evs.push({ status: "marginal", limiting: { factor: "temperature", value: h.tempC } });
-      if (h.tempC !== null && h.rhPct !== null) {
+      if (h.tempC !== null && h.rhPct !== null && ok(c, "deltaTNoAbove", "deltaTGoodMax", "deltaTGoodMin")) {
         const dt = deltaT(h.tempC, h.rhPct);
         if (dt > v(c, "deltaTNoAbove")) evs.push({ status: "no", limiting: { factor: "delta_t", value: round1(dt) } });
         else if (dt > v(c, "deltaTGoodMax") || dt < v(c, "deltaTGoodMin"))
           evs.push({ status: "marginal", limiting: { factor: "delta_t", value: round1(dt) } });
       }
-      return worst(...evs);
-    }
-    if (op === "sowing") {
-      const min = crop ? cfg.sowing.crops[crop]?.value : undefined;
-      const evs: Ev[] = [];
-      if (min !== undefined) {
+    } else if (op === "sowing") {
+      const cropT = crop ? cfg.sowing.crops[crop] : undefined;
+      if (usable(cropT)) {
         const win = hours.slice(Math.max(0, i - 12), i + 13).map((x) => x.soilTemp6cmC).filter((x): x is number => x !== null);
         if (win.length) {
+          decided = true;
           const mean = win.reduce((a, b) => a + b, 0) / win.length;
-          if (mean < min) evs.push({ status: "no", limiting: { factor: "soil_temp", value: round1(mean) } });
+          if (mean < cropT.value) evs.push({ status: "no", limiting: { factor: "soil_temp", value: round1(mean) } });
         }
       }
       const c = cfg.sowing as unknown as Record<string, Threshold>;
-      const past = sum(hours, i - 24, i + 1);
-      if (past >= v(c, "rainPast24hNoMm")) evs.push({ status: "no", limiting: { factor: "rain_past", value: round1(past) } });
-      else if (past >= v(c, "rainPast24hMarginalMm"))
-        evs.push({ status: "marginal", limiting: { factor: "rain_past", value: round1(past) } });
-      const next = sum(hours, i + 1, i + 7);
-      if (next >= v(c, "rainNext6hNoMm")) evs.push({ status: "marginal", limiting: { factor: "rain_next", value: round1(next) } });
-      return worst(...evs);
-    }
-    if (op === "traffic") {
+      if (ok(c, "rainPast24hNoMm", "rainPast24hMarginalMm")) {
+        const past = sum(hours, i - 24, i + 1);
+        if (past >= v(c, "rainPast24hNoMm")) evs.push({ status: "no", limiting: { factor: "rain_past", value: round1(past) } });
+        else if (past >= v(c, "rainPast24hMarginalMm"))
+          evs.push({ status: "marginal", limiting: { factor: "rain_past", value: round1(past) } });
+      }
+      if (ok(c, "rainNext6hNoMm")) {
+        const next = sum(hours, i + 1, i + 7);
+        if (next >= v(c, "rainNext6hNoMm")) evs.push({ status: "marginal", limiting: { factor: "rain_next", value: round1(next) } });
+      }
+    } else if (op === "traffic") {
       const c = cfg.traffic;
-      const evs: Ev[] = [];
-      const past = sum(hours, i - 48, i + 1);
-      if (past >= v(c, "rainPast48hNoMm")) evs.push({ status: "no", limiting: { factor: "rain_past", value: round1(past) } });
-      else if (past >= v(c, "rainPast48hMarginalMm"))
-        evs.push({ status: "marginal", limiting: { factor: "rain_past", value: round1(past) } });
-      const next = sum(hours, i + 1, i + 7);
-      if (next >= v(c, "rainNext6hNoMm")) evs.push({ status: "no", limiting: { factor: "rain_next", value: round1(next) } });
-      else if (next >= v(c, "rainNext6hMarginalMm"))
-        evs.push({ status: "marginal", limiting: { factor: "rain_next", value: round1(next) } });
-      return worst(...evs);
+      if (ok(c, "rainPast48hNoMm", "rainPast48hMarginalMm")) {
+        const past = sum(hours, i - 48, i + 1);
+        if (past >= v(c, "rainPast48hNoMm")) evs.push({ status: "no", limiting: { factor: "rain_past", value: round1(past) } });
+        else if (past >= v(c, "rainPast48hMarginalMm"))
+          evs.push({ status: "marginal", limiting: { factor: "rain_past", value: round1(past) } });
+      }
+      if (ok(c, "rainNext6hNoMm", "rainNext6hMarginalMm")) {
+        const next = sum(hours, i + 1, i + 7);
+        if (next >= v(c, "rainNext6hNoMm")) evs.push({ status: "no", limiting: { factor: "rain_next", value: round1(next) } });
+        else if (next >= v(c, "rainNext6hMarginalMm"))
+          evs.push({ status: "marginal", limiting: { factor: "rain_next", value: round1(next) } });
+      }
+    } else {
+      const c = cfg.fertiliser;
+      if (ok(c, "rainHourNoMm") && (h.precipMm ?? 0) >= v(c, "rainHourNoMm"))
+        evs.push({ status: "no", limiting: { factor: "rain_now", value: h.precipMm } });
+      if (ok(c, "rainNext24hNoMm", "rainNext24hMarginalMm")) {
+        const next = sum(hours, i, i + 24);
+        if (next >= v(c, "rainNext24hNoMm")) evs.push({ status: "no", limiting: { factor: "rain_next", value: round1(next) } });
+        else if (next >= v(c, "rainNext24hMarginalMm"))
+          evs.push({ status: "marginal", limiting: { factor: "rain_next", value: round1(next) } });
+      }
     }
-    const c = cfg.fertiliser;
-    const evs: Ev[] = [];
-    if ((h.precipMm ?? 0) >= v(c, "rainHourNoMm")) evs.push({ status: "no", limiting: { factor: "rain_now", value: h.precipMm } });
-    const next = sum(hours, i, i + 24);
-    if (next >= v(c, "rainNext24hNoMm")) evs.push({ status: "no", limiting: { factor: "rain_next", value: round1(next) } });
-    else if (next >= v(c, "rainNext24hMarginalMm"))
-      evs.push({ status: "marginal", limiting: { factor: "rain_next", value: round1(next) } });
-    return worst(...evs);
+    const r = worst(...evs);
+    return decided ? r : { status: "unknown", limiting: null };
   });
+}
+
+/** True when the thresholds behind a displayed condition may decide a verdict. */
+function factorVerified(op: Operation, cfg: WorkWindowsConfig, factor: Factor, crop: string | null): boolean {
+  const g = (c: Record<string, Threshold>, ...k: string[]) => k.every((x) => isUsable(c, x));
+  const sow = cfg.sowing as unknown as Record<string, Threshold>;
+  switch (`${op}:${factor}`) {
+    case "spraying:wind":
+      return g(cfg.spraying, "windMaxMs", "windMinMs");
+    case "spraying:gust":
+      return g(cfg.spraying, "gustMaxMs", "windMaxMs");
+    case "spraying:temperature":
+      return g(cfg.spraying, "temperatureMaxC");
+    case "spraying:delta_t":
+      return g(cfg.spraying, "deltaTNoAbove", "deltaTGoodMax", "deltaTGoodMin");
+    case "spraying:rain_day":
+      return g(cfg.spraying, "rainHourMm", "rainFreeNoHours", "rainFreeGoodHours");
+    case "sowing:soil_temp":
+      return usable(crop ? cfg.sowing.crops[crop] : undefined);
+    case "sowing:rain_day":
+      return g(sow, "rainPast24hNoMm", "rainPast24hMarginalMm");
+    case "traffic:rain_day":
+      return g(cfg.traffic, "rainPast48hNoMm", "rainPast48hMarginalMm");
+    case "fertiliser:rain_day":
+      return g(cfg.fertiliser, "rainHourNoMm", "rainNext24hNoMm", "rainNext24hMarginalMm");
+    default:
+      return false;
+  }
+}
+
+/** Measured daytime values for the day detail: extremes of wind, gusts, temperature, Delta T, rain, soil temperature. */
+function dayConditions(op: Operation, hrs: HourlyPoint[], cfg: WorkWindowsConfig, crop: string | null): Condition[] {
+  const nums = (f: (h: HourlyPoint) => number | null) => hrs.map(f).filter((x): x is number => x !== null);
+  const max = (xs: number[]) => (xs.length ? round1(Math.max(...xs)) : null);
+  const out: Condition[] = [];
+  const add = (factor: Factor, value: number | null) => {
+    if (value !== null) out.push({ factor, value, verified: factorVerified(op, cfg, factor, crop) });
+  };
+  if (op === "spraying") {
+    add("wind", max(nums((h) => h.windMs)));
+    add("gust", max(nums((h) => h.gustMs)));
+    add("temperature", max(nums((h) => h.tempC)));
+    add("delta_t", max(nums((h) => (h.tempC !== null && h.rhPct !== null ? deltaT(h.tempC, h.rhPct) : null))));
+  }
+  if (op === "sowing") {
+    const st = nums((h) => h.soilTemp6cmC);
+    add("soil_temp", st.length ? round1(st.reduce((a, b) => a + b, 0) / st.length) : null);
+  }
+  if (hrs.some((h) => h.precipMm !== null)) add("rain_day", round1(hrs.reduce((a, h) => a + (h.precipMm ?? 0), 0)));
+  return out;
 }
 
 const round1 = (x: number) => Math.round(x * 10) / 10;
@@ -230,7 +314,8 @@ export function operationWindows(
       const hour = Number(h.time.slice(11, 13));
       if (hour >= from && hour < to) day.push({ hour, r: results[i]! });
     });
-    if (!day.length) return { date, status: "no", limiting: { factor: "daylight", value: null }, windows: [] };
+    if (!day.length)
+      return { date, status: "no", limiting: { factor: "daylight", value: null }, windows: [], conditions: [] };
     // Runs of consecutive hours with the same status.
     const runs: Array<{ start: number; end: number; status: WindowStatus; items: typeof day }> = [];
     for (const d of day) {
@@ -244,7 +329,7 @@ export function operationWindows(
       from: hh(r.start),
       to: hh(r.end + 1),
       status: r.status,
-      limiting: r.status === "good" ? null : (worstLimiting(r.items.map((x) => x.r)) ?? null),
+      limiting: r.status === "good" || r.status === "unknown" ? null : (worstLimiting(r.items.map((x) => x.r)) ?? null),
     }));
     const longest = (ok: (s: WindowStatus) => boolean) => {
       let best = 0;
@@ -257,14 +342,29 @@ export function operationWindows(
       }
       return best;
     };
-    const status: WindowStatus =
-      longest((s) => s === "good") >= need ? "good" : longest((s) => s !== "no") >= need ? "marginal" : "no";
-    const bad = day.map((d) => d.r).filter((r) => r.status !== "good");
+    const allUnknown = day.every((d) => d.r.status === "unknown");
+    const status: WindowStatus = allUnknown
+      ? "unknown"
+      : longest((s) => s === "good") >= need
+        ? "good"
+        : longest((s) => s !== "no") >= need
+          ? "marginal"
+          : "no";
+    const bad = day.map((d) => d.r).filter((r) => r.status !== "good" && r.status !== "unknown");
     return {
       date,
       status,
-      limiting: status === "good" ? null : (modeLimiting(bad) ?? null),
+      limiting: status === "good" || status === "unknown" ? null : (modeLimiting(bad) ?? null),
       windows,
+      conditions: dayConditions(
+        op,
+        hours.filter((h) => {
+          const hr = Number(h.time.slice(11, 13));
+          return h.time.startsWith(date) && h.time >= now && hr >= from && hr < to;
+        }),
+        cfg,
+        crop,
+      ),
     };
   });
   return { operation: op, applicable: true, crop, days: out };
