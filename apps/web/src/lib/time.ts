@@ -11,7 +11,9 @@ export type Greeting = "hiMorning" | "hiDay" | "hiEvening";
 /** The current time, or null until the component has mounted in the browser. */
 export function useNow(): Date | null {
   const [now, setNow] = useState<Date | null>(null);
-  useEffect(() => setNow(new Date()), []);
+  useEffect(() => {
+    setNow(new Date());
+  }, []);
   return now;
 }
 

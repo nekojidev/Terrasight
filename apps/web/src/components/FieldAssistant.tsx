@@ -31,15 +31,21 @@ export function FieldAssistant({
     if (!question.trim() || busy) return;
     setBusy(true);
     setError(null);
+    let created: string | null = null;
     try {
       const c = await api<{ id: string }>(`/api/w/${workspaceId}/conversations`, {
         body: { title: fieldName },
       });
+      created = c.id;
       await api(`/api/w/${workspaceId}/conversations/${c.id}/messages`, {
         body: { text: question, context: { fieldId }, lang: locale === "uk" ? "uk" : "en" },
       });
       setId(c.id);
     } catch (e) {
+      // Don't leave an empty conversation behind when the question could not be sent.
+      if (created)
+        void api(`/api/w/${workspaceId}/conversations/${created}`, { method: "DELETE" }).catch(() => undefined);
+      setText(question);
       setError(e instanceof ApiError && e.problem.status === 429 ? t("aiRateLimited") : t("errGeneric"));
     } finally {
       setBusy(false);

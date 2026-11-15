@@ -6,6 +6,7 @@ import { Send, ShieldCheck, Sparkles, TriangleAlert } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api, ApiError } from "@/lib/api";
+import { displayText, restoreAliases } from "@/lib/assistant-text";
 import { connectStream } from "@/lib/events";
 
 interface Message {
@@ -25,17 +26,20 @@ interface Conversation {
   messages: Message[];
 }
 
-/** Field aliases (F3) back to the company's field names, only in the browser (RFC §12.6). */
-function restore(text: string, aliases: Conversation["aliases"]): string {
-  return text.replace(/\bF(\d+)\b/g, (m) => aliases[m]?.name ?? m);
-}
-
 /** A plain table of a tool result for the fallback card (S-05.03). */
-function ResultTable({ result, aliases }: { result: unknown; aliases: Conversation["aliases"] }) {
+function ResultTable({
+  result,
+  aliases,
+  lang,
+}: {
+  result: unknown;
+  aliases: Conversation["aliases"];
+  lang: "en" | "uk";
+}) {
   const rows: Array<[string, string]> = [];
   const walk = (node: unknown, path: string) => {
     if (rows.length > 30 || node === null || node === undefined) return;
-    if (typeof node !== "object") return rows.push([path, restore(String(node), aliases)]);
+    if (typeof node !== "object") return rows.push([path, displayText(String(node), aliases, lang)]);
     const o = node as Record<string, unknown>;
     if (typeof o.value === "number" && "unit" in o) return rows.push([path, `${o.value} ${String(o.unit)}`]);
     for (const [k, v] of Object.entries(o)) walk(v, path ? `${path}.${k}` : k);
@@ -71,6 +75,7 @@ export function Chat({
   const a = useTranslations("Assistant");
   const client = useQueryClient();
   const locale = useLocale();
+  const lang = locale === "uk" ? "uk" : "en";
   const key = ["conversation", workspaceId, conversationId];
   const conv = useQuery({
     queryKey: key,
@@ -109,10 +114,9 @@ export function Chat({
     return () => ctl.stop();
   }, [workspaceId, conversationId, client]);
 
-  useEffect(
-    () => end.current?.scrollIntoView({ block: "end" }),
-    [conv.data?.messages.length, live.length, progress],
-  );
+  useEffect(() => {
+    end.current?.scrollIntoView?.({ block: "end" });
+  }, [conv.data?.messages.length, live.length, progress]);
 
   async function ask(q: string) {
     if (!q.trim()) return;
@@ -120,10 +124,11 @@ export function Chat({
     setText("");
     try {
       await api(`/api/w/${workspaceId}/conversations/${conversationId}/messages`, {
-        body: { text: q, context: context ?? {}, lang: locale === "uk" ? "uk" : "en" },
+        body: { text: q, context: context ?? {}, lang },
       });
       void client.invalidateQueries({ queryKey: key });
     } catch (e) {
+      setText(q);
       setError(e instanceof ApiError && e.problem.status === 429 ? t("aiRateLimited") : t("errGeneric"));
     }
   }
@@ -133,6 +138,7 @@ export function Chat({
   };
 
   const aliases = conv.data?.aliases ?? {};
+  const show = (s: string) => displayText(s, aliases, lang);
   const messages = conv.data?.messages ?? [];
   return (
     <div className={`flex min-h-0 flex-col ${compact ? "h-[560px]" : "h-[calc(100vh-220px)]"}`}>
@@ -144,7 +150,7 @@ export function Chat({
               key={m.id}
               className="max-w-[85%] self-end rounded-card bg-ink px-4 py-3 text-body text-surface"
             >
-              {restore(m.text, aliases)}
+              {restoreAliases(m.text, aliases)}
             </p>
           ) : (
             <div key={m.id} className="flex max-w-[95%] flex-col gap-2">
@@ -154,11 +160,11 @@ export function Chat({
                   {t("aiUnavailable")}
                 </p>
               ) : m.text ? (
-                <p className="text-body text-ink">{restore(m.text, aliases)}</p>
+                <p className="text-body text-ink">{show(m.text)}</p>
               ) : (
                 <p className="text-body text-ink">
                   {live.length ? (
-                    restore(live.join(" "), aliases)
+                    show(live.join(" "))
                   ) : (
                     <span className="text-ink-2">{progress ?? t("aiThinking")}</span>
                   )}
@@ -170,7 +176,7 @@ export function Chat({
                   {m.card.map((c, i) => (
                     <div key={i} className="mb-3">
                       <p className="mb-1 font-mono text-micro text-ink-2">{t("aiTool", { tool: c.tool })}</p>
-                      <ResultTable result={c.result} aliases={aliases} />
+                      <ResultTable result={c.result} aliases={aliases} lang={lang} />
                     </div>
                   ))}
                 </div>
