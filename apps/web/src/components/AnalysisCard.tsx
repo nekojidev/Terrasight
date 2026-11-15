@@ -7,6 +7,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { dateShortIn, isAutumn, isSameDayIn, timeIn, useNow } from "@/lib/time";
 import { api } from "@/lib/api";
 import { useWorkspaceEvents } from "@/lib/events";
+import { AnalysisFocus } from "./AnalysisFocus";
 
 interface RunField {
   fieldId: string;
@@ -111,6 +112,9 @@ export function AnalysisCard({
           </Button>
         )}
       </div>
+      {running && r?.fields && (
+        <AnalysisFocus fields={r.fields.map((f) => ({ id: f.fieldId, name: f.name, status: f.status }))} />
+      )}
       {running && r?.fields && (
         <AnalysisPanel
           title={m("analyzing")}

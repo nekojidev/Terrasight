@@ -20,6 +20,7 @@ import { api } from "@/lib/api";
 import { useWorkspaceEvents } from "@/lib/events";
 import { FieldAssistant } from "@/components/FieldAssistant";
 import { YieldCard } from "./YieldCard";
+import { GatherFocus, isFirstBuild } from "./GatherFocus";
 import { FieldBrief, FieldTabs, RisksCard, WeatherCard, type Risk } from "./Overview";
 
 export interface FieldView {
@@ -36,6 +37,7 @@ export interface FieldView {
 type TaskStatus = "queued" | "running" | "done" | "partial" | "failed" | "cached";
 interface GatherStatus {
   status: string;
+  startedAt?: string | null;
   sources: Array<{
     source: string;
     label: string;
@@ -117,6 +119,7 @@ export function FieldClient({
     queryKey: ["field", workspaceId, id, "history"],
     queryFn: () => api<History>(`${base}/history`),
   });
+  const building = isFirstBuild(gather.data, history.isLoading || Boolean(history.data?.built));
   const record = useQuery({
     queryKey: ["field", workspaceId, id, "season"],
     queryFn: () => api<SeasonRecord>(`${base}/season-records/current`),
@@ -176,6 +179,21 @@ export function FieldClient({
           </p>
         </header>
         <FieldTabs fieldId={id} />
+        <GatherFocus
+          status={gather.data}
+          building={building}
+          fieldName={field.data.name}
+          outline={field.data.thumb ?? null}
+          canEdit={canEdit}
+          onRetry={(source) =>
+            void api(`${base}/gather/sources/${source}/retry`, { method: "POST" }).then(() => gather.refetch())
+          }
+        />
+        <div
+          inert={building}
+          aria-hidden={building || undefined}
+          className={`flex min-w-0 flex-col gap-6 transition-opacity duration-rise ease-ts ${building ? "pointer-events-none select-none opacity-40" : ""}`}
+        >
 
         {history.data && (
           <FieldBrief
@@ -198,7 +216,7 @@ export function FieldClient({
         <WeatherCard workspaceId={workspaceId} fieldId={id} units={units} />
         {history.data && <HistoryCard history={history.data} />}
 
-        {gather.data && (
+        {gather.data && !building && (
           <GatherPanel
             status={gather.data}
             base={base}
@@ -224,6 +242,7 @@ export function FieldClient({
             fieldId={id}
           />
         )}
+        </div>
       </div>
       {canEdit && (
         <aside className="min-w-0 xl:sticky xl:top-6 xl:self-start">
