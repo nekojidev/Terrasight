@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
 import type {
   AnswerBody,
   Decision,
@@ -76,6 +76,8 @@ export function decisionState(
 /** Owner decisions (PD v2.7, contract packages/shared/src/decisions.ts): list, answer, replies, republish, links. */
 @Injectable()
 export class DecisionsService {
+  private readonly log = new Logger(DecisionsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly outbox: OutboxService,
@@ -258,8 +260,8 @@ export class DecisionsService {
           actorId: "userId" in by ? by.userId : null,
         }),
       );
-    } catch {
-      /* best effort */
+    } catch (e) {
+      this.log.warn(`report.answered notification for item ${id} failed: ${(e as Error).message}`);
     }
     return this.one(workspaceId, id);
   }

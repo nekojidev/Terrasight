@@ -15,6 +15,12 @@ type Tx = Prisma.TransactionClient;
 const ACTIVE: FieldCheckStatus[] = ["waiting", "running"];
 const FINAL: FieldCheckStatus[] = ["ok", "stale", "failed"];
 
+/** A check "running" longer than this has lost its worker (the slowest healthy check takes a few minutes). */
+export const STALE_RUNNING_MS = 15 * 60_000;
+/** A check still "waiting" this long after the run started never got its message (lost job). */
+export const STALE_WAITING_MS = 60 * 60_000;
+export const STALE_REASON = "the check did not finish (the worker stopped); run the analysis again";
+
 /** While a run is active its summary holds the fields attached to another run's check (RFC §10.2). */
 interface RunningSummary {
   attached?: string[];
@@ -132,15 +138,81 @@ export class AnalysisService implements OnModuleInit {
     return run.id;
   }
 
-  /** Marks a field's check as running (the event drives the AnalysisPanel). */
-  async running(workspaceId: string, runId: string, fieldId: string): Promise<boolean> {
+  /**
+   * Marks a field's check as running (the event drives the AnalysisPanel). A redelivered message (`reclaimAfterMs`
+   * given, after a worker crash) also re-claims a row stuck in "running" for longer than that, so the check is not
+   * silently dropped; a fresh message only claims "waiting".
+   */
+  async running(
+    workspaceId: string,
+    runId: string,
+    fieldId: string,
+    reclaimAfterMs?: number,
+    now = new Date(),
+  ): Promise<boolean> {
     const r = await this.prisma.system.analysisRunField.updateMany({
-      where: { runId, fieldId, status: "waiting" },
+      where: {
+        runId,
+        fieldId,
+        OR: [
+          { status: "waiting" },
+          ...(reclaimAfterMs === undefined
+            ? []
+            : [{ status: "running" as const, updatedAt: { lt: new Date(now.getTime() - reclaimAfterMs) } }]),
+        ],
+      },
       data: { status: "running" },
     });
     if (r.count)
       await this.outbox.add(this.prisma.system, [this.fieldEvent(workspaceId, runId, fieldId, "running")]);
     return r.count === 1;
+  }
+
+  /** Hands a check back to "waiting" before a retry (the retry message claims it again). */
+  async release(runId: string, fieldId: string): Promise<void> {
+    await this.prisma.system.analysisRunField.updateMany({
+      where: { runId, fieldId, status: "running" },
+      data: { status: "waiting" },
+    });
+  }
+
+  /**
+   * Reaper: checks stuck in "running" (worker died, no redelivery) or never started ("waiting" far too long) are
+   * marked failed with a reason; `finish` then completes the run and notifies as usual. Returns the number reaped.
+   */
+  async reapStale(
+    now = new Date(),
+    runningMs = STALE_RUNNING_MS,
+    waitingMs = STALE_WAITING_MS,
+  ): Promise<number> {
+    const stale = await this.prisma.system.analysisRunField.findMany({
+      where: {
+        OR: [
+          { status: "running", updatedAt: { lt: new Date(now.getTime() - runningMs) } },
+          { status: "waiting", updatedAt: { lt: new Date(now.getTime() - waitingMs) } },
+        ],
+      },
+      select: { runId: true, fieldId: true, status: true, run: { select: { workspaceId: true, status: true } } },
+    });
+    let reaped = 0;
+    for (const row of stale) {
+      if (row.run.status !== "running") continue;
+      // Claim atomically so two reapers don't both finish it; a late worker result may still overwrite.
+      const claimed = await this.prisma.system.analysisRunField.updateMany({
+        where: {
+          runId: row.runId,
+          fieldId: row.fieldId,
+          status: row.status,
+          updatedAt: { lt: new Date(now.getTime() - (row.status === "running" ? runningMs : waitingMs)) },
+        },
+        data: { status: "failed", error: STALE_REASON },
+      });
+      if (claimed.count !== 1) continue;
+      await this.finish(row.run.workspaceId, row.runId, row.fieldId, "failed", null, STALE_REASON, 0);
+      this.log.warn(`reaped stale ${row.status} check: run ${row.runId} field ${row.fieldId}`);
+      reaped += 1;
+    }
+    return reaped;
   }
 
   /** Finishes a field check; completes every run waiting on it and writes their summaries. */

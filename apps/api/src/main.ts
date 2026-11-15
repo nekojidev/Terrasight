@@ -7,11 +7,17 @@ import { AppModule } from "./app.module.js";
 import { requireRequestedWith } from "./http/csrf.js";
 import { ProblemFilter } from "./http/problem.js";
 import { loadEnv } from "./config/config.js";
+import { installProcessGuards } from "./process-guards.js";
+
+let logger: Logger | null = null;
+installProcessGuards(() => logger ?? console);
 
 async function bootstrap(): Promise<void> {
   const env = loadEnv();
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
-  app.useLogger(app.get(Logger));
+  const pino = app.get(Logger);
+  logger = pino;
+  app.useLogger(pino);
   app.setGlobalPrefix("api", {
     exclude: [
       { path: "healthz", method: RequestMethod.GET },

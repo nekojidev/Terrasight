@@ -15,6 +15,7 @@ export class FakeBroker implements Broker {
   down = false;
   /** Fail only the n-th publish (1-based), to test partial batches. */
   failOn: number | null = null;
+  readonly depths = new Map<string, number>();
   private count = 0;
 
   get connected(): boolean {
@@ -25,6 +26,10 @@ export class FakeBroker implements Broker {
     this.count += 1;
     if (this.down || this.failOn === this.count) throw new Error("broker down");
     this.published.push({ exchange, routingKey, body, options });
+  }
+
+  async queueDepth(queue: string): Promise<number | null> {
+    return this.down ? null : (this.depths.get(queue) ?? 0);
   }
 
   async consume(queue: string, _prefetch: number, handler: ConsumeHandler): Promise<void> {

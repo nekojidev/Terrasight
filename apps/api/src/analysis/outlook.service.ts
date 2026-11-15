@@ -78,7 +78,7 @@ export class OutlookService {
     const age = row ? Date.now() - row.fetchedAt.getTime() : Infinity;
     if (cached && age < FRESH_MS && covers(cached)) return { ensemble: cached, origin: "cache" };
     try {
-      while (!(await this.limits.take("source:seasonal", BUCKET))) await new Promise((r) => setTimeout(r, 300));
+      await this.limits.takeWithin("source:seasonal", BUCKET, 300);
       const ensemble = await openMeteoSeasonal(
         cell,
         daysThrough(today, lastMonth),
@@ -146,10 +146,9 @@ export class OutlookService {
       const geom = await this.geo.fieldGeometry(fieldId);
       const months = outlookMonths(today, 3);
       const [power, ens] = await Promise.all([
-        this.sources.fresh<DailyWeather>("power", geom, today, async () => {
-          while (!(await this.limits.take("source:power", POWER_BUCKET)))
-            await new Promise((r) => setTimeout(r, 250));
-        }),
+        this.sources.fresh<DailyWeather>("power", geom, today, () =>
+          this.limits.takeWithin("source:power", POWER_BUCKET, 250),
+        ),
         this.ensemble(geom.centroid.lat, geom.centroid.lon, today, months[months.length - 1]!),
       ]);
       if (!ens) return fail("Seasonal forecast unavailable");

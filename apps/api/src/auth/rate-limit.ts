@@ -68,6 +68,38 @@ export class RateLimitService {
     }
     return this.memory.take(key, spec);
   }
+
+  /**
+   * Waits for a token, polling every `pollMs`, for at most `maxWaitMs`; then throws instead of holding the caller
+   * (a worker slot) indefinitely behind a starved bucket. Callers treat it like any source failure.
+   */
+  async takeWithin(key: string, spec: BucketSpec, pollMs: number, maxWaitMs = MAX_TOKEN_WAIT_MS): Promise<void> {
+    await waitFor(() => this.take(key, spec), pollMs, maxWaitMs, `rate limit ${key}`);
+  }
+}
+
+/** Longest a gather loop waits for a rate-limit token before giving up. */
+export const MAX_TOKEN_WAIT_MS = 60_000;
+
+export class WaitTimeoutError extends Error {
+  constructor(what: string, ms: number) {
+    super(`gave up waiting for ${what} after ${Math.round(ms / 1000)} s`);
+    this.name = "WaitTimeoutError";
+  }
+}
+
+/** Polls `attempt` until it returns true, or throws WaitTimeoutError once `maxWaitMs` has passed. */
+export async function waitFor(
+  attempt: () => Promise<boolean>,
+  pollMs: number,
+  maxWaitMs: number,
+  what: string,
+): Promise<void> {
+  const deadline = Date.now() + maxWaitMs;
+  while (!(await attempt())) {
+    if (Date.now() + pollMs > deadline) throw new WaitTimeoutError(what, maxWaitMs);
+    await new Promise((r) => setTimeout(r, pollMs));
+  }
 }
 
 /**

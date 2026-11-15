@@ -12,6 +12,7 @@ import {
 import { ENV, type Env } from "../config/config.js";
 import { PrismaService } from "../db/prisma.service.js";
 import type { Prisma } from "../generated/prisma/client.js";
+import { CircuitBreaker } from "./circuit-breaker.js";
 
 /** Plain-language names used in reasons and the progress list (design 13). */
 export const SOURCE_LABELS: Record<SourceId, string> = {
@@ -75,6 +76,11 @@ export interface CachedSource<T = unknown> {
 @Injectable()
 export class SourcesService {
   readonly adapters: SourceAdapter[];
+  /** Per source: after repeated failures the live call is skipped for a while (cache / fixture / stale instead). */
+  readonly breaker = new CircuitBreaker({
+    threshold: Number(process.env.SOURCE_BREAKER_FAILURES) || 5,
+    cooldownMs: (Number(process.env.SOURCE_BREAKER_COOLDOWN_S) || 60) * 1000,
+  });
 
   constructor(
     private readonly prisma: PrismaService,
@@ -153,12 +159,18 @@ export class SourcesService {
     if (hit) return { result: hit.result, origin: "cache" };
     let error = "did not respond";
     try {
-      await take();
-      const result = (await adapter.fetch(field, {
-        signal: AbortSignal.timeout(SOURCE_TIMEOUT_MS[source]),
-        fetch,
-        today,
-      })) as SourceResult<T>;
+      const result = (await this.breaker.run(
+        source,
+        async () => {
+          await take();
+          return adapter.fetch(field, {
+            signal: AbortSignal.timeout(SOURCE_TIMEOUT_MS[source]),
+            fetch,
+            today,
+          });
+        },
+        (r) => r.status === "failed",
+      )) as SourceResult<T>;
       if (result.status !== "failed") {
         await this.store(adapter, key, { source, today }, result, "live");
         return { result, origin: "live" };

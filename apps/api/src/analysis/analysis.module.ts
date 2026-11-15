@@ -12,6 +12,7 @@ import { ForecastService } from "./forecast.service.js";
 import { OutlookController } from "./outlook.controller.js";
 import { OutlookService } from "./outlook.service.js";
 import { AnalysisScheduler } from "./scheduler.js";
+import { StaleCheckReaper } from "./stale-check-reaper.js";
 
 /** EP-03: forecast, analysis runs (06:00 and manual), field checks and evaluators. */
 @Module({
@@ -25,6 +26,7 @@ import { AnalysisScheduler } from "./scheduler.js";
     OutlookService,
     AnalysisService,
     AnalysisScheduler,
+    StaleCheckReaper,
     FieldCheckConsumer,
     EvalInputsService,
   ],

@@ -32,6 +32,9 @@ import { ToolError, ToolExecutor, type Scope } from "./executor.js";
 const MAX_TOOL_CALLS = 6;
 const TURN_MS = 30_000;
 const RETENTION_DAYS = 90;
+/** An assistant message still empty this long after it was created lost its turn (crash / restart); a turn lasts 30 s. */
+export const STALE_TURN_MS = 2 * 60_000;
+const REAP_TICK_MS = 60_000;
 const USER_BUCKET = { capacity: 10, refillPerSec: 1 / 6 };
 const WORKSPACE_BUCKET = { capacity: 30, refillPerSec: 1 / 2 };
 
@@ -74,6 +77,7 @@ export class AssistantService implements OnModuleInit, OnModuleDestroy {
   private readonly ai: GoogleGenAI | null;
   private readonly safety: SafetyFilter;
   private timer: NodeJS.Timeout | null = null;
+  private reapTimer: NodeJS.Timeout | null = null;
   /** Cleared when the configured model rejects thinkingConfig. */
   private thinking = true;
 
@@ -103,11 +107,47 @@ export class AssistantService implements OnModuleInit, OnModuleDestroy {
     if (runsScheduler(this.env) && this.env.NODE_ENV !== "test") {
       this.timer = setInterval(() => void this.purge(), 6 * 3600_000);
       setTimeout(() => void this.purge(), 30_000);
+      this.reapTimer = setInterval(() => void this.reapStaleTurns().catch(() => undefined), REAP_TICK_MS);
+      this.reapTimer.unref();
     }
   }
 
   onModuleDestroy(): void {
     if (this.timer) clearInterval(this.timer);
+    if (this.reapTimer) clearInterval(this.reapTimer);
+  }
+
+  /**
+   * A turn runs fire-and-forget in the API process; if it dies mid-turn the empty assistant message would show
+   * "thinking" forever. Marks empty assistant messages older than 2 min as errored (the chat shows "unavailable")
+   * and tells the open conversation. Returns the number of messages reaped.
+   */
+  async reapStaleTurns(now = new Date()): Promise<number> {
+    const stale = await this.prisma.system.message.findMany({
+      where: {
+        role: "assistant",
+        text: "",
+        error: null,
+        createdAt: { lt: new Date(now.getTime() - STALE_TURN_MS) },
+      },
+      select: { id: true, conversationId: true, conversation: { select: { workspaceId: true } } },
+      take: 100,
+    });
+    let reaped = 0;
+    for (const m of stale) {
+      // Re-check text/error in the update so a turn that finished meanwhile is left alone.
+      const r = await this.prisma.system.message.updateMany({
+        where: { id: m.id, text: "", error: null },
+        data: { error: UNAVAILABLE.en },
+      });
+      if (r.count !== 1) continue;
+      reaped += 1;
+      await this.emit({ workspaceId: m.conversation.workspaceId } as Scope, m.conversationId, "assistant.done", {
+        messageId: m.id,
+      }).catch((e: unknown) => this.log.warn(`reaped turn ${m.id}: event not sent (${(e as Error).message})`));
+    }
+    if (reaped) this.log.warn(`marked ${reaped} lost assistant turn(s) as errored`);
+    return reaped;
   }
 
   /** Retention (RFC §12.7): conversations expire 90 days after creation; messages and tool calls cascade. */

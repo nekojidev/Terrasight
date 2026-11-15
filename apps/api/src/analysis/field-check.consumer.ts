@@ -12,7 +12,7 @@ import { JobConsumer } from "../messaging/consumer.js";
 import { QUEUES } from "../messaging/topology.js";
 import { AiRecommendationsService } from "./ai-recommendations.service.js";
 import { AlertsService } from "./alerts.service.js";
-import { AnalysisService, type FieldCheckJob } from "./analysis.service.js";
+import { AnalysisService, STALE_RUNNING_MS, type FieldCheckJob } from "./analysis.service.js";
 import { EvalInputsService } from "./eval-inputs.service.js";
 import { ScenariosService } from "../scenarios/scenarios.service.js";
 
@@ -21,6 +21,8 @@ const ORDER: Record<Level, number> = { unknown: -1, none: 0, low: 1, moderate: 2
 const DISEASE_KINDS = new Set(["fungus", "oomycete", "bacteria", "virus", "mycotoxin"]);
 /** Weather kept in a stored snapshot; the full 1981+ series is referenced by its POWER cache date. */
 const SNAPSHOT_WEATHER_DAYS = 430;
+/** Transient source failures are retried twice with the consumer's 5 s / 30 s backoff. */
+export const FIELD_CHECK_RETRIES = 2;
 
 /**
  * One field check (RFC §10.2, Tech Design §8.2): refresh weather by grid cell → season state → the evaluators whose
@@ -41,21 +43,31 @@ export class FieldCheckConsumer extends JobConsumer<FieldCheckJob> implements On
     private readonly alerts: AlertsService,
     @Optional() private readonly ai?: AiRecommendationsService,
   ) {
-    super(broker, { queue: QUEUES.fieldCheck, prefetch: 4, retries: 0 });
+    super(broker, { queue: QUEUES.fieldCheck, prefetch: 4, retries: FIELD_CHECK_RETRIES });
   }
 
   async onModuleInit(): Promise<void> {
     if (runsWorker(this.env)) await this.start();
   }
 
-  async handle(env: Envelope<FieldCheckJob>): Promise<void> {
+  async handle(env: Envelope<FieldCheckJob>, attempt = 0): Promise<void> {
     const { runId, fieldId } = env.data;
     const workspaceId = env.workspaceId!;
-    if (!(await this.analysis.running(workspaceId, runId, fieldId))) return; // already handled
+    // attempt > 0: a retry or a redelivery after a worker crash, which may find its row still "running".
+    const reclaim = attempt > 0 ? STALE_RUNNING_MS : undefined;
+    if (!(await this.analysis.running(workspaceId, runId, fieldId, reclaim))) return; // already handled
+    const retry = attempt < this.options.retries;
     try {
       const r = await this.check(workspaceId, runId, fieldId);
+      if (r.status === "failed" && retry) throw new Error(r.error ?? "no weather data");
       await this.analysis.finish(workspaceId, runId, fieldId, r.status, r.dataDate, r.error, r.created);
     } catch (e) {
+      if (retry) {
+        // Transient (sources down, DB blip): back to "waiting" and let the consumer schedule the retry.
+        this.logger.warn(`field check ${fieldId} will be retried: ${(e as Error).message}`);
+        await this.analysis.release(runId, fieldId);
+        throw e;
+      }
       this.logger.error(`field check ${fieldId} failed: ${(e as Error).stack ?? String(e)}`);
       await this.analysis.finish(
         workspaceId,
