@@ -4,7 +4,9 @@ import { AuthGuard, Requires, UUID, WorkspaceGuard, type AuthedRequest } from ".
 import { COST_BUCKETS, RateLimitService } from "../auth/rate-limit.js";
 import { ProblemException } from "../http/problem.js";
 import { ZodPipe } from "../http/zod.js";
+import { FarmStressService } from "./farm-stress.service.js";
 import { ScenariosService } from "./scenarios.service.js";
+import { YearSetsService } from "./year-sets.service.js";
 
 const RunBody = z.object({
   overrides: z
@@ -39,12 +41,26 @@ export class RotationsOverviewController {
   }
 }
 
+/** Farm stress test: margin at risk if 2022 weather repeats on every field (EP-10, S-10.13). */
+@Controller("w/:ws/farm-stress")
+@UseGuards(AuthGuard, WorkspaceGuard)
+export class FarmStressController {
+  constructor(private readonly stress: FarmStressService) {}
+
+  @Get()
+  @Requires("brief.read")
+  get(@Req() req: AuthedRequest) {
+    return this.stress.get(req.workspaceId!);
+  }
+}
+
 /** Rotation scenarios and the season plan (S-06.03, S-06.06; Tech Design §14). */
 @Controller("w/:ws/fields/:id")
 @UseGuards(AuthGuard, WorkspaceGuard)
 export class ScenariosController {
   constructor(
     private readonly scenarios: ScenariosService,
+    private readonly yearSets: YearSetsService,
     private readonly limits: RateLimitService,
   ) {}
 
@@ -58,6 +74,18 @@ export class ScenariosController {
   ) {
     await this.limits.enforce(`scenario:${req.user!.id}`, COST_BUCKETS.scenarioRun);
     return this.scenarios.run(req.workspaceId!, uuid(id), body.overrides);
+  }
+
+  /** The ranking of the same options under different sets of weather years (a sensitivity analysis, not a forecast). */
+  @Post("scenario-runs/year-sets")
+  @Requires("scenarios.explore")
+  async yearSetComparison(
+    @Param("id") id: string,
+    @Body(new ZodPipe(RunBody)) body: z.infer<typeof RunBody>,
+    @Req() req: AuthedRequest,
+  ) {
+    await this.limits.enforce(`scenario:${req.user!.id}`, COST_BUCKETS.scenarioRun);
+    return this.yearSets.compare(req.workspaceId!, uuid(id), body.overrides);
   }
 
   @Get("scenario-runs/:runId")

@@ -87,6 +87,11 @@ export interface EngineInput {
    */
   yearSet?: { id: YearSetId; shift?: { deltaT: number; precipFactor: number } };
   /**
+   * The rotations given are exactly the options to evaluate and show (year-set comparison, EP-10): no filters, no
+   * relaxation, no picking of two, no extra AI options; every option comes back in `alternatives`, best score first.
+   */
+  fixedCandidates?: boolean;
+  /**
    * Pumping cost, $ per ha per mm of irrigation. Pass it only when it is verified (prices.json irrigationCostPerMm);
    * without it the water cost is only inside the per-hectare budget and every irrigated result carries a caveat.
    */
@@ -738,9 +743,9 @@ export function runScenarios(engineInput: EngineInput, weights: Weights = EQUAL_
     (skip.has("precipitation") || !r.minPrecipMm || precipMedian >= r.minPrecipMm) &&
     (skip.has("slope") || !r.maxSlopePct || input.site.slopePct <= r.maxSlopePct);
   const relaxed: string[] = [];
-  let candidates = base.filter((r) => passes(r, new Set()));
+  let candidates = input.fixedCandidates ? base : base.filter((r) => passes(r, new Set()));
   for (const step of ["precipitation", "slope"]) {
-    if (candidates.length >= 2) break;
+    if (input.fixedCandidates || candidates.length >= 2) break;
     relaxed.push(step);
     candidates = base.filter((r) => passes(r, new Set(relaxed)));
   }
@@ -797,10 +802,12 @@ export function runScenarios(engineInput: EngineInput, weights: Weights = EQUAL_
     weights,
   );
   const current = ranked[0]!;
-  const alternatives = pickTwo(ranked);
+  const alternatives = input.fixedCandidates
+    ? ranked.filter((s) => s.kind === "alternative").sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+    : pickTwo(ranked);
   // The assistant's two best proposals are always shown (as extra options) so they can be judged on the numbers.
   const bestAi = ranked
-    .filter((s) => s.kind === "alternative" && aiIds.has(s.id) && !alternatives.some((a) => a.id === s.id))
+    .filter((s) => !input.fixedCandidates && s.kind === "alternative" && aiIds.has(s.id) && !alternatives.some((a) => a.id === s.id))
     .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
   const shownAi = alternatives.filter((a) => aiIds.has(a.id)).length;
   alternatives.push(...bestAi.slice(0, Math.max(0, MAX_AI_SHOWN - shownAi)));

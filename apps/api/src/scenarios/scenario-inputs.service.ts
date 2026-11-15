@@ -49,6 +49,10 @@ export interface InputMeta {
   needYield: string[];
   /** Oblast average yields (t/ha) for context next to the yield field; never a model input. */
   yieldHints: Record<string, { meanTHa: number; oblast: string }>;
+  /** Last day with POWER weather (the newest day, which may belong to a season that is not complete yet). */
+  weatherLastDate: string | null;
+  /** Crop seasons that defined the current rotation (satellite guesses are left out when a confirmed one is recent). */
+  historyRead: Array<{ season: number; source: string }>;
 }
 
 export interface Overrides {
@@ -86,6 +90,14 @@ export function seasonWindows(power: PowerSeries, southern: boolean): Map<number
   return out;
 }
 
+/** Newest date of a POWER series that has temperature and precipitation. */
+function lastPowerDay(power: PowerSeries): string | null {
+  const v = power.values;
+  for (let i = power.dates.length - 1; i >= 0; i--)
+    if (v.T2M_MIN[i] != null && v.T2M_MAX[i] != null && v.PRECTOTCORR[i] != null) return power.dates[i] ?? null;
+  return null;
+}
+
 /** Builds the engine inputs for a field: gathered sources, confirmed history, soil, prices, rotation candidates. */
 @Injectable()
 export class ScenarioInputsService {
@@ -107,7 +119,7 @@ export class ScenarioInputsService {
     workspaceId: string,
     fieldId: string,
     o: Overrides,
-  ): Promise<{ input: EngineInput; meta: InputMeta; aiCtx: ProposalContext | null }> {
+  ): Promise<{ input: EngineInput; meta: InputMeta; aiCtx: ProposalContext | null; power: PowerSeries }> {
     const field = await this.prisma.db.field.findFirst({
       where: { id: fieldId, workspaceId, archivedAt: null },
       select: { id: true, regionId: true, irrigation: true, slopePct: true, tier: true, adminCode: true },
@@ -269,8 +281,13 @@ export class ScenarioInputsService {
         priceSources: resolved.sources,
         needYield: resolved.needYield,
         yieldHints: this.yieldHints(field.adminCode),
+        weatherLastDate: lastPowerDay(power.result.payload),
+        historyRead: crops
+          .filter((c) => !c.isOverride && (recentConfirmed || c.source !== "ndvi"))
+          .map((c) => ({ season: c.season, source: c.source })),
       },
       aiCtx,
+      power: power.result.payload,
     };
   }
 
