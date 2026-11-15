@@ -40,7 +40,7 @@ jobs:
         env:
           # Sign-ups come from one IP; production keeps the default burst of 10.
           AUTH_RATE_BURST: "100"
-          # The P0 path reads the verification email through GET /api/test/outbox (refused in production).
+          # Test hook for reading emails (GET /api/test/outbox; refused in production).
           AUTH_TEST_HOOKS: "1"
         run: docker compose -f infra/docker-compose.yml up -d --build --wait --wait-timeout 600
       - name: Boundaries for field previews

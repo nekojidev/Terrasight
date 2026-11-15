@@ -6,7 +6,6 @@ export interface Me {
   email: string;
   name: string;
   uiLanguage: "uk" | "en";
-  emailVerified: boolean;
   workspaces: Array<{
     id: string;
     name: string;

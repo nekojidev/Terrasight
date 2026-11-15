@@ -4,7 +4,7 @@ import { linkIn, Mailer } from "./mailer.js";
 
 /**
  * Test hook (AUTH_TEST_HOOKS=1, never in production): returns the link of the latest outbox email for an
- * address, so the Postman contract and Cypress runs can complete email verification like a real user.
+ * address, so the Postman contract can complete a password reset like a real user.
  */
 @Controller("test")
 class TestHooksController {

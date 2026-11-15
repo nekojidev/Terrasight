@@ -13,11 +13,6 @@ const WorkspaceBody = z.object({
   reportLanguage: z.enum(["uk", "en"]),
 });
 const WorkspacePatch = WorkspaceBody.partial().refine((v) => Object.keys(v).length > 0, "nothing to change");
-const InviteBody = z.object({
-  // Design 02 says "Email or phone"; phone invites are not supported in v2.
-  email: z.string().trim().toLowerCase().pipe(z.email("enter an email address").max(254)),
-  role: z.enum(["owner", "agronomist"]).default("agronomist"),
-});
 const CreateUserBody = z.object({
   name: z.string().trim().min(1).max(100),
   email: z.string().trim().toLowerCase().pipe(z.email("enter an email address").max(254)),
@@ -41,23 +36,6 @@ export class WorkspacesController {
   ) {
     await this.limits.enforce(`ws:create:${req.user!.id}`, COST_BUCKETS.workspaceCreate);
     return this.workspaces.create(req.user!.id, body);
-  }
-
-  @Post("invitations/:token/accept")
-  @HttpCode(200)
-  accept(@Param("token") token: string, @Req() req: AuthedRequest) {
-    return this.workspaces.accept(token, req.user!.id);
-  }
-}
-
-/** Public: what an invitation is for, shown before sign-in / sign-up. */
-@Controller("invitations")
-export class InvitationsPublicController {
-  constructor(private readonly workspaces: WorkspacesService) {}
-
-  @Get(":token")
-  info(@Param("token") token: string) {
-    return this.workspaces.invitationInfo(token);
   }
 }
 
@@ -84,7 +62,7 @@ export class WorkspaceController {
     return this.workspaces.members(req.workspaceId!);
   }
 
-  /** Owner creates users (PD v2.9): returns a one-time setup link, or adds an existing account. */
+  /** Owner creates users (PD v2.9, v2.12): returns a one-time setup link; an existing email is 409 `email-in-use`. */
   @Post("members")
   @Requires("members.manage")
   createUser(
@@ -100,17 +78,6 @@ export class WorkspaceController {
   setupLink(@Param("userId") userId: string, @Req() req: AuthedRequest) {
     if (!UUID.test(userId)) throw new ProblemException(404, "not-found");
     return this.workspaces.newSetupLink(req.workspaceId!, { id: req.user!.id, role: req.role! }, userId);
-  }
-
-  @Post("invitations")
-  @Requires("members.manage")
-  invite(@Body(new ZodPipe(InviteBody)) body: z.infer<typeof InviteBody>, @Req() req: AuthedRequest) {
-    return this.workspaces.invite(
-      req.workspaceId!,
-      { id: req.user!.id, role: req.role! },
-      body.email,
-      body.role,
-    );
   }
 
   @Patch("members/:userId")

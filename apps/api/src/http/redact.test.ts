@@ -8,10 +8,8 @@ describe("redactUrl", () => {
     ["/api/r/SECRETtoken123", "/api/r/[redacted]"],
     ["/api/r/SECRETtoken123/decisions/abc/answer", "/api/r/[redacted]/decisions/abc/answer"],
     ["/api/auth/setup/SECRET", "/api/auth/setup/[redacted]"],
-    ["/api/auth/verify/SECRET", "/api/auth/verify/[redacted]"],
     ["/api/auth/reset/SECRET", "/api/auth/reset/[redacted]"],
-    ["/api/invitations/SECRET", "/api/invitations/[redacted]"],
-    ["/api/invitations/SECRET/accept", "/api/invitations/[redacted]/accept"],
+    ["/api/auth/reset/SECRET/x", "/api/auth/reset/[redacted]/x"],
     ["/api/scouting-photos/abc?op=get&exp=1&sig=SECRETSIG", "/api/scouting-photos/abc"],
     ["/api/w/1/fields?x=1#frag", "/api/w/1/fields"],
     ["/api/r/SECRET?x=1", "/api/r/[redacted]"],
@@ -29,12 +27,12 @@ describe("req serializer (pino-http)", () => {
     const req = {
       id: 1,
       method: "POST",
-      url: "/api/invitations/SECRETtoken/accept?sig=SECRETSIG",
+      url: "/api/auth/reset/SECRETtoken/x?sig=SECRETSIG",
       headers: { host: "x" },
       socket: {},
     };
     const out = JSON.stringify(reqSerializer(req));
-    expect(out).toContain("/api/invitations/[redacted]/accept");
+    expect(out).toContain("/api/auth/reset/[redacted]/x");
     expect(out).not.toContain("SECRET");
   });
 });

@@ -14,7 +14,7 @@ import { PrismaService } from "../src/db/prisma.service.js";
 import { ProblemException } from "../src/http/problem.js";
 import { WorkspacesService } from "../src/workspaces/workspaces.service.js";
 
-/** Owner creates users (PD v2.9): create → setup link → set password → login; existing email; regenerate; expiry. */
+/** Owner creates users (PD v2.9, v2.12): create → setup link → set password → login; email-in-use; one company; regenerate; expiry. */
 const MIGRATIONS = fileURLToPath(new URL("../../../prisma/migrations/", import.meta.url));
 const IMAGE = "terrasight-postgis:17";
 const DOCKERFILE_DIR = fileURLToPath(new URL("../../../infra/postgis/", import.meta.url));
@@ -72,7 +72,7 @@ beforeAll(async () => {
   prisma = new PrismaService(env);
   const mailer = new Mailer(env);
   auth = new AuthService(prisma, env, mailer);
-  workspaces = new WorkspacesService(prisma, env, mailer);
+  workspaces = new WorkspacesService(prisma);
 });
 
 afterAll(async () => {
@@ -88,7 +88,6 @@ describe("owner creates users (PD v2.9)", () => {
     const email = `ira-${Math.random().toString(36).slice(2)}@example.com`;
 
     const created = await workspaces.createUser(ws, owner, { name: "Ira", email, role: "agronomist" });
-    if (!("setupUrl" in created)) throw new Error("expected a setup link");
     expect(created.setupUrl).toMatch(/^\/setup\/[\w-]{43}$/);
     expect(created.expiresAt.getTime() - Date.now()).toBeGreaterThan(6.9 * 864e5);
 
@@ -128,39 +127,65 @@ describe("owner creates users (PD v2.9)", () => {
     expect(audit.rows.map((r) => r.action)).toEqual(expect.arrayContaining(["member.create", "user.setup"]));
   });
 
-  it("an existing account is invited, not silently added; a member is 409", async () => {
+  it("an email that already has an account is 409 email-in-use: no membership, no setup token, no invitation", async () => {
     const ws = await workspace();
     const owner = await member(ws, "owner");
     const other = await member(await workspace(), "owner");
     const email = (await client.query(`SELECT email FROM users WHERE id = $1`, [other.id])).rows[0]
       .email as string;
 
-    const r = await workspaces.createUser(ws, owner, {
-      name: "Someone",
-      email: email.toUpperCase(),
-      role: "agronomist",
-    });
-    expect(r).toMatchObject({ userId: other.id, existing: true, invited: true });
-    const m = await client.query(`SELECT role FROM memberships WHERE workspace_id = $1 AND user_id = $2`, [
-      ws,
-      other.id,
-    ]);
+    for (const e of [email, email.toUpperCase()]) {
+      const err = await workspaces
+        .createUser(ws, owner, { name: "Someone", email: e, role: "agronomist" })
+        .catch((x: unknown) => x);
+      expect(err).toBeInstanceOf(ProblemException);
+      expect((err as ProblemException).getStatus()).toBe(409);
+      expect(JSON.stringify((err as ProblemException).getResponse())).toContain("email-in-use");
+    }
+    const m = await client.query(`SELECT 1 FROM memberships WHERE workspace_id = $1 AND user_id = $2`, [ws, other.id]);
     expect(m.rows).toHaveLength(0);
-    const inv = await client.query(`SELECT role FROM invitations WHERE workspace_id = $1`, [ws]);
-    expect(inv.rows[0].role).toBe("agronomist");
-    // The existing password stays untouched and no setup token is issued.
+    // The existing account is untouched and no setup token is issued.
     const u = (
       await client.query(`SELECT password_hash, setup_token_hash FROM users WHERE id = $1`, [other.id])
     ).rows[0];
     expect(u).toEqual({ password_hash: "x", setup_token_hash: null });
+    // Even a member of this very company: still email-in-use.
+    await client.query(`INSERT INTO memberships (workspace_id, user_id, role) VALUES ($1, $2, 'agronomist')`, [ws, other.id]);
+    expect(await code(workspaces.createUser(ws, owner, { name: "Someone", email, role: "agronomist" }))).toBe(409);
+  });
 
-    await client.query(`INSERT INTO memberships (workspace_id, user_id, role) VALUES ($1, $2, 'agronomist')`, [
-      ws,
-      other.id,
-    ]);
-    expect(await code(workspaces.createUser(ws, owner, { name: "Someone", email, role: "agronomist" }))).toBe(
-      409,
-    );
+  it("one user = one company: creating a second company is 409 one-company", async () => {
+    const ws = await workspace();
+    const owner = await member(ws, "owner");
+    const input = { name: "Second", timeZone: "UTC", units: "metric" as const, reportLanguage: "en" as const };
+    const err = await workspaces.create(owner.id, input).catch((x: unknown) => x);
+    expect((err as ProblemException).getStatus()).toBe(409);
+    expect(JSON.stringify((err as ProblemException).getResponse())).toContain("one-company");
+    // A fresh account with no membership can create exactly one.
+    const fresh = (
+      await client.query(
+        `INSERT INTO users (id, email, password_hash, name) VALUES (gen_random_uuid(), $1, 'x', 'F') RETURNING id`,
+        [`${Math.random().toString(36).slice(2)}@example.com`],
+      )
+    ).rows[0].id as string;
+    expect(await workspaces.create(fresh, input)).toMatchObject({ role: "owner" });
+    expect(await code(workspaces.create(fresh, input))).toBe(409);
+  });
+
+  it("removing a member deletes the account and its sessions; an Owner can't remove the last Owner", async () => {
+    const ws = await workspace();
+    const owner = await member(ws, "owner");
+    const created = await workspaces.createUser(ws, owner, {
+      name: "Gone",
+      email: `gone-${Math.random().toString(36).slice(2)}@example.com`,
+      role: "agronomist",
+    });
+    await auth.completeSetup(tokenOf(created.setupUrl), "a long enough password");
+    expect((await client.query(`SELECT 1 FROM refresh_tokens WHERE user_id = $1`, [created.userId])).rows).toHaveLength(1);
+    await workspaces.remove(ws, owner, created.userId);
+    expect((await client.query(`SELECT 1 FROM users WHERE id = $1`, [created.userId])).rows).toHaveLength(0);
+    expect((await client.query(`SELECT 1 FROM refresh_tokens WHERE user_id = $1`, [created.userId])).rows).toHaveLength(0);
+    expect(await code(workspaces.remove(ws, owner, owner.id))).toBe(409);
   });
 
   it("regenerating a link invalidates the previous one", async () => {
@@ -171,7 +196,6 @@ describe("owner creates users (PD v2.9)", () => {
       email: `max-${Math.random().toString(36).slice(2)}@example.com`,
       role: "agronomist",
     });
-    if (!("setupUrl" in created)) throw new Error("expected a setup link");
     const next = await workspaces.newSetupLink(ws, owner, created.userId);
     expect(next.setupUrl).not.toBe(created.setupUrl);
     expect(await code(auth.completeSetup(tokenOf(created.setupUrl), "a long enough password"))).toBe(410);
@@ -191,7 +215,6 @@ describe("owner creates users (PD v2.9)", () => {
       email: `old-${Math.random().toString(36).slice(2)}@example.com`,
       role: "agronomist",
     });
-    if (!("setupUrl" in created)) throw new Error("expected a setup link");
     await client.query(`UPDATE users SET setup_expires_at = now() - interval '1 minute' WHERE id = $1`, [
       created.userId,
     ]);
@@ -206,13 +229,10 @@ describe("owner creates users (PD v2.9)", () => {
 
   it("only the two roles exist: the old values are rejected by the database", async () => {
     const ws = await workspace();
+    const u = (await member(ws, "owner")).id;
     for (const role of ["admin", "viewer"]) {
       await expect(
-        client.query(
-          `INSERT INTO invitations (id, workspace_id, email, role, token_hash, expires_at)
-           VALUES (gen_random_uuid(), $1, 'x@example.com', $2, $3, now() + interval '1 day')`,
-          [ws, role, Math.random().toString(36)],
-        ),
+        client.query(`UPDATE memberships SET role = $3 WHERE workspace_id = $1 AND user_id = $2`, [ws, u, role]),
       ).rejects.toThrow();
     }
   });

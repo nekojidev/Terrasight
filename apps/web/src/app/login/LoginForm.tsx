@@ -38,10 +38,22 @@ export function LoginForm() {
           },
           noRefresh: true,
         });
-        // The answer is the same for new and existing addresses and opens no session: check the mailbox, then sign in.
-        setSentTo(String(form.get("email")));
-        setBusy(false);
-        return;
+        // The answer is the same for new and existing addresses (no enumeration) and opens no session. A new account
+        // exists already (no email verification), so signing in with the same credentials works; for an address that
+        // already had an account it fails like any wrong password, and we say "you may already have an account".
+        try {
+          await api("/api/auth/login", {
+            body: { email: form.get("email"), password: form.get("password") },
+            noRefresh: true,
+          });
+        } catch (err) {
+          if (err instanceof ApiError && err.code === "bad-credentials") {
+            setSentTo(String(form.get("email")));
+            setBusy(false);
+            return;
+          }
+          throw err;
+        }
       } else {
         await api("/api/auth/login", {
           body: { email: form.get("email"), password: form.get("password") },

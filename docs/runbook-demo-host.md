@@ -11,7 +11,7 @@ One EC2 instance runs the whole stack with Docker Compose behind Caddy (TLS). Se
 | Security group | 80 and 443 from anywhere; 22 from your IP only |
 | S3 bucket | private, block all public access, SSE-S3, versioning on, lifecycle rule (see Backups); used for scouting photos (`scouting/…`) and backups (`backups/…`) |
 | IAM role (instance profile) | `s3:PutObject`, `s3:GetObject`, `s3:ListBucket` on the bucket; `sns:Publish` on the alert topic (optional); `ssm:GetParametersByPath` on `/terrasight/demo/*`; `kms:Decrypt` for the SSM key |
-| SSM Parameter Store | SecureStrings under `/terrasight/demo/`: `JWT_SECRET` (≥ 32 random chars), `GEMINI_API_KEY`, `GEMINI_MODEL`, `OPENET_API_KEY`, `CDSE_CLIENT_ID`, `CDSE_CLIENT_SECRET`, `EARTHDATA_TOKEN`, `S3_BUCKET`, `AWS_REGION`, **`SMTP_URL`** (required: the API refuses to start in production without it; `smtps://user:pass@host:465`, an SES SMTP endpoint works) and `EMAIL_FROM` (a verified sender), optional `OPEN_METEO_API_KEY` |
+| SSM Parameter Store | SecureStrings under `/terrasight/demo/`: `JWT_SECRET` (≥ 32 random chars), `GEMINI_API_KEY`, `GEMINI_MODEL`, `OPENET_API_KEY`, `CDSE_CLIENT_ID`, `CDSE_CLIENT_SECRET`, `EARTHDATA_TOKEN`, `S3_BUCKET`, `AWS_REGION`, **`SMTP_URL`** (required: the API refuses to start in production without it; used for password-reset emails only, since there is no email verification or invitation email; `smtps://user:pass@host:465`, an SES SMTP endpoint works) and `EMAIL_FROM` (a verified sender), optional `OPEN_METEO_API_KEY` |
 | DNS | an A record for the demo domain → the Elastic IP |
 
 ## 2. Host setup (once)

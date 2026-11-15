@@ -4,9 +4,7 @@ import { stdSerializers } from "pino";
 const TOKEN_PATHS: RegExp[] = [
   /^(\/api\/r\/)[^/?#]+/,
   /^(\/api\/auth\/setup\/)[^/?#]+/,
-  /^(\/api\/auth\/verify\/)[^/?#]+/,
   /^(\/api\/auth\/reset\/)[^/?#]+/,
-  /^(\/api\/invitations\/)[^/?#]+/,
 ];
 
 /** A request URL that is safe to log: no query string (signed photo `sig`/`exp`) and no token in the path. */

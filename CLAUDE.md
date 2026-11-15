@@ -7,7 +7,7 @@ Built for NASA Space Apps Challenge 2026, challenge _"Field Shift: Adapting Farm
 
 We build this project in three documented stages. Each one builds on the stage before it:
 
-1. **Product Definition** — `docs/01-product-definition.md` — what we build and why ✅ v2.11 (AI assistant for agronomists; two roles Owner / Agronomist; no demo or example data in the product; AI-proposed rotations and AI-written recommendations; competitors in `docs/competitor-eos.md`), open questions resolved
+1. **Product Definition** — `docs/01-product-definition.md` — what we build and why ✅ v2.12 (AI assistant for agronomists; two roles Owner / Agronomist, one user = one company, no invitations; no demo or example data in the product; AI-proposed rotations and AI-written recommendations; competitors in `docs/competitor-eos.md`), open questions resolved
 2. **RFC** — `docs/02-rfc.md` — proposed solution, alternatives, trade-offs, decisions ⏳ v2.2 draft in review (open questions in §19)
    - **Design** — `design/` (v4 "Morning brief", 17 screens) ✅ handed off; see "Design" below
 3. **Tech Design** — `docs/03-tech-design.md` — architecture, data model, API, modules, testing, deploy ✅ v1.1 agreed (decision log kept current to 2026-11-15); backlog in `docs/epics/`
@@ -67,7 +67,7 @@ Design source: `design/README.md` (screens, components, behaviour), `design/toke
 - Pest and disease library: `data/pests.json` (62 entries, EN/UA). Risk, not diagnosis; never pesticide products or doses. A model threshold is used only after it is verified against a cited source.
 - AI assistant: Google Gemini API with function calling over our tools; every number in an answer must match a tool result.
 - Forecast: Open-Meteo (paid), NOAA NWS as US fallback.
-- One workspace = one farming company with many fields, possibly in several regions. Roles: Owner, Agronomist (the Owner answers decisions and manages users; the Agronomist does the field work and asks the owner). Platform admin is internal to Terrasight.
+- One workspace = one farming company with many fields, possibly in several regions; one user = one company (no invitations, no email verification; the Owner creates users with a setup link). Roles: Owner, Agronomist (the Owner answers decisions and manages users; the Agronomist does the field work and asks the owner). Platform admin is internal to Terrasight.
 - All fields are re-checked every morning at 06:00 and on demand ("Analyze fields"); checks depend on the season.
 - Demo-script field: a pivot-irrigated field near Garden City, Kansas (2022 = record drought), added as a real field the day before.
 

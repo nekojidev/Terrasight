@@ -14,7 +14,6 @@ import { NotificationsBell } from "./NotificationsBell";
 import { OfflineBanner } from "./OfflineBanner";
 import { useSidebarState } from "./SidebarState";
 import { ThemeToggle } from "./ThemeToggle";
-import { VerifyBanner } from "./VerifyBanner";
 
 export interface ShellWorkspace {
   id: string;
@@ -193,9 +192,6 @@ export function AppShell({
         <main className="mx-auto w-full max-w-[1180px] px-4 pt-6 pb-24 sm:px-8 sm:py-10 lg:pb-10">
           <div className="mb-4 empty:hidden">
             <OfflineBanner />
-          </div>
-          <div className="mb-4 empty:hidden">
-            <VerifyBanner />
           </div>
           {children}
         </main>

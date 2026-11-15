@@ -1,14 +1,10 @@
 import { randomBytes } from "node:crypto";
-import { Inject, Injectable } from "@nestjs/common";
+import { Injectable } from "@nestjs/common";
 import { hashToken, newOpaqueToken } from "../auth/tokens.js";
-import { ENV, type Env } from "../config/config.js";
-import { Mailer } from "../mail/mailer.js";
-import { templates } from "../mail/templates.js";
 import { PrismaService } from "../db/prisma.service.js";
 import type { Language, Role, Units } from "../generated/prisma/enums.js";
 import { ProblemException } from "../http/problem.js";
 
-export const INVITE_TTL_DAYS = 7;
 export const SETUP_TTL_DAYS = 7;
 
 /** True for a valid IANA time zone name ("America/Chicago"). */
@@ -47,50 +43,12 @@ export interface WorkspaceInput {
 export class WorkspacesService {
   constructor(
     private readonly prisma: PrismaService,
-    @Inject(ENV) private readonly env: Env,
-    private readonly mailer: Mailer,
   ) {}
 
-  /** Creates an invitation and emails the link; returns the token (the owner can also copy the link). */
-  private async createInvitation(
-    workspaceId: string,
-    actor: { id: string },
-    email: string,
-    role: Role,
-  ): Promise<{ id: string; email: string; role: Role; expiresAt: Date; token: string }> {
-    const token = newOpaqueToken();
-    const invitation = await this.prisma.system.invitation.create({
-      data: {
-        workspaceId,
-        email,
-        role,
-        tokenHash: hashToken(token),
-        expiresAt: new Date(Date.now() + INVITE_TTL_DAYS * 864e5),
-      },
-      select: { id: true, email: true, role: true, expiresAt: true, workspace: { select: { name: true } } },
-    });
-    await this.prisma.db.auditLog.create({
-      data: { workspaceId, userId: actor.id, action: "member.invite", target: `${email}:${role}` },
-    });
-    const invitee = await this.prisma.system.user.findUnique({ where: { email }, select: { uiLanguage: true } });
-    const link = `${this.env.WEB_ORIGIN.replace(/\/$/, "")}/invite/${token}`;
-    await this.mailer.trySend({
-      to: email,
-      ...templates.invitation(invitee?.uiLanguage ?? "en", invitation.workspace.name, link),
-    });
-    const { workspace: _w, ...rest } = invitation;
-    return { ...rest, token };
-  }
-
-  /** Onboarding step 1 (S-01.02): the creator becomes the Owner. */
+  /** Onboarding step 1 (S-01.02): the creator becomes the Owner. One user = one company (PD v2.12). */
   async create(userId: string, input: WorkspaceInput) {
-    const owned = await this.prisma.system.membership.count({ where: { userId, role: "owner" } });
-    if (owned >= this.env.MAX_WORKSPACES_PER_USER)
-      throw new ProblemException(
-        409,
-        "workspace-limit",
-        `You can own up to ${this.env.MAX_WORKSPACES_PER_USER} companies`,
-      );
+    const has = await this.prisma.system.membership.count({ where: { userId } });
+    if (has > 0) throw new ProblemException(409, "one-company", "Your account already belongs to a company");
     return this.prisma.system.$transaction(async (tx) => {
       const ws = await tx.workspace.create({
         data: {
@@ -140,10 +98,6 @@ export class WorkspacesService {
       },
       orderBy: { createdAt: "asc" },
     });
-    const invites = await this.prisma.system.invitation.findMany({
-      where: { workspaceId, acceptedAt: null, expiresAt: { gt: new Date() } },
-      select: { id: true, email: true, role: true, expiresAt: true },
-    });
     return {
       members: rows.map((r) => ({
         id: r.user.id,
@@ -154,45 +108,41 @@ export class WorkspacesService {
         // true until the user sets a password from the setup link (Copy link / New link in the UI).
         needsSetup: r.user.passwordHash === null,
       })),
-      pendingInvitations: invites,
     };
   }
 
-  /** Owner creates a user (PD v2.9): a new account gets a one-time setup link; an existing one is just added. */
+  /**
+   * Owner creates a user (PD v2.9, v2.12): always a new account with a one-time setup link. One user = one company,
+   * so an email that already has an account is refused (409 `email-in-use`), never added or invited.
+   */
   async createUser(
     workspaceId: string,
     actor: { id: string; role: Role },
     input: { name: string; email: string; role: Role },
-  ): Promise<
-    | { userId: string; setupUrl: string; expiresAt: Date }
-    | { userId: string; existing: true; invited: true; expiresAt: Date }
-  > {
+  ): Promise<{ userId: string; setupUrl: string; expiresAt: Date }> {
     if (input.role === "owner" && actor.role !== "owner")
       throw new ProblemException(403, "owner-only", "Only an Owner can create an Owner");
     const email = input.email.trim().toLowerCase();
-    // An existing account is never added silently: it gets an invitation it must accept with a verified email.
-    const existing = await this.prisma.system.user.findUnique({ where: { email }, select: { id: true } });
-    if (existing) {
-      const member = await this.prisma.system.membership.findUnique({
-        where: { workspaceId_userId: { workspaceId, userId: existing.id } },
+    const inUse = () => new ProblemException(409, "email-in-use", "This email is already used by another account");
+    if (await this.prisma.system.user.findUnique({ where: { email }, select: { id: true } })) throw inUse();
+    try {
+      return await this.prisma.system.$transaction(async (tx) => {
+        const token = newOpaqueToken();
+        const expiresAt = new Date(Date.now() + SETUP_TTL_DAYS * 864e5);
+        const user = await tx.user.create({
+          data: { email, name: input.name.trim(), setupTokenHash: hashToken(token), setupExpiresAt: expiresAt },
+          select: { id: true },
+        });
+        await tx.membership.create({ data: { workspaceId, userId: user.id, role: input.role } });
+        await tx.auditLog.create({
+          data: { workspaceId, userId: actor.id, action: "member.create", target: `${user.id}:${input.role}` },
+        });
+        return { userId: user.id, setupUrl: `/setup/${token}`, expiresAt };
       });
-      if (member) throw new ProblemException(409, "already-member", "This person is already a member");
-      const inv = await this.createInvitation(workspaceId, actor, email, input.role);
-      return { userId: existing.id, existing: true as const, invited: true as const, expiresAt: inv.expiresAt };
+    } catch (e) {
+      if ((e as { code?: string }).code === "P2002") throw inUse(); // lost a race on the unique email
+      throw e;
     }
-    return this.prisma.system.$transaction(async (tx) => {
-      const token = newOpaqueToken();
-      const expiresAt = new Date(Date.now() + SETUP_TTL_DAYS * 864e5);
-      const user = await tx.user.create({
-        data: { email, name: input.name.trim(), setupTokenHash: hashToken(token), setupExpiresAt: expiresAt },
-        select: { id: true },
-      });
-      await tx.membership.create({ data: { workspaceId, userId: user.id, role: input.role } });
-      await tx.auditLog.create({
-        data: { workspaceId, userId: actor.id, action: "member.create", target: `${user.id}:${input.role}` },
-      });
-      return { userId: user.id, setupUrl: `/setup/${token}`, expiresAt };
-    });
   }
 
   /** A fresh setup link for a member who hasn't set a password yet; the old link stops working. */
@@ -216,74 +166,6 @@ export class WorkspacesService {
       data: { workspaceId, userId: actor.id, action: "member.setup-link", target: userId },
     });
     return { userId, setupUrl: `/setup/${token}`, expiresAt };
-  }
-
-  /** Creates a single-use invitation. Email sending is optional in the hackathon: the link is returned to copy. */
-  async invite(workspaceId: string, actor: { id: string; role: Role }, email: string, role: Role) {
-    if (role === "owner" && actor.role !== "owner")
-      throw new ProblemException(403, "owner-only", "Only an Owner can invite an Owner");
-    const already = await this.prisma.system.membership.findFirst({
-      where: { workspaceId, user: { email } },
-      select: { userId: true },
-    });
-    if (already) throw new ProblemException(409, "already-member", "This person is already a member");
-    return this.createInvitation(workspaceId, actor, email, role);
-  }
-
-  async invitationInfo(token: string) {
-    const inv = await this.prisma.system.invitation.findUnique({
-      where: { tokenHash: hashToken(token) },
-      select: {
-        email: true,
-        role: true,
-        expiresAt: true,
-        acceptedAt: true,
-        workspace: { select: { name: true } },
-      },
-    });
-    if (!inv) throw new ProblemException(404, "invitation-not-found");
-    return {
-      workspaceName: inv.workspace.name,
-      email: inv.email,
-      role: inv.role,
-      status: inv.acceptedAt ? "accepted" : inv.expiresAt <= new Date() ? "expired" : "open",
-    };
-  }
-
-  /** The invited email must be the signed-in user's email, so a forwarded link can't be used by someone else. */
-  async accept(token: string, userId: string) {
-    return this.prisma.system.$transaction(async (tx) => {
-      const inv = await tx.invitation.findUnique({ where: { tokenHash: hashToken(token) } });
-      if (!inv) throw new ProblemException(404, "invitation-not-found");
-      if (inv.acceptedAt)
-        throw new ProblemException(410, "invitation-used", "This invitation was already used");
-      if (inv.expiresAt <= new Date())
-        throw new ProblemException(410, "invitation-expired", "This invitation has expired");
-      const user = await tx.user.findUnique({
-        where: { id: userId },
-        select: { email: true, emailVerifiedAt: true },
-      });
-      if (!user || user.email.toLowerCase() !== inv.email.toLowerCase()) {
-        throw new ProblemException(403, "invitation-other-email", `This invitation is for ${inv.email}`);
-      }
-      // The invitation proves nothing about who owns the mailbox; the account must have verified it.
-      if (!user.emailVerifiedAt)
-        throw new ProblemException(403, "email-unverified", "Verify your email address to accept this invitation");
-      const claimed = await tx.invitation.updateMany({
-        where: { id: inv.id, acceptedAt: null },
-        data: { acceptedAt: new Date() },
-      });
-      if (claimed.count !== 1) throw new ProblemException(410, "invitation-used");
-      await tx.membership.upsert({
-        where: { workspaceId_userId: { workspaceId: inv.workspaceId, userId } },
-        create: { workspaceId: inv.workspaceId, userId, role: inv.role },
-        update: {},
-      });
-      await tx.auditLog.create({
-        data: { workspaceId: inv.workspaceId, userId, action: "member.join", target: inv.role },
-      });
-      return { workspaceId: inv.workspaceId, role: inv.role };
-    });
   }
 
   async setRole(workspaceId: string, actor: { id: string; role: Role }, userId: string, role: Role) {
@@ -314,7 +196,11 @@ export class WorkspacesService {
         if (actor.role !== "owner") throw new ProblemException(403, "owner-only");
         await assertNotLastOwner(tx, workspaceId);
       }
+      // One user = one company: a removed member has no other membership, so the account goes too
+      // (sessions cascade).
       await tx.membership.delete({ where: { workspaceId_userId: { workspaceId, userId } } });
+      const others = await tx.membership.count({ where: { userId } });
+      if (others === 0) await tx.user.delete({ where: { id: userId } });
       await tx.auditLog.create({
         data: { workspaceId, userId: actor.id, action: "member.remove", target: userId },
       });
