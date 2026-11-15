@@ -5,3 +5,4 @@ export { matchRegion } from "./region.js";
 export { loadUaYields, oblastYields, UaYieldsFile } from "./ua-yields.js";
 export type { OblastYield, OblastYieldContext } from "./ua-yields.js";
 export { ADMIN_ALIASES, normaliseAdminCode } from "./admin-aliases.js";
+export { CropFloweringFile, checkCropFlowering, loadCropFlowering, parseCropFlowering } from "./crop-flowering.js";

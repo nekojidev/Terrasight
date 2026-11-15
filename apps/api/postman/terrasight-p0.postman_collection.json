@@ -1968,6 +1968,58 @@
           }
         },
         {
+          "name": "Climate shift is readable while the history is still gathering (EP-10)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "const c = pm.response.json(); pm.test(\"status\", () => pm.expect([\"pending\", \"ready\", \"unavailable\"]).to.include(c.status));",
+                  "pm.test(\"shape is valid in every status\", () => { pm.expect(c.periods.baseline).to.eql({ from: 1981, to: 2000 }); pm.expect(c.periods.recent).to.eql({ from: 2006, to: 2025 }); pm.expect([\"north\", \"south\"]).to.include(c.hemisphere); pm.expect(c.metrics).to.be.an(\"array\"); pm.expect(c.skippedYears).to.be.an(\"array\"); pm.expect(c.flowering).to.have.property(\"thresholdC\"); pm.expect(c.alpha).to.eql(0.05); });",
+                  "pm.test(\"ready carries the source line and eight metrics\", () => { if (c.status === \"ready\") { pm.expect(c.metrics.length).to.eql(8); pm.expect(c.source.dataset).to.eql(\"NASA POWER\"); pm.expect(c.source.resolutionKm).to.eql(55); pm.expect(c.source.cell.lat).to.be.a(\"number\"); c.metrics.forEach((m) => { pm.expect(m.trend).to.have.property(\"significant\"); }); } else { pm.expect(c.metrics.length).to.eql(0); } });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/fields/{{fieldId}}/climate-shift"
+          }
+        },
+        {
+          "name": "An unknown field id gives 404 on the climate shift",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"problem+json\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/fields/00000000-0000-4000-8000-000000000000/climate-shift"
+          }
+        },
+        {
           "name": "An agronomist marks the land as cropland (override stores who and when)",
           "event": [
             {

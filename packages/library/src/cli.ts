@@ -2,6 +2,9 @@
 // validate-library [dataDir]: loads every library file through the same loader the API uses, including the
 // pest-model verification gate (RFC §11.3). Prints crops still missing prices (S-06.05) as a warning.
 import { fileURLToPath } from "node:url";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { checkCropFlowering, parseCropFlowering } from "./crop-flowering.js";
 import { loadLibrary, LibraryError, missingPrices } from "./load.js";
 
 const dir = process.argv[2] ?? fileURLToPath(new URL("../../../data/", import.meta.url));
@@ -11,6 +14,19 @@ try {
     `library valid: ${lib.rotations.rotations.length} rotations, ${Object.keys(lib.rotations.regions).length} regions, ` +
       `${lib.pests.pests.length} pests, ${lib.enabledModels.length}/${lib.pestModels.models.length} pest models enabled`,
   );
+  // data/crop-flowering.json (EP-10): schema, sources on every value, crops and regions known to the library.
+  const flowering = parseCropFlowering(readFileSync(join(dir, "crop-flowering.json"), "utf8"));
+  const floweringProblems = flowering.file
+    ? checkCropFlowering(flowering.file, {
+        crops: Object.keys(lib.rotations.crops),
+        regions: Object.keys(lib.rotations.regions),
+      })
+    : flowering.problems;
+  if (floweringProblems.length) {
+    console.error(`Crop flowering file is invalid:\n  - ${floweringProblems.join("\n  - ")}`);
+    process.exit(1);
+  }
+  console.log(`crop-flowering valid: ${Object.keys(flowering.file!.crops).length} crops`);
   const missing = missingPrices(lib);
   const demo = ["us-southern-plains", "us-central-high-plains"].filter((r) => missing[r]);
   if (demo.length)

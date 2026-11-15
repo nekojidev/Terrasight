@@ -13,6 +13,7 @@ import { AuthModule } from "./auth/auth.module.js";
 import { ExportModule } from "./export/export.module.js";
 import { CropPricesModule } from "./crop-prices/crop-prices.module.js";
 import { YieldsModule } from "./yields/yields.module.js";
+import { ClimateModule } from "./climate/climate.module.js";
 import { ConfigModule } from "./config/config.module.js";
 import { DbModule } from "./db/db.module.js";
 import { EventsModule } from "./events/events.module.js";
@@ -79,6 +80,7 @@ function hasPrettyPrinter(): boolean {
     WorkspacesModule,
     FieldsModule,
     AnalysisModule,
+    ClimateModule,
     RecommendationsModule,
     AssistantModule,
     CropPricesModule,
