@@ -46,7 +46,9 @@
   "errAgName": "Введіть ім’я агронома.",
   "errAgEmail": "Введіть дійсний email агронома.",
   "saveFail": "Не вдалося зберегти компанію",
-  "inviteFail": "Не вдалося створити посилання"
+  "inviteFail": "Не вдалося створити посилання",
+  "tzLine": "Часовий пояс: {tz}. Поля перевіряються щоранку о 06:00.",
+  "tzChange": "Змінити"
  },
  "en": {
   "lang_group": "Interface language",
@@ -95,6 +97,8 @@
   "errAgName": "Enter the agronomist's name.",
   "errAgEmail": "Enter a valid email for the agronomist.",
   "saveFail": "Couldn't save the company",
-  "inviteFail": "Couldn't create the link"
+  "inviteFail": "Couldn't create the link",
+  "tzLine": "Time zone: {tz}. Fields are checked every morning at 06:00.",
+  "tzChange": "Change"
  }
 }

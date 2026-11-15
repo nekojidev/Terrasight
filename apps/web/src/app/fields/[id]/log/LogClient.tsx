@@ -56,6 +56,12 @@ export function LogClient({
     staleTime: 10 * 60_000,
   });
   const tz = timeZone ? { timeZone } : undefined;
+  // "Today" / "Yesterday" instead of a long date for the two most recent days.
+  const nowMs = Date.now();
+  const todayLabel = fmt.date(new Date(nowMs).toISOString(), "full", tz);
+  const yesterdayLabel = fmt.date(new Date(nowMs - 86_400_000).toISOString(), "full", tz);
+  const dayLabel = (l: string) =>
+    l === todayLabel ? w("ww5_today") : l === yesterdayLabel ? w("zl6_yesterday") : l;
   const text = (e: LogEntry) => {
     const d = e.data;
     if (e.kind === "check")
@@ -77,7 +83,7 @@ export function LogClient({
         <h1 className="text-h1 text-ink">{fieldName}</h1>
         <FieldTabs fieldId={fieldId} active={1} />
       </header>
-      <Surface as="section" className="max-w-[760px]">
+      <Surface as="section">
         <h2 className="mb-3 text-h2 text-ink">
           {t("tabLog")} <InfoHint label={t("hintLabel")}>{t("hintSeasonNow")}</InfoHint>
         </h2>
@@ -86,13 +92,17 @@ export function LogClient({
           what={w("zn5_what")}
           skeleton={<Skeleton variant="rows" rows={3} label={w("zn5_loading")} />}
           isEmpty={(d) => d.length === 0}
-          empty={{ text: t("znLogEmpty"), actionLabel: t("znLogEmptyAction"), onAction: () => router.push(`/fields/${fieldId}`) }}
+          empty={{
+            text: t("znLogEmpty"),
+            actionLabel: t("znLogEmptyAction"),
+            onAction: () => router.push(`/fields/${fieldId}`),
+          }}
         >
           {(entries) => (
             <div className="flex flex-col gap-5">
               {groupBy(entries, (e) => fmt.date(e.at, "full", tz)).map((g) => (
                 <section key={g.label}>
-                  <h3 className="kicker mb-2">{g.label}</h3>
+                  <h3 className="mb-2 text-small font-semibold text-ink-2">{dayLabel(g.label)}</h3>
                   <ol className="flex flex-col gap-3">
                     {g.items.map((e, i) => (
                       <li key={`${e.at}-${i}`} className="flex gap-3">
@@ -103,7 +113,7 @@ export function LogClient({
                           {ICON[e.kind]}
                         </span>
                         <span>
-                          <span className="block text-caption font-semibold text-ink-2">{w(`zn5_kind_${e.kind}`)}</span>
+                          <span className="sr-only">{w(`zn5_kind_${e.kind}`)}: </span>
                           <span className="block text-body font-semibold text-ink">{text(e)}</span>
                           <span className="text-small text-ink-2">
                             {fmt.date(e.at, "time", tz)} · {t(`znSrc_${e.source}`)}

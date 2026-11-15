@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation } from "@tanstack/react-query";
-import { Button, ConfirmDialog, Segmented, Surface, TextField, useToast } from "@terrasight/ui";
+import { Button, ConfirmDialog, Surface, TextField, useToast } from "@terrasight/ui";
 import { LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -26,6 +26,7 @@ export function AccountClient({ initial }: { initial: Profile }) {
   const router = useRouter();
   const toast = useToast();
   const action = useActionToast();
+  // The interface language is switched in the top bar only; the saved value is sent back unchanged.
   const [profile, setProfile] = useState({ name: initial.name, uiLanguage: initial.uiLanguage });
   const [profileError, setProfileError] = useState<ApiError | null>(null);
 
@@ -104,16 +105,6 @@ export function AccountClient({ initial }: { initial: Profile }) {
             error={profileError?.field("name")}
           />
           <TextField label={t("teamEmail")} name="email" value={initial.email} readOnly disabled />
-          <Segmented
-            variant="compact"
-            label={t("accLanguage")}
-            value={profile.uiLanguage}
-            onChange={(uiLanguage) => setProfile({ ...profile, uiLanguage })}
-            options={[
-              { value: "uk", label: "UA" },
-              { value: "en", label: "EN" },
-            ]}
-          />
           <div>
             <Button
               type="submit"

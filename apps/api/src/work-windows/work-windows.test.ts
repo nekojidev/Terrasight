@@ -40,8 +40,8 @@ function setup(opts: { hourly?: boolean } = {}) {
   const prisma = {
     system: {
       $queryRaw: vi.fn(async () => [
-        { id: F1, name: "North pivot", alias_no: 1, lat: 38.1, lon: -101.1 },
-        { id: F2, name: "South pivot", alias_no: 2, lat: 38.12, lon: -101.08 },
+        { id: F1, name: "North pivot", alias_no: 1, lat: 38.1, lon: -101.1, country: "US" },
+        { id: F2, name: "South pivot", alias_no: 2, lat: 38.12, lon: -101.08, country: "US" },
       ]),
       workspace: { findUnique: vi.fn(async () => ({ timeZone: "America/Chicago" })) },
       cropSeason: { findFirst: vi.fn(async () => ({ mainCrop: "corn" })) },

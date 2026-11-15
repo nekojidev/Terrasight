@@ -62,7 +62,11 @@ interface ZonesResponse {
 
 type NdviResponse =
   | { available: false; reason: string }
-  | ({ available: true; date: string; stops: Array<{ value: number; rgb: [number, number, number] }> } & NdviImage);
+  | ({
+      available: true;
+      date: string;
+      stops: Array<{ value: number; rgb: [number, number, number] }>;
+    } & NdviImage);
 
 const ZONE_CLASS: Record<ZoneName, string> = {
   strong: "bg-ok",
@@ -111,7 +115,11 @@ export function ZonesClient({
   const build = useMutation({
     onError: (e) => toast.fail(e, w("zz5_whatBuild"), () => build.mutate()),
     mutationFn: () => api<ZonesResponse>(`${base}/zones/build`, { method: "POST" }),
-    onSuccess: (d) => qc.setQueryData(["field", workspaceId, fieldId, "zones"], (old: ZonesResponse | undefined) => ({ ...old, ...d })),
+    onSuccess: (d) =>
+      qc.setQueryData(["field", workspaceId, fieldId, "zones"], (old: ZonesResponse | undefined) => ({
+        ...old,
+        ...d,
+      })),
   });
 
   // A finished build also refreshes the NDVI layer and the zones.
@@ -132,7 +140,9 @@ export function ZonesClient({
   const progressText = (p: Progress) =>
     p.phase === "seasons"
       ? t("zzProgress_seasons", { season: p.season ?? 0, done: p.done ?? 0, total: p.total ?? 0 })
-      : t(`zzProgress_${p.phase === "ndvi" || p.phase === "classify" ? p.phase : "queued"}` as "zzProgress_queued");
+      : t(
+          `zzProgress_${p.phase === "ndvi" || p.phase === "classify" ? p.phase : "queued"}` as "zzProgress_queued",
+        );
 
   const buildLabel = running ? t("zzBuilding") : z?.status === "done" ? t("zzRebuild") : t("zzBuild");
 
@@ -144,153 +154,193 @@ export function ZonesClient({
       </header>
 
       <QueryState query={zones} skeletonVariant="map" what={w("zz5_whatZones")}>
-        {(zd) => (
-          <Surface as="section" className="flex flex-col gap-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="max-w-[640px]">
-                <h2 className="text-h2 text-ink">
-                  {t("zzTitle")} <InfoHint label={t("hintLabel")}>{t("zzMethod")}</InfoHint>
-                </h2>
-                <p className="mt-1 text-small text-ink-2">{w("zz5_intro")}</p>
-              </div>
-              {canEdit && (
-                <div className="flex items-center gap-2">
-                  {ready && !running ? (
-                    <>
-                      <Button variant="primary" icon={<MapIcon aria-hidden />} onClick={() => setSheet(true)}>
-                        {w("zz5_createRate")}
+        {(zd) => {
+          // Not built, nothing running, nothing failed: one sentence and one action instead of a bare photo.
+          const notBuilt =
+            !zd.geojson && zd.status !== "queued" && zd.status !== "running" && zd.status !== "failed";
+          const failed = zd.status === "failed";
+          return (
+            <Surface as="section" className="flex flex-col gap-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="max-w-[640px]">
+                  <h2 className="text-h2 text-ink">
+                    {t("zzTitle")} <InfoHint label={t("hintLabel")}>{t("zzMethod")}</InfoHint>
+                  </h2>
+                  <p className="mt-1 text-small text-ink-2">{w("zz5_intro")}</p>
+                </div>
+                {canEdit && !notBuilt && !failed && (
+                  <div className="flex items-center gap-2">
+                    {ready && !running ? (
+                      <>
+                        <Button
+                          variant="primary"
+                          icon={<MapIcon aria-hidden />}
+                          onClick={() => setSheet(true)}
+                        >
+                          {w("zz5_createRate")}
+                        </Button>
+                        <Menu
+                          label={w("zz5_more")}
+                          items={[
+                            {
+                              id: "rebuild",
+                              label: t("zzRebuild"),
+                              icon: <RefreshCw />,
+                              onSelect: () => build.mutate(),
+                            },
+                          ]}
+                        />
+                      </>
+                    ) : (
+                      <Button
+                        variant="primary"
+                        icon={<RefreshCw aria-hidden />}
+                        disabled={running || build.isPending}
+                        onClick={() => build.mutate()}
+                      >
+                        {buildLabel}
                       </Button>
-                      <Menu
-                        label={w("zz5_more")}
-                        items={[
-                          {
-                            id: "rebuild",
-                            label: t("zzRebuild"),
-                            icon: <RefreshCw />,
-                            onSelect: () => build.mutate(),
-                          },
-                        ]}
-                      />
-                    </>
-                  ) : (
+                    )}
+                  </div>
+                )}
+              </div>
+              {!canEdit && !notBuilt && <p className="text-small text-ink-2">{w("zz5_readOnly")}</p>}
+
+              {notBuilt ? (
+                <div className="flex flex-col items-start gap-3 rounded-input bg-surface-2 p-4">
+                  <p className="text-h3 text-ink">{w("zz6_emptyTitle")}</p>
+                  <p className="max-w-[560px] text-body text-ink-2">
+                    {canEdit ? w("zz6_emptyBody") : w("zz6_emptyReadOnly")}
+                  </p>
+                  {canEdit && (
                     <Button
                       variant="primary"
                       icon={<RefreshCw aria-hidden />}
-                      disabled={running || build.isPending}
+                      disabled={build.isPending}
                       onClick={() => build.mutate()}
                     >
                       {buildLabel}
                     </Button>
                   )}
                 </div>
-              )}
-            </div>
-            {!canEdit && <p className="text-small text-ink-2">{w("zz5_readOnly")}</p>}
-
-            <Tabs
-              label={t("zzLayers")}
-              value={layer}
-              onChange={(id) => setLayer(id as Layer)}
-              items={[
-                { id: "zones", label: t("zzLayerZones") },
-                { id: "ndvi", label: t("zzLayerNdvi") },
-              ]}
-            />
-
-            <div role="tabpanel" className="flex flex-col gap-4">
-              <ZonesMap
-                geometry={geometry}
-                zones={zd.geojson ?? null}
-                ndvi={nd ? { image: nd.image, corners: nd.corners } : null}
-                layer={layer}
-                label={t("zzMapLabel")}
-                onZone={setPicked}
-              />
-
-              {running && (
-                <div role="status" aria-live="polite" className="flex flex-col gap-2">
-                  <p className="text-small font-semibold text-ink">{progressText(zd.progress)}</p>
-                  <ProgressBar
-                    value={zd.progress.done ?? 0}
-                    max={Math.max(1, zd.progress.total ?? 1)}
-                    label={w("zz5_buildingLabel")}
-                  />
-                  <p className="text-caption text-ink-2">{w("zz5_runningNote")}</p>
-                </div>
-              )}
-              {zd.status === "failed" && (
-                <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-input bg-urgent-soft p-3">
-                  <p className="flex items-start gap-2 text-small text-ink">
-                    <AlertTriangle aria-hidden className="mt-0.5 size-4 shrink-0 text-urgent" strokeWidth={2} />
-                    <span>
-                      <span className="block font-semibold">{w("zz5_failedTitle")}</span>
-                      {zd.error && <span className="block text-ink-2">{zd.error}</span>}
-                    </span>
-                  </p>
-                  {canEdit && (
-                    <Button variant="outline" disabled={build.isPending} onClick={() => build.mutate()}>
-                      {w("zz5_tryAgain")}
-                    </Button>
-                  )}
-                </div>
-              )}
-
-              {layer === "zones" ? (
-                zd.geojson ? (
-                  <ZoneSummary zd={zd} picked={picked} onPick={setPicked} fmt={fmt} />
-                ) : (
-                  !running &&
-                  zd.status !== "failed" && <p className="text-small text-ink-2">{w("zz5_none")}</p>
-                )
-              ) : nd ? (
-                <div className="flex flex-col gap-2">
-                  <p className="text-small font-semibold text-ink">
-                    {t("zzNdviDate", { date: fmt.date(nd.date, "full") })}
-                  </p>
-                  <div className="flex items-center gap-3 text-caption text-ink-2">
-                    <span>{t("zzNdviLow")}</span>
-                    <span
-                      aria-hidden
-                      className="h-3 w-48 max-w-[40%] rounded-chip"
-                      style={{
-                        background: `linear-gradient(to right, ${nd.stops.map((s) => `rgb(${s.rgb.join(",")}) ${Math.round((s.value / 0.95) * 100)}%`).join(", ")})`,
-                      }}
-                    />
-                    <span>{t("zzNdviHigh")}</span>
-                  </div>
-                </div>
-              ) : ndvi.isError ? (
-                <QueryState query={ndvi} what={w("zz5_whatNdvi")}>
-                  {() => null}
-                </QueryState>
-              ) : ndvi.isPending ? (
-                <Skeleton variant="text" rows={2} label={w("zz5_ndviLoading")} />
               ) : (
-                <p className="text-small text-ink-2">{t("zzNdviNone")}</p>
-              )}
-            </div>
+                <>
+                  <Tabs
+                    label={t("zzLayers")}
+                    value={layer}
+                    onChange={(id) => setLayer(id as Layer)}
+                    items={[
+                      { id: "zones", label: t("zzLayerZones") },
+                      { id: "ndvi", label: t("zzLayerNdvi") },
+                    ]}
+                  />
 
-            <Disclosure summary={w("zz5_details")}>
-              <div className="flex flex-col gap-1 pb-2 text-caption text-ink-2">
-                {zd.geojson && (
-                  <p>
-                    {t("zzSeasons", {
-                      list: zd.seasons
-                        .filter((s) => s.used)
-                        .map((s) => s.season)
-                        .join(", "),
-                    })}
-                    {zd.seasons.some((s) => !s.used) &&
-                      ` · ${t("zzSeasonsSkipped", { list: zd.seasons.filter((s) => !s.used).map((s) => s.season).join(", ") })}`}
-                    {zd.builtAt && ` · ${t("zzBuiltAt", { date: fmt.date(zd.builtAt, "full") })}`}
-                  </p>
-                )}
-                <p>{t("zzSource")}</p>
-                <p>{t("zzIsoxmlNote")}</p>
-              </div>
-            </Disclosure>
-          </Surface>
-        )}
+                  <div role="tabpanel" className="flex flex-col gap-4">
+                    <ZonesMap
+                      geometry={geometry}
+                      zones={zd.geojson ?? null}
+                      ndvi={nd ? { image: nd.image, corners: nd.corners } : null}
+                      layer={layer}
+                      label={t("zzMapLabel")}
+                      onZone={setPicked}
+                    />
+
+                    {running && (
+                      <div role="status" aria-live="polite" className="flex flex-col gap-2">
+                        <p className="text-small font-semibold text-ink">{progressText(zd.progress)}</p>
+                        <ProgressBar
+                          value={zd.progress.done ?? 0}
+                          max={Math.max(1, zd.progress.total ?? 1)}
+                          label={w("zz5_buildingLabel")}
+                        />
+                        <p className="text-caption text-ink-2">{w("zz5_runningNote")}</p>
+                      </div>
+                    )}
+                    {zd.status === "failed" && (
+                      <div
+                        role="alert"
+                        className="flex flex-wrap items-center justify-between gap-3 rounded-input bg-urgent-soft p-3"
+                      >
+                        <p className="flex items-start gap-2 text-small text-ink">
+                          <AlertTriangle
+                            aria-hidden
+                            className="mt-0.5 size-4 shrink-0 text-urgent"
+                            strokeWidth={2}
+                          />
+                          <span>
+                            <span className="block font-semibold">{w("zz5_failedTitle")}</span>
+                            {zd.error && <span className="block text-ink-2">{zd.error}</span>}
+                          </span>
+                        </p>
+                        {canEdit && (
+                          <Button variant="outline" disabled={build.isPending} onClick={() => build.mutate()}>
+                            {w("zz5_tryAgain")}
+                          </Button>
+                        )}
+                      </div>
+                    )}
+
+                    {layer === "zones" ? (
+                      zd.geojson ? (
+                        <ZoneSummary zd={zd} picked={picked} onPick={setPicked} fmt={fmt} />
+                      ) : null
+                    ) : nd ? (
+                      <div className="flex flex-col gap-2">
+                        <p className="text-small font-semibold text-ink">
+                          {t("zzNdviDate", { date: fmt.date(nd.date, "full") })}
+                        </p>
+                        <div className="flex items-center gap-3 text-caption text-ink-2">
+                          <span>{t("zzNdviLow")}</span>
+                          <span
+                            aria-hidden
+                            className="h-3 w-48 max-w-[40%] rounded-chip"
+                            style={{
+                              background: `linear-gradient(to right, ${nd.stops.map((s) => `rgb(${s.rgb.join(",")}) ${Math.round((s.value / 0.95) * 100)}%`).join(", ")})`,
+                            }}
+                          />
+                          <span>{t("zzNdviHigh")}</span>
+                        </div>
+                      </div>
+                    ) : ndvi.isError ? (
+                      <QueryState query={ndvi} what={w("zz5_whatNdvi")}>
+                        {() => null}
+                      </QueryState>
+                    ) : ndvi.isPending ? (
+                      <Skeleton variant="text" rows={2} label={w("zz5_ndviLoading")} />
+                    ) : (
+                      <p className="text-small text-ink-2">{t("zzNdviNone")}</p>
+                    )}
+                  </div>
+                </>
+              )}
+
+              <Disclosure summary={w("zz5_details")}>
+                <div className="flex flex-col gap-1 pb-2 text-caption text-ink-2">
+                  {zd.geojson && (
+                    <p>
+                      {t("zzSeasons", {
+                        list: zd.seasons
+                          .filter((s) => s.used)
+                          .map((s) => s.season)
+                          .join(", "),
+                      })}
+                      {zd.seasons.some((s) => !s.used) &&
+                        ` · ${t("zzSeasonsSkipped", {
+                          list: zd.seasons
+                            .filter((s) => !s.used)
+                            .map((s) => s.season)
+                            .join(", "),
+                        })}`}
+                      {zd.builtAt && ` · ${t("zzBuiltAt", { date: fmt.date(zd.builtAt, "full") })}`}
+                    </p>
+                  )}
+                  <p>{t("zzSource")}</p>
+                  <p>{t("zzIsoxmlNote")}</p>
+                </div>
+              </Disclosure>
+            </Surface>
+          );
+        }}
       </QueryState>
 
       {canEdit && ready && z && (
@@ -345,7 +395,9 @@ function ZoneSummary({
                 <span>
                   <span className="block text-body font-semibold text-ink">{w(`zz5_zone_${name}`)}</span>
                   <span className="text-small text-ink-2">
-                    {s ? w("zz5_share", { share: fmt.percent(s.share), area: fmt.area(s.areaHa) }) : w("zz5_absent")}
+                    {s
+                      ? w("zz5_share", { share: fmt.percent(s.share), area: fmt.area(s.areaHa) })
+                      : w("zz5_absent")}
                   </span>
                 </span>
               </button>
@@ -415,7 +467,8 @@ function RateSheet({
         const problem = (await res.json().catch(() => null)) as Problem | null;
         throw new ApiError(problem ?? { type: "about:blank", title: res.statusText, status: res.status });
       }
-      const name = /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? "rate-zones";
+      const name =
+        /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? "rate-zones";
       const url = URL.createObjectURL(await res.blob());
       const a = document.createElement("a");
       a.href = url;

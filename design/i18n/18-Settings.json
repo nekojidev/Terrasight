@@ -38,7 +38,10 @@
   "currencyHeading": "Валюта",
   "exportSection": "Експорт даних",
   "cropFallback": "Інша культура",
-  "pricesNotice": "Порожні рядки ціни й витрат видаляються при збереженні."
+  "pricesNotice": "Порожні рядки ціни й витрат видаляються при збереженні.",
+  "pricesHowTitle": "Як використовуються ціни",
+  "setUnitsNote": "Типове значення для нових полів і звітів. Кожен екран показує поле в одиницях його країни.",
+  "setDataTitle": "Експорт ваших даних"
  },
  "en": {
   "saveSection": "Save",
@@ -79,6 +82,9 @@
   "currencyHeading": "Currency",
   "exportSection": "Data export",
   "cropFallback": "Other crop",
-  "pricesNotice": "Rows with price and costs left empty are removed when you save."
+  "pricesNotice": "Rows with price and costs left empty are removed when you save.",
+  "pricesHowTitle": "How prices are used",
+  "setUnitsNote": "Default for new fields and reports. Each screen shows a field in the units of its own country.",
+  "setDataTitle": "Export your data"
  }
 }

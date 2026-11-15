@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, Segmented, Surface, TextField, useToast } from "@terrasight/ui";
+import { Button, Disclosure, Segmented, Surface, TextField, useToast } from "@terrasight/ui";
 import { ArchiveRestore, Download } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -96,15 +96,18 @@ export function WorkspaceSettingsClient({
             error={error?.field("name")}
           />
           <TimeZoneField value={form.timeZone} onChange={(timeZone) => setForm({ ...form, timeZone })} />
-          <Segmented
-            label={o("units")}
-            value={form.units}
-            onChange={(units) => setForm({ ...form, units })}
-            options={[
-              { value: "metric", label: o("u_ha") },
-              { value: "imperial", label: o("u_ac") },
-            ]}
-          />
+          <div className="flex flex-col gap-1">
+            <Segmented
+              label={o("units")}
+              value={form.units}
+              onChange={(units) => setForm({ ...form, units })}
+              options={[
+                { value: "metric", label: o("u_ha") },
+                { value: "imperial", label: o("u_ac") },
+              ]}
+            />
+            <p className="text-small text-ink-2">{s("setUnitsNote")}</p>
+          </div>
           <Segmented
             variant="compact"
             label={o("lang")}
@@ -128,19 +131,18 @@ export function WorkspaceSettingsClient({
         </form>
       </Surface>
 
-      <Surface as="section" aria-labelledby="ws-export">
-        <h2 id="ws-export" className="mb-1 text-h3 text-ink">
-          {t("setExportTitle")}
-        </h2>
-        <p className="mb-4 text-small text-ink-2">{t("setExportSub")}</p>
-        <a
-          href={`/api/w/${workspaceId}/export`}
-          download
-          className="focus-ring inline-flex min-h-12 items-center gap-2 rounded-btn border border-line-control bg-surface px-5 text-body font-semibold text-ink hover:bg-surface-2"
-        >
-          <Download aria-hidden className="size-5" />
-          {t("setExportGo")}
-        </a>
+      <Surface as="section" aria-label={t("setExportTitle")}>
+        <Disclosure summary={t("setExportTitle")}>
+          <p className="mb-4 text-small text-ink-2">{t("setExportSub")}</p>
+          <a
+            href={`/api/w/${workspaceId}/export`}
+            download
+            className="focus-ring inline-flex min-h-12 items-center gap-2 rounded-btn border border-line-control bg-surface px-5 text-body font-semibold text-ink hover:bg-surface-2"
+          >
+            <Download aria-hidden className="size-5" />
+            {t("setExportGo")}
+          </a>
+        </Disclosure>
       </Surface>
 
       <Surface as="section" aria-labelledby="ws-archived">

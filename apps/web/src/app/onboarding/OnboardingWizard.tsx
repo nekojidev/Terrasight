@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, ProgressBar, Segmented, Surface, TextField, useToast } from "@terrasight/ui";
+import { Button, ProgressBar, Surface, TextField, useToast } from "@terrasight/ui";
 import { ArrowRight, Check, Copy } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
@@ -36,10 +36,11 @@ export function OnboardingWizard() {
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [companyName, setCompanyName] = useState("");
   const [timeZone, setTimeZone] = useState(detected);
-  const [units, setUnits] = useState<"metric" | "imperial">(
-    locale === "en" && detected.startsWith("America/") ? "imperial" : "metric",
-  );
-  const [reportLanguage, setReportLanguage] = useState<"uk" | "en">(locale === "uk" ? "uk" : "en");
+  const [editZone, setEditZone] = useState(false);
+  // Defaults only: units are corrected by the first field's country (screens follow each field), both live in Settings.
+  const units: "metric" | "imperial" =
+    locale === "en" && detected.startsWith("America/") ? "imperial" : "metric";
+  const reportLanguage: "uk" | "en" = locale === "uk" ? "uk" : "en";
   const [busy, setBusy] = useState(false);
   const [fields, setFields] = useState<{ name?: string; agname?: string; email?: string }>({});
   const [agronomist, setAgronomist] = useState<CreatedAgronomist | null>(null);
@@ -145,26 +146,17 @@ export function OnboardingWizard() {
               defaultValue={companyName}
               error={fields.name}
             />
-            <TimeZoneField value={timeZone} onChange={setTimeZone} detected={detected} hint={t("tz_h")} />
-            <Segmented
-              label={t("units")}
-              value={units}
-              onChange={setUnits}
-              options={[
-                { value: "metric", label: t("u_ha") },
-                { value: "imperial", label: t("u_ac") },
-              ]}
-            />
-            <Segmented
-              variant="compact"
-              label={t("lang")}
-              value={reportLanguage}
-              onChange={setReportLanguage}
-              options={[
-                { value: "uk", label: "UA" },
-                { value: "en", label: "EN" },
-              ]}
-            />
+            {/* Time zone is detected from the browser: a quiet line, editable. Units come from the first field. */}
+            {editZone ? (
+              <TimeZoneField value={timeZone} onChange={setTimeZone} detected={detected} hint={t("tz_h")} />
+            ) : (
+              <p className="flex flex-wrap items-center gap-x-2 text-small text-ink-2">
+                {t("tzLine", { tz: timeZone.replace(/_/g, " ") })}
+                <Button variant="link" className="min-h-tap" onClick={() => setEditZone(true)}>
+                  {t("tzChange")}
+                </Button>
+              </p>
+            )}
             <Button
               type="submit"
               size={56}
