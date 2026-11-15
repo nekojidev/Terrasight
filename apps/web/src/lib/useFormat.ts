@@ -5,7 +5,6 @@ import { useMemo } from "react";
 import {
   dayShift,
   formatArea,
-  moneyPerArea,
   formatDayOfYear,
   formatDate,
   formatDateRelative,
@@ -54,7 +53,6 @@ export function useFormat(options: UseFormatOptions = {}) {
       /** Today / tomorrow / yesterday as words, every other day `short`. `now` defaults to the current time. */
       dateRel: (d: Date | string | number, opts?: { now?: Date | number; style?: DateStyle; timeZone?: string }) =>
         formatDateRelative(d, opts?.now ?? Date.now(), locale, opts?.style, opts?.timeZone ? { timeZone: opts.timeZone } : {}),
-      moneyPerArea: (amountPerHa: number, currency: "USD" | "UAH") => moneyPerArea(amountPerHa, currency, units, locale),
       area: (hectares: number) => formatArea(hectares, units, locale),
       moneyPerArea: (
         amountPerHa: number,

@@ -101,17 +101,6 @@ export function formatMoney(
   }).format(amount);
 }
 
-/**
- * Money per area in the field's unit system: "$420/ha", "$170/ac" (the amount is always passed per hectare).
- * Unit 0 may add the same function; keep one when merging.
- */
-export function moneyPerArea(amountPerHa: number, currency: "USD" | "UAH", units: Units, locale: FormatLocale): string {
-  const imperial = units === "imperial";
-  const amount = imperial ? amountPerHa * HA_PER_AC : amountPerHa;
-  const unit = imperial ? (locale === "uk" ? "акр" : "ac") : locale === "uk" ? "га" : "ha";
-  return `${formatMoney(amount, currency, locale)}/${unit}`;
-}
-
 function unitNumber(n: number, locale: FormatLocale, unit: string, digits: number): string {
   return new Intl.NumberFormat(tag(locale), {
     style: "unit",

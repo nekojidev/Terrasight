@@ -146,9 +146,10 @@ describe("SuggestionChips and InsightRow", () => {
 
 describe("format additions", () => {
   it("moneyPerArea follows the unit system", () => {
-    expect(moneyPerArea(100, "USD", "metric", "en")).toBe("$100/ha");
-    expect(moneyPerArea(100, "USD", "imperial", "en")).toBe("$40/ac");
-    expect(moneyPerArea(100, "UAH", "metric", "uk")).toContain("/га");
+    const flat = (x: string) => x.replace(/\u00A0/g, " ");
+    expect(flat(moneyPerArea(100, "USD", "metric", "en"))).toBe("$100 per ha");
+    expect(flat(moneyPerArea(100, "USD", "imperial", "en"))).toBe("$40 per ac");
+    expect(flat(moneyPerArea(100, "UAH", "metric", "uk"))).toContain("за га");
   });
   it("date rule: words only for yesterday, today, tomorrow", () => {
     const now = new Date("2026-11-15T12:00:00Z");
