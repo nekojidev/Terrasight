@@ -54,8 +54,11 @@ export type ScopedPrisma = ReturnType<typeof createScopedClient>;
 
 /**
  * Two clients over one connection pool:
- * - `db`: the default, workspace-scoped client (rejects unscoped queries on scoped tables);
- * - `system`: unscoped, only for cross-workspace system jobs (scheduler, retention, outbox relay).
+ * - `db`: the default, workspace-scoped client. Inside a `/w/:ws` request it verifies the caller's workspace on
+ *   direct-workspace tables and ANDs a relation filter into relation-scoped ones (request-context.ts);
+ * - `system`: unscoped. Allowed only for background jobs/consumers, public token endpoints, cross-workspace admin
+ *   (users, memberships, workspaces), raw SQL and `$transaction` blocks (interactive transactions bypass `db`);
+ *   each use outside those cases should carry a comment saying why.
  */
 @Injectable()
 export class PrismaService implements OnModuleDestroy {

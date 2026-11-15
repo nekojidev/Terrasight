@@ -141,6 +141,11 @@ export class FieldOverviewController {
   @Get("recommendations")
   @Requires("brief.read")
   async risks(@Param("id") id: string, @Req() req: AuthedRequest) {
+    const own = await this.prisma.db.field.findFirst({
+      where: { id: uuid(id), workspaceId: req.workspaceId! },
+      select: { id: true },
+    });
+    if (!own) throw new ProblemException(404, "not-found");
     const rows = await this.prisma.db.recommendation.findMany({
       where: {
         workspaceId: req.workspaceId!,
