@@ -5,7 +5,10 @@
 import type { Library, Rotation, SequenceItem } from "@terrasight/library";
 import {
   cdlCrop,
+  CROPLAND_MIN_SHARE,
+  NOT_CROPLAND_SHARE,
   type CdlHistory,
+  type CroplandHistory,
   type DailyWeather,
   type EtSeries,
   type NdviSeries,
@@ -36,6 +39,23 @@ export function cropsFromCdl(cdl: CdlHistory, regionId: string | null): SeasonCr
     const main = crop === null ? `other:${s.majorityCode}` : typeof crop === "string" ? crop : crop.main;
     const second = crop !== null && typeof crop === "object" ? crop.second : null;
     return { season: s.year, mainCrop: main, secondCrop: second, confidence: s.majorityShare, source: "cdl" };
+  });
+}
+
+/**
+ * Outside the US the crop type stays an NDVI estimate; the 10 m land-cover map only says whether a season was cropland.
+ * A season the map shows as not cropland loses its crop guess (no crop is better than an invented one); a season it
+ * confirms as cropland gets a little more confidence. Seasons the map does not cover are left as they were.
+ */
+export const CROPLAND_CONFIRMED_CONFIDENCE = 0.6;
+export function applyCroplandMask(crops: SeasonCrop[], cropland: CroplandHistory | null): SeasonCrop[] {
+  if (!cropland) return crops;
+  const share = new Map(cropland.seasons.map((s) => [s.year, s.cropShare]));
+  return crops.flatMap((c) => {
+    const s = share.get(c.season);
+    if (c.source !== "ndvi" || s === undefined) return [c];
+    if (s < NOT_CROPLAND_SHARE) return [];
+    return [s >= CROPLAND_MIN_SHARE ? { ...c, confidence: CROPLAND_CONFIRMED_CONFIDENCE } : c];
   });
 }
 
@@ -172,7 +192,8 @@ export interface IrrigationDetection {
   status: "irrigated" | "dryland" | "unknown";
   /** 0–1: share of years that agree. */
   confidence: number;
-  method: "openet" | "ndvi" | "none";
+  /** "wapor" = FAO WaPOR v3 evapotranspiration (outside the US), an estimate from a different model than OpenET. */
+  method: "openet" | "wapor" | "ndvi" | "none";
   evidence: Array<{
     season: number;
     etMm?: number;
@@ -212,7 +233,7 @@ export function detectIrrigation(
       return {
         status: confidence >= IRRIGATION_CONFIDENT ? status : "unknown",
         confidence: round2(confidence),
-        method: "openet",
+        method: et.basis === "wapor" ? "wapor" : "openet",
         evidence,
       };
     }

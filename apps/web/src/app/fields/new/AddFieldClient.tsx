@@ -195,7 +195,17 @@ export function AddFieldClient({
       title: t("d3"),
       sub: !sources || sources.includes("ssurgo") ? t("d3s") : a("asFindSoilS"),
     },
+    ...(sources?.includes("cropland")
+      ? [{ icon: <Calendar />, title: a("asFindCropT"), sub: a("asFindCropS") }]
+      : []),
     ...(has("openet") && sources ? [{ icon: <Droplet />, title: t("d4"), sub: t("d4s") }] : []),
+    ...(sources?.includes("wapor")
+      ? [{ icon: <Droplet />, title: a("asFindWaterT"), sub: a("asFindWaterS") }]
+      : []),
+    // WaPOR runs only for Ukraine today, and the oblast yield table is Ukrainian too.
+    ...(sources?.includes("wapor")
+      ? [{ icon: <Layers />, title: a("asFindYieldT"), sub: a("asFindYieldS") }]
+      : []),
     ...(sources?.includes("sentinel2")
       ? [{ icon: <Satellite />, title: a("asFindS2T"), sub: a("asFindS2S") }]
       : []),

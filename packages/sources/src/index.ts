@@ -22,8 +22,19 @@ export {
   type CdlSeason,
 } from "./cdl.js";
 export { cdlCrop, cdlName, type CdlCrop } from "./cdl-classes.js";
-export { soilgrids, type SoilGridsSummary } from "./others.js";
-export { soilFromTexture, textureClass } from "./texture.js";
+export { soilgrids, summariseSoilGrids, type SoilGridsSummary } from "./others.js";
+export { soilFromTexture, soilSummaryFromGrids, textureClass } from "./texture.js";
+export {
+  cropland,
+  cropShare,
+  utmProj,
+  CROPLAND_FIRST_YEAR,
+  CROPLAND_MIN_SHARE,
+  NOT_CROPLAND_SHARE,
+  type CroplandHistory,
+  type CroplandSeason,
+} from "./landcover.js";
+export { wapor, waporTile, waporUrl, toEtSeries, monthRange, WAPOR_FIRST_YEAR } from "./wapor.js";
 export { openetAdapter, type EtSeries } from "./openet.js";
 export { sentinel2Adapter, parseStats, type S2Ndvi, type S2Result } from "./sentinel2.js";
 export {
@@ -40,6 +51,8 @@ export {
 export { openMeteoSeasonal, parseSeasonal, type SeasonalEnsemble } from "./seasonal.js";
 
 import { cdl } from "./cdl.js";
+import { cropland } from "./landcover.js";
+import { wapor } from "./wapor.js";
 import { dem } from "./dem.js";
 import { modis } from "./modis.js";
 import { openetAdapter } from "./openet.js";
@@ -66,6 +79,8 @@ export function createAdapters(keys: SourceKeys): SourceAdapter[] {
     dem,
     sentinel2Adapter(keys.cdseClientId, keys.cdseClientSecret) as SourceAdapter,
     openetAdapter(keys.openetApiKey) as SourceAdapter,
+    cropland as SourceAdapter,
+    wapor as SourceAdapter,
   ];
 }
 

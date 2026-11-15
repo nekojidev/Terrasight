@@ -9,7 +9,13 @@ import {
 } from "@terrasight/evaluators";
 import type { Library, PestModel } from "@terrasight/library";
 import type { HydGroup } from "@terrasight/simulator";
-import type { DailyWeather as PowerSeries, S2Result, SoilSummary } from "@terrasight/sources";
+import {
+  soilSummaryFromGrids,
+  type DailyWeather as PowerSeries,
+  type S2Result,
+  type SoilGridsSummary,
+  type SoilSummary,
+} from "@terrasight/sources";
 import { RateLimitService } from "../auth/rate-limit.js";
 import { PrismaService } from "../db/prisma.service.js";
 import { GeoService } from "../geo/geo.service.js";
@@ -94,15 +100,19 @@ export class EvalInputsService {
     const irrigated = record.irrigated.value ?? (field.irrigation === "irrigated" ? true : null);
     let waterSite: WaterSite | null = null;
     if (irrigated === true) {
-      // Soil only for irrigated fields (the water_stress evaluator); SSURGO covers the US (tier A).
+      // Soil only for irrigated fields (the water_stress evaluator); SSURGO covers the US (tier A), SoilGrids elsewhere.
       const soil = await this.sources.fresh<SoilSummary>("ssurgo", geom, asOf, async () => undefined);
-      const s = soil?.result.payload;
+      let s = soil?.result.payload;
+      if (!s) {
+        const grids = await this.sources.fresh<SoilGridsSummary>("soilgrids", geom, asOf, async () => undefined);
+        s = grids?.result.payload ? soilSummaryFromGrids(grids.result.payload) : null;
+      }
       const aws = s?.aws100Mm ?? (s?.awsMm != null ? (s.awsMm * 2) / 3 : null);
       waterSite = {
         latDeg: geom.centroid.lat,
         elevationM: power?.result.payload?.elevationM ?? 0,
         awsMmPerM: aws ?? null,
-        awsEstimated: s?.aws100Mm == null && aws !== null,
+        awsEstimated: s?.basis === "soilgrids" || (s?.aws100Mm == null && aws !== null),
         hydGroup: (s?.hydrologicGroup?.[0] as HydGroup | undefined) ?? null,
         slopePct: field.slopePct ?? 1,
         irrigated,

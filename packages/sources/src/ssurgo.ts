@@ -20,6 +20,12 @@ export interface SoilSummary {
   /** Representative slope, %. */
   slopePct: number | null;
   mapUnits: Array<{ mukey: string; name: string; share: number }>;
+  /** Where the numbers come from (absent = SSURGO). SoilGrids values are class-typical estimates. */
+  basis?: "ssurgo" | "soilgrids";
+  /** Topsoil organic carbon, g/kg (SoilGrids 0–30 cm), the ICBM input outside the US. */
+  organicCarbonGPerKg?: number | null;
+  /** Topsoil pH in water (SoilGrids 0–30 cm). */
+  ph?: number | null;
 }
 
 const SDA = "https://sdmdataaccess.sc.egov.usda.gov/Tabular/post.rest";

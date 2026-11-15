@@ -189,6 +189,8 @@ describe("registry", () => {
       "modis",
       "dem",
       "sentinel2",
+      "cropland",
+      "wapor",
     ]);
   });
 });

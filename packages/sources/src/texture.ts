@@ -1,4 +1,5 @@
 import type { SoilGridsSummary } from "./others.js";
+import type { SoilSummary } from "./ssurgo.js";
 
 /** USDA texture class from clay / sand / silt percent (the standard triangle). */
 export function textureClass(clay: number, sand: number, silt: number): string {
@@ -43,4 +44,24 @@ export function soilFromTexture(
   if (s.clayPct == null || s.sandPct == null || s.siltPct == null) return null;
   const cls = textureClass(s.clayPct, s.sandPct, s.siltPct);
   return { textureClass: cls, ...TEXTURE[cls]! };
+}
+
+/**
+ * SoilGrids as the field's soil in the shape SSURGO gives (outside the US): 0–100 cm water capacity from the texture
+ * class, ×1.5 for the 0–150 cm total, hydrologic group, organic carbon and pH. Estimates, flagged with `basis`.
+ */
+export function soilSummaryFromGrids(s: SoilGridsSummary): SoilSummary | null {
+  const t = soilFromTexture(s);
+  if (!t) return null;
+  return {
+    awsMm: Math.round(t.awsMmPerM * 1.5),
+    aws100Mm: t.awsMmPerM,
+    hydrologicGroup: t.hydrologicGroup,
+    drainageClass: null,
+    slopePct: null,
+    mapUnits: [],
+    basis: "soilgrids",
+    organicCarbonGPerKg: s.ocGPerKg ?? null,
+    ph: s.ph ?? null,
+  };
 }

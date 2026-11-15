@@ -13,6 +13,8 @@ export interface EtSeries {
   months: Array<{ month: string; etMm: number }>;
   /** Calendar-year sums for complete years. */
   annual: Array<{ year: number; etMm: number }>;
+  /** Which product the numbers come from (absent = OpenET, from before WaPOR was added). */
+  basis?: "openet" | "wapor";
 }
 
 const API = "https://openet-api.org/raster/timeseries/polygon";

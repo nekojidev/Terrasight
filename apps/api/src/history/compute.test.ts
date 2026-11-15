@@ -2,6 +2,7 @@ import { fileURLToPath } from "node:url";
 import { loadLibrary } from "@terrasight/library";
 import { describe, expect, it } from "vitest";
 import {
+  applyCroplandMask,
   bareMonths,
   classifySeason,
   cropForGroup,
@@ -121,6 +122,23 @@ describe("irrigation detection (RFC §6.2)", () => {
     expect(d).toMatchObject({ status: "irrigated", method: "openet", confidence: 1 });
   });
 
+  it("labels the method wapor when the ET series comes from WaPOR (Ukraine)", () => {
+    const et = {
+      months: [],
+      annual: stats.map((s) => ({ year: s.season, etMm: 760 })),
+      basis: "wapor" as const,
+    };
+    const soil = {
+      awsMm: 240,
+      aws100Mm: 160,
+      hydrologicGroup: "C",
+      drainageClass: null,
+      slopePct: null,
+      mapUnits: [],
+    };
+    expect(detectIrrigation(et, stats, soil, null)).toMatchObject({ status: "irrigated", method: "wapor" });
+  });
+
   it("uses root-zone storage, not the full profile (Pivot 12, Finney County KS, live 2016–2025)", () => {
     const years = [
       [2016, 898, 503],
@@ -196,5 +214,40 @@ describe("current rotation match (RFC §6.3)", () => {
   it("needs at least 4 seasons and a library region", () => {
     expect(matchBaseline(seasons(["corn", "corn"]), lib, "us-southern-plains").label).toBe("detected");
     expect(matchBaseline(seasons(["corn", "corn", "corn", "corn"]), lib, null).label).toBe("detected");
+  });
+});
+
+describe("cropland mask (outside the US)", () => {
+  const ndviCrop = (season: number): SeasonCrop => ({
+    season,
+    mainCrop: "winter_wheat",
+    secondCrop: null,
+    confidence: 0.5,
+    source: "ndvi",
+  });
+  const mask = (cropShares: Record<number, number>) => ({
+    product: "test",
+    seasons: Object.entries(cropShares).map(([year, cropShare]) => ({
+      year: Number(year),
+      cropShare,
+      n: 100,
+    })),
+  });
+
+  it("drops the crop guess for a season the land cover shows as not cropland", () => {
+    expect(applyCroplandMask([ndviCrop(2020)], mask({ 2020: 0.05 }))).toEqual([]);
+  });
+
+  it("raises confidence where cropland is confirmed and keeps the crop an NDVI estimate", () => {
+    const [c] = applyCroplandMask([ndviCrop(2021)], mask({ 2021: 0.9 }));
+    expect(c).toMatchObject({ season: 2021, source: "ndvi", confidence: 0.6 });
+  });
+
+  it("leaves uncertain seasons, seasons outside the product, CDL seasons and a missing mask alone", () => {
+    const cdl: SeasonCrop = { ...ndviCrop(2019), source: "cdl", confidence: 0.9 };
+    expect(applyCroplandMask([ndviCrop(2022)], mask({ 2022: 0.35 }))[0]!.confidence).toBe(0.5);
+    expect(applyCroplandMask([ndviCrop(2010)], mask({ 2022: 0 }))).toEqual([ndviCrop(2010)]);
+    expect(applyCroplandMask([cdl], mask({ 2019: 0 }))).toEqual([cdl]);
+    expect(applyCroplandMask([ndviCrop(2020)], null)).toEqual([ndviCrop(2020)]);
   });
 });

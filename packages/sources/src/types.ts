@@ -40,7 +40,7 @@ export interface SourceAdapter<P = unknown> {
   fetch(field: FieldGeometry, ctx: FetchContext): Promise<SourceResult<P>>;
 }
 
-export type SourceId = "power" | "cdl" | "ssurgo" | "soilgrids" | "modis" | "dem" | "sentinel2" | "openet";
+export type SourceId = "power" | "cdl" | "ssurgo" | "soilgrids" | "modis" | "dem" | "sentinel2" | "openet" | "cropland" | "wapor";
 
 export class SourceError extends Error {
   constructor(

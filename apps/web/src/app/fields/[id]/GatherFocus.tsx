@@ -22,6 +22,8 @@ const TYPICAL_S: Record<string, number> = {
   dem: 10,
   sentinel2: 45,
   openet: 30,
+  cropland: 10,
+  wapor: 30,
 };
 /** Friendly step key (App.gf_<key> and gf_<key>_d). Unknown sources fall back to the API label. */
 const STEP_KEY: Record<string, string> = {
@@ -32,6 +34,8 @@ const STEP_KEY: Record<string, string> = {
   soilgrids: "soil",
   modis: "modis",
   openet: "openet",
+  cropland: "cropland",
+  wapor: "wapor",
   dem: "dem",
 };
 
