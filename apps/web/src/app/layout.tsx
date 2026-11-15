@@ -39,11 +39,10 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       data-theme-mode={mode}
       suppressHydrationWarning
     >
-      <head>
-        {/* "system": resolve prefers-color-scheme before first paint (no flash). */}
-        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
-      </head>
       <body className="min-h-dvh bg-bg">
+        {/* "system": resolve prefers-color-scheme before the content paints (no flash). First in <body>: an inline
+            script in a hand-written <head> breaks hydration (React #418). */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
         <NextIntlClientProvider>
           <ThemeProvider initial={mode}>
             <Providers>{children}</Providers>
