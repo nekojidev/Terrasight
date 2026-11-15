@@ -880,7 +880,7 @@ export async function renderPhoneBackdrop(browser, cfg, stateFile, file) {
 
 export const SHOTS = { openGraph, sources, tiles, coldOpen, addField, climate, overview, plan, trust, ask1, ask2, endCard, hook, briefHome, briefField, rotation, assistant, owner };
 
-Object.assign(SHOTS, { proof: G2.proof, askLive: G2.askLive, today: G2.today, climate: G2.climate, rotation: G2.rotation });
+Object.assign(SHOTS, { title: G2.title, proof: G2.proof, askLive: G2.askLive, today: G2.today, climate: G2.climate, rotation: G2.rotation });
 
 /** A lime pill (design tokens) as a transparent PNG, for overlays that are added in the edit. */
 export async function renderPill(browser, cfg, text, file) {

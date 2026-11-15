@@ -44,6 +44,7 @@ export async function readFacts(browser, cfg, stateFile) {
     return n.innerText;
   });
   const days = must(txt.match(/The first autumn frost comes (\d+) days? later/), "frost days")[1];
+  const history = must((await page.getByRole("heading", { name: /^\d+ seasons on this field$/ }).first().innerText()).match(/\d+/), "seasons of history")[0];
   await page.goto(`${cfg.base}/fields/${cfg.fieldId}/rotation`);
   const g = page.getByText(/\$\d+\s+per\s+ac\s+a\s+year\s+more\s+than\s+today/).first();
   await g.waitFor({ timeout: 45000 });
@@ -59,12 +60,12 @@ export async function readFacts(browser, cfg, stateFile) {
   await ctx.close();
   const S = await loadFrostSeries();
   if (S.years.length !== 45) throw new Error("expected 45 years of NASA weather");
-  return { days, gain, seasons, seasonsChecked, missed, years: String(S.years.length) };
+  return { days, gain, seasons, seasonsChecked, missed, years: String(S.years.length), history };
 }
 
-async function stageTitle(page, logoHtml, teamLine) {
+async function stageTitle(page, logoHtml, teamLine, liftAt = 1700) {
   await page.evaluate(
-    ({ logo, team }) => {
+    ({ logo, team, liftAt }) => {
       const layer = document.getElementById("demo-layer");
       const tok = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
       const veil = document.createElement("div");
@@ -81,28 +82,20 @@ async function stageTitle(page, logoHtml, teamLine) {
         document.getElementById("vtag").animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(-70px)" }], { duration: 300, easing: tok("--ts-ease-exit"), fill: "both" });
         document.getElementById("vteam").animate([{ opacity: 1 }, { opacity: 0 }], { duration: 300, easing: tok("--ts-ease-exit"), fill: "both" });
         veil.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 320, easing: tok("--ts-ease-exit"), fill: "both" }).finished.then(() => veil.remove());
-      }, 1700);
+      }, liftAt);
     },
-    { logo: logoHtml, team: teamLine },
+    { logo: logoHtml, team: teamLine, liftAt },
   );
 }
 
-// ---------------------------------------------------------------- opening: title over the softened product, then the Today card
-export async function today(take, cfg, L, ctx) {
+// ---------------------------------------------------------------- title: the wordmark and tagline over the softened product
+export async function title(take, cfg, L, ctx) {
   const { page } = take;
   await page.goto(cfg.base + "/");
   const startWith = page.getByText("Start with this", { exact: true }).first();
   await startWith.waitFor({ timeout: 45000 });
   await settle(page, 900);
   const cardSel = await take.card(startWith, "tcard", 300);
-  const lns = await lines(page, cardSel);
-  const action = must(lns.find((l) => /^Scout the field/.test(l)), "action sentence");
-  const am = must(action.match(/^(\w+) the field[^.]*?before (\w+ \d+)/), "action parse");
-  const sow = `${am[1]} the field before ${am[2]}`;
-  const titleEl = await take.tag(page.getByText(/^Wheat streak mosaic virus risk/).first(), "ttitle");
-  const actionEl = await take.tag(page.getByText(/^Scout the field/).first(), "taction");
-  const accept = await take.tag(page.locator(cardSel).getByRole("button", { name: "Accept" }).first(), "accept");
-  const chip = await take.tag(page.getByText("What should I do first today?").first(), "tchip");
   const logoHtml = await page.evaluate(() => {
     const t = [...document.querySelectorAll("*")].find((e) => e.children.length === 0 && e.textContent.trim() === "Terrasight" && e.getBoundingClientRect().width > 0);
     let n = t;
@@ -112,22 +105,30 @@ export async function today(take, cfg, L, ctx) {
     return `<div style="display:flex;align-items:center;gap:28px">${mark}<span style="font-size:150px;font-weight:700;letter-spacing:-0.05em;line-height:1;color:var(--ts-ink)">Terrasight</span></div>`;
   });
   await take.cam(cardSel, { dur: 1, fill: [0.7, 0.76], anchor: [0.5, 0.45], maxScale: 1.6 });
-  await stageTitle(page, logoHtml, ctx.team);
+  await stageTitle(page, logoHtml, ctx.team, Math.max(900, (L - 0.1) * 1000));
   const t0 = take.mark("ready");
-  const wait = async (t) => {
-    const d = t0 + t - take.now();
-    if (d > 0.02) await page.waitForTimeout(d * 1000);
-  };
-  take.cam(cardSel, { dur: 1900, ease: "--ts-ease-enter", fill: [0.78, 0.84], anchor: [0.5, 0.45], maxScale: 1.8 });
-  await wait(2.0);
-  // shot (b): tight on the card's title and its action, then down to Accept and the suggested question
+  await take.cam(cardSel, { dur: (L + 0.4) * 1000, ease: "--ts-ease-enter", fill: [0.78, 0.84], anchor: [0.5, 0.45], maxScale: 1.8 });
+  return { segs: [{ from: t0, to: t0 + L + 0.4 }], facts: {}, clicks: [] };
+}
+
+// ---------------------------------------------------------------- Today: the pest risk card, then the real work-windows strip
+export async function today(take, cfg, L, ctx) {
+  const { page } = take;
+  const LABEL = "Today: what to do, and why";
+  await page.goto(cfg.base + "/");
+  const startWith = page.getByText("Start with this", { exact: true }).first();
+  await startWith.waitFor({ timeout: 45000 });
+  await settle(page, 900);
+  const cardSel = await take.card(startWith, "tcard", 300);
+  const lns = await lines(page, cardSel);
+  must(lns.find((l) => /risk/i.test(l)), "risk title on the card");
+  const titleEl = await take.tag(page.getByText(/^Wheat streak mosaic virus risk/).first(), "ttitle");
+  const actionEl = await take.tag(page.getByText(/^Scout the field/).first(), "taction");
   await take.cam(null, { union: [titleEl, actionEl], dur: 1, fill: [0.86, 0.3], anchor: [0.5, 0.4], maxScale: 2.1 });
-  const camB = take.cam(null, { union: [titleEl, actionEl], dur: 1300, ease: "--ts-ease-enter", fill: [0.9, 0.34], anchor: [0.5, 0.4], maxScale: 2.2 });
-  await take.d("say", [{ segs: [{ text: sow }], accent: true, size: NUM }], { pos: "bl" });
-  setTimeout(() => void take.d("clear").catch(() => {}), 1600);
-  await camB;
-  await take.cam(null, { union: [accept, chip], dur: Math.max(400, (L + 0.4 - (take.now() - t0)) * 1000), ease: "--ts-ease-standard", fill: [0.7, 0.4], anchor: [0.5, 0.5], maxScale: 1.9 });
-  return { segs: [{ from: t0, to: t0 + L + 0.4 }], facts: { action: sow }, clicks: [] };
+  const t0 = take.mark("ready");
+  await take.d("say", [{ segs: [{ text: LABEL }], accent: true, size: NUM }], { pos: "bl" });
+  await take.cam(null, { union: [titleEl, actionEl], dur: (L + 0.4) * 1000 - 100, ease: "--ts-ease-enter", fill: [0.9, 0.34], anchor: [0.5, 0.4], maxScale: 2.2 });
+  return { segs: [{ from: t0, to: t0 + L + 0.4 }], facts: { label: LABEL }, clicks: [] };
 }
 
 // ---------------------------------------------------------------- climate: the takeaways fill the frame, no count-up
@@ -136,15 +137,24 @@ export async function climate(take, cfg, L, ctx) {
   await page.goto(`${cfg.base}/fields/${cfg.fieldId}`);
   const row = page.getByText(/How this field's climate has changed/).first();
   await row.waitFor({ timeout: 45000 });
+  const histHead = page.getByRole("heading", { name: /^\d+ seasons on this field$/ }).first();
+  await histHead.waitFor({ timeout: 15000 });
   await settle(page, 900);
+  const nHist = must((await histHead.innerText()).match(/\d+/), "seasons of history")[0];
+  if (nHist !== ctx.facts.history) throw new Error(`history ${nHist} differs from the spoken ${ctx.facts.history}`);
+  const histSel = await take.card(histHead, "hist", 150);
   const rowSel = await take.card(row, "row", 40);
-  await take.cam(rowSel, { dur: 1, fill: [0.9, 0.2], anchor: [0.5, 0.45], maxScale: 2.0 });
+  const aLen = Math.max(1.3, (L + 0.4) * 0.42);
+  // (a) the real history strip fills the frame
+  await take.cam(histSel, { dur: 1, fill: [0.9, 0.5], anchor: [0.5, 0.42], maxScale: 2.0 });
   const t0 = take.mark("ready");
-  const wait = async (t) => {
-    const d = t0 + t - take.now();
-    if (d > 0.02) await page.waitForTimeout(d * 1000);
-  };
-  await take.cursorClick(row, "row", { dur: 450 });
+  await take.d("say", [{ segs: [{ text: `${nHist} seasons of field history` }], accent: true, size: NUM }], { pos: "bl" });
+  await take.cam(histSel, { dur: aLen * 1000 - 100, ease: "--ts-ease-enter", fill: [0.94, 0.56], anchor: [0.5, 0.42], maxScale: 2.15 });
+  const endA = take.now();
+  // (b) the climate row opens into its takeaways
+  await take.cam(rowSel, { dur: 1, fill: [0.9, 0.2], anchor: [0.5, 0.45], maxScale: 2.0 });
+  const tB = take.mark("row");
+  await take.cursorClick(row, "row", { dur: 400 });
   const clicks = [take.now()];
   await row.click();
   await page.waitForTimeout(200);
@@ -160,11 +170,10 @@ export async function climate(take, cfg, L, ctx) {
     "takeaway",
   )[1];
   if (days !== ctx.facts.days) throw new Error(`frost days ${days} differ from the spoken ${ctx.facts.days}`);
-  await take.d("say", [{ segs: [{ text: `First frost: ${days} days later` }], accent: true, size: NUM }], { pos: "bl" });
-  await take.cam(rowSel, { dur: 700, fill: [0.92, 0.62], anchor: [0.5, 0.44], maxScale: 2.2 });
-  await take.cam(rowSel, { dur: Math.max(300, (t0 + L + 0.4 - take.now()) * 1000), ease: "--ts-ease-enter", fill: [0.96, 0.68], anchor: [0.5, 0.44], maxScale: 2.35 });
-  void wait;
-  return { segs: [{ from: t0, to: t0 + L + 0.4 }], facts: { days }, clicks };
+  await take.d("say", [{ segs: [{ text: `Climate shift: first frost ${days} days later` }], accent: true, size: NUM }], { pos: "bl" });
+  await take.cam(rowSel, { dur: 600, fill: [0.92, 0.62], anchor: [0.5, 0.44], maxScale: 2.2 });
+  await take.cam(rowSel, { dur: Math.max(300, (tB + (L + 0.4 - aLen) - take.now()) * 1000), ease: "--ts-ease-enter", fill: [0.96, 0.68], anchor: [0.5, 0.44], maxScale: 2.35 });
+  return { segs: [{ from: t0, to: endA }, { from: tB, to: take.now() }], facts: { days, history: nHist }, clicks };
 }
 
 // ---------------------------------------------------------------- rotation: the benefit, large; then a flick across the options
@@ -182,7 +191,7 @@ export async function rotation(take, cfg, L, ctx) {
   const optsBtn = await take.tag(page.getByRole("button", { name: /Choose this option|Chosen/ }).first(), "optsbtn");
   await take.cam(decCard, { dur: 1, fill: [0.9, 0.62], anchor: [0.5, 0.42], maxScale: 2.0 });
   const t0 = take.mark("ready");
-  await take.d("say", [{ segs: [{ text: `+$${gain} per acre a year` }], accent: true, size: NUM }], { pos: "bl" });
+  await take.d("say", [{ segs: [{ text: `5-season plan: +$${gain} per acre a year` }], accent: true, size: NUM }], { pos: "bl" });
   const flick = 1100;
   const hold = Math.max(300, (L + 0.4) * 1000 - flick - 150);
   await take.cam(decCard, { dur: hold, ease: "--ts-ease-enter", fill: [0.94, 0.68], anchor: [0.5, 0.42], maxScale: 2.15 });
@@ -380,7 +389,7 @@ export async function proof(take, cfg, L, ctx) {
     if (d > 0.02) await page.waitForTimeout(d * 1000);
   };
   take.cam(verdictSel, { dur: 1300, ease: "--ts-ease-enter", fill: [0.94, 0.68], anchor: [0.5, 0.45], maxScale: 2.45 });
-  await take.d("say", [{ segs: [{ text: `Checked against ${nSeasons} past seasons` }], accent: true, size: NUM }], { pos: "bl" });
+  await take.d("say", [{ segs: [{ text: `Honest about misses: ${ringText.length} of ${nSeasons} seasons` }], accent: true, size: NUM }], { pos: "bl" });
   await wait(1.45);
   await take.cam(chartCard, { dur: 500, fill: [0.94, 0.92], anchor: [0.5, 0.5], maxScale: 2.0 });
   const clicks = [];

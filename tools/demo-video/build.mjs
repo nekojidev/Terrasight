@@ -27,36 +27,40 @@ const ASSISTANT = process.env.DEMO_VOICE_ASSISTANT || "Kore";
 const TAIL = 0.3;
 const JCUT = 0.15;
 const OV = 0.25; // act wipe
+const GAP = 0.38; // the small breath between two lines
 const makeStory = (F) => [
   {
     id: "open",
     group: 0,
-    min: 4.8,
+    min: 3.8,
     lead: 0.3,
-    line: "Terrasight is an AI assistant for farmers. Each morning it says what to do, and why.",
+    line: "Meet Terrasight: the AI assistant for farmers.",
     voice: NARRATOR,
-    shots: [["today", 1]],
+    shots: [
+      ["title", 0.5],
+      ["today", 0.5],
+    ],
   },
   {
     id: "add",
     group: 1,
-    min: 3.2,
-    line: `Add a field: it reads ${words(F.years)} years of NASA weather.`,
+    min: 2.8,
+    line: `Draw a field, and ${words(F.years)} years of NASA data go to work.`,
     voice: NARRATOR,
     shots: [["addField", 1]],
   },
   {
     id: "climate",
     group: 1,
-    min: 3.8,
-    line: `It shows how the climate has shifted: first frost, ${words(F.days)} days later.`,
+    min: 2.8,
+    line: `${words(F.history)} seasons of history, and a shifting climate: first frost, ${words(F.days)} days later.`.replace(/^./, (c) => c.toUpperCase()),
     voice: NARRATOR,
     shots: [["climate", 1]],
   },
   {
     id: "rotation",
     group: 1,
-    min: 3.8,
+    min: 3.0,
     line: `It plans ${words(F.seasons)} seasons: ${words(F.gain)} dollars more per acre.`,
     voice: NARRATOR,
     shots: [["rotation", 1]],
@@ -64,26 +68,26 @@ const makeStory = (F) => [
   {
     id: "ask",
     group: 1,
-    min: 4.2,
-    line: "Ask it anything. Every number is checked against the models.",
+    min: 3.4,
+    line: "Ask it anything. Every number is checked, never invented.",
     voice: NARRATOR,
     shots: [["askLive", 1]],
   },
   {
     id: "proof",
     group: 1,
-    min: 5.1,
-    line: `It also shows where it was wrong: ${words(F.missed.length)} years missed out of ${words(F.seasonsChecked)}.`,
+    min: 3.4,
+    line: `And it shows where it was wrong: ${words(F.missed.length)} years of ${words(F.seasonsChecked)}.`,
     voice: NARRATOR,
     shots: [["proof", 1]],
   },
   {
     id: "end",
     group: 2,
-    min: 2.7,
-    jcut: 1.0,
+    min: 2.4,
+    jcut: 0.8,
     tail: 0.05,
-    line: "Built on NASA data, for farms adapting to a changing climate.",
+    line: "Terrasight: NASA data, for your next decision.",
     voice: ASSISTANT,
     shots: [["endCard", 1]],
   },
@@ -94,9 +98,9 @@ const RECUT = {
     const m = c.marks;
     // the map first and large: it pushes in while the outline closes, then the checklist, then the click
     c.segs = [
-      { from: m.uploaded - 0.2, to: m.checked, ramp: 1.0, zoom: { from: 1.3, to: 1.9, cx: 0.386, cy: 0.86 } },
+      { from: m.uploaded - 0.2, to: m.checked, ramp: 1.2, zoom: { from: 1.3, to: 1.9, cx: 0.386, cy: 0.86 } },
       { from: m.checked, to: m.checked + 1.6, zoom: { from: 1.3, to: 1.55, cx: 1, cy: 0.74 } },
-      { from: c.clicks[1] - 0.8, to: c.clicks[2] + 0.2, ramp: 1.0, zoom: { from: 1.55, to: 1.75, cx: 1, cy: 0.74 } },
+      { from: c.clicks[1] - 0.8, to: c.clicks[2] + 0.2, ramp: 1.1, zoom: { from: 1.55, to: 1.75, cx: 1, cy: 0.74 } },
     ];
   },
   askLive: (c) => {
@@ -104,7 +108,7 @@ const RECUT = {
     c.segs = [
       { from: c.clicks[0] + 0.7, to: m.typed - 0.15, ramp: 0.8, zoom: { from: 1.94, to: 1.94, cx: 0.5, cy: 0.077 } },
       { from: m.answered + 0.1, to: m.highlight },
-      { from: m.highlight, to: m.chip, ramp: 1.0 },
+      { from: m.highlight, to: m.chip, ramp: 0.7 },
       { from: m.chip + 0.95, to: m.chip + 2.45 },
     ];
   },
@@ -150,21 +154,30 @@ const ctxShots = { facts, team: `NASA Space Apps 2026 · Field Shift · Team ${t
 // 1. voice first
 const voice = await synthesize(STORY.filter((s) => s.line).map((s) => ({ id: s.id, text: s.line, voice: s.voice })));
 console.log(`voice: ${voice.provider} / ${voice.voice}${voice.draft ? "  (DRAFT)" : ""}`);
-// the voice is sped up by 5 % so that the narration fits without gaps
+// natural tempo (atempo 1.0)
 for (const id of Object.keys(voice.files)) {
   const out = voice.files[id].replace(/\.t\.wav$/, ".x105.wav");
-  if (!fs.existsSync(out)) run(["-i", voice.files[id], "-af", "atempo=1.05", out]);
+  if (!fs.existsSync(out)) run(["-i", voice.files[id], "-af", "atempo=1.0", out]);
   voice.files[id] = out;
   voice.durations[id] = parseFloat(probe(out, ["-show_entries", "format=duration", "-of", "csv=p=0"]));
 }
 let t = 0;
-for (const s of STORY) {
-  s.dur = s.line ? voice.durations[s.id] : 0;
-  s.lead = s.lead ?? 0;
-  s.at = s.line ? (s.lead ? s.lead : -(s.jcut ?? JCUT)) : 0; // offset of the voice from the scene start (negative: J-cut)
-  s.len = Math.max(s.min, s.at + s.dur + (s.tail ?? TAIL));
-  s.start = t;
-  t += s.len;
+{
+  let vsPrev = null; // voice start of the previous line
+  let durPrev = 0;
+  STORY.forEach((s, i) => {
+    s.dur = s.line ? voice.durations[s.id] : 0;
+    const jc = i === 0 ? 0 : (s.jcut ?? JCUT);
+    s.start = i === 0 ? 0 : Math.max(STORY[i - 1].start + STORY[i - 1].min, vsPrev + durPrev + GAP + jc);
+    if (i) STORY[i - 1].len = s.start - STORY[i - 1].start;
+    s.vs = i === 0 ? (s.lead ?? 0.3) : s.start - jc; // voice start (absolute)
+    s.at = s.vs - s.start;
+    vsPrev = s.vs;
+    durPrev = s.dur;
+  });
+  const last = STORY.at(-1);
+  last.len = Math.max(last.min, last.at + last.dur + (last.tail ?? TAIL));
+  t = last.start + last.len;
 }
 const total = t;
 console.log(STORY.map((s) => `${s.id} ${s.len.toFixed(2)}s (voice ${s.dur.toFixed(2)})`).join("\n"));
