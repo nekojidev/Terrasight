@@ -15,6 +15,7 @@ import {
   Sprout,
   Sun,
 } from "lucide-react";
+import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { useState, type FormEvent } from "react";
 import { api } from "@/lib/api";
@@ -215,7 +216,7 @@ export function FieldClient({
         <YieldCard workspaceId={workspaceId} fieldId={id} units={units} />
         <RisksCard risks={risks.data ?? []} />
         <WeatherCard workspaceId={workspaceId} fieldId={id} units={units} />
-        {history.data && <HistoryCard history={history.data} />}
+        {history.data && <HistoryCard history={history.data} fieldId={id} />}
 
         {gather.data && !building && (
           <GatherPanel
@@ -398,12 +399,18 @@ function cropLabel(names: History["cropNames"], locale: string, id: string): str
 }
 
 /** 18-season strip (design 08): one tile per season in crop colours, red dot on stress years. */
-function HistoryCard({ history }: { history: History }) {
+function HistoryCard({ history, fieldId }: { history: History; fieldId: string }) {
   const t = useTranslations("App");
   const locale = useLocale();
   const stress = new Map(history.stressYears.map((s) => [s.season, s.reasons]));
-  const first = history.seasons[0]?.season;
-  const last = history.seasons.at(-1)?.season;
+  const bySeason = new Map(history.seasons.map((s) => [s.season, s]));
+  // Always 18 slots ending at the last known season, so a season without data shows as "unknown", not as a gap.
+  const lastKnown = history.seasons.reduce((m, s) => Math.max(m, s.season), 0);
+  const slots = lastKnown ? Array.from({ length: 18 }, (_, i) => lastKnown - 17 + i) : [];
+  const first = slots[0];
+  const last = slots.at(-1);
+  const hasEstimate = history.seasons.some((s) => s.source === "ndvi" && !s.isOverride);
+  const hasUnknown = slots.some((y) => !bySeason.has(y));
   const name = (id: string) => cropLabel(history.cropNames, locale, id);
   const sourceWord = (s: History["seasons"][number]) =>
     s.isOverride
@@ -415,50 +422,82 @@ function HistoryCard({ history }: { history: History }) {
           : s.source;
   return (
     <section className="rounded-card border border-line bg-surface p-5">
-      <h2 className="text-h2 text-ink">{t("historyTitle")}</h2>
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="text-h2 text-ink">{t("historyTitle")}</h2>
+        <Link
+          href={`/fields/${fieldId}/rotation`}
+          className="focus-ring shrink-0 text-body font-semibold text-ink underline underline-offset-4"
+        >
+          {t("historyDetails")}
+        </Link>
+      </div>
       {history.built?.provisional && <p className="mt-1 text-small text-week">{t("historyProvisional")}</p>}
       {history.stressYears.length > 0 && (
         <p className="mt-1 text-body text-ink-2">
           {t("stressTitle")}: {history.stressYears.map((s) => s.season).join(", ")}
         </p>
       )}
-      <ol
-        aria-label={history.seasons
-          .map(
-            (s) =>
-              `${s.season}: ${name(s.mainCrop)}${s.secondCrop ? ` + ${name(s.secondCrop)}` : ""} (${sourceWord(s)})`,
-          )
-          .join(", ")}
-        className="mt-4 grid grid-cols-9 gap-1.5 md:grid-cols-[repeat(18,minmax(0,1fr))]"
-      >
-        {history.seasons.map((s) => (
-          <li
-            key={s.season}
-            title={`${s.season}: ${name(s.mainCrop)}${s.secondCrop ? ` + ${name(s.secondCrop)}` : ""} · ${sourceWord(s)} · ${Math.round(s.confidence * 100)}%`}
-            className="relative"
+      {slots.length === 0 ? (
+        <p className="mt-3 text-small text-ink-2">{t("historyUnknown")}</p>
+      ) : (
+        <>
+          <ol
+            aria-label={slots
+              .map((y) => {
+                const s = bySeason.get(y);
+                return s
+                  ? `${y}: ${name(s.mainCrop)}${s.secondCrop ? ` + ${name(s.secondCrop)}` : ""} (${sourceWord(s)})`
+                  : `${y}: ${t("historyUnknownTile")}`;
+              })
+              .join(", ")}
+            className="mt-4 grid grid-cols-[repeat(18,minmax(0,1fr))] gap-0.5 sm:gap-1.5"
           >
-            <span
-              className="flex aspect-square overflow-hidden rounded-[6px]"
-              style={{ opacity: s.confidence < 0.5 ? 0.55 : 1 }}
-            >
-              <span className="flex-1" style={{ backgroundColor: cropColour(s.mainCrop) }} />
-              {s.secondCrop && (
-                <span className="w-1/3" style={{ backgroundColor: cropColour(s.secondCrop) }} />
-              )}
-            </span>
-            {stress.has(s.season) && (
-              <span
-                aria-hidden
-                className="absolute -right-0.5 -top-0.5 size-2.5 rounded-chip border-2 border-surface bg-urgent"
-              />
-            )}
-          </li>
-        ))}
-      </ol>
-      <div className="mt-2 flex justify-between font-mono text-small text-ink-3">
-        <span>{first}</span>
-        <span>{last}</span>
-      </div>
+            {slots.map((y) => {
+              const s = bySeason.get(y);
+              const estimate = s?.source === "ndvi" && !s.isOverride;
+              return (
+                <li
+                  key={y}
+                  title={
+                    s
+                      ? `${y}: ${name(s.mainCrop)}${s.secondCrop ? ` + ${name(s.secondCrop)}` : ""} · ${sourceWord(s)} · ${Math.round(s.confidence * 100)}%`
+                      : `${y}: ${t("historyUnknownTile")}`
+                  }
+                  className="relative min-w-0"
+                >
+                  {s ? (
+                    <span
+                      className={`flex aspect-square overflow-hidden rounded-[4px] sm:rounded-[6px] ${estimate ? "outline-dashed outline-1 -outline-offset-1 outline-ink-3" : ""}`}
+                      style={{ opacity: s.confidence < 0.5 ? 0.55 : estimate ? 0.8 : 1 }}
+                    >
+                      <span className="flex-1" style={{ backgroundColor: cropColour(s.mainCrop) }} />
+                      {s.secondCrop && (
+                        <span className="w-1/3" style={{ backgroundColor: cropColour(s.secondCrop) }} />
+                      )}
+                    </span>
+                  ) : (
+                    <span className="flex aspect-square items-center justify-center rounded-[4px] border border-dashed border-line-strong bg-muted font-mono text-[10px] text-ink-3 sm:rounded-[6px]">
+                      ?
+                    </span>
+                  )}
+                  {stress.has(y) && (
+                    <span
+                      aria-hidden
+                      className="absolute -right-0.5 -top-0.5 size-2 rounded-chip border border-surface bg-urgent sm:size-2.5 sm:border-2"
+                    />
+                  )}
+                </li>
+              );
+            })}
+          </ol>
+          <div className="mt-2 flex justify-between font-mono text-small text-ink-3">
+            <span>{first}</span>
+            <span>{last}</span>
+          </div>
+        </>
+      )}
+      {hasEstimate && <p className="mt-3 text-small text-ink-2">{t("historyEstimateHint")}</p>}
+      {hasUnknown && slots.length > 0 && <p className="mt-1 text-small text-ink-2">{t("historyUnknownHint")}</p>}
       {history.currentRotation && history.currentRotation.label !== "none" && (
         <p className="mt-3 text-small text-ink-2">
           {t("currentRotation")}: {history.currentRotation.rotationId ?? t("detectedFromHistory")} ·{" "}
