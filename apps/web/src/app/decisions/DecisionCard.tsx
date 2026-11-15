@@ -3,7 +3,17 @@
 import { useQueryClient } from "@tanstack/react-query";
 import type { Decision, DecisionAnswer, DecisionState, ThreadEntry } from "@terrasight/shared";
 import { Button, Chip, Skeleton, type ChipTone } from "@terrasight/ui";
-import { Check, Clock, MessageCircleQuestion, Pause, Pencil, RefreshCw, Send, ShieldCheck, Sparkles } from "lucide-react";
+import {
+  Check,
+  Clock,
+  MessageCircleQuestion,
+  Pause,
+  Pencil,
+  RefreshCw,
+  Send,
+  ShieldCheck,
+  Sparkles,
+} from "lucide-react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useId, useState, type ReactNode } from "react";
@@ -86,15 +96,7 @@ function Bubble({ e }: { e: ThreadEntry }) {
 }
 
 /** The agronomist's reply: a draft built from the item for a question (S-08.05), a plain composer otherwise. */
-function Composer({
-  d,
-  workspaceId,
-  onSent,
-}: {
-  d: Decision;
-  workspaceId: string;
-  onSent: () => void;
-}) {
+function Composer({ d, workspaceId, onSent }: { d: Decision; workspaceId: string; onSent: () => void }) {
   const t = useTranslations("App");
   const id = useId();
   const wantsDraft = d.state === "question";
@@ -202,10 +204,15 @@ export function DecisionCard({
   // A question that was already replied to is no longer waiting for the agronomist.
   const lastAnswer = [...d.thread].reverse().find((e) => e.kind === "answer");
   const replied =
-    d.state === "question" && !!lastAnswer && d.thread.some((e) => e.kind === "reply" && e.at > lastAnswer.at);
+    d.state === "question" &&
+    !!lastAnswer &&
+    d.thread.some((e) => e.kind === "reply" && e.at > lastAnswer.at);
   const headId = useId();
   return (
-    <article aria-labelledby={headId} className="flex flex-col gap-4 rounded-hero border border-line bg-surface p-5 sm:p-6">
+    <article
+      aria-labelledby={headId}
+      className="flex flex-col gap-4 rounded-hero border border-line bg-surface p-5 sm:p-6"
+    >
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-small text-ink-2">
@@ -226,7 +233,9 @@ export function DecisionCard({
 
       <div className="flex flex-col gap-2 rounded-input bg-surface-2 p-4">
         <p className="text-body font-semibold text-ink">{d.action[locale]}</p>
-        {d.deadline && <p className="text-small text-ink-2">{t("rpDeadline", { date: day(`${d.deadline}T12:00:00Z`) })}</p>}
+        {d.deadline && (
+          <p className="text-small text-ink-2">{t("rpDeadline", { date: day(`${d.deadline}T12:00:00Z`) })}</p>
+        )}
         <KeyNumbers d={d} />
       </div>
 
@@ -264,7 +273,12 @@ export function DecisionCard({
       )}
 
       {canReply && !replied && (
-        <Composer key={`${d.id}:${d.thread.length}:${d.state}`} d={d} workspaceId={workspaceId} onSent={() => void refresh()} />
+        <Composer
+          key={`${d.id}:${d.thread.length}:${d.state}`}
+          d={d}
+          workspaceId={workspaceId}
+          onSent={() => void refresh()}
+        />
       )}
     </article>
   );

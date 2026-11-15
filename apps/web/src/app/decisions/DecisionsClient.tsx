@@ -3,13 +3,14 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Decision, DecisionList } from "@terrasight/shared";
 import { Button, Skeleton } from "@terrasight/ui";
-import { Check, Copy, Eye, Link2, MessageCircleQuestion, Pause, UserPlus, X } from "lucide-react";
+import { Copy, Eye, Link2, UserPlus, X } from "lucide-react";
 import Link from "next/link";
-import { useLocale, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import { useId, useMemo, useRef, useState } from "react";
+import { OwnerDecisions } from "@/components/OwnerDecisions";
 import { api } from "@/lib/api";
 import { useWorkspaceEvents } from "@/lib/events";
-import { DecisionCard, KeyNumbers, useDateFormat } from "./DecisionCard";
+import { DecisionCard } from "./DecisionCard";
 
 type Role = "owner" | "admin" | "agronomist" | "viewer";
 type Tab = "waiting" | "question" | "decided";
@@ -95,7 +96,11 @@ export function DecisionsClient({
 
       <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
         <div className="flex min-w-0 flex-col gap-4">
-          <div role="tablist" aria-label={t("decTitle")} className="flex w-fit max-w-full gap-1 overflow-x-auto rounded-input bg-muted p-1">
+          <div
+            role="tablist"
+            aria-label={t("decTitle")}
+            className="flex w-fit max-w-full gap-1 overflow-x-auto rounded-input bg-muted p-1"
+          >
             {TABS.map((k) => (
               <button
                 key={k}
@@ -111,13 +116,20 @@ export function DecisionsClient({
               </button>
             ))}
           </div>
-          <div id="dec-panel" role="tabpanel" aria-labelledby={`dec-tab-${current}`} className="flex flex-col gap-4">
+          <div
+            id="dec-panel"
+            role="tabpanel"
+            aria-labelledby={`dec-tab-${current}`}
+            className="flex flex-col gap-4"
+          >
             {shown.length === 0 ? (
               <p className="rounded-card border border-line bg-surface p-6 text-body text-ink-2">
                 {items.length === 0 ? t("decEmptyAll") : t(`decEmpty_${current}`)}
               </p>
             ) : (
-              shown.map((d) => <DecisionCard key={d.id} d={d} workspaceId={workspaceId} canReply={canReply} />)
+              shown.map((d) => (
+                <DecisionCard key={d.id} d={d} workspaceId={workspaceId} canReply={canReply} />
+              ))
             )}
           </div>
         </div>
@@ -142,7 +154,12 @@ export function DecisionsClient({
       </div>
 
       <Dialog ref={preview} title={t("rqOwnerSees")}>
-        <OwnerPreview items={list.data.items.filter((d) => d.state === "waiting" || d.state === "question")} />
+        <OwnerDecisions
+          items={list.data.items}
+          language={list.data.language}
+          workspaceName={list.data.workspaceName}
+          onAnswer={null}
+        />
       </Dialog>
     </div>
   );
@@ -173,45 +190,6 @@ function Dialog({
       </div>
       <div className="max-h-[75vh] overflow-y-auto p-5">{children}</div>
     </dialog>
-  );
-}
-
-/** What the owner sees (read-only): each open decision with its three answers; nothing here can be pressed. */
-function OwnerPreview({ items }: { items: Decision[] }) {
-  const t = useTranslations("App");
-  const locale = useLocale() as "en" | "uk";
-  const day = useDateFormat();
-  return (
-    <div className="flex flex-col gap-4">
-      <p className="text-small text-ink-2">
-        {items.length > 0 ? t("decPreviewSub", { n: items.length }) : t("decPreviewEmpty")}
-      </p>
-      {items.map((d) => (
-        <article key={d.id} className="flex flex-col gap-2 rounded-card border border-line bg-surface p-4">
-          <p className="text-small text-ink-2">
-            {d.fieldName}
-            {d.deadline ? ` · ${t("rpDeadline", { date: day(`${d.deadline}T12:00:00Z`) })}` : ""}
-          </p>
-          <h3 className="text-body font-semibold text-ink">{d.title[locale]}</h3>
-          <p className="text-body text-ink">{d.action[locale]}</p>
-          <KeyNumbers d={d} />
-          <div aria-hidden className="mt-1 flex flex-wrap gap-2">
-            <span className="inline-flex min-h-tap items-center gap-2 rounded-btn bg-ink px-4 text-body font-semibold text-surface">
-              <Check className="size-4" strokeWidth={1.7} />
-              {t("decAns_approve")}
-            </span>
-            <span className="inline-flex min-h-tap items-center gap-2 rounded-btn border border-line-strong px-4 text-body font-semibold text-ink">
-              <Pause className="size-4" strokeWidth={1.7} />
-              {t("decAns_not_now")}
-            </span>
-            <span className="inline-flex min-h-tap items-center gap-2 rounded-btn border border-line-strong px-4 text-body font-semibold text-ink">
-              <MessageCircleQuestion className="size-4" strokeWidth={1.7} />
-              {t("decAns_question")}
-            </span>
-          </div>
-        </article>
-      ))}
-    </div>
   );
 }
 
