@@ -17,6 +17,7 @@ import { NotificationsModule } from "./notifications/notifications.module.js";
 import { ReportsModule } from "./reports/reports.module.js";
 import { ScoutingModule } from "./scouting/scouting.module.js";
 import { RedisModule } from "./redis/redis.module.js";
+import { WorkWindowsModule } from "./work-windows/work-windows.module.js";
 import { WorkspacesModule } from "./workspaces/workspaces.module.js";
 
 const env = loadEnv();
@@ -49,6 +50,7 @@ const env = loadEnv();
     ScoutingModule,
     ReportsModule,
     NotificationsModule,
+    WorkWindowsModule,
   ],
   controllers: [HealthController],
 })

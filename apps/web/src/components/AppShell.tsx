@@ -1,7 +1,7 @@
 "use client";
 
 import { BottomTabs, Sidebar, TopBar, type NavItem } from "@terrasight/ui";
-import { FileText, Home, LogOut, Map, RefreshCw, Sparkles } from "lucide-react";
+import { FileText, Home, LogOut, Map, RefreshCw, Sparkles, Wind } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
@@ -55,6 +55,7 @@ export function AppShell({
     { href: "/", label: t("n_today"), icon: <Home />, active: path === "/" },
     { href: "/fields", label: t("n_fields"), icon: <Map />, active: path.startsWith("/fields") },
     { href: "/rotation", label: t("n_rot"), icon: <RefreshCw />, active: path.startsWith("/rotation") },
+    ...(user.role === "viewer" ? [] : [{ href: "/work-windows", label: a("navWorkWindows"), icon: <Wind />, active: path.startsWith("/work-windows") }]),
     { href: "/assistant", label: t("n_ai"), icon: <Sparkles />, active: path.startsWith("/assistant") },
     { href: "/decisions", label: a("navDecisions"), icon: <FileText />, active: path.startsWith("/decisions") },
   ];

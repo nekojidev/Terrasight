@@ -154,3 +154,84 @@ export function nextFrostDay(f: Forecast): { date: string; tminC: number; uncert
   const d = f.days.find((x) => x.origin === "forecast" && x.tminC !== null && x.tminC <= 0);
   return d ? { date: d.date, tminC: d.tminC!, uncertain: (d.forecastDay ?? 0) > 7 } : null;
 }
+
+/** Hourly forecast for work windows: the last 2 days (rain history) and the next 8, in the cell's local time. */
+export interface HourlyForecast {
+  provider: "open-meteo";
+  cell: { lat: number; lon: number };
+  issuedAt: string;
+  hours: Array<{
+    /** Local time of the cell, "YYYY-MM-DDTHH:00" (Open-Meteo `timezone=auto`). */
+    time: string;
+    tempC: number | null;
+    rhPct: number | null;
+    precipMm: number | null;
+    windMs: number | null;
+    gustMs: number | null;
+    soilTemp6cmC: number | null;
+    soilTemp0cmC: number | null;
+    soilMoisture: number | null;
+  }>;
+  utcOffsetSeconds: number;
+  attribution: string;
+}
+
+/** Open-Meteo hourly variables for work windows (wind in m/s, rain in mm, soil temperature at 0 and 6 cm). */
+export async function openMeteoHourly(
+  cell: { lat: number; lon: number },
+  ctx: FetchContext,
+  apiKey?: string,
+): Promise<HourlyForecast> {
+  const host = apiKey ? "https://customer-api.open-meteo.com" : "https://api.open-meteo.com";
+  const q = new URLSearchParams({
+    latitude: String(cell.lat),
+    longitude: String(cell.lon),
+    hourly:
+      "temperature_2m,relative_humidity_2m,precipitation,wind_speed_10m,wind_gusts_10m,soil_temperature_0cm,soil_temperature_6cm,soil_moisture_0_to_1cm",
+    wind_speed_unit: "ms",
+    past_days: "2",
+    forecast_days: "8",
+    timezone: "auto",
+    ...(apiKey ? { apikey: apiKey } : {}),
+  });
+  type Series = Array<number | null> | undefined;
+  const d = await httpJson<{
+    utc_offset_seconds?: number;
+    hourly?: {
+      time: string[];
+      temperature_2m?: Series;
+      relative_humidity_2m?: Series;
+      precipitation?: Series;
+      wind_speed_10m?: Series;
+      wind_gusts_10m?: Series;
+      soil_temperature_0cm?: Series;
+      soil_temperature_6cm?: Series;
+      soil_moisture_0_to_1cm?: Series;
+    };
+  }>(`${host}/v1/forecast?${q}`, { signal: ctx.signal, fetch: ctx.fetch });
+  const h = d.hourly;
+  if (!h?.time.length) throw new SourceError("returned no hourly forecast", true);
+  return {
+    provider: "open-meteo",
+    cell,
+    issuedAt: new Date().toISOString(),
+    utcOffsetSeconds: d.utc_offset_seconds ?? 0,
+    hours: h.time.map((time, i) => ({
+      time,
+      tempC: h.temperature_2m?.[i] ?? null,
+      rhPct: h.relative_humidity_2m?.[i] ?? null,
+      precipMm: h.precipitation?.[i] ?? null,
+      windMs: h.wind_speed_10m?.[i] ?? null,
+      gustMs: h.wind_gusts_10m?.[i] ?? null,
+      soilTemp6cmC: h.soil_temperature_6cm?.[i] ?? null,
+      soilTemp0cmC: h.soil_temperature_0cm?.[i] ?? null,
+      soilMoisture: h.soil_moisture_0_to_1cm?.[i] ?? null,
+    })),
+    attribution: OM_ATTRIBUTION,
+  };
+}
+
+/** The cell's local "YYYY-MM-DDTHH:00" at an instant, from the forecast's UTC offset. */
+export function localHour(instant: Date, utcOffsetSeconds: number): string {
+  return new Date(instant.getTime() + utcOffsetSeconds * 1000).toISOString().slice(0, 13) + ":00";
+}

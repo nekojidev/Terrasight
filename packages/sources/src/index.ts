@@ -28,11 +28,14 @@ export { openetAdapter, type EtSeries } from "./openet.js";
 export { sentinel2Adapter, parseStats, type S2Ndvi, type S2Result } from "./sentinel2.js";
 export {
   forecastCell,
+  localHour,
   nextFrostDay,
   nwsForecast,
   openMeteoForecast,
+  openMeteoHourly,
   type Forecast,
   type ForecastDay,
+  type HourlyForecast,
 } from "./forecast.js";
 
 import { cdl } from "./cdl.js";
