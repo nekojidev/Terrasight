@@ -76,6 +76,14 @@ interface History {
     isOverride: boolean;
   }>;
   stressYears: Array<{ season: number; reasons: string[] }>;
+  /** Per-season weather and greenness used for the stress years (NASA POWER, MODIS). */
+  seasonStats?: Array<{
+    season: number;
+    precipMm?: number | null;
+    heatDays?: number | null;
+    /** Peak NDVI of the season (MODIS). */
+    peak?: number | null;
+  }>;
   irrigation: {
     value: FieldView["irrigation"];
     source: string;
@@ -270,7 +278,7 @@ export function FieldClient({
           <WeatherCard workspaceId={workspaceId} fieldId={id} units={units} />
           <OutlookCard workspaceId={workspaceId} fieldId={id} units={units} />
           <TodayWindows workspaceId={workspaceId} fieldId={id} units={units} />
-          {history.data && <HistoryCard history={history.data} fieldId={id} />}
+          {history.data && <HistoryCard history={history.data} fieldId={id} units={units} />}
 
           {gather.data && !building && (
             <GatherPanel
@@ -458,10 +466,98 @@ function cropLabel(names: History["cropNames"], locale: string, id: string): str
 }
 
 /** 18-season strip (design 08): one tile per season in crop colours, red dot on stress years. */
-function HistoryCard({ history, fieldId }: { history: History; fieldId: string }) {
+/** Details of one season tile (design 08): crop, source, confidence, the season's weather and why it was a stress year. */
+function SeasonPopover({
+  year,
+  align,
+  crop,
+  source,
+  confidence,
+  stat,
+  reasons,
+  rain,
+  heatLabel,
+}: {
+  year: number;
+  align: "start" | "center" | "end";
+  crop: string | null;
+  source: string | null;
+  confidence: number | null;
+  stat: { precipMm: number | null; heatDays: number | null; ndviPeak: number | null } | null;
+  reasons: string[];
+  rain: (mm: number) => string;
+  heatLabel: string;
+}) {
+  const t = useTranslations("App");
+  const pos = align === "start" ? "left-0" : align === "end" ? "right-0" : "left-1/2 -translate-x-1/2";
+  return (
+    <div
+      role="tooltip"
+      className={`absolute bottom-full z-20 mb-2 w-60 rounded-input border border-line bg-surface p-3 text-left shadow-sheet ${pos}`}
+    >
+      <p className="font-mono text-micro text-ink-3">{t("hsSeason", { year })}</p>
+      <p className="mt-0.5 text-body font-semibold text-ink">{crop ?? t("historyUnknownTile")}</p>
+      {source && (
+        <p className="text-small text-ink-2">
+          {source}
+          {confidence !== null && ` · ${t("hsConfidence", { n: confidence })}`}
+        </p>
+      )}
+      {stat && (stat.precipMm !== null || stat.heatDays !== null || stat.ndviPeak !== null) && (
+        <dl className="mt-2 grid grid-cols-[1fr_auto] gap-x-3 gap-y-0.5 text-small">
+          {stat.precipMm !== null && (
+            <>
+              <dt className="text-ink-2">{t("hsRain")}</dt>
+              <dd className="text-right font-mono text-ink">{rain(stat.precipMm)}</dd>
+            </>
+          )}
+          {stat.heatDays !== null && (
+            <>
+              <dt className="text-ink-2">{t("hsHeat", { t: heatLabel })}</dt>
+              <dd className="text-right font-mono text-ink">{stat.heatDays}</dd>
+            </>
+          )}
+          {stat.ndviPeak !== null && (
+            <>
+              <dt className="text-ink-2">{t("hsNdvi")}</dt>
+              <dd className="text-right font-mono text-ink">{stat.ndviPeak.toFixed(2)}</dd>
+            </>
+          )}
+        </dl>
+      )}
+      {reasons.length > 0 && (
+        <p className="mt-2 flex items-start gap-1.5 text-small font-semibold text-urgent">
+          <span aria-hidden className="mt-1.5 size-2 shrink-0 rounded-chip bg-urgent" />
+          {reasons.map((r) => (t.has(`hsStress_${r}`) ? t(`hsStress_${r}`) : r)).join(" · ")}
+        </p>
+      )}
+      {stat && <p className="mt-2 text-micro text-ink-3">{t("hsSources")}</p>}
+    </div>
+  );
+}
+
+function HistoryCard({
+  history,
+  fieldId,
+  units,
+}: {
+  history: History;
+  fieldId: string;
+  units: "metric" | "imperial";
+}) {
   const t = useTranslations("App");
   const locale = useLocale();
   const stress = new Map(history.stressYears.map((s) => [s.season, s.reasons]));
+  const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+  const stats = new Map(
+    (history.seasonStats ?? []).map((s) => [
+      s.season,
+      { precipMm: num(s.precipMm), heatDays: num(s.heatDays), ndviPeak: num(s.peak) },
+    ]),
+  );
+  const [open, setOpen] = useState<number | null>(null);
+  const rain = (mm: number) =>
+    units === "imperial" ? `${(mm / 25.4).toFixed(1)} in` : `${Math.round(mm)} mm`;
   const bySeason = new Map(history.seasons.map((s) => [s.season, s]));
   // Always 18 slots ending at the last known season, so a season without data shows as "unknown", not as a gap.
   const lastKnown = history.seasons.reduce((m, s) => Math.max(m, s.season), 0);
@@ -511,38 +607,56 @@ function HistoryCard({ history, fieldId }: { history: History; fieldId: string }
               .join(", ")}
             className="mt-4 grid grid-cols-[repeat(18,minmax(0,1fr))] gap-0.5 sm:gap-1.5"
           >
-            {slots.map((y) => {
+            {slots.map((y, i) => {
               const s = bySeason.get(y);
               const estimate = s?.source === "ndvi" && !s.isOverride;
               return (
-                <li
-                  key={y}
-                  title={
-                    s
-                      ? `${y}: ${name(s.mainCrop)}${s.secondCrop ? ` + ${name(s.secondCrop)}` : ""} · ${sourceWord(s)} · ${Math.round(s.confidence * 100)}%`
-                      : `${y}: ${t("historyUnknownTile")}`
-                  }
-                  className="relative min-w-0"
-                >
-                  {s ? (
-                    <span
-                      className={`flex aspect-square overflow-hidden rounded-[4px] sm:rounded-[6px] ${estimate ? "outline-dashed outline-1 -outline-offset-1 outline-ink-3" : ""}`}
-                      style={{ opacity: s.confidence < 0.5 ? 0.55 : estimate ? 0.8 : 1 }}
-                    >
-                      <span className="flex-1" style={{ backgroundColor: cropColour(s.mainCrop) }} />
-                      {s.secondCrop && (
-                        <span className="w-1/3" style={{ backgroundColor: cropColour(s.secondCrop) }} />
-                      )}
-                    </span>
-                  ) : (
-                    <span className="flex aspect-square items-center justify-center rounded-[4px] border border-dashed border-line-strong bg-muted font-mono text-[10px] text-ink-3 sm:rounded-[6px]">
-                      ?
-                    </span>
-                  )}
+                <li key={y} className="relative min-w-0">
+                  <button
+                    type="button"
+                    aria-label={`${t("hsSeason", { year: y })}: ${s ? name(s.mainCrop) : t("historyUnknownTile")}`}
+                    aria-expanded={open === y}
+                    onMouseEnter={() => setOpen(y)}
+                    onMouseLeave={() => setOpen((o) => (o === y ? null : o))}
+                    onFocus={() => setOpen(y)}
+                    onBlur={() => setOpen((o) => (o === y ? null : o))}
+                    onClick={() => setOpen((o) => (o === y ? null : y))}
+                    onKeyDown={(e) => e.key === "Escape" && setOpen(null)}
+                    className="focus-ring block w-full rounded-[4px] sm:rounded-[6px]"
+                  >
+                    {s ? (
+                      <span
+                        className={`flex aspect-square overflow-hidden rounded-[4px] sm:rounded-[6px] ${estimate ? "outline-dashed outline-1 -outline-offset-1 outline-ink-3" : ""}`}
+                        style={{ opacity: s.confidence < 0.5 ? 0.55 : estimate ? 0.8 : 1 }}
+                      >
+                        <span className="flex-1" style={{ backgroundColor: cropColour(s.mainCrop) }} />
+                        {s.secondCrop && (
+                          <span className="w-1/3" style={{ backgroundColor: cropColour(s.secondCrop) }} />
+                        )}
+                      </span>
+                    ) : (
+                      <span className="flex aspect-square items-center justify-center rounded-[4px] border border-dashed border-line-strong bg-muted font-mono text-[10px] text-ink-3 sm:rounded-[6px]">
+                        ?
+                      </span>
+                    )}
+                  </button>
                   {stress.has(y) && (
                     <span
                       aria-hidden
-                      className="absolute -right-0.5 -top-0.5 size-2 rounded-chip border border-surface bg-urgent sm:size-2.5 sm:border-2"
+                      className="pointer-events-none absolute -right-0.5 -top-0.5 size-2 rounded-chip border border-surface bg-urgent sm:size-2.5 sm:border-2"
+                    />
+                  )}
+                  {open === y && (
+                    <SeasonPopover
+                      year={y}
+                      align={i < 4 ? "start" : i > slots.length - 5 ? "end" : "center"}
+                      crop={s ? `${name(s.mainCrop)}${s.secondCrop ? ` + ${name(s.secondCrop)}` : ""}` : null}
+                      source={s ? sourceWord(s) : null}
+                      confidence={s ? Math.round(s.confidence * 100) : null}
+                      stat={stats.get(y) ?? null}
+                      reasons={stress.get(y) ?? []}
+                      rain={rain}
+                      heatLabel={units === "imperial" ? "95 °F" : "35 °C"}
                     />
                   )}
                 </li>
