@@ -48,7 +48,7 @@ const STORY = [
   {
     id: "ask",
     group: 2,
-    min: 7.6,
+    min: 7.0,
     lead: 0.9,
     line: "Ask it anything. Every number is checked against the models.",
     voice: NARRATOR,
@@ -57,7 +57,7 @@ const STORY = [
   {
     id: "proof",
     group: 2,
-    min: 4.5,
+    min: 5.1,
     lead: 0.5,
     line: "And it shows you where it was wrong.",
     voice: NARRATOR,
@@ -89,8 +89,9 @@ const RECUT = {
     // no wide field page, no loading skeleton, no empty assistant page
     const m = c.marks;
     c.segs = [
-      { from: c.clicks[0] + 0.3, to: m.typed + 0.02, ramp: 1.3 },
-      { from: m.answered - 0.1, to: m.answered - 0.1 + 6.28 },
+      // tight on the palette (post zoom 1.94x on top of the take's camera): no page figure is behind it
+      { from: c.clicks[0] + 0.7, to: m.typed - 0.15, ramp: 1.0, zoom: { from: 1.94, to: 1.94, cx: 0.5, cy: 0.077 } },
+      { from: m.answered + 0.45, to: m.answered + 0.45 + 5.78 },
     ];
   },
 };

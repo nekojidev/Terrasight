@@ -15,7 +15,7 @@ It shows what has changed on the field, and what to plant for five seasons.
 Ask it anything. Every number is checked against the models.
 
 5
-00:00:22,469 --> 00:00:24,421
+00:00:21,869 --> 00:00:23,821
 And it shows you where it was wrong.
 
 6

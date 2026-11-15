@@ -46,7 +46,7 @@ export function renderClip({ input, segs, len, out, phone }) {
     let chain = labels.length > 1 ? `${labels.join("")}concat=n=${labels.length}:v=1:a=0` : null;
     const z = s.zoom;
     const zoom = z
-      ? `scale=w='trunc(1920*(${z.from}+(${z.to}-${z.from})*min(1,t/${f3(dur)}))/2)*2':h=-2:eval=frame:flags=bilinear,crop=1920:1080:x='(iw-1920)*${z.cx ?? 0.5}':y='(ih-1080)*${z.cy ?? 0.5}'`
+      ? `scale=w='trunc(1920*(${z.from}+(${z.to}-${z.from})*min(1,t/${f3(dur)}))/2)*2':h=-2:eval=frame:flags=bilinear,crop=1920:1080:x='(iw-1920)*${z.cx ?? 0.5}':y='(ih-1080)*${z.cy ?? 0.5}',setsar=1`
       : null;
     if (chain) parts.push(`${chain}${zoom ? "," + zoom : ""}[s${i}]`);
     else parts.push(`${labels[0]}${zoom ? zoom : "null"}[s${i}]`);

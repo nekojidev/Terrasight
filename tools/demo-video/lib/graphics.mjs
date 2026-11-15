@@ -523,27 +523,45 @@ export async function today(take, cfg, L) {
   const am = must(action.match(/^(\w+) the field[^.]*?before (\w+ \d+)/), "action parse");
   const sow = `${am[1]} the field before ${am[2]}`;
   const hSel = await take.tag(h1, "h1");
-  void hSel;
-  await take.cam(cardSel, { dur: 1, fill: [0.76, 0.8], anchor: [0.5, 0.4], maxScale: 1.85 });
-  await take.d("say", [{ segs: [{ text: sow }], accent: true, size: px(72) }], { pos: "bl" });
-  // the designed title: wordmark and one line over the product, in for 240 ms, out after about 1.6 s
-  await page.evaluate(() => {
+  const accept = await take.tag(page.locator(cardSel).getByRole("button", { name: "Accept" }).first(), "accept");
+  const logoHtml = await page.evaluate(() => {
+    const t = [...document.querySelectorAll("*")].find((e) => e.children.length === 0 && e.textContent.trim() === "Terrasight" && e.getBoundingClientRect().width > 0);
+    let n = t;
+    let svg = null;
+    for (let i = 0; i < 5 && n && !svg; i++, n = n.parentElement) svg = n.querySelector("svg, img");
+    const mark = svg ? svg.outerHTML.replace(/<svg /, '<svg style="width:150px;height:150px" ').replace(/<img /, '<img style="width:150px;height:150px" ') : "";
+    return `<div style="display:flex;align-items:center;gap:28px">${mark}<span style="font-size:150px;font-weight:700;letter-spacing:-0.05em;line-height:1;color:var(--ts-ink)">Terrasight</span></div>`;
+  });
+  await take.cam(cardSel, { dur: 1, fill: [0.7, 0.76], anchor: [0.5, 0.45], maxScale: 1.6 });
+  // shot (a): the title is the hero of the frame, centred over the softened product
+  await page.evaluate((logo) => {
     const layer = document.getElementById("demo-layer");
     const tok = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-    const el = document.createElement("div");
-    el.style.cssText = "position:absolute;left:96px;top:58px;display:flex;flex-direction:column;gap:var(--ts-s3);align-items:flex-start;font-family:var(--ts-font)";
-    el.innerHTML = `<div style="padding:var(--ts-s3) var(--ts-s8);border-radius:var(--ts-r-card);background:var(--ts-ink);color:var(--ts-surface);box-shadow:var(--ts-shadow-hero);font-size:104px;font-weight:700;letter-spacing:-0.045em;line-height:1.05">Terrasight</div>
-      <div style="padding:var(--ts-s3) var(--ts-s6);border-radius:var(--ts-r-card);background:var(--ts-signal);color:var(--ts-on-signal);box-shadow:var(--ts-shadow-hero);font-size:52px;font-weight:700;letter-spacing:-0.03em">The AI assistant for your farm</div>`;
-    layer.appendChild(el);
-    [...el.children].forEach((c, i) =>
-      c.animate([{ transform: "translateY(26px)", opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 240, delay: i * 90, easing: tok("--ts-ease-enter"), fill: "both" }),
-    );
-    setTimeout(() => el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 160, easing: tok("--ts-ease-exit"), fill: "both" }).finished.then(() => el.remove()), 1750);
-  });
-  await page.waitForTimeout(380);
+    const veil = document.createElement("div");
+    veil.id = "veil";
+    veil.style.cssText = "position:fixed;inset:0;backdrop-filter:blur(9px);background:color-mix(in srgb, var(--ts-bg) 52%, transparent);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--ts-s8);font-family:var(--ts-font)";
+    veil.innerHTML = `<div id="vlogo" style="transform-origin:center;pointer-events:none;margin-bottom:var(--ts-s8)">${logo}</div>
+      <div id="vtag" style="padding:var(--ts-s3) var(--ts-s8);border-radius:var(--ts-r-card);background:var(--ts-signal);color:var(--ts-on-signal);box-shadow:var(--ts-shadow-hero);font-size:64px;font-weight:700;letter-spacing:-0.03em">The AI assistant for your farm</div>`;
+    layer.appendChild(veil);
+    document.getElementById("vlogo").animate([{ transform: "scale(1)" }, { transform: "scale(1.08)" }], { duration: 2000, easing: "linear", fill: "both" });
+    document.getElementById("vtag").animate([{ transform: "translateY(18px)", opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 260, delay: 80, easing: tok("--ts-ease-enter"), fill: "both" });
+    // the title lifts away at about 1.9 s
+    setTimeout(() => {
+      const out = [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(-70px)" }];
+      document.getElementById("vtag").animate(out, { duration: 300, easing: tok("--ts-ease-exit"), fill: "both" });
+      veil.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 320, easing: tok("--ts-ease-exit"), fill: "both" }).finished.then(() => veil.remove());
+    }, 1900);
+  }, logoHtml);
   const t0 = take.mark("ready");
-  const camP = take.cam(cardSel, { dur: (L + 0.4) * 1000, ease: "--ts-ease-enter", fill: [0.8, 0.84], anchor: [0.5, 0.4], maxScale: 1.95 });
-  // the data sources fly across the shot (0.8 s) toward the product
+  const wait = async (t) => {
+    const d = t0 + t - take.now();
+    if (d > 0.02) await page.waitForTimeout(d * 1000);
+  };
+  take.cam(cardSel, { dur: 2100, ease: "--ts-ease-enter", fill: [0.78, 0.84], anchor: [0.5, 0.45], maxScale: 1.8 });
+  await wait(2.2);
+  // shot (b): the page revealed from its heading, a steady push down onto the card and its action
+  await take.cam(hSel, { dur: 1, fill: [0.5, 0.2], anchor: [0.5, 0.3], maxScale: 2.0 });
+  const camB = take.cam(cardSel, { dur: 3300, ease: "--ts-ease-standard", fill: [0.8, 0.84], anchor: [0.5, 0.42], maxScale: 1.9 });
   await page.evaluate(() => {
     const layer = document.getElementById("demo-layer");
     const tok = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
@@ -559,10 +577,15 @@ export async function today(take, cfg, L) {
           { transform: `translateX(${dir * 120}px)`, opacity: 1, offset: 0.5 },
           { transform: "translateX(0) scale(.5)", opacity: 0 },
         ],
-        { duration: 800, delay: 2000 + i * 120, easing: tok("--ts-ease-standard"), fill: "both" },
+        { duration: 800, delay: 300 + i * 120, easing: tok("--ts-ease-standard"), fill: "both" },
       ).finished.then(() => e.remove());
     });
   });
-  await camP;
-  return { segs: [{ from: t0, to: t0 + L + 0.4 }], facts: { sow, action }, clicks: [] };
+  await wait(4.0);
+  await take.d("say", [{ segs: [{ text: sow }], accent: true, size: px(72) }], { pos: "bl" });
+  await wait(4.9);
+  await take.d("cursorTo", accept, { dur: 800 });
+  await camB;
+  await wait(L + 0.4);
+  return { segs: [{ from: t0, to: t0 + L + 0.4 }], facts: { action: sow }, clicks: [] };
 }
