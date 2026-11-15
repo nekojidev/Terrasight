@@ -38,7 +38,10 @@ export default async function Home() {
       crumb={t("crumb")}
     >
       {ws.data.fieldCount === 0 ? (
-        <EmptyHome firstName={me.data.name.split(/\s+/)[0] ?? me.data.name} />
+        <EmptyHome
+          firstName={me.data.name.split(/\s+/)[0] ?? me.data.name}
+          isOwner={ws.data.role === "owner"}
+        />
       ) : (
         <Brief
           workspaceId={ws.data.id}

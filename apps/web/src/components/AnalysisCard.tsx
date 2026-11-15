@@ -1,12 +1,13 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AnalysisPanel, Button, InfoHint, type FieldRunStatus } from "@terrasight/ui";
+import { AnalysisPanel, Button, Disclosure, InfoHint, Surface, type FieldRunStatus } from "@terrasight/ui";
 import { Play } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { dateShortIn, isAutumn, isSameDayIn, timeIn, useNow } from "@/lib/time";
 import { api } from "@/lib/api";
 import { useWorkspaceEvents } from "@/lib/events";
+import { useActionToast } from "@/lib/useActionToast";
 import { AnalysisFocus } from "./AnalysisFocus";
 
 interface RunField {
@@ -58,6 +59,7 @@ export function AnalysisCard({
   const m = useTranslations("Main");
   const locale = useLocale();
   const client = useQueryClient();
+  const toast = useActionToast();
   useWorkspaceEvents(workspaceId, ["analysis"]);
   const key = ["analysis", workspaceId];
   const run = useQuery({
@@ -69,6 +71,7 @@ export function AnalysisCard({
     mutationFn: (fieldIds?: string[]) =>
       api<Run>(`/api/w/${workspaceId}/analysis-runs`, { body: fieldIds ? { fieldIds } : {} }),
     onSuccess: (r) => client.setQueryData(key, r),
+    onError: (e, fieldIds) => toast.fail(e, m("analyze"), () => start.mutate(fieldIds)),
   });
 
   const r = run.data;
@@ -109,12 +112,12 @@ export function AnalysisCard({
 
   return (
     <section aria-live="polite" className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        {statusLine && <p className="min-w-0 text-small text-ink-2">{statusLine}</p>}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        {statusLine && <p className="min-w-0 text-caption text-ink-2">{statusLine}</p>}
         {canRun && (
           <span className="inline-flex items-center gap-2">
             <Button
-              variant="outline"
+              variant="link"
               icon={<Play />}
               onClick={() => start.mutate(undefined)}
               disabled={running}
@@ -129,9 +132,13 @@ export function AnalysisCard({
         )}
       </div>
       {running && r?.fields && (
-        <AnalysisFocus fields={r.fields.map((f) => ({ id: f.fieldId, name: f.name, status: f.status }))} />
+        <AnalysisFocus
+          fields={r.fields.map((f) => ({ id: f.fieldId, name: f.name, status: f.status }))}
+          {...(r.startedAt ? { startedAt: r.startedAt } : {})}
+        />
       )}
       {running && r?.fields && (
+        <Disclosure summary={m("an_details")}>
         <AnalysisPanel
           title={m("analyzing")}
           fields={r.fields.map((f) => ({
@@ -151,14 +158,16 @@ export function AnalysisCard({
           retryLabel={t("retry")}
           onRetry={retry}
         />
+        </Disclosure>
       )}
       {!running &&
         r?.summary?.problems.map((p) => (
-          <div
+          <Surface
             key={p.fieldId}
-            className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-line bg-surface p-3"
+            pad="sm"
+            className="flex flex-wrap items-center justify-between gap-3"
           >
-            <p className={`text-small ${p.status === "failed" ? "text-urgent" : "text-week"}`}>
+            <p className={`text-caption ${p.status === "failed" ? "text-urgent" : "text-week"}`}>
               {p.status === "stale" && p.dataDate
                 ? t("anStale", { name: p.name, reason: reason(p), date: date(`${p.dataDate}T12:00:00Z`) })
                 : t("anFailed", { name: p.name, reason: reason(p) })}
@@ -168,7 +177,7 @@ export function AnalysisCard({
                 {t("anRetryField", { name: p.name })}
               </Button>
             )}
-          </div>
+          </Surface>
         ))}
     </section>
   );
