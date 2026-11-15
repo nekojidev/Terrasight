@@ -13,6 +13,9 @@ interface WorkspaceDetail {
   role: Me["workspaces"][number]["role"];
 }
 
+/** Owners and Agronomists both manage fields (Product Definition roles; the API's `fields.write`). */
+const canWriteFields = (role: WorkspaceDetail["role"]) => role === "owner" || role === "agronomist";
+
 /** Design 07: fields by county with the region map (S-04.08). */
 export default async function FieldsPage() {
   const me = await serverGet<Me>("/api/me");
@@ -36,7 +39,12 @@ export default async function FieldsPage() {
       crumb={t("fieldsTitle")}
     >
       {fields.ok ? (
-        <FieldsOverview data={fields.data} units={ws.data.units} canEdit />
+        <FieldsOverview
+          data={fields.data}
+          units={ws.data.units}
+          canEdit={canWriteFields(ws.data.role)}
+          workspaceId={ws.data.id}
+        />
       ) : (
         <p className="text-body text-urgent">{t("errGeneric")}</p>
       )}
