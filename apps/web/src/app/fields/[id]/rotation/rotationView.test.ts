@@ -1,8 +1,15 @@
 import { YEAR_SET_IDS, type YearSetComparison, type YearSetId } from "@terrasight/shared";
 import { describe, expect, it } from "vitest";
 import {
+  defaultOptionIds,
   findYearSets,
-  pestKey, planStatus, priceSourceKind, relaxedKey, reliabilityOf,
+  noWeatherSpread,
+  rerankYearSets,
+  pestKey,
+  planStatus,
+  priceSourceKind,
+  relaxedKey,
+  reliabilityOf,
   visibleNotice,
 } from "./rotationView";
 
@@ -82,13 +89,17 @@ describe("findYearSets", () => {
     names: {},
   });
   it("states nothing without the 'all' set or without a second set", () => {
-    expect(findYearSets(cmp([set("last-15", ["a", "b"]), set("trend-2030", ["b", "a"])]), YEAR_SET_IDS, "a").kind).toBe(
-      "none",
-    );
+    expect(
+      findYearSets(cmp([set("last-15", ["a", "b"]), set("trend-2030", ["b", "a"])]), YEAR_SET_IDS, "a").kind,
+    ).toBe("none");
     expect(findYearSets(cmp([set("all", ["a", "b"])]), YEAR_SET_IDS, "a").kind).toBe("none");
   });
   it("same winner but a different order is not called the same order", () => {
-    const f = findYearSets(cmp([set("all", ["a", "b", "c"]), set("last-15", ["a", "c", "b"])]), YEAR_SET_IDS, "a");
+    const f = findYearSets(
+      cmp([set("all", ["a", "b", "c"]), set("last-15", ["a", "c", "b"])]),
+      YEAR_SET_IDS,
+      "a",
+    );
     expect(f).toEqual({ kind: "same", sameOrder: false, complete: false });
   });
   it("lists only the sets whose best differs", () => {
@@ -97,7 +108,12 @@ describe("findYearSets", () => {
       YEAR_SET_IDS,
       "x",
     );
-    expect(f).toMatchObject({ kind: "changes", allBest: "a", changed: [{ set: "last-15", best: "b" }], currentNote: null });
+    expect(f).toMatchObject({
+      kind: "changes",
+      allBest: "a",
+      changed: [{ set: "last-15", best: "b" }],
+      currentNote: null,
+    });
   });
   it("current-rotation note only when it won in 1981–2000 and lost in the last 15 years", () => {
     const f = findYearSets(
@@ -106,5 +122,67 @@ describe("findYearSets", () => {
       "a",
     );
     expect(f).toMatchObject({ kind: "changes", currentNote: { rank: 2 } });
+  });
+});
+
+describe("rerankYearSets, noWeatherSpread, defaultOptionIds", () => {
+  const sc = (id: string, over: Record<string, unknown> = {}) =>
+    ({
+      id,
+      kind: id === "cur" ? "current" : "alternative",
+      margin: 100,
+      drought: 80,
+      droughtYield: 0.8,
+      water: 100,
+      erosion: 10,
+      carbonChange: 0,
+      score: 0,
+      ...over,
+    }) as never;
+  it("ranks every set with the headline's priority and keeps the page's order for 'all'", () => {
+    const scenarios = [sc("cur", { score: 0.4 }), sc("a", { score: 0.9 }), sc("b", { score: 0.5 })];
+    const opt = (id: string, margin: number) => ({ id, rank: 1, margin, drought: margin, score: 0 });
+    const cmp = {
+      mode: "money",
+      currency: "USD",
+      bestChanges: false,
+      names: {},
+      sets: [
+        {
+          id: "all",
+          years: { from: 1, to: 2, count: 2 },
+          shift: null,
+          best: "b",
+          options: [opt("b", 300), opt("a", 200), opt("cur", 100)],
+        },
+        {
+          id: "last-15",
+          years: { from: 1, to: 2, count: 2 },
+          shift: null,
+          best: "cur",
+          options: [opt("cur", 100), opt("a", 90), opt("b", 80)],
+        },
+      ],
+    } as never as YearSetComparison;
+    const out = rerankYearSets(cmp, scenarios, { margin: 3, water: 0.25, soil: 0.25, drought: 0.25 }, false);
+    expect(out.sets[0]!.best).toBe("a");
+    expect(out.sets[0]!.options.map((o) => o.id)).toEqual(["a", "b", "cur"]);
+    expect(out.sets[1]!.best).toBe("cur");
+  });
+  it("detects an irrigated field with no weather spread", () => {
+    expect(
+      noWeatherSpread([sc("cur"), sc("a")].map((x) => ({ ...(x as object), drought: 100 }) as never)),
+    ).toBe(true);
+    expect(noWeatherSpread([sc("cur"), sc("a")])).toBe(false);
+  });
+  it("shows the current, the recommended and the next best by default", () => {
+    const list = [
+      sc("cur", { score: 0.1 }),
+      sc("a", { score: 0.9 }),
+      sc("b", { score: 0.8 }),
+      sc("c", { score: 0.7 }),
+    ];
+    expect(defaultOptionIds(list, "a", null)).toEqual(["cur", "a", "b"]);
+    expect(defaultOptionIds(list, "a", "c")).toEqual(["cur", "a", "b", "c"]);
   });
 });

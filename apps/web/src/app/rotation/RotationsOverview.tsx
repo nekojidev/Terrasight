@@ -7,8 +7,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
+import type { FarmStress } from "@terrasight/shared";
+import { FarmStressCard } from "@/components/FarmStressCard";
 import { QueryState } from "@/components/QueryState";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import { useFormat } from "@/lib/useFormat";
 import { LandChip, type LandView } from "@/components/LandSuitability";
 import { planStatus, type PlanStatus } from "../fields/[id]/rotation/rotationView";
@@ -46,7 +48,15 @@ const STATUS: Record<PlanStatus, { key: string; tone: ChipTone; icon: ReactNode 
 };
 
 /** "Plan": every field's decision for the next season and the way into its options. Table on desktop, cards on a phone. */
-export function RotationsOverview({ workspaceId, units }: { workspaceId: string; units: "metric" | "imperial" }) {
+export function RotationsOverview({
+  workspaceId,
+  units,
+  isOwner = false,
+}: {
+  workspaceId: string;
+  units: "metric" | "imperial";
+  isOwner?: boolean;
+}) {
   const t = useTranslations("App");
   const r = useTranslations("Rotation");
   const locale = useLocale() as "en" | "uk";
@@ -55,6 +65,30 @@ export function RotationsOverview({ workspaceId, units }: { workspaceId: string;
   const q = useQuery({
     queryKey: ["rotations", workspaceId],
     queryFn: () => api<Overview>(`/api/w/${workspaceId}/rotations`),
+  });
+
+  // The same query the home line uses (same key, same cache); a 404 (API not deployed) means "unavailable".
+  const stress = useQuery({
+    queryKey: ["brief", workspaceId, "farm-stress"],
+    queryFn: async (): Promise<FarmStress> => {
+      try {
+        return await api<FarmStress>(`/api/w/${workspaceId}/farm-stress`);
+      } catch (e) {
+        if (e instanceof ApiError && e.problem.status === 404)
+          return {
+            status: "unavailable",
+            stressYear: 2022,
+            season: new Date().getFullYear(),
+            currency: null,
+            current: null,
+            recommended: null,
+            difference: null,
+            counted: [],
+            notCounted: [],
+          };
+        throw e;
+      }
+    },
   });
 
   return (
@@ -84,25 +118,33 @@ export function RotationsOverview({ workspaceId, units }: { workspaceId: string;
         {(overview) => {
           const crop = (id: string | null) =>
             id ? (overview.cropNames[id]?.[locale] ?? r("crop_unknown")) : "—";
-          const rows = overview.fields.map((f) => {
-            const status = planStatus(f);
-            const rec = f.recommendation;
-            const next =
-              status === "saved" && f.plan
-                ? crop(f.plan.crop)
-                : status === "proposed" && rec
-                  ? rec.bestOption === "current"
-                    ? t("rvKeep")
-                    : crop(rec.firstCrop)
-                  : "—";
-            const decideBy =
-              status === "proposed" && rec?.deadline
-                ? t("rvDecideBy", {
-                    date: fmt.date(`${rec.deadline}T12:00:00Z`, "full", { timeZone: "UTC" }),
-                  })
-                : null;
-            return { f, status, next, decideBy };
-          });
+          const needsDecision = (st: PlanStatus) => st === "proposed";
+          const rows = overview.fields
+            .map((f) => {
+              const status = planStatus(f);
+              const rec = f.recommendation;
+              const next =
+                status === "saved" && f.plan
+                  ? crop(f.plan.crop)
+                  : status === "proposed" && rec
+                    ? rec.bestOption === "current"
+                      ? t("rvKeep")
+                      : crop(rec.firstCrop)
+                    : "—";
+              const decideBy =
+                status === "proposed" && rec?.deadline
+                  ? t("rvDecideBy", {
+                      date: fmt.date(`${rec.deadline}T12:00:00Z`, "full", { timeZone: "UTC" }),
+                    })
+                  : null;
+              return { f, status, next, decideBy };
+            })
+            .sort((a, b) => Number(needsDecision(b.status)) - Number(needsDecision(a.status)));
+          const need = rows.filter((x) => needsDecision(x.status)).length;
+          const compare = (st: PlanStatus) => st === "proposed";
+          const actionLabel = (st: PlanStatus) => r(compare(st) ? "plan_act_compare" : "plan_act_open");
+          const actionAria = (st: PlanStatus, name: string) =>
+            r(compare(st) ? "plan_open" : "plan_open_plan", { name });
           const chip = (status: PlanStatus) => (
             <Chip tone={STATUS[status].tone} icon={STATUS[status].icon}>
               {r(STATUS[status].key)}
@@ -112,6 +154,9 @@ export function RotationsOverview({ workspaceId, units }: { workspaceId: string;
             [fmt.area(f.areaHa), f.county].filter(Boolean).join(" · ");
           return (
             <>
+              <p className="text-body font-semibold text-ink" data-testid="plan-summary">
+                {r("plan_summary", { need, total: rows.length })}
+              </p>
               <Surface pad="none" className="hidden overflow-x-auto md:block">
                 <table className="w-full text-body">
                   <caption className="sr-only">{r("plan_table")}</caption>
@@ -156,10 +201,10 @@ export function RotationsOverview({ workspaceId, units }: { workspaceId: string;
                         <td className="p-4 text-right">
                           <Link
                             href={`/fields/${f.fieldId}/rotation`}
-                            aria-label={r("plan_open", { name: f.name })}
+                            aria-label={actionAria(status, f.name)}
                             className="focus-ring inline-flex min-h-tap items-center gap-1 rounded-btn px-2 text-body font-semibold text-ink"
                           >
-                            {t("rvOpen")}
+                            {actionLabel(status)}
                             <ChevronRight aria-hidden className="size-4" />
                           </Link>
                         </td>
@@ -171,12 +216,19 @@ export function RotationsOverview({ workspaceId, units }: { workspaceId: string;
 
               <ul className="flex flex-col gap-3 md:hidden">
                 {rows.map(({ f, status, next, decideBy }, i) => (
-                  <li key={f.fieldId} className="animate-rise stagger" style={{ "--i": i } as React.CSSProperties}>
+                  <li
+                    key={f.fieldId}
+                    className="animate-rise stagger"
+                    style={{ "--i": i } as React.CSSProperties}
+                  >
                     <Surface pad="sm" className="flex flex-col gap-3">
                       <div>
                         <p className="flex flex-wrap items-center gap-2 text-body font-semibold text-ink">
                           {f.name}
-                          <LandChip status={f.suitability?.status} overridden={Boolean(f.suitability?.override)} />
+                          <LandChip
+                            status={f.suitability?.status}
+                            overridden={Boolean(f.suitability?.override)}
+                          />
                         </p>
                         <p className="text-caption text-ink-2">{meta(f)}</p>
                       </div>
@@ -189,10 +241,10 @@ export function RotationsOverview({ workspaceId, units }: { workspaceId: string;
                         {chip(status)}
                         <Link
                           href={`/fields/${f.fieldId}/rotation`}
-                          aria-label={r("plan_open", { name: f.name })}
+                          aria-label={actionAria(status, f.name)}
                           className="focus-ring inline-flex min-h-tap items-center gap-1 rounded-btn px-2 text-body font-semibold text-ink"
                         >
-                          {t("rvOpen")}
+                          {actionLabel(status)}
                           <ChevronRight aria-hidden className="size-4" />
                         </Link>
                       </div>
@@ -204,6 +256,16 @@ export function RotationsOverview({ workspaceId, units }: { workspaceId: string;
           );
         }}
       </QueryState>
+      <section id="stress" aria-label={r("stress_title")} className="scroll-mt-20">
+        <FarmStressCard
+          data={stress.data}
+          isLoading={stress.isLoading}
+          isError={stress.isError}
+          onRetry={() => void stress.refetch()}
+          isOwner={isOwner}
+          units={units}
+        />
+      </section>
     </PageContainer>
   );
 }

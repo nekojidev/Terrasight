@@ -29,7 +29,11 @@ export function DataBasis({
   const period = (i: DataBasisItem) => {
     if (!i.from || !i.to) return null;
     if (i.from.endsWith("-01-01") && i.to.endsWith("-12-31"))
-      return t("basis_period_years", { from: i.from.slice(0, 4), to: i.to.slice(0, 4) });
+      return t("basis_period_years", {
+        from: i.from.slice(0, 4),
+        to: i.to.slice(0, 4),
+        same: i.from.slice(0, 4) === i.to.slice(0, 4) ? "yes" : "no",
+      });
     return t("basis_period", { from: day(i.from), to: day(i.to) });
   };
 

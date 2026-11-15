@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { rank, type Metric, type ScenarioResult } from "@terrasight/scenario-engine";
+import type { DecisionList } from "@terrasight/shared";
 import {
   Button,
   Chip,
@@ -9,7 +10,6 @@ import {
   FieldThumb,
   InfoHint,
   Kicker,
-  ProgressBar,
   SeasonStrip,
   SelectField,
   Surface,
@@ -23,8 +23,6 @@ import {
   Equal,
   Leaf,
   PiggyBank,
-  Shield,
-  ShieldAlert,
   ShieldCheck,
   Sparkles,
   TrendingDown,
@@ -33,28 +31,39 @@ import {
   Wallet,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useId, useMemo, useState } from "react";
-import { YEAR_SET_IDS, type ClimateShift, type DataBasisItem, type YearSetComparison } from "@terrasight/shared";
+import {
+  type ClimateShift,
+  type DataBasisItem,
+  type YearSetComparison,
+} from "@terrasight/shared";
 import { api, ApiError } from "@/lib/api";
 import { ClimateShiftCard } from "@/components/ClimateShiftCard";
 import { DataBasis } from "@/components/DataBasis";
 import { CaveatNotes } from "@/components/CaveatNotes";
 import { CropPricesEditor } from "@/components/CropPricesEditor";
+import { NoticeStack } from "@/components/NoticeStack";
+import { SuggestionChips } from "@/components/SuggestionChips";
+import { TrustLine } from "@/components/TrustLine";
+import { askHref } from "@/lib/ask";
 import { QueryState } from "@/components/QueryState";
 import { useFormat } from "@/lib/useFormat";
 import { useActionToast } from "@/lib/useActionToast";
 import { FieldTabs } from "../Overview";
 import { LandBanner, LandBlocked, type LandView } from "@/components/LandSuitability";
 import { CumulativeChart } from "./CumulativeChart";
-import { YearSets, heroSentence } from "./YearSets";
+import { YearSets } from "./YearSets";
 import { RunProgress } from "./RunProgress";
 import {
-  findYearSets,
+  defaultOptionIds,
+  noWeatherSpread,
   pestKey,
   priceSourceKind,
   reliabilityOf,
   relaxedKey,
+  rerankYearSets,
   visibleNotice,
 } from "./rotationView";
 
@@ -121,14 +130,37 @@ const PRIORITY: Array<{ key: Metric; icon: React.ReactNode; label: string }> = [
 const seqCrops = (s: string | { main: string; second: string }) =>
   typeof s === "string" ? [s] : [s.main, s.second];
 
-/** True after the first paint: lets bars start empty and grow, so the reveal animates. */
-function useMounted(): boolean {
-  const [m, setM] = useState(false);
+/** One collapsed evidence row: a title and a one-line summary while closed; `#id` in the URL opens it. */
+function EvidenceRow({
+  id,
+  title,
+  note,
+  children,
+}: {
+  id: string;
+  title: string;
+  note: string;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
   useEffect(() => {
-    const id = window.requestAnimationFrame(() => setM(true));
-    return () => window.cancelAnimationFrame(id);
-  }, []);
-  return m;
+    const sync = () => {
+      if (window.location.hash === `#${id}`) {
+        setOpen(true);
+        document.getElementById(id)?.scrollIntoView?.({ block: "start" });
+      }
+    };
+    sync();
+    window.addEventListener("hashchange", sync);
+    return () => window.removeEventListener("hashchange", sync);
+  }, [id]);
+  return (
+    <section id={id} className="scroll-mt-20 rounded-card border border-line bg-surface px-4 py-1">
+      <Disclosure open={open} onOpenChange={setOpen} id={`${id}-panel`} summary={title} summaryNote={note}>
+        {children}
+      </Disclosure>
+    </section>
+  );
 }
 
 function FieldHeader({
@@ -280,7 +312,10 @@ export function RotationClient({
   // Land suitability comes with the field (same query as the field page), so the override refreshes both.
   const land = useQuery({
     queryKey: ["field", workspaceId, fieldId, "info"],
-    queryFn: () => api<{ suitability?: LandView | null; country?: string | null }>(`/api/w/${workspaceId}/fields/${fieldId}`),
+    queryFn: () =>
+      api<{ suitability?: LandView | null; country?: string | null }>(
+        `/api/w/${workspaceId}/fields/${fieldId}`,
+      ),
   });
 
   // A re-run that fails keeps the old numbers on screen and says so in a toast with Retry.
@@ -301,7 +336,11 @@ export function RotationClient({
 
   // The weather-year comparison starts only after the main run has resolved, and never blocks it.
   const runReady =
-    run.isSuccess && !run.isPlaceholderData && !run.data.pending && !run.data.noLibrary && !run.data.landUnsuitable;
+    run.isSuccess &&
+    !run.isPlaceholderData &&
+    !run.data.pending &&
+    !run.data.noLibrary &&
+    !run.data.landUnsuitable;
   const yearSets = useQuery({
     queryKey: ["scenarios", workspaceId, fieldId, "year-sets", overrides],
     queryFn: () =>
@@ -314,24 +353,32 @@ export function RotationClient({
   });
 
   const header = <FieldHeader fieldId={fieldId} fieldName={fieldName} thumb={thumb} crop={crop} />;
+  // The Owner decides; a waiting decision about this field is linked from the read-only view.
+  const decisions = useQuery({
+    queryKey: ["decisions", workspaceId, "all"],
+    queryFn: () => api<DecisionList>(`/api/w/${workspaceId}/decisions?state=all`),
+    enabled: !canSave,
+  });
+  const waitingDecision = (decisions.data?.items ?? []).some(
+    (d) => d.fieldId === fieldId && (d.state === "waiting" || d.state === "question"),
+  );
+  const climateCard = (
+    <ClimateShiftCard
+      data={climate.data}
+      isLoading={climate.isLoading}
+      isError={climate.isError}
+      onRetry={() => void climate.refetch()}
+      {...(land.data?.country ? { country: land.data.country } : {})}
+      units={units}
+      trustHref={`/fields/${fieldId}/trust`}
+      compact
+      collapsed
+    />
+  );
   return (
     <div className="flex flex-col gap-6">
       {header}
-      <ClimateShiftCard
-        data={climate.data}
-        isLoading={climate.isLoading}
-        isError={climate.isError}
-        onRetry={() => void climate.refetch()}
-        {...(land.data?.country ? { country: land.data.country } : {})}
-        units={units}
-        trustHref={`/fields/${fieldId}/trust`}
-        compact
-      />
-      <QueryState
-        query={run}
-        what={r("run_error_what")}
-        skeleton={<RunProgress agro={false} />}
-      >
+      <QueryState query={run} what={r("run_error_what")} skeleton={<RunProgress agro={false} />}>
         {(data) => (
           <RotationBody
             data={data}
@@ -340,6 +387,9 @@ export function RotationClient({
             fieldName={fieldName}
             units={units}
             canSave={canSave}
+            waitingDecision={waitingDecision}
+            country={land.data?.country ?? null}
+            climateCard={climateCard}
             suitability={land.data?.suitability ?? null}
             fetching={run.isFetching}
             overrides={overrides}
@@ -357,8 +407,11 @@ function RotationBody({
   workspaceId,
   fieldId,
   fieldName,
-  units,
+  units: workspaceUnits,
   canSave,
+  waitingDecision,
+  country,
+  climateCard,
   suitability,
   fetching,
   overrides,
@@ -371,6 +424,9 @@ function RotationBody({
   fieldName: string;
   units: "metric" | "imperial";
   canSave: boolean;
+  waitingDecision: boolean;
+  country: string | null;
+  climateCard: React.ReactNode;
   suitability: LandView | null;
   fetching: boolean;
   overrides: Overrides;
@@ -385,13 +441,20 @@ function RotationBody({
   const t = useTranslations("App");
   const r = useTranslations("Rotation");
   const locale = useLocale() as "en" | "uk";
+  // Amounts follow the field's country (US: per acre), not only the workspace setting.
+  const units: "metric" | "imperial" = country
+    ? country.toUpperCase() === "US"
+      ? "imperial"
+      : "metric"
+    : workspaceUnits;
   const fmt = useFormat({ units });
+  const router = useRouter();
   const { fail } = useActionToast();
   const groupName = useId();
-  const mounted = useMounted();
   const [priority, setPriority] = useState<Metric>("margin");
   const [chosen, setChosen] = useState<string | null>(null);
   const [showPrices, setShowPrices] = useState(false);
+  const [showAll, setShowAll] = useState(false);
   const [draft, setDraft] = useState({
     deltaT: overrides.deltaT ?? 0,
     rain: overrides.precipFactor ? Math.round((overrides.precipFactor - 1) * 100) : 0,
@@ -410,12 +473,19 @@ function RotationBody({
   const priorities = agro ? PRIORITY.filter((p) => p.key !== "margin") : PRIORITY;
   const effPriority: Metric = agro && priority === "margin" ? "water" : priority;
 
+  const weights = useMemo(
+    () =>
+      ({ margin: agro ? 0 : 0.25, water: 0.25, soil: 0.25, drought: 0.25, [effPriority]: 3 }) as Record<
+        Metric,
+        number
+      >,
+    [effPriority, agro],
+  );
   const scenarios = useMemo(() => {
     if (!data.result) return [];
     const all = [data.result.current, ...data.result.alternatives];
-    const w = { margin: agro ? 0 : 0.25, water: 0.25, soil: 0.25, drought: 0.25, [effPriority]: 3 };
-    return rank(all, w as Record<Metric, number>);
-  }, [data, effPriority, agro]);
+    return rank(all, weights);
+  }, [data, weights]);
   const best = scenarios.reduce<ScenarioResult | null>(
     (b, s) => (!b || (s.score ?? 0) > (b.score ?? 0) ? s : b),
     null,
@@ -554,7 +624,8 @@ function RotationBody({
     const out: string[] = [];
     if (s.delta.margin != null && s.delta.margin > 0)
       out.push(t("rotProMargin", { delta: signed(s.delta.margin), unit }));
-    if (s.water < current.water - 5) out.push(t("rotProWater", { amount: fmt.rain(current.water - s.water) }));
+    if (s.water < current.water - 5)
+      out.push(t("rotProWater", { amount: fmt.rain(current.water - s.water) }));
     if (
       s.carbonChange != null &&
       current.carbonChange != null &&
@@ -640,14 +711,23 @@ function RotationBody({
       return { icon: <Equal />, text: r("diff_same") };
     }
     const dm = pick.delta.margin ?? 0;
-    const shown = Math.round(Math.abs(perUnit(dm)));
-    if (shown === 0) return { icon: <Equal />, text: r("diff_same") };
-    const delta = fmt.money(shown, cur);
+    if (Math.round(Math.abs(perUnit(dm))) === 0) return { icon: <Equal />, text: r("diff_same") };
+    const amount = fmt.moneyPerArea(Math.abs(dm), cur);
     return dm > 0
-      ? { icon: <TrendingUp />, text: r("diff_more", { delta, unit }) }
-      : { icon: <TrendingDown />, text: r("diff_less", { delta, unit }) };
+      ? { icon: <TrendingUp />, text: r("hd_more", { amount }) }
+      : { icon: <TrendingDown />, text: r("hd_less", { amount }) };
   })();
-  const relIcon = rel === "high" ? <ShieldCheck /> : rel === "medium" ? <Shield /> : <ShieldAlert />;
+  /** Agronomy-only: the pick has a lower bad-year yield than today; say why it is still recommended. */
+  const agroWhy = (() => {
+    if (!agro || !pick || isCurrent) return null;
+    const d = Math.round(pick.delta.drought * 100);
+    if (d >= 0) return null;
+    const why = pros(pick)
+      .filter((x) => x !== t("rotProCurrent"))
+      .slice(0, 2)
+      .join("; ");
+    return why ? r("agro_less_why", { n: -d, why }) : r("agro_less_plain", { n: -d });
+  })();
   const priceKind = priceSourceKind({ priceLabel: data.priceLabel, regionId: data.regionId });
   const priceLine =
     priceKind === "company"
@@ -677,7 +757,7 @@ function RotationBody({
   const noteItems: string[] = [
     r(agro ? "note_agro" : "note_money", { n: data.result.candidates + 1 }),
     ...(agro ? [t("rotAgroSub")] : []),
-    ...(agro && notice !== "agro" ? [t("rotAgroWhy")] : []),
+    ...(agro ? [t("rotAgroWhy")] : []),
     ...(data.regionVerify ? [t("rotVerify")] : []),
     ...(!agro && priceLine ? [priceLine] : []),
     ...(data.aiStatus === "unavailable" ? [t("rotAiUnavailable")] : []),
@@ -704,66 +784,78 @@ function RotationBody({
       : r("weather_line_nolast", { from: w.from, to: w.to, count: w.count })
     : null;
 
-  // Sensitivity to the weather years: the label of an option is its letter and name, as in the rest of the page.
+  // Sensitivity to the weather years (ranked with the headline's priority): the label of an option is its letter and name, as in the rest of the page.
   const optionLabel = (id: string) => {
     const k = scenarios.findIndex((x) => x.id === id);
     const s = scenarios[k];
     return s ? `${letters[k] ?? ""} · ${name(s)}` : (yearSets.data?.names[id]?.[locale] ?? r("crop_unknown"));
   };
-  const finding = yearSets.data ? findYearSets(yearSets.data, YEAR_SET_IDS, current.id) : null;
-  const heroYs = finding ? heroSentence(finding, r as never, optionLabel) : null;
 
   const saveLabel = save.isSuccess ? t("rotSaved", { season: first }) : t("rotSave", { season: first });
+  // The weather-year sets are ranked with the same priority as the headline (and the page's own order for "all").
+  const rankedSets = yearSets.data ? rerankYearSets(yearSets.data, scenarios, weights, agro) : undefined;
+  const flat = !agro && noWeatherSpread(scenarios);
+  const optionLetter = (id: string) => letters[scenarios.findIndex((x) => x.id === id)] ?? "";
+  const visibleIds = new Set(
+    showAll ? scenarios.map((x) => x.id) : defaultOptionIds(scenarios, best?.id ?? null, chosen),
+  );
+  const group = (x: ScenarioResult) => (x.kind === "current" ? 0 : x.id === best?.id ? 1 : 2);
+  const shown = scenarios
+    .filter((x) => visibleIds.has(x.id))
+    .sort((a, b) => group(a) - group(b) || (b.score ?? 0) - (a.score ?? 0));
+  const seqOf = (x: ScenarioResult) => x.plan.map((q) => q.crops.map(cropLabel).join(" + ")).join(" → ");
+  /** Signed money per area in the field's unit: "−$192 per ac". */
+  const perArea = (perHa: number) => `${perHa < 0 ? "−" : ""}${fmt.moneyPerArea(Math.abs(perHa), cur)}`;
+  const whyLine = (x: ScenarioResult) => (x.source === "ai" && rationaleOf(x)) || pros(x)[0] || "";
+  const questions = [
+    ...(pick && !isCurrent
+      ? [{ id: "why", text: r("ask_why", { crop: cropLabel(firstCrop ?? "fallow") }) }]
+      : []),
+    { id: "bad", text: r("ask_bad_year") },
+    { id: "safe", text: r("ask_safe") },
+  ].slice(0, 3);
+  const evOpen = (id: string, title: string, note: string, children: React.ReactNode) => (
+    <EvidenceRow key={id} id={id} title={title} note={note}>
+      {children}
+    </EvidenceRow>
+  );
+  const y22 = scenarios.map((x) => {
+    const ok = Number.isFinite(x.if2022.margin) && Number.isFinite(x.if2022.typical);
+    return { s: x, ok, same: ok && Math.abs(perUnit(x.if2022.typical - x.if2022.margin)) < 0.5 };
+  });
+  const y22Same = y22.length > 0 && y22.every((x) => x.same);
+  const pickY22 = pick ? y22.find((x) => x.s.id === pick.id) : undefined;
+  const hasWaitingDecision = waitingDecision;
+
+  const dataLine = (
+    <div className="flex flex-col gap-1">
+      <p className="text-caption text-ink-2">{r(agro ? "rel_basis_agro" : "rel_basis_money")}</p>
+      {rel !== "high" && <p className="text-caption text-ink-2">{r("rel_check")}</p>}
+      {weatherLine && <p className="text-caption text-ink-2">{weatherLine}</p>}
+      <p className="text-caption text-ink-2">
+        {t("rotBannerSub", { from: first, to: first + 4 })}{" "}
+        <InfoHint label={t("hintLabel")}>
+          {seasonHintText(t("hintSeason"), first)} {t("hintHorizon")}
+        </InfoHint>
+      </p>
+      {!agro && priceChip && (
+        <div className="mt-1">
+          <Chip tone="neutral">{priceChip}</Chip>
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <div className="flex flex-col gap-8">
-      {notice === "land" && <LandBanner suitability={suitability} fieldId={fieldId} />}
-      {notice === "agro" && (
-        <Surface as="section" tone="inset" pad="lg" aria-labelledby="agro-status" className="flex flex-col gap-3">
-          <h2 id="agro-status" className="flex items-center gap-2 text-h2 text-ink">
-            <TriangleAlert aria-hidden className="size-5 shrink-0 text-week" />
-            {t("rotAgroTitle")}
-          </h2>
-          <p className="text-body text-ink">{t("rotAgroWhy")}</p>
-          <p className="text-body text-ink-2">{t("rotAgroDo")}</p>
-          {(data.cropsNeedingPrices?.length ?? 0) > 0 && (
-            <p className="text-caption text-ink-2">
-              {t("rotAgroMissing", { list: data.cropsNeedingPrices!.map(cropLabel).join(", ") })}
-            </p>
-          )}
-          {canSave ? (
-            <div className="flex flex-col gap-4">
-              <div>
-                <Button
-                  variant="outline"
-                  icon={<Wallet />}
-                  onClick={() => setShowPrices((v) => !v)}
-                  aria-expanded={showPrices}
-                >
-                  {t("rotEnterPrices")}
-                </Button>
-              </div>
-              {showPrices && (
-                <CropPricesEditor
-                  workspaceId={workspaceId}
-                  crops={priceCrops}
-                  needYield={data.needYield}
-                  yieldHints={data.yieldHints}
-                  onSaved={() => setShowPrices(false)}
-                  onCancel={() => setShowPrices(false)}
-                />
-              )}
-            </div>
-          ) : (
-            <p className="text-caption text-ink-2">{r("read_only")}</p>
-          )}
-        </Surface>
-      )}
-      {notice === "estimate" && histForm(true, false)}
-      {fetching && <RunProgress agro={agro} compact />}
-
-      {/* 1. The headline */}
-      <Surface as="section" tone="hero" pad="lg" aria-labelledby="headline" className="animate-rise flex flex-col gap-4">
+      {/* 1. The decision: headline, one trust line, the primary action, three questions */}
+      <Surface
+        as="section"
+        tone="hero"
+        pad="lg"
+        aria-labelledby="headline"
+        className="animate-rise flex flex-col gap-4"
+      >
         <div className="flex items-start gap-4">
           <span
             aria-hidden
@@ -779,54 +871,29 @@ function RotationBody({
                   : t("rotRecommended", { season: first })}
             </Kicker>
             <h2 id="headline" className="text-h1 text-ink">
-              {t("rotSow", { crop: cropLabel(firstCrop ?? "fallow") })}
+              {r("h_sow", { crop: cropLabel(firstCrop ?? "fallow"), season: first })}
             </h2>
           </div>
         </div>
-        <p className="flex items-start gap-2 text-body font-semibold text-ink [&>svg]:mt-0.5 [&>svg]:size-5 [&>svg]:shrink-0">
+        <p className="flex items-start gap-2 text-body font-semibold text-ink [&>span>svg]:mt-0.5 [&>span>svg]:size-5 [&>span>svg]:shrink-0">
           <span aria-hidden className="inline-flex">
             {diff.icon}
           </span>
           {diff.text}
         </p>
-        <div className="flex flex-col gap-1">
-          <p className="flex items-center gap-2 text-body text-ink [&>span>svg]:size-5">
-            <span aria-hidden className="inline-flex">
-              {relIcon}
-            </span>
-            <span className="font-semibold">
-              {r("rel_label")}: {r(`rel_${rel}`)}
-            </span>
-          </p>
-          <p className="text-caption text-ink-2">{r(agro ? "rel_basis_agro" : "rel_basis_money")}</p>
-          {rel !== "high" && <p className="text-caption text-ink-2">{r("rel_check")}</p>}
-          <Link
-            href={`/fields/${fieldId}/trust`}
-            className="focus-ring inline-flex min-h-tap w-fit items-center text-caption text-ink-2 underline"
-          >
-            {r("trust_link")}
-          </Link>
-        </div>
-        {weatherLine && <p className="text-caption text-ink-2">{weatherLine}</p>}
-        {heroYs && (
-          <p className="text-body text-ink">
-            {heroYs}{" "}
-            <a href="#year-sets" className="focus-ring inline-flex min-h-tap items-center text-ink-2 underline">
-              {r("ys_hero_link")}
-            </a>
+        {agroWhy && <p className="text-body text-ink">{agroWhy}</p>}
+        {pick && (
+          <p className="text-body text-ink-2" data-testid="plan-line">
+            {r("plan_line", { from: first, to: first + 4, seq: seqOf(pick) })}
           </p>
         )}
-        <p className="text-caption text-ink-2">
-          {t("rotBannerSub", { from: first, to: first + 4 })}{" "}
-          <InfoHint label={t("hintLabel")}>
-            {seasonHintText(t("hintSeason"), first)} {t("hintHorizon")}
-          </InfoHint>
-        </p>
-        {!agro && priceChip && (
-          <div>
-            <Chip tone="neutral">{priceChip}</Chip>
-          </div>
-        )}
+        <TrustLine
+          reliability={rel}
+          {...(data.currentBasis === "estimated" ? { estimate: true } : {})}
+          sources={(data.dataBasis ?? []).map((b) => b.dataset)}
+          lastDate={w?.lastDate ?? null}
+          href={`/fields/${fieldId}/trust`}
+        />
         {canSave ? (
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <Button
@@ -841,11 +908,55 @@ function RotationBody({
             </Button>
           </div>
         ) : (
-          <p className="text-body text-ink-2">{r("read_only")}</p>
+          <div className="flex flex-col gap-1">
+            <p className="text-body text-ink-2">{r("owner_only")}</p>
+            {hasWaitingDecision && (
+              <p className="text-body text-ink">
+                {r("owner_decision")}{" "}
+                <Link
+                  href="/decisions"
+                  className="focus-ring inline-flex min-h-tap items-center font-semibold underline underline-offset-4"
+                >
+                  {r("owner_decision_link")}
+                </Link>
+              </p>
+            )}
+          </div>
         )}
+        <SuggestionChips questions={questions} onAsk={(q) => router.push(askHref(q.text, { fieldId }))} />
       </Surface>
 
-      {data.dataBasis && <DataBasis items={data.dataBasis} trustHref={`/fields/${fieldId}/trust`} compact />}
+      {/* One notice at most, below the decision */}
+      {notice === "land" && <LandBanner suitability={suitability} fieldId={fieldId} />}
+      {notice === "agro" && (
+        <div className="flex flex-col gap-3">
+          <NoticeStack
+            notices={[
+              {
+                id: "agro",
+                tone: "info",
+                title: t("rotAgroTitle"),
+                body: t("rotAgroDo"),
+                ...(canSave
+                  ? { action: { label: t("rotEnterPrices"), onClick: () => setShowPrices((v) => !v) } }
+                  : {}),
+              },
+            ]}
+          />
+          {canSave && showPrices && (
+            <CropPricesEditor
+              workspaceId={workspaceId}
+              crops={priceCrops}
+              needYield={data.needYield}
+              yieldHints={data.yieldHints}
+              onSaved={() => setShowPrices(false)}
+              onCancel={() => setShowPrices(false)}
+            />
+          )}
+        </div>
+      )}
+      {notice === "estimate" && histForm(true, false)}
+      {fetching && <RunProgress agro={agro} compact />}
 
       {/* 2. The options to compare */}
       <section className="flex flex-col gap-4" aria-labelledby="options">
@@ -895,23 +1006,26 @@ function RotationBody({
           </div>
         </fieldset>
 
+        {flat && <p className="text-body text-ink-2">{r("no_spread")}</p>}
+
         <div className="grid gap-4 lg:grid-cols-3">
-          {scenarios.map((s, i) => {
+          {shown.map((s, i) => {
             const isBest = s.id === best?.id;
             const isPick = s.id === pick?.id;
             const pests = s.pestPressure.filter((p) => p.seasons > 0);
+            const why = whyLine(s);
             return (
               <Surface
                 as="article"
                 key={s.id}
                 tone={isPick ? "hero" : "card"}
-                className={clsx("animate-rise stagger flex flex-col gap-4", isPick && "ring-2 ring-ink")}
+                className={clsx("animate-rise stagger flex flex-col gap-3", isPick && "ring-2 ring-ink")}
                 style={{ "--i": i } as React.CSSProperties}
               >
                 <div>
                   <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
                     <p className="text-caption font-semibold text-ink-2">
-                      {t("rotAlt", { letter: letters[i] ?? "" })}
+                      {t("rotAlt", { letter: optionLetter(s.id) })}
                     </p>
                     {isBest && (
                       <Chip tone="ok" icon={<Check />}>
@@ -925,12 +1039,7 @@ function RotationBody({
                     </Chip>
                   )}
                   <h3 className="text-h2 text-ink">{name(s)}</h3>
-                  {s.source === "ai" && rationaleOf(s) && (
-                    <p className="mt-1 text-caption text-ink-2">{rationaleOf(s)}</p>
-                  )}
-                  <p className="text-caption text-ink-2">
-                    {s.plan.map((p) => p.crops.map(cropLabel).join(" + ")).join(" → ")}
-                  </p>
+                  <p className="text-caption text-ink-2">{seqOf(s)}</p>
                 </div>
                 <SeasonStrip
                   seasons={s.plan.map((p) => ({
@@ -953,28 +1062,19 @@ function RotationBody({
                             delta: `${s.delta.drought >= 0 ? "+" : "−"}${Math.abs(Math.round(s.delta.drought * 100))}`,
                           })}
                     </p>
-                    <ul className="mt-3 flex flex-col gap-1 text-caption text-ink-2">
-                      <li>{t("rotAgroWater", { amount: fmt.rain(s.water) })}</li>
-                      <li>
-                        {s.carbonChange != null
-                          ? t("rotAgroSoil", { value: fmt.number(s.carbonChange, { maximumFractionDigits: 2 }) })
-                          : t("rotAgroSoilUnknown")}
-                      </li>
-                      <li>{t("rotAgroErosion", { value: fmt.number(Math.round(s.erosion)) })}</li>
-                    </ul>
                   </Surface>
                 ) : (
                   <Surface tone="inset" pad="sm">
-                    <p className="text-caption text-ink-2">{t("rotMargin")}</p>
-                    <p className="font-mono text-big-number text-ink">{money(s.margin ?? 0)}</p>
-                    <p className="text-caption text-ink-2">{t("rotPer", { unit, cur })}</p>
+                    <p className="font-mono text-big-number text-ink">
+                      {r("opt_money", { amount: fmt.moneyPerArea(s.margin ?? 0, cur) })}
+                    </p>
                     <p className="mt-1 flex items-center gap-1.5 text-caption font-semibold text-ink">
-                      {s.kind === "current" ? (
+                      {s.kind === "current" || (s.delta.margin ?? 0) === 0 ? (
                         <>
                           <Equal aria-hidden className="size-4" />
                           {t("rotSame")}
                         </>
-                      ) : (s.delta.margin ?? 0) !== 0 ? (
+                      ) : (
                         <>
                           {(s.delta.margin ?? 0) > 0 ? (
                             <TrendingUp aria-hidden className="size-4" />
@@ -983,60 +1083,87 @@ function RotationBody({
                           )}
                           {t("rotVsNow", { delta: signed(s.delta.margin ?? 0) })}
                         </>
-                      ) : (
-                        <>
-                          <Equal aria-hidden className="size-4" />
-                          {t("rotSame")}
-                        </>
                       )}
                     </p>
+                    {!flat && s.drought != null && (
+                      <p className="mt-1 text-caption text-ink-2">
+                        {r("opt_bad", { amount: fmt.moneyPerArea(s.drought, cur) })}
+                      </p>
+                    )}
                   </Surface>
                 )}
-                <ul className="flex flex-col gap-2 text-caption">
-                  {metrics.map((m) => (
-                    <li key={m.key} className="flex items-center justify-between gap-3">
-                      <span className="text-ink-2">
-                        {t(m.label)}
-                        {m.key === "margin" && (
-                          <InfoHint label={t("hintLabel")} className="ml-1.5">
-                            {t("hintRotDots")}
-                          </InfoHint>
-                        )}
-                        {m.key === "drought" && (
-                          <InfoHint label={t("hintLabel")} className="ml-1.5">
-                            {t("hintWorst10")}
-                          </InfoHint>
-                        )}
-                      </span>
-                      <Dots n={dots(s, m.key)} label={`${t(m.label)}: ${dots(s, m.key)}/5`} strong={isPick} />
-                    </li>
-                  ))}
-                </ul>
-                {!agro && (
+                {agro && (
                   <p className="text-caption text-ink-2">
-                    {t("rotPrice", { n: s.priceWins })}{" "}
-                    <InfoHint label={t("hintLabel")}>{t("hintPrices")}</InfoHint>
+                    {r("opt_bad_agro", { pct: fmt.percent(s.droughtYield) })}
                   </p>
                 )}
-                {s.capped && !agro && (
-                  <p className="flex items-start gap-2 text-caption text-ink">
-                    <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-week" />
-                    {t("rotCapped", { loss: fmt.number(Math.abs(perUnit(s.capLoss))), unit, cur })}
-                  </p>
-                )}
-                <div className="text-caption">
-                  <p className="font-semibold text-ink">{t("rotPest")}</p>
-                  {pests.length ? (
-                    pests.map((p) => (
-                      <p key={p.pest} className="flex items-start gap-2 text-ink">
-                        <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-week" />
-                        {t("rotPestLine", { pest: pestName(p.pest), n: p.seasons })}
+                {why && <p className="text-caption text-ink">{why}</p>}
+                <Disclosure summary={<span className="text-small">{r("opt_details")}</span>}>
+                  <div className="flex flex-col gap-3 pb-2 pt-1">
+                    {agro && (
+                      <ul className="flex flex-col gap-1 text-caption text-ink-2">
+                        <li>{t("rotAgroWater", { amount: fmt.rain(s.water) })}</li>
+                        <li>
+                          {s.carbonChange != null
+                            ? t("rotAgroSoil", {
+                                value: fmt.number(s.carbonChange, { maximumFractionDigits: 2 }),
+                              })
+                            : t("rotAgroSoilUnknown")}
+                        </li>
+                        <li>{t("rotAgroErosion", { value: fmt.number(Math.round(s.erosion)) })}</li>
+                      </ul>
+                    )}
+                    <ul className="flex flex-col gap-2 text-caption">
+                      {metrics.map((m) => (
+                        <li key={m.key} className="flex items-center justify-between gap-3">
+                          <span className="text-ink-2">
+                            {t(m.label)}
+                            {m.key === "margin" && (
+                              <InfoHint label={t("hintLabel")} className="ml-1.5">
+                                {t("hintRotDots")}
+                              </InfoHint>
+                            )}
+                            {m.key === "drought" && (
+                              <InfoHint label={t("hintLabel")} className="ml-1.5">
+                                {t("hintWorst10")}
+                              </InfoHint>
+                            )}
+                          </span>
+                          <Dots
+                            n={dots(s, m.key)}
+                            label={`${t(m.label)}: ${dots(s, m.key)}/5`}
+                            strong={isPick}
+                          />
+                        </li>
+                      ))}
+                    </ul>
+                    {!agro && (
+                      <p className="text-caption text-ink-2">
+                        {t("rotPrice", { n: s.priceWins })}{" "}
+                        <InfoHint label={t("hintLabel")}>{t("hintPrices")}</InfoHint>
                       </p>
-                    ))
-                  ) : (
-                    <p className="text-ink-2">{t("rotNoPest")}</p>
-                  )}
-                </div>
+                    )}
+                    {s.capped && !agro && (
+                      <p className="flex items-start gap-2 text-caption text-ink">
+                        <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-week" />
+                        {t("rotCapped", { loss: fmt.number(Math.abs(perUnit(s.capLoss))), unit, cur })}
+                      </p>
+                    )}
+                    <div className="text-caption">
+                      <p className="font-semibold text-ink">{t("rotPest")}</p>
+                      {pests.length ? (
+                        pests.map((p) => (
+                          <p key={p.pest} className="flex items-start gap-2 text-ink">
+                            <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-week" />
+                            {t("rotPestLine", { pest: pestName(p.pest), n: p.seasons })}
+                          </p>
+                        ))
+                      ) : (
+                        <p className="text-ink-2">{t("rotNoPest")}</p>
+                      )}
+                    </div>
+                  </div>
+                </Disclosure>
                 <Button
                   variant="outline"
                   icon={isPick ? <Check /> : undefined}
@@ -1054,345 +1181,397 @@ function RotationBody({
           })}
         </div>
 
+        {scenarios.length > shown.length || showAll
+          ? scenarios.length > 3 && (
+              <div>
+                <Button variant="outline" onClick={() => setShowAll((v) => !v)} aria-expanded={showAll}>
+                  {showAll ? r("opts_show_less") : r("opts_show_all", { n: scenarios.length })}
+                </Button>
+              </div>
+            )
+          : null}
+
         {pick && (
-          <Surface as="section" pad="lg" aria-labelledby="why-pick">
-            <div className="mb-4 flex flex-wrap items-center gap-3">
-              <Chip tone="neutral">{t("rotYourPick")}</Chip>
-              <h2 id="why-pick" className="text-h2 text-ink">
-                {t("rotAlt", { letter: letters[scenarios.indexOf(pick)] ?? "" })} · {name(pick)}
-              </h2>
-            </div>
-            <div className="grid gap-6 md:grid-cols-2">
-              <div>
-                <h3 className="mb-3 text-body font-semibold text-ink">{t("rotWhy")}</h3>
-                <ul className="flex flex-col gap-3">
-                  {pros(pick).map((x) => (
-                    <li key={x} className="flex gap-3 text-body text-ink">
-                      <span
-                        aria-hidden
-                        className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-ok-soft text-ok"
-                      >
-                        <Check className="size-4" />
-                      </span>
-                      {x}
-                    </li>
-                  ))}
-                  {pros(pick).length === 0 && <li className="text-body text-ink-2">{t("rotNoPros")}</li>}
-                </ul>
+          <section
+            className="rounded-card border border-line bg-surface px-4 py-1"
+            aria-labelledby="why-pick"
+          >
+            <Disclosure
+              summary={
+                <span id="why-pick">
+                  {t("rotYourPick")}: {t("rotAlt", { letter: optionLetter(pick.id) })} · {name(pick)}
+                </span>
+              }
+              summaryNote={pros(pick)[0] ?? ""}
+            >
+              <div className="grid gap-6 pb-3 pt-2 md:grid-cols-2">
+                <div>
+                  <h3 className="mb-3 text-body font-semibold text-ink">{t("rotWhy")}</h3>
+                  <ul className="flex flex-col gap-3">
+                    {pros(pick).map((x) => (
+                      <li key={x} className="flex gap-3 text-body text-ink">
+                        <span
+                          aria-hidden
+                          className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-ok-soft text-ok"
+                        >
+                          <Check className="size-4" />
+                        </span>
+                        {x}
+                      </li>
+                    ))}
+                    {pros(pick).length === 0 && <li className="text-body text-ink-2">{t("rotNoPros")}</li>}
+                  </ul>
+                </div>
+                {cons(pick).length > 0 && (
+                  <div>
+                    <h3 className="mb-3 text-body font-semibold text-ink">{t("rotCheck")}</h3>
+                    <ul className="flex flex-col gap-3">
+                      {cons(pick).map((x) => (
+                        <li key={x} className="flex gap-3 text-body text-ink">
+                          <span
+                            aria-hidden
+                            className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-week-soft text-week"
+                          >
+                            <TriangleAlert className="size-4" />
+                          </span>
+                          {x}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
-              <div>
-                <h3 className="mb-3 text-body font-semibold text-ink">{t("rotCheck")}</h3>
-                <ul className="flex flex-col gap-3">
-                  {cons(pick).map((x) => (
-                    <li key={x} className="flex gap-3 text-body text-ink">
-                      <span
-                        aria-hidden
-                        className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-week-soft text-week"
-                      >
-                        <TriangleAlert className="size-4" />
-                      </span>
-                      {x}
-                    </li>
-                  ))}
-                  {cons(pick).length === 0 && <li className="text-body text-ink-2">{t("rotNoCons")}</li>}
-                </ul>
-              </div>
-            </div>
-          </Surface>
+            </Disclosure>
+          </section>
         )}
       </section>
 
-      {/* 3. The chart */}
-      {!agro && (
-        <Surface as="section" pad="lg">
-          <h2 className="text-h2 text-ink">{t("rotCumTitle")}</h2>
-          <p className="mb-4 text-body text-ink-2">
-            {t("rotCumSub", { unit, from: first, to: first + 4, cur })}
-          </p>
-          <CumulativeChart
-            series={scenarios.map((s, k) => ({
-              letter: letters[k] ?? "",
-              name: name(s),
-              values: cum[k] ?? [],
-              picked: s.id === pick?.id,
-            }))}
-            seasons={seasons}
-            money={(v) => fmt.money(v, cur)}
-            moneyCompact={(v) => fmt.money(v, cur, { compact: true })}
-            dipLetters={dips.map((k) => letters[k] ?? "")}
-            dipLabel={t("rotDipTag")}
-            ariaLabel={r("money_label")}
-          />
-          {dips.length > 0 && (
-            <p className="mt-3 text-caption text-ink-2">
-              {t("rotDip", { letters: dips.map((k) => letters[k]).join(", "), year: first })}
-            </p>
-          )}
-        </Surface>
-      )}
+      {/* 3. Data and reliability: the climate row and the NASA block, one place */}
+      <section className="flex flex-col gap-3" aria-labelledby="data-reliability">
+        <h2 id="data-reliability" className="text-h2 text-ink">
+          {r("sec_data")}
+        </h2>
+        {climateCard}
+        {data.dataBasis && (
+          <DataBasis items={data.dataBasis} trustHref={`/fields/${fieldId}/trust`} compact />
+        )}
+        {dataLine}
+      </section>
 
-      {/* 4. The 2022 drought check */}
-      {!agro && (
-        <Surface as="section" pad="lg">
-          <h2 className="text-h2 text-ink">{t("rot2022")}</h2>
-          <p className="mb-4 text-body text-ink-2">{t("rot2022Sub")}</p>
-          <CaveatNotes
-            caveats={[...new Set(scenarios.flatMap((s) => s.caveats ?? []))]}
-            cropName={cropLabel}
-            only={["water"]}
-            className="mb-4"
-          />
-          <div className="grid gap-5 sm:grid-cols-3">
-            {scenarios.map((s, i) => {
-              const pct =
-                Number.isFinite(s.if2022.margin) && Math.abs(s.if2022.typical) > 1
-                  ? Math.round(((s.if2022.typical - s.if2022.margin) / Math.abs(s.if2022.typical)) * 100)
-                  : null;
-              return (
-                <div key={s.id} className="flex flex-col gap-2">
-                  <p className="text-caption font-semibold text-ink">
-                    {letters[i]} · {name(s)}
-                  </p>
-                  <p className="flex items-center gap-1.5 text-body font-semibold text-ink">
-                    {pct === null ? (
-                      r("y22_na")
-                    ) : pct === 0 ? (
-                      <>
-                        <Equal aria-hidden className="size-4" />
-                        {r("y22_same")}
-                      </>
-                    ) : pct > 0 ? (
-                      <>
-                        <TrendingDown aria-hidden className="size-4" />
-                        {r("y22_loss", { pct: fmt.percent(pct / 100) })}
-                      </>
-                    ) : (
-                      <>
-                        <TrendingUp aria-hidden className="size-4" />
-                        {r("y22_gain", { pct: fmt.percent(Math.abs(pct) / 100) })}
-                      </>
-                    )}
-                  </p>
-                  {pct !== null && pct !== 0 && (
-                    <ProgressBar
-                      value={mounted ? Math.min(100, Math.max(2, Math.abs(pct))) : 0}
-                      label={r("y22_bar", { option: letters[i] ?? "" })}
-                      tone={pct > 0 ? "urgent" : "ok"}
-                      className="h-2.5"
+      {/* 4. Evidence: collapsed rows, one line each */}
+      <section className="flex flex-col gap-3" aria-labelledby="evidence-title">
+        <h2 id="evidence-title" className="text-h2 text-ink">
+          {r("sec_evidence")}
+        </h2>
+        {!agro &&
+          evOpen(
+            "evidence-chart",
+            t("rotCumTitle"),
+            r("ev_chart_note", { n: scenarios.length, from: first, to: first + 4 }),
+            <div className="pb-3 pt-2">
+              <p className="mb-4 text-body text-ink-2">
+                {t("rotCumSub", { unit, from: first, to: first + 4, cur })}
+              </p>
+              <CumulativeChart
+                series={scenarios
+                  .map((s, k) => ({
+                    letter: letters[k] ?? "",
+                    name: name(s),
+                    values: cum[k] ?? [],
+                    picked: s.id === pick?.id,
+                    id: s.id,
+                  }))
+                  .filter((x) => visibleIds.has(x.id))}
+                seasons={seasons}
+                money={(v) => fmt.money(v, cur)}
+                moneyCompact={(v) => fmt.money(v, cur, { compact: true })}
+                dipLetters={dips.map((k) => letters[k] ?? "")}
+                dipLabel={t("rotDipTag")}
+                ariaLabel={r("money_label")}
+              />
+              {dips.length > 0 && (
+                <p className="mt-3 text-caption text-ink-2">
+                  {t("rotDip", { letters: dips.map((k) => letters[k]).join(", "), year: first })}
+                </p>
+              )}
+            </div>,
+          )}
+        {!agro &&
+          evOpen(
+            "evidence-2022",
+            r("ev_22_title"),
+            y22Same
+              ? r("ev_22_note_same")
+              : pickY22?.ok
+                ? r("ev_22_note", {
+                    hit: perArea(pickY22.s.if2022.margin),
+                    typical: perArea(pickY22.s.if2022.typical),
+                  })
+                : t("rot2022Sub"),
+            <div className="pb-3 pt-2">
+              <p className="mb-4 text-body text-ink-2">{t("rot2022Sub")}</p>
+              <CaveatNotes
+                caveats={[...new Set(scenarios.flatMap((s) => s.caveats ?? []))]}
+                cropName={cropLabel}
+                only={["water"]}
+                className="mb-4"
+              />
+              {y22Same ? (
+                <p className="text-body font-semibold text-ink">{r("y22_all_same")}</p>
+              ) : (
+                <div className="grid gap-5 sm:grid-cols-3">
+                  {y22.map(({ s, ok, same }) => (
+                    <div key={s.id} className="flex flex-col gap-1">
+                      <p className="text-caption font-semibold text-ink">
+                        {optionLetter(s.id)} · {name(s)}
+                      </p>
+                      <p className="flex items-start gap-1.5 text-body font-semibold text-ink">
+                        {!ok ? (
+                          r("y22_na")
+                        ) : same ? (
+                          <>
+                            <Equal aria-hidden className="mt-1 size-4 shrink-0" />
+                            {r("y22_same")}
+                          </>
+                        ) : (
+                          r("y22_money", {
+                            hit: perArea(s.if2022.margin),
+                            typical: perArea(s.if2022.typical),
+                          })
+                        )}
+                      </p>
+                      {ok && same && <p className="text-caption text-ink-2">{t("rot2022Covered")}</p>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>,
+          )}
+        {evOpen(
+          "year-sets",
+          r("ys_title"),
+          r("ev_sets_note"),
+          <div className="pb-3 pt-2">
+            <YearSets
+              bare
+              data={rankedSets}
+              isError={yearSets.isError}
+              error={yearSets.error}
+              onRetry={() => void yearSets.refetch()}
+              agro={agro}
+              units={units}
+              money={money}
+              unitLabel={unit}
+              label={optionLabel}
+              recommendedId={best?.id ?? null}
+              currentId={current.id}
+              hideBad={flat}
+            />
+          </div>,
+        )}
+        {evOpen(
+          "evidence-try",
+          r("ev_try_title"),
+          r("ev_try_note"),
+          <div className="pb-3">
+            <div className="flex flex-col gap-5 pt-3">
+              <p className="text-body text-ink-2">{t("rotSlidersSub")}</p>
+              <div className="grid gap-5 sm:grid-cols-3">
+                <label className="flex flex-col gap-1 text-body text-ink-2">
+                  {t("rotDeltaT")}:{" "}
+                  <span className="font-mono text-ink">
+                    {draft.deltaT > 0 ? "+" : ""}
+                    {fmt.number(draft.deltaT)} °C
+                  </span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={3}
+                    step={0.5}
+                    value={draft.deltaT}
+                    className="h-11 w-full cursor-pointer"
+                    onChange={(e) => setDraft({ ...draft, deltaT: Number(e.target.value) })}
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-body text-ink-2">
+                  {t("rotRain")}: <span className="font-mono text-ink">{fmt.percent(draft.rain / 100)}</span>
+                  <input
+                    type="range"
+                    min={-30}
+                    max={0}
+                    step={5}
+                    value={draft.rain}
+                    className="h-11 w-full cursor-pointer"
+                    onChange={(e) => setDraft({ ...draft, rain: Number(e.target.value) })}
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-body text-ink-2">
+                  {t("rotCap")}:{" "}
+                  <span className="font-mono text-ink">
+                    {draft.cap ? fmt.rain(draft.cap) : t("rotNoCap")}
+                  </span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={600}
+                    step={25}
+                    value={draft.cap}
+                    className="h-11 w-full cursor-pointer"
+                    onChange={(e) => setDraft({ ...draft, cap: Number(e.target.value) })}
+                  />
+                </label>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    setOverrides({
+                      ...(draft.deltaT ? { deltaT: draft.deltaT } : {}),
+                      ...(draft.rain ? { precipFactor: 1 + draft.rain / 100 } : {}),
+                      ...(draft.cap ? { waterCapMm: draft.cap } : {}),
+                    })
+                  }
+                  disabled={fetching}
+                  aria-busy={fetching}
+                >
+                  {fetching ? r("rerun_busy") : r("rerun")}
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => (setDraft({ deltaT: 0, rain: 0, cap: 0 }), setOverrides({}))}
+                >
+                  {t("rotReset")}
+                </Button>
+              </div>
+              {!agro && canSave && (
+                <div className="flex flex-col gap-3 border-t border-line pt-4">
+                  <p className="text-body font-semibold text-ink">{r("price_edit")}</p>
+                  <p className="text-caption text-ink-2">{r("price_edit_hint")}</p>
+                  <div>
+                    <Button
+                      variant="outline"
+                      icon={<Wallet />}
+                      onClick={() => setShowPrices((v) => !v)}
+                      aria-expanded={showPrices}
+                    >
+                      {t("rotYourPrices")}
+                    </Button>
+                  </div>
+                  {showPrices && (
+                    <CropPricesEditor
+                      workspaceId={workspaceId}
+                      crops={priceCrops}
+                      needYield={data.needYield}
+                      yieldHints={data.yieldHints}
+                      onSaved={() => setShowPrices(false)}
+                      onCancel={() => setShowPrices(false)}
                     />
                   )}
-                  {pct === 0 && <p className="text-caption text-ink-2">{t("rot2022Covered")}</p>}
-                  {pct !== null && pct !== 0 && (
-                    <p className="text-caption text-ink-2">
-                      {t("rot2022Season", {
-                        season: s.if2022.season,
-                        hit: signedPlain(s.if2022.margin),
-                        typical: signedPlain(s.if2022.typical),
-                        unit,
-                      })}
-                    </p>
-                  )}
                 </div>
-              );
-            })}
-          </div>
-        </Surface>
-      )}
-
-      {/* 4b. Sensitivity to the weather years: its own query, never blocks the page */}
-      <YearSets
-        data={yearSets.data}
-        isError={yearSets.isError}
-        error={yearSets.error}
-        onRetry={() => void yearSets.refetch()}
-        agro={agro}
-        units={units}
-        money={money}
-        unitLabel={unit}
-        label={optionLabel}
-        recommendedId={best?.id ?? null}
-        currentId={current.id}
-      />
-
-      {/* 5. Assumptions */}
-      <Surface as="section" pad="md">
-        <Disclosure summary={<span className="text-h2">{t("rotSliders")}</span>}>
-          <div className="flex flex-col gap-5 pt-3">
-            <p className="text-body text-ink-2">{t("rotSlidersSub")}</p>
-            <div className="grid gap-5 sm:grid-cols-3">
-              <label className="flex flex-col gap-1 text-body text-ink-2">
-                {t("rotDeltaT")}:{" "}
-                <span className="font-mono text-ink">
-                  {draft.deltaT > 0 ? "+" : ""}
-                  {fmt.number(draft.deltaT)} °C
-                </span>
-                <input
-                  type="range"
-                  min={0}
-                  max={3}
-                  step={0.5}
-                  value={draft.deltaT}
-                  className="h-11 w-full cursor-pointer"
-                  onChange={(e) => setDraft({ ...draft, deltaT: Number(e.target.value) })}
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-body text-ink-2">
-                {t("rotRain")}: <span className="font-mono text-ink">{fmt.percent(draft.rain / 100)}</span>
-                <input
-                  type="range"
-                  min={-30}
-                  max={0}
-                  step={5}
-                  value={draft.rain}
-                  className="h-11 w-full cursor-pointer"
-                  onChange={(e) => setDraft({ ...draft, rain: Number(e.target.value) })}
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-body text-ink-2">
-                {t("rotCap")}:{" "}
-                <span className="font-mono text-ink">{draft.cap ? fmt.rain(draft.cap) : t("rotNoCap")}</span>
-                <input
-                  type="range"
-                  min={0}
-                  max={600}
-                  step={25}
-                  value={draft.cap}
-                  className="h-11 w-full cursor-pointer"
-                  onChange={(e) => setDraft({ ...draft, cap: Number(e.target.value) })}
-                />
-              </label>
+              )}
             </div>
-            <div className="flex flex-wrap gap-3">
-              <Button
-                variant="outline"
-                onClick={() =>
-                  setOverrides({
-                    ...(draft.deltaT ? { deltaT: draft.deltaT } : {}),
-                    ...(draft.rain ? { precipFactor: 1 + draft.rain / 100 } : {}),
-                    ...(draft.cap ? { waterCapMm: draft.cap } : {}),
-                  })
-                }
-                disabled={fetching}
-                aria-busy={fetching}
-              >
-                {fetching ? r("rerun_busy") : r("rerun")}
-              </Button>
-              <Button
-                variant="ghost"
-                onClick={() => (setDraft({ deltaT: 0, rain: 0, cap: 0 }), setOverrides({}))}
-              >
-                {t("rotReset")}
-              </Button>
-            </div>
-            {!agro && canSave && (
-              <div className="flex flex-col gap-3 border-t border-line pt-4">
-                <p className="text-body font-semibold text-ink">{r("price_edit")}</p>
-                <p className="text-caption text-ink-2">{r("price_edit_hint")}</p>
-                <div>
-                  <Button
-                    variant="outline"
-                    icon={<Wallet />}
-                    onClick={() => setShowPrices((v) => !v)}
-                    aria-expanded={showPrices}
-                  >
-                    {t("rotYourPrices")}
-                  </Button>
-                </div>
-                {showPrices && (
-                  <CropPricesEditor
-                    workspaceId={workspaceId}
-                    crops={priceCrops}
-                    needYield={data.needYield}
-                    yieldHints={data.yieldHints}
-                    onSaved={() => setShowPrices(false)}
-                    onCancel={() => setShowPrices(false)}
-                  />
-                )}
-              </div>
-            )}
-          </div>
-        </Disclosure>
-      </Surface>
-
-      {/* All numbers */}
-      <Surface as="section" pad="md">
-        <Disclosure summary={t("rotTable")}>
-          <div className="overflow-x-auto pt-3">
-            <table className="w-full text-caption">
-              <thead>
-                <tr className="text-left text-ink-2">
-                  <th className="py-2">{r("tbl_metric")}</th>
-                  {scenarios.map((s, i) => (
-                    <th key={s.id} className="py-2 text-right">
-                      {letters[i]}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="font-mono">
-                {(agro
-                  ? [
-                      [t("rotAgroDroughtLabel"), (s: ScenarioResult) => fmt.percent(s.droughtYield)],
-                      [t("rotWater"), (s: ScenarioResult) => fmt.rain(s.water)],
-                      [
-                        t("rotSoilC"),
-                        (s: ScenarioResult) =>
-                          s.carbonChange != null ? fmt.number(s.carbonChange, { maximumFractionDigits: 2 }) : "—",
-                      ],
-                      [t("rotErosion"), (s: ScenarioResult) => fmt.number(Math.round(s.erosion))],
-                      [r("row_score"), (s: ScenarioResult) => fmt.number(s.score ?? 0, { maximumFractionDigits: 2 })],
-                    ]
-                  : [
-                      [t("rotMargin"), (s: ScenarioResult) => money(s.margin ?? 0)],
-                      [t("rotWater"), (s: ScenarioResult) => fmt.rain(s.water)],
-                      [
-                        t("rotSoilC"),
-                        (s: ScenarioResult) =>
-                          s.carbonChange != null ? fmt.number(s.carbonChange, { maximumFractionDigits: 2 }) : "—",
-                      ],
-                      [t("rotErosion"), (s: ScenarioResult) => fmt.number(Math.round(s.erosion))],
-                      [t("rotDrought"), (s: ScenarioResult) => money(s.drought ?? 0)],
-                      [
-                        t("rot2022"),
-                        (s: ScenarioResult) =>
-                          Number.isFinite(s.if2022.margin)
-                            ? `${signedPlain(s.if2022.margin)} / ${signedPlain(s.if2022.typical)}`
-                            : "—",
-                      ],
-                      [r("row_price"), (s: ScenarioResult) => `${s.priceWins}/10`],
-                      [r("row_score"), (s: ScenarioResult) => fmt.number(s.score ?? 0, { maximumFractionDigits: 2 })],
-                    ]
-                ).map(([label, f]) => (
-                  <tr key={label as string} className="border-t border-line">
-                    <th className="py-2 pr-3 text-left font-sans font-normal text-ink-2">{label as string}</th>
-                    {scenarios.map((s) => (
-                      <td key={s.id} className="py-2 text-right text-ink">
-                        {(f as (s: ScenarioResult) => string)(s)}
-                      </td>
+          </div>,
+        )}
+        {evOpen(
+          "evidence-table",
+          t("rotTable"),
+          r("ev_table_note", { n: scenarios.length }),
+          <div className="pb-3">
+            <div className="overflow-x-auto pt-3">
+              <table className="w-full text-caption">
+                <thead>
+                  <tr className="text-left text-ink-2">
+                    <th className="py-2">{r("tbl_metric")}</th>
+                    {scenarios.map((s, i) => (
+                      <th key={s.id} className="py-2 text-right">
+                        {letters[i]}
+                      </th>
                     ))}
                   </tr>
+                </thead>
+                <tbody className="font-mono">
+                  {(agro
+                    ? [
+                        [t("rotAgroDroughtLabel"), (s: ScenarioResult) => fmt.percent(s.droughtYield)],
+                        [t("rotWater"), (s: ScenarioResult) => fmt.rain(s.water)],
+                        [
+                          t("rotSoilC"),
+                          (s: ScenarioResult) =>
+                            s.carbonChange != null
+                              ? fmt.number(s.carbonChange, { maximumFractionDigits: 2 })
+                              : "—",
+                        ],
+                        [t("rotErosion"), (s: ScenarioResult) => fmt.number(Math.round(s.erosion))],
+                        [
+                          r("row_score"),
+                          (s: ScenarioResult) => fmt.number(s.score ?? 0, { maximumFractionDigits: 2 }),
+                        ],
+                      ]
+                    : [
+                        [t("rotMargin"), (s: ScenarioResult) => money(s.margin ?? 0)],
+                        [t("rotWater"), (s: ScenarioResult) => fmt.rain(s.water)],
+                        [
+                          t("rotSoilC"),
+                          (s: ScenarioResult) =>
+                            s.carbonChange != null
+                              ? fmt.number(s.carbonChange, { maximumFractionDigits: 2 })
+                              : "—",
+                        ],
+                        [t("rotErosion"), (s: ScenarioResult) => fmt.number(Math.round(s.erosion))],
+                        [t("rotDrought"), (s: ScenarioResult) => money(s.drought ?? 0)],
+                        [
+                          t("rot2022"),
+                          (s: ScenarioResult) =>
+                            Number.isFinite(s.if2022.margin)
+                              ? `${signedPlain(s.if2022.margin)} / ${signedPlain(s.if2022.typical)}`
+                              : "—",
+                        ],
+                        [r("row_price"), (s: ScenarioResult) => `${s.priceWins}/10`],
+                        [
+                          r("row_score"),
+                          (s: ScenarioResult) => fmt.number(s.score ?? 0, { maximumFractionDigits: 2 }),
+                        ],
+                      ]
+                  ).map(([label, f]) => (
+                    <tr key={label as string} className="border-t border-line">
+                      <th className="py-2 pr-3 text-left font-sans font-normal text-ink-2">
+                        {label as string}
+                      </th>
+                      {scenarios.map((s) => (
+                        <td key={s.id} className="py-2 text-right text-ink">
+                          {(f as (s: ScenarioResult) => string)(s)}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {agro && <p className="mt-3 text-caption text-ink-2">{t("rotAgroSoilNote")}</p>}
+            </div>
+          </div>,
+        )}
+        {evOpen(
+          "evidence-notes",
+          r("notes_title"),
+          r("ev_notes_note", { n: noteItems.length }),
+          <div className="pb-3">
+            <div className="flex flex-col gap-3 pt-3">
+              <ul className="flex list-disc flex-col gap-2 pl-5 text-body text-ink-2">
+                {noteItems.map((n) => (
+                  <li key={n}>{n}</li>
                 ))}
-              </tbody>
-            </table>
-            {agro && <p className="mt-3 text-caption text-ink-2">{t("rotAgroSoilNote")}</p>}
-          </div>
-        </Disclosure>
-      </Surface>
-
-      {/* Everything else that qualifies the numbers */}
-      <Surface as="section" pad="md">
-        <Disclosure summary={r("notes_title")}>
-          <div className="flex flex-col gap-3 pt-3">
-            <ul className="flex list-disc flex-col gap-2 pl-5 text-body text-ink-2">
-              {noteItems.map((n) => (
-                <li key={n}>{n}</li>
-              ))}
-            </ul>
-            <CaveatNotes caveats={pick?.caveats} cropName={cropLabel} only={["crop", "repeat"]} className="" />
-            {notice !== "estimate" && data.currentBasis === "estimated" && histForm(true, false)}
-          </div>
-        </Disclosure>
-      </Surface>
+              </ul>
+              <CaveatNotes
+                caveats={pick?.caveats}
+                cropName={cropLabel}
+                only={["crop", "repeat"]}
+                className=""
+              />
+              {notice !== "estimate" && data.currentBasis === "estimated" && histForm(true, false)}
+            </div>
+          </div>,
+        )}
+      </section>
 
       <Link
         href={`/fields/${fieldId}`}

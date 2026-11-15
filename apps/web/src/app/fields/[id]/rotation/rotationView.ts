@@ -1,4 +1,5 @@
 /** Pure view logic of the rotation screen: which notice shows, how reliable the pick is, where prices come from. */
+import { rank, type Metric, type ScenarioResult } from "@terrasight/scenario-engine";
 import type { YearSetComparison, YearSetId, YearSetRanking } from "@terrasight/shared";
 
 export type Reliability = "high" | "medium" | "low";
@@ -148,4 +149,79 @@ export function findYearSets(
       ? { rank }
       : null;
   return { kind: "changes", allBest, changed, currentNote, complete };
+}
+
+/**
+ * Ranks every set with the priority the headline uses (the API only ranks with equal weights). A set carries the
+ * margin and the bad-year value per option; water, soil and erosion come from the main run. The "all" set is ranked
+ * exactly as the page ranks its options, so its first option is always the headline's. Model numbers are untouched.
+ * `scenarios` are the page's options already scored with `weights`.
+ */
+export function rerankYearSets(
+  cmp: YearSetComparison,
+  scenarios: ScenarioResult[],
+  weights: Record<Metric, number>,
+  agro: boolean,
+): YearSetComparison {
+  const index = new Map(scenarios.map((s, i) => [s.id, i]));
+  const sets = (Array.isArray(cmp.sets) ? cmp.sets : []).map((set) => {
+    const known = set.options.filter((o) => index.has(o.id));
+    const unknown = set.options.filter((o) => !index.has(o.id));
+    const merged = known.map((o) => {
+      const base = scenarios[index.get(o.id)!]!;
+      return {
+        ...base,
+        margin: o.margin ?? base.margin,
+        drought: agro ? base.drought : (o.drought ?? base.drought),
+        droughtYield: agro ? (o.drought ?? base.droughtYield) : base.droughtYield,
+      } as ScenarioResult;
+    });
+    const scored =
+      set.id === "all"
+        ? merged.map((m) => ({ ...m, score: scenarios[index.get(m.id)!]!.score }))
+        : rank(merged, weights);
+    const order = scored
+      .map((m, i) => ({ m, i }))
+      .sort(
+        (a, b) =>
+          (b.m.score ?? 0) - (a.m.score ?? 0) ||
+          (index.get(a.m.id) ?? 0) - (index.get(b.m.id) ?? 0) ||
+          a.i - b.i,
+      );
+    const options = [
+      ...order.map(({ m }, k) => {
+        const o = known.find((x) => x.id === m.id)!;
+        return { ...o, rank: k + 1, score: m.score ?? o.score };
+      }),
+      ...unknown.map((o, k) => ({ ...o, rank: order.length + k + 1 })),
+    ];
+    return { ...set, options, best: options[0]?.id ?? set.best };
+  });
+  return { ...cmp, sets, bestChanges: new Set(sets.map((s) => s.best)).size > 1 };
+}
+
+/** True when the model shows no weather spread: the bad-year value equals the mean for every option (irrigated fields). */
+export function noWeatherSpread(scenarios: ScenarioResult[]): boolean {
+  return (
+    scenarios.length > 0 &&
+    scenarios.every((s) => s.margin != null && s.drought != null && Math.abs(s.drought - s.margin) < 0.5)
+  );
+}
+
+/** The options shown by default: the current plan, the recommended one, the next best, and the one the user chose. */
+export function defaultOptionIds(
+  scenarios: ScenarioResult[],
+  bestId: string | null,
+  chosen: string | null,
+): string[] {
+  const ids: string[] = [];
+  const add = (id: string | undefined | null) => {
+    if (id && !ids.includes(id)) ids.push(id);
+  };
+  add(scenarios.find((s) => s.kind === "current")?.id);
+  add(bestId);
+  const ranked = [...scenarios].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+  for (const s of ranked) if (ids.length < 3) add(s.id);
+  add(chosen);
+  return ids;
 }

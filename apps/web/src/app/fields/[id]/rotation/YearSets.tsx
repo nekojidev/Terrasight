@@ -47,6 +47,10 @@ export interface YearSetsProps {
   /** The page's recommendation. */
   recommendedId: string | null;
   currentId: string;
+  /** Hide the bad-year line (the model shows no weather spread for this field). */
+  hideBad?: boolean;
+  /** Render inside an evidence row: no card and no heading of its own. */
+  bare?: boolean;
 }
 
 function SetColumn({
@@ -58,12 +62,14 @@ function SetColumn({
   set: YearSetRanking;
   t: T;
   fmt: ReturnType<typeof useFormat>;
-} & Pick<YearSetsProps, "agro" | "money" | "unitLabel" | "label" | "recommendedId">) {
+} & Pick<YearSetsProps, "agro" | "money" | "unitLabel" | "label" | "recommendedId" | "hideBad">) {
   const s = set.shift;
   const rainPct = s ? s.precipFactor - 1 : 0;
   const parts = s
     ? [
-        s.applied.temperature ? t("ys_shift_temp", { delta: fmt.tempDelta(s.deltaT) }) : t("ys_shift_temp_off"),
+        s.applied.temperature
+          ? t("ys_shift_temp", { delta: fmt.tempDelta(s.deltaT) })
+          : t("ys_shift_temp_off"),
         s.applied.precipitation
           ? t("ys_shift_rain", {
               pct: `${rainPct > 0 ? "+" : rainPct < 0 ? "−" : ""}${fmt.percent(Math.abs(rainPct), { maximumFractionDigits: 1 })}`,
@@ -73,7 +79,11 @@ function SetColumn({
     : [];
   const options = [...set.options].sort((a, b) => a.rank - b.rank);
   return (
-    <Surface as="li" className="flex flex-col gap-3" data-year-set={set.id}>
+    <Surface
+      as="li"
+      className="flex w-[85%] shrink-0 snap-start flex-col gap-3 sm:w-auto"
+      data-year-set={set.id}
+    >
       <div>
         <h3 className="text-body font-semibold text-ink">{t(`ys_set_${set.id}`)}</h3>
         {set.id === "all" && <p className="text-caption text-ink-2">{t("ys_basis_tag")}</p>}
@@ -81,7 +91,9 @@ function SetColumn({
       <p className="text-caption text-ink-2">
         {t("ys_years", { from: set.years.from, to: set.years.to, count: set.years.count })}
       </p>
-      {parts.length > 0 && <p className="text-caption text-ink-2">{t("ys_shift_lead", { parts: parts.join("; ") })}</p>}
+      {parts.length > 0 && (
+        <p className="text-caption text-ink-2">{t("ys_shift_lead", { parts: parts.join("; ") })}</p>
+      )}
       <ol className="flex flex-col gap-2">
         {options.map((o) => {
           const rec = o.id === p.recommendedId;
@@ -95,7 +107,9 @@ function SetColumn({
               }
             >
               <p className="flex flex-col gap-0.5 text-body font-semibold text-ink">
-                <span className="font-mono text-caption font-normal text-ink-2">{t("ys_rank", { n: o.rank })}</span>
+                <span className="font-mono text-caption font-normal text-ink-2">
+                  {t("ys_rank", { n: o.rank })}
+                </span>
                 <span className="min-w-0">{p.label(o.id)}</span>
               </p>
               {(o.rank === 1 || rec) && (
@@ -117,7 +131,7 @@ function SetColumn({
                   {t("ys_margin", { amount: p.money(o.margin), unit: p.unitLabel })}
                 </p>
               )}
-              {o.drought != null && (
+              {o.drought != null && !p.hideBad && (
                 <p className="font-mono text-caption text-ink-2">
                   {p.agro
                     ? t("ys_worst_agro", { pct: fmt.percent(o.drought) })
@@ -139,7 +153,9 @@ export function YearSets(props: YearSetsProps) {
   const fmt = useFormat({ units: props.units });
   const sets = props.data ? usableSets(props.data, YEAR_SET_IDS) : [];
   const missing = YEAR_SET_IDS.filter((id) => !sets.some((s) => s.id === id));
-  const finding = props.data ? findYearSets(props.data, YEAR_SET_IDS, props.currentId) : ({ kind: "none" } as const);
+  const finding = props.data
+    ? findYearSets(props.data, YEAR_SET_IDS, props.currentId)
+    : ({ kind: "none" } as const);
   const lines = conclusionLines(finding, t, props.label);
 
   let body: React.ReactNode;
@@ -167,7 +183,10 @@ export function YearSets(props: YearSetsProps) {
   } else {
     body = (
       <>
-        <ul className="grid grid-cols-[repeat(auto-fit,minmax(15rem,1fr))] gap-4">
+        <ul
+          aria-label={t("ys_title")}
+          className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-2 sm:grid sm:grid-cols-[repeat(auto-fit,minmax(15rem,1fr))] sm:overflow-visible sm:pb-0"
+        >
           {sets.map((s) => (
             <SetColumn
               key={s.id}
@@ -179,6 +198,7 @@ export function YearSets(props: YearSetsProps) {
               unitLabel={props.unitLabel}
               label={props.label}
               recommendedId={props.recommendedId}
+              hideBad={props.hideBad ?? false}
             />
           ))}
         </ul>
@@ -204,15 +224,33 @@ export function YearSets(props: YearSetsProps) {
     );
   }
 
+  const intro = (
+    <div>
+      <p className="text-body text-ink-2">{t("ys_label")}</p>
+      {props.data && sets.length > 0 && <p className="text-caption text-ink-2">{t("ys_basis")}</p>}
+    </div>
+  );
+  if (props.bare)
+    return (
+      <div role="region" aria-label={t("ys_title")} className="flex flex-col gap-4">
+        {intro}
+        {body}
+      </div>
+    );
   return (
-    <Surface as="section" pad="lg" id="year-sets" aria-labelledby="year-sets-title" className="flex flex-col gap-4">
+    <Surface
+      as="section"
+      pad="lg"
+      id="year-sets"
+      aria-labelledby="year-sets-title"
+      className="flex flex-col gap-4"
+    >
       <div>
         <h2 id="year-sets-title" className="text-h2 text-ink">
           {t("ys_title")}
         </h2>
-        <p className="text-body text-ink-2">{t("ys_label")}</p>
-        {props.data && sets.length > 0 && <p className="text-caption text-ink-2">{t("ys_basis")}</p>}
       </div>
+      {intro}
       {body}
     </Surface>
   );

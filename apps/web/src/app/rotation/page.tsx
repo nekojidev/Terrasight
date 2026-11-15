@@ -31,7 +31,7 @@ export default async function RotationPage() {
       user={{ name: me.data.name, role: ws.data.role }}
       crumb={t("plan_title")}
     >
-      <RotationsOverview workspaceId={ws.data.id} units={ws.data.units} />
+      <RotationsOverview workspaceId={ws.data.id} units={ws.data.units} isOwner={ws.data.role === "owner"} />
     </AppShell>
   );
 }
