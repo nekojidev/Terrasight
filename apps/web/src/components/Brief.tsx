@@ -7,6 +7,7 @@ import {
   Chip,
   ErrorCard,
   HeroItem,
+  InfoHint,
   QueueRow,
   RailCard,
   FactorRows,
@@ -293,6 +294,11 @@ export function Brief({
             title={hero.text.title[locale]}
             numbers={numbers(hero)}
             confidence={conf(hero)}
+            confidenceHint={
+              <InfoHint label={t("hintLabel")} align="end">
+                {t("hintConf")} {t(`hintTier_${hero.tier}` as "hintTier_A")} {t("hintKeyNumbers")}
+              </InfoHint>
+            }
             labels={{ accept: m("acc4"), snooze: m("snooze"), details: m("details") }}
             detailsHref={`/recommendations/${hero.id}`}
             onAccept={() => canAct && void act(hero!, "accept")}
@@ -450,8 +456,7 @@ export function Brief({
               <span>
                 “{b.rail.ownerQuestion.text}”
                 <span className="block text-small text-ink-2">
-                  {b.rail.ownerQuestion.fieldName} ·{" "}
-                  {dateShort(b.rail.ownerQuestion.at.slice(0, 10))}
+                  {b.rail.ownerQuestion.fieldName} · {dateShort(b.rail.ownerQuestion.at.slice(0, 10))}
                 </span>
               </span>
             </p>

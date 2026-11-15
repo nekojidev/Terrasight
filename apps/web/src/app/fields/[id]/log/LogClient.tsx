@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { InfoHint } from "@terrasight/ui";
 import { Bug, FileText, MessageCircle, Sparkles, Sprout } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { api } from "@/lib/api";
@@ -63,7 +64,9 @@ export function LogClient({
         <FieldTabs fieldId={fieldId} active={1} />
       </header>
       <section className="max-w-[760px] rounded-card border border-line bg-surface p-6">
-        <h2 className="mb-3 text-h2 text-ink">{t("tabLog")}</h2>
+        <h2 className="mb-3 text-h2 text-ink">
+          {t("tabLog")} <InfoHint label={t("hintLabel")}>{t("hintSeasonNow")}</InfoHint>
+        </h2>
         {log.data?.length ? (
           <ol className="flex flex-col gap-4">
             {log.data.map((e, i) => (

@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, Skeleton } from "@terrasight/ui";
+import { Button, InfoHint, Skeleton } from "@terrasight/ui";
 import {
   Check,
   ChevronRight,
@@ -191,7 +191,9 @@ export function ReportsClient({
           </section>
 
           <section className="rounded-card border border-line bg-surface p-5">
-            <h2 className="mb-3 text-h3 text-ink">{t("rqDelivery")}</h2>
+            <h2 className="mb-3 text-h3 text-ink">
+              {t("rqDelivery")} <InfoHint label={t("hintLabel")}>{t("hintReportDelivery")}</InfoHint>
+            </h2>
             <ul className="flex flex-col gap-2 text-small text-ink">
               <li className="flex gap-2">
                 <Zap aria-hidden className="size-4 shrink-0 translate-y-0.5" strokeWidth={1.7} />

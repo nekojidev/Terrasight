@@ -1,6 +1,16 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { BigNumber, Button, DoneRow, FieldThumb, QueueRow, SeasonStrip } from "../index";
+import {
+  BigNumber,
+  Button,
+  DoneRow,
+  FieldThumb,
+  InfoHint,
+  QueueRow,
+  SeasonLabel,
+  SeasonStrip,
+  seasonHintText,
+} from "../index";
 
 afterEach(cleanup);
 
@@ -111,5 +121,59 @@ describe("FieldThumb", () => {
     cleanup();
     const again = render(<FieldThumb name="B" />);
     expect(again.container.querySelector("path")).toBeNull();
+  });
+});
+
+describe("InfoHint", () => {
+  it("opens on click with a described tooltip and closes on Escape", () => {
+    render(<InfoHint label="What does this mean?">Full data means US sources.</InfoHint>);
+    const btn = screen.getByRole("button", { name: "What does this mean?" });
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    fireEvent.click(btn);
+    const tip = screen.getByRole("tooltip");
+    expect(tip.textContent).toContain("Full data");
+    expect(btn.getAttribute("aria-describedby")).toBe(tip.id);
+    expect(btn.getAttribute("aria-expanded")).toBe("true");
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("tooltip")).toBeNull();
+  });
+  it("toggles on a second tap and closes on a tap outside", () => {
+    render(
+      <div>
+        <InfoHint label="Info">Hint</InfoHint>
+        <p>elsewhere</p>
+      </div>,
+    );
+    const btn = screen.getByRole("button", { name: "Info" });
+    fireEvent.click(btn);
+    fireEvent.click(btn);
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    fireEvent.click(btn);
+    fireEvent.pointerDown(screen.getByText("elsewhere"));
+    expect(screen.queryByRole("tooltip")).toBeNull();
+  });
+  it("opens on hover too", () => {
+    render(<InfoHint label="Info">Hint</InfoHint>);
+    fireEvent.mouseEnter(screen.getByRole("button").parentElement!);
+    expect(screen.getByRole("tooltip")).toBeTruthy();
+  });
+});
+
+describe("SeasonLabel", () => {
+  it("fills the harvest year and the sowing year into the hint", () => {
+    expect(seasonHintText("Season {year}: harvest {year}; sown autumn {prev}", 2027)).toBe(
+      "Season 2027: harvest 2027; sown autumn 2026",
+    );
+    render(
+      <SeasonLabel
+        year={2027}
+        label="Season 2027"
+        hintLabel="What is a season?"
+        hintTemplate="Harvest in {year}; winter crops sown in autumn {prev}."
+      />,
+    );
+    expect(screen.getByText("Season 2027")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "What is a season?" }));
+    expect(screen.getByRole("tooltip").textContent).toBe("Harvest in 2027; winter crops sown in autumn 2026.");
   });
 });

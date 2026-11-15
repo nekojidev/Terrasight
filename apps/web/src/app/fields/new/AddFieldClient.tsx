@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, Chip, TextField } from "@terrasight/ui";
+import { Button, Chip, InfoHint, TextField } from "@terrasight/ui";
 import {
   ArrowRight,
   Calendar,
@@ -295,12 +295,7 @@ export function AddFieldClient({
               </ul>
             )}
             <div className="flex w-fit gap-1 rounded-input bg-surface p-1 shadow-sheet">
-              <Button
-                size={44}
-                variant={drawing ? "primary" : "ghost"}
-                icon={<Pencil />}
-                onClick={clear}
-              >
+              <Button size={44} variant={drawing ? "primary" : "ghost"} icon={<Pencil />} onClick={clear}>
                 {t("tool_draw")}
               </Button>
               <Button size={44} variant="ghost" icon={<Upload />} onClick={() => fileRef.current?.click()}>
@@ -404,12 +399,15 @@ export function AddFieldClient({
           </div>
           {preview && (
             <div className="flex flex-col gap-2">
-              <Chip
-                tone={preview.tier === "A" ? "ok" : preview.tier === "B" ? "info" : "week"}
-                icon={<ShieldCheck />}
-              >
-                {preview.tier === "A" ? t("tier") : t(`tier_${preview.tier}`)}
-              </Chip>
+              <span className="inline-flex items-center gap-2">
+                <Chip
+                  tone={preview.tier === "A" ? "ok" : preview.tier === "B" ? "info" : "week"}
+                  icon={<ShieldCheck />}
+                >
+                  {preview.tier === "A" ? t("tier") : t(`tier_${preview.tier}`)}
+                </Chip>
+                <InfoHint label={a("hintLabel")}>{a(`hintTier_${preview.tier}` as "hintTier_A")}</InfoHint>
+              </span>
               <p className="text-small text-ink-2">{a(`asTier_${preview.tier}`)}</p>
             </div>
           )}

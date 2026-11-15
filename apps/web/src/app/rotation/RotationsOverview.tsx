@@ -1,6 +1,6 @@
 "use client";
 
-import { Chip, SeasonStrip } from "@terrasight/ui";
+import { Chip, InfoHint, SeasonStrip, seasonHintText } from "@terrasight/ui";
 import { ChevronRight, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
@@ -46,7 +46,10 @@ export function RotationsOverview({ overview, units }: { overview: Overview; uni
       <header>
         <h1 className="text-h1 text-ink">{t("rvTitle")}</h1>
         <p className="text-body text-ink-2">
-          {t("rvSub", { season: overview.season, from: overview.horizon[0], to: overview.horizon[1] })}
+          {t("rvSub", { season: overview.season, from: overview.horizon[0], to: overview.horizon[1] })}{" "}
+          <InfoHint label={t("hintLabel")}>
+            {seasonHintText(t("hintSeason"), overview.season)} {t("hintHorizon")}
+          </InfoHint>
         </p>
       </header>
       <ul className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface">
