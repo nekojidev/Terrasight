@@ -11,8 +11,48 @@ One EC2 instance runs the whole stack with Docker Compose behind Caddy (TLS). Se
 | Security group | 80 and 443 from anywhere; 22 from your IP only |
 | S3 bucket | private, block all public access, SSE-S3, versioning on, lifecycle rule (see Backups); used for scouting photos (`scouting/…`) and backups (`backups/…`) |
 | IAM role (instance profile) | `s3:PutObject`, `s3:GetObject`, `s3:ListBucket` on the bucket; `sns:Publish` on the alert topic (optional); `ssm:GetParametersByPath` on `/terrasight/demo/*`; `kms:Decrypt` for the SSM key |
-| SSM Parameter Store | SecureStrings under `/terrasight/demo/`: `JWT_SECRET` (≥ 32 random chars), `GEMINI_API_KEY`, `GEMINI_MODEL`, `OPENET_API_KEY`, `CDSE_CLIENT_ID`, `CDSE_CLIENT_SECRET`, `EARTHDATA_TOKEN`, `S3_BUCKET`, `AWS_REGION`, **`SMTP_URL`** (required: the API refuses to start in production without it; used for password-reset emails only, since there is no email verification or invitation email; `smtps://user:pass@host:465`, an SES SMTP endpoint works) and `EMAIL_FROM` (a verified sender), optional `OPEN_METEO_API_KEY` |
+| SSM Parameter Store | SecureStrings under `/terrasight/demo/`: `JWT_SECRET` (≥ 32 random chars), `GEMINI_API_KEY`, `GEMINI_MODEL`, `OPENET_API_KEY`, `CDSE_CLIENT_ID`, `CDSE_CLIENT_SECRET`, `EARTHDATA_TOKEN`, `NASS_API_KEY`, `GEMINI_DAILY_CALL_BUDGET`, `GEMINI_DAILY_TOKEN_BUDGET` (see "Gemini budget" below), `S3_BUCKET`, `AWS_REGION`, **`SMTP_URL`** (required: the API refuses to start in production without it; used for password-reset emails only, since there is no email verification or invitation email; `smtps://user:pass@host:465`, an SES SMTP endpoint works) and `EMAIL_FROM` (a verified sender), **`OPEN_METEO_API_KEY` for a public host** (the free Open-Meteo endpoint is for non-commercial use only; without the key the API falls back to it, which a public site must not rely on) |
 | DNS | an A record for the demo domain → the Elastic IP |
+
+**Scouting photos need storage that survives a deploy.** The API receives `S3_BUCKET` **only through the SSM-generated `/opt/terrasight/.env`**
+(the `S3_BUCKET` line in `prod.env` is read by the backup scripts, not by the API container). So create the SSM parameter `/terrasight/demo/S3_BUCKET`
+(and `AWS_REGION`), re-run `ssm-env.sh` and `docker compose ... up -d api`. Check: `grep -c '^S3_BUCKET=' /opt/terrasight/.env` prints `1`.
+Without a bucket the API writes photos (and zone rasters) to `/repo/uploads` inside the container; `infra/prod/docker-compose.yml` mounts the named volume `uploads` there
+so they survive deploys, but that volume is on the instance disk, is **not** in `backup.sh`, and the signed upload URLs go through the API (10 MiB per photo). Use the bucket on a public host.
+
+**Instance metadata hop limit (check by hand).** The API runs in a container, so its calls to the instance metadata service (IMDSv2) cross one more network hop.
+With the default hop limit of 1 the SDK cannot get the instance-role credentials and S3 / SNS calls fail with "credentials not found". Set the limit to 2 and verify:
+
+```bash
+aws ec2 modify-instance-metadata-options --instance-id <i-...> --http-tokens required --http-put-response-hop-limit 2 --http-endpoint enabled
+# from inside the api container (the image has no curl; it has node). Prints 200 when the metadata service is reachable:
+docker compose -f /opt/terrasight/repo/infra/prod/docker-compose.yml exec api node -e \
+  "fetch('http://169.254.169.254/latest/api/token',{method:'PUT',headers:{'X-aws-ec2-metadata-token-ttl-seconds':'60'}}).then(r=>console.log(r.status),e=>console.log('FAIL',e.message))"
+```
+
+(Not verifiable from the repository: the team performs and confirms it.)
+
+## Gemini budget (set before the host is public)
+
+`GEMINI_DAILY_CALL_BUDGET` and `GEMINI_DAILY_TOKEN_BUDGET` default to `0` = **unlimited**. A public host can be driven by anyone, so set both. Over budget the API makes no Gemini call
+(one log line per UTC day: "Gemini daily budget spent ..."); recommendation texts, the day summary and AI-proposed rotations fall back to templates / library rotations until 00:00 UTC.
+The check runs before a call; a call counts when it starts and tokens when it ends, so the last call of a day may overshoot the token budget a little.
+
+What the app calls per day (from the code):
+
+| Feature | Gemini calls | Notes |
+| --- | --- | --- |
+| AI-written recommendations and watch-items | at most 1 per field per check (one batched call) | skipped when the facts hash is unchanged (24 h cache), so most days far fewer |
+| Day summary | 1 per company per changed facts hash | cached 24 h |
+| AI-proposed rotations | 1 per field per scenario run with new inputs | cached 24 h; background recomputes use the cache and never call |
+| Assistant chat | 1 per model step, up to about 8 per question (at most 6 tool calls plus the final answer) | tool results are sent back each step, so a question is the most token-heavy item |
+
+Starting point (an estimate, **not measured**; adjust after a week of real use): for about 50 fields, 10 companies and 20 assistant questions a day that is roughly 50 + 10 + 50 + 160 = 270 calls
+and, assuming about 4k tokens per recommendation call, 2k per summary, 3k per rotation and 15k per question, about 0.7 M tokens. With about 3x headroom:
+`GEMINI_DAILY_CALL_BUDGET=1000` and `GEMINI_DAILY_TOKEN_BUDGET=2000000`. Raise them in proportion to fields and users; read the real usage from the `ai_usage` table
+(`docker exec terrasight-postgres psql -U terrasight -d terrasight -c 'select * from ai_usage limit 10'`) and the "budget spent" log line.
+**Known gap:** assistant chat turns call Gemini directly and are not counted against or stopped by this budget (only the texts and rotations are). Cap the cost of the assistant with a hard quota / billing alert on the
+Gemini API key in the Google console, and watch `ai_usage`.
 
 ## 2. Host setup (once)
 
@@ -31,6 +71,12 @@ chmod 600 /opt/terrasight/prod.env
 /opt/terrasight/repo/infra/prod/ssm-env.sh            # writes /opt/terrasight/.env from SSM
 ```
 
+**First-deploy checklist (before `deploy.sh`).** (a) `SMTP_URL` must exist in SSM: in production the API **refuses to start** without it (config check: "SMTP_URL: required in production"),
+even though mail is only sent for password resets; use an SES SMTP endpoint or any valid `smtps://user:pass@host:465` URL. (b) `OPEN_METEO_API_KEY`, `S3_BUCKET`, the Gemini budgets and `NASS_API_KEY` are set (above).
+(c) On the 2-vCPU `t3.large` set the SSM parameter `SCENARIO_WORKERS=1`: scenario runs are CPU-bound and the API's event loop needs the other core (the default is cores minus one, which is also 1 on 2 vCPUs; setting it makes it explicit and survives a change of instance size). Other knobs: README "Advanced settings".
+(d) Docker Compose is **at least v2.24**: run `docker compose version`. `infra/prod/docker-compose.cloudwatch.yml` uses the `!override` tag, which older versions reject
+(Ubuntu 24.04's `docker-compose-v2` package is new enough; check anyway, and do not enable the CloudWatch override on an older one).
+
 ## 3. Deploy, roll back, back up
 
 All scripts read `/opt/terrasight/prod.env` and share `infra/prod/common.sh`. Optional keys in `prod.env`:
@@ -41,7 +87,7 @@ All scripts read `/opt/terrasight/prod.env` and share `infra/prod/common.sh`. Op
 
 ```bash
 /opt/terrasight/repo/infra/prod/deploy.sh v0.9.0       # see the flow below
-docker compose -f /opt/terrasight/repo/infra/prod/docker-compose.yml exec api npm run boundaries:load   # once
+docker compose -f /opt/terrasight/repo/infra/prod/docker-compose.yml exec api npm run boundaries:load   # once, after the first deploy (needs outbound internet to raw.githubusercontent.com)
 (crontab -l; echo "15 3 * * * /opt/terrasight/repo/infra/prod/backup.sh >> /var/log/terrasight-backup.log 2>&1") | crontab -
 ```
 
@@ -80,11 +126,38 @@ docker exec -i terrasight-postgres pg_restore -U terrasight -d terrasight --clea
 - **CloudWatch Logs instead of local files:** add `COMPOSE_FILE=infra/prod/docker-compose.yml:infra/prod/docker-compose.cloudwatch.yml` and `AWS_REGION=<region>` to `prod.env` (instance role: `logs:CreateLogGroup`, `logs:CreateLogStream`, `logs:PutLogEvents`), then `deploy.sh <tag>` again. Groups: `/terrasight/demo/api`, `/terrasight/demo/web`. Read them with `aws logs tail /terrasight/demo/api --follow`.
 - **Error reporting (optional):** set `SENTRY_DSN` (and optionally `SENTRY_ENVIRONMENT`, `SENTRY_RELEASE`) as SSM parameters for the API: 5xx responses and consumers that gave up are reported with the request id as a tag. For the browser set `NEXT_PUBLIC_SENTRY_DSN` in `prod.env` before the deploy (build-time); a tiny reporter sends uncaught errors and unhandled rejections (max 5 per page load). Unset = nothing is sent.
 - **External uptime check:** point an external monitor (UptimeRobot, Better Stack, a Route 53 health check) at `https://<domain>/api/readyz` every minute, expecting 200 (it is 503 when PostgreSQL or RabbitMQ is down; Redis is optional and only reported). Alert by e-mail or SMS to two people. Caddy maps `/api/readyz` to the API's `/readyz`.
+- **Request limits and the proxy:** stock Caddy has no rate limiter (it needs a plugin), so none is configured. Rate limits for sign-in, sign-up and the public routes are enforced **in the API** with per-IP buckets
+  (per-user buckets for the expensive signed-in endpoints; Redis-backed when Redis is up, in-process otherwise). That only works if the API sees the real client address: Caddy appends the client IP to `X-Forwarded-For`
+  and the API sets Express `trust proxy` = 1 (one hop), so `req.ip` is the visitor, not Caddy. Do not put another proxy or CDN in front without raising that hop count in `apps/api/src/main.ts`, or every visitor would share one bucket.
+  Caddy does cap request bodies: `/api/scouting-photos/*` 11 MB (photo cap `PHOTO_MAX_BYTES` is 10 MiB; with a bucket the photo goes to S3 directly), every other `/api/*` request 1 MB (JSON only; the largest is a field outline,
+  at most 5,000 vertices per ring and 50 parts, and the API's own JSON limit is 100 kB). The Caddyfile also sends `Strict-Transport-Security`, `X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options: DENY` and a restrictive `Permissions-Policy`, and hides the `Server` header.
 - **Secrets rotate:** update the SSM parameter, run `ssm-env.sh`, then `docker compose … up -d api`.
 - **Disk:** images accumulate per tag; run `docker image prune -a --filter "until=720h"` monthly (keeps recent tags for rollback).
 
 ## 4. Checks after a deploy
 
-1. `https://<domain>/api/readyz` → 200 (`deploy.sh` already checked it); `status/deploy.status` says `ok`.
-2. Sign up, create the company, add a real field: its history is gathered (MODIS ~2 min); Analyze fields finishes in < 30 s once history is built. There is no demo company (product definition v2.6).
-3. A rotation run returns in < 5 s; the Owner report link opens on a phone.
+Health routes are `/healthz` (process up; used by the container healthcheck) and `/readyz` (PostgreSQL and RabbitMQ reachable); the API has **no** `/health`. Through Caddy only `/api/readyz` is mapped.
+
+1. `curl -s -o /dev/null -w '%{http_code}\n' https://<domain>/api/readyz` gives `200` (`deploy.sh` already checked it inside the container); `status/deploy.status` says `ok`.
+2. **Boundaries loaded** (`boundaries:load` is a manual step; without it field previews fail to find the county / region). Confirm it ran:
+   `docker exec terrasight-postgres psql -U terrasight -d terrasight -c 'select (select count(*) from admin_areas) as admin_areas, (select count(*) from us_counties) as us_counties'`
+   Both counts must be well above zero (Natural Earth: several thousand admin-1 areas, about 3,000 US counties). If they are 0, run the `boundaries:load` command from section 3.
+3. Sign up, create the company, add a **real field** (draw an outline; the preview must answer): its history is gathered (MODIS ~2 min); Analyze fields finishes in < 30 s once history is built. There is no demo company (product definition v2.6).
+4. A rotation run returns in < 5 s; the Owner report link opens on a phone.
+5. **Public page `/explore`** (no sign-in): click a point on the map and the climate shift for it appears within seconds; when a ready field outline covers the clicked place, a rotation is shown.
+   Also call the public API routes it uses, signed out (`https://<domain>/api/public/...`; the paths are in the public-page unit's API reference): each answers 200 with JSON, not 401, and a burst of requests from one IP eventually answers 429.
+6. S3 photos: add a scouting photo to a task and open it (needs `S3_BUCKET` in `/opt/terrasight/.env` and the hop limit above). Gemini: the log has no "budget spent" line right after the first morning check.
+7. Security headers: `curl -sI https://<domain>/ | grep -iE 'strict-transport|x-frame|x-content-type|referrer|permissions'`.
+
+## 5. Public page (`/explore`)
+
+**What it exposes without sign-in:** the climate shift (18 seasons of NASA data compared across periods) and, where a ready outline covers the point, the rotation view for a clicked location, through the
+read-only routes under `/api/public/*`. No company, field, user or recommendation data is reachable; there is no write route. Sign-in, sign-up and the app stay as before.
+
+**Which limits protect it:** per-IP request buckets in the API (the proxy forwards the real client IP; see "Request limits and the proxy"), Caddy's 1 MB request body cap on `/api/*`, source circuit breakers and caches
+(`SOURCE_BREAKER_*`) so a flood cannot hammer NASA / Open-Meteo, and the Gemini daily budget for any AI text. Open-Meteo needs `OPEN_METEO_API_KEY` (commercial use).
+
+**Switch it off quickly:** set the SSM parameter `PUBLIC_EXPLORE=0` (the kill switch, **implemented by the public-page unit**; until that lands it has no effect), run `ssm-env.sh`, then
+`docker compose -f /opt/terrasight/repo/infra/prod/docker-compose.yml up -d api` (a few seconds; no rebuild, no migration). `/explore` and `/api/public/*` then stop answering; the signed-in app is unaffected.
+If the flag is not available yet, the fastest block is a temporary `respond /api/public/* 404` and `respond /explore* 404` at the top of the site block in `infra/prod/Caddyfile`, then
+`docker compose -f /opt/terrasight/repo/infra/prod/docker-compose.yml exec caddy caddy reload --config /etc/caddy/Caddyfile`.

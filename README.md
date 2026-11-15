@@ -69,6 +69,7 @@ Copy `.env.example` to `.env` for runs outside Docker. In production, secrets li
 | `JWT_SECRET` | required | HS256 key for 15-minute access tokens, at least 32 characters |
 | `GEMINI_API_KEY`, `GEMINI_MODEL` | unset, `gemini-3.5-flash-lite` | Assistant and AI-written texts; without a key the assistant says "unavailable" |
 | `AI_ROTATIONS`, `AI_RECOMMENDATIONS` | on when a key is set | `0` / `1` to switch AI-proposed rotations and AI-written recommendations |
+| `GEMINI_DAILY_TOKEN_BUDGET`, `GEMINI_DAILY_CALL_BUDGET` | `0` (unlimited) | Daily Gemini limits (UTC day, all instances). Over budget the AI-written texts and proposed rotations fall back to templates; assistant chat turns are not counted. Set both on a public host (starting point `2000000` / `1000`, see the runbook) |
 | `OPEN_METEO_API_KEY` | unset | Commercial Open-Meteo key (the free endpoint is non-commercial) |
 | `OPENET_API_KEY`, `EARTHDATA_TOKEN`, `CDSE_CLIENT_ID`, `CDSE_CLIENT_SECRET` | unset | Source credentials; sources report "not configured" without them |
 | `S3_BUCKET`, `AWS_REGION` | unset, `us-east-1` | Scouting photos (else `UPLOADS_DIR`) and backups |
@@ -79,6 +80,28 @@ Copy `.env.example` to `.env` for runs outside Docker. In production, secrets li
 | `API_URL` | `http://api:4000` | Web build/runtime: where Next.js proxies `/api/*` |
 | `NEXT_PUBLIC_BASEMAP_TILES`, `NEXT_PUBLIC_BASEMAP_ATTRIBUTION` | EOX Sentinel-2 cloudless 2016 | Web build-time basemap override (an XYZ template) |
 | `NEXT_PUBLIC_SENTRY_DSN` | unset | Web build-time: tiny browser error reporter |
+
+### Advanced settings
+
+All optional; the defaults are right for local runs. Set them as SSM parameters (production) or in `.env`.
+
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `SCENARIO_WORKERS` | CPU cores − 1 (min 1) | Worker threads for rotation scenario runs (Monte Carlo). Recommended `1` on a 2-vCPU host so the API event loop keeps a core |
+| `FIELD_CHECK_PREFETCH` | `8` (1–64) | `field.check` jobs one worker processes at once; lower it if the morning run starves the API |
+| `MORNING_JITTER_MINUTES` | `30` (0–120) | Each company's 06:00 check starts at a fixed offset inside this window, so they do not all start together; `0` = all at once |
+| `SOURCE_BREAKER_FAILURES` | `5` | Consecutive failures after which a data source's live calls pause (cache, fixture or stale data is used instead) |
+| `SOURCE_BREAKER_COOLDOWN_S` | `60` | Seconds the breaker stays open before one live call is tried again |
+| `RETENTION_ENABLED` | `1` | `0` turns off the daily 03:00 UTC pruning jobs |
+| `RETENTION_SOURCE_CACHE_DAYS` | `8` | Days a cached source response is kept |
+| `RETENTION_INPUT_SNAPSHOT_DAYS` | `90` | Days analysis input snapshots are kept |
+| `RETENTION_LEVEL_DAYS` | `180` | Days recommendation level history is kept |
+| `RETENTION_RUN_FIELD_DAYS` | `90` | Days per-field analysis run rows are kept |
+| `RETENTION_NOTIFICATION_DAYS` | `90` | Days notifications are kept |
+| `PHOTO_SIGNING_KEY` | derived from `JWT_SECRET` | Key (at least 32 characters) that signs local scouting-photo URLs; only used when `S3_BUCKET` is not set |
+| `PHOTO_MAX_BYTES`, `PHOTO_MAX_PER_POINT`, `PHOTO_MAX_PER_TASK` | `10485760`, `6`, `30` | Scouting photo caps (size in bytes, photos per point, photos per task) |
+| `MAX_FIELDS_PER_WORKSPACE` | `200` | Active fields one company may hold |
+| `SMTP_URL`, `EMAIL_FROM` | unset, `Terrasight <no-reply@terrasight.app>` | Password-reset email. `SMTP_URL` is required when `NODE_ENV=production` (the API refuses to start without it) |
 
 ## Architecture
 
