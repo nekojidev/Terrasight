@@ -151,9 +151,7 @@ describe("water_stress", () => {
 
   it("is none when rain keeps depletion below RAW for the next 7 days", () => {
     const wet = base({
-      weather: series(SOWN, () => 15, 8).map((w) =>
-        w.origin === "forecast" ? { ...w, precipMm: 20 } : w,
-      ),
+      weather: series(SOWN, () => 15, 8).map((w) => (w.origin === "forecast" ? { ...w, precipMm: 20 } : w)),
       record,
     });
     expect(waterStress(wet, SITE, ASOF)!.level).toBe("none");
@@ -172,7 +170,18 @@ describe("water_stress", () => {
     const w = series("2026-04-25", () => 15);
     expect(waterStress(base({ weather: w, record: rec(null, "2026-04-25") }), SITE, ASOF)).toBeNull();
     expect(waterStress(base({ weather: w, record: rec("corn", null) }), SITE, ASOF)).toBeNull();
-    expect(waterStress(base({ weather: w, record: rec("unobtainium", "2026-04-25") }), SITE, ASOF)).toBeNull();
+    expect(
+      waterStress(base({ weather: w, record: rec("unobtainium", "2026-04-25") }), SITE, ASOF),
+    ).toBeNull();
+  });
+
+  it("stays off for crops whose p is adapted rather than read from FAO-56 Table 22 (unverified)", () => {
+    const rec = {
+      crop: { value: "winter_wheat", source: "confirmed" as const },
+      sowingDate: { value: SOWN, source: "confirmed" as const },
+      emergenceDate: { value: null, source: "unknown" as const },
+    };
+    expect(waterStress(base({ weather: series(SOWN, () => 15), record: rec }), SITE, ASOF)).toBeNull();
   });
 
   it("produces nothing when the weather history has gaps", () => {

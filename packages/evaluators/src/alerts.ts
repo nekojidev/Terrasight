@@ -170,6 +170,9 @@ export function waterStress(inp: EvalInputs, site: WaterSite | null, asOf: strin
   const params = crop ? CROPS[crop.crop] : undefined;
   const sowing = inp.record.sowingDate.value;
   if (!crop || !params || !sowing || sowing >= asOf) return null;
+  // CLAUDE.md: a threshold is used only after it is verified against a cited source. "adapted" p values are not read
+  // from FAO-56 Table 22, so they stay off until someone verifies them.
+  if (params.adapted) return null;
   if (daysBetween(sowing, asOf) >= seasonLength(params)) return null; // past maturity
   const toDay = (w: (typeof inp.weather)[number]): WeatherDay | null =>
     w.tminC === null || w.tmaxC === null || w.precipMm === null
@@ -207,8 +210,10 @@ export function waterStress(inp: EvalInputs, site: WaterSite | null, asOf: strin
   let hit: { date: string; dr: number; raw: number; taw: number } | null =
     now > today.raw ? { date: asOf, dr: now, ...today } : null;
   for (let k = 1; !hit && k <= forecast.length; k++) {
-    const dr = simulateSeason({ ...base, irrigated: false, startDepletionMm: now }, forecast.slice(0, k))
-      .endDepletionMm;
+    const dr = simulateSeason(
+      { ...base, irrigated: false, startDepletionMm: now },
+      forecast.slice(0, k),
+    ).endDepletionMm;
     const date = forecast[k - 1]!.date;
     const l = limits(date);
     if (dr > l.raw) hit = { date, dr, ...l };
@@ -219,7 +224,8 @@ export function waterStress(inp: EvalInputs, site: WaterSite | null, asOf: strin
   if (crop.estimated) estimated.push("crop not confirmed");
   if (inp.record.sowingDate.source !== "confirmed") estimated.push("sowing date estimated");
   if (site.awsEstimated) estimated.push("soil water capacity derived from the 0–150 cm value");
-  if (days !== null && days + 1 > RELIABLE_FORECAST_DAYS) estimated.push(`relies on forecast day ${days + 1}`);
+  if (days !== null && days + 1 > RELIABLE_FORECAST_DAYS)
+    estimated.push(`relies on forecast day ${days + 1}`);
   return {
     subject: "water_stress",
     type: "irrigation",
