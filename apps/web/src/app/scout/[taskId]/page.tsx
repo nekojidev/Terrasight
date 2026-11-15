@@ -15,5 +15,18 @@ export default async function ScoutPage({ params }: { params: Promise<{ taskId: 
   if (!active) redirect("/onboarding");
   const task = await serverGet<ScoutTask>(`/api/w/${active.id}/scouting-tasks/${taskId}`);
   if (!task.ok) notFound();
-  return <ScoutClient workspaceId={active.id} initial={task.data} />;
+  // The field's country picks the units (US: feet / miles). Best effort: metric when it is not available.
+  const rec = await serverGet<{ fieldId: string }>(
+    `/api/w/${active.id}/recommendations/${task.data.recommendationId}`,
+  );
+  const field = rec.ok
+    ? await serverGet<{ country?: string | null }>(`/api/w/${active.id}/fields/${rec.data.fieldId}`)
+    : null;
+  return (
+    <ScoutClient
+      workspaceId={active.id}
+      initial={task.data}
+      country={field?.ok ? (field.data.country ?? undefined) : undefined}
+    />
+  );
 }
