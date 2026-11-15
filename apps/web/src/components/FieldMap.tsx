@@ -25,15 +25,15 @@ const TRACE_PX = 12;
  * Satellite basemap for outlining fields. Default: EOX Sentinel-2 cloudless 2016 (CC BY 4.0; later EOX years are
  * non-commercial). Override with NEXT_PUBLIC_BASEMAP_TILES (an XYZ template) for another provider.
  */
-const BASEMAP =
+export const BASEMAP =
   process.env.NEXT_PUBLIC_BASEMAP_TILES ??
   "https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless_3857/default/g/{z}/{y}/{x}.jpg";
-const ATTRIBUTION =
+export const ATTRIBUTION =
   process.env.NEXT_PUBLIC_BASEMAP_ATTRIBUTION ??
   'Sentinel-2 cloudless — <a href="https://s2maps.eu" target="_blank" rel="noreferrer">s2maps.eu</a> by EOX IT Services GmbH (contains modified Copernicus Sentinel data 2016)';
 
 /** MapLibre paint needs literal colours: read them from design/tokens.css at runtime. */
-function token(name: string): string {
+export function token(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 

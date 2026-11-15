@@ -1,13 +1,14 @@
 "use client";
 
 import { Button } from "@terrasight/ui";
-import { ArrowLeft, Camera, ChevronLeft, ChevronRight, Minus, Plus, Send } from "lucide-react";
+import { ArrowLeft, Camera, Check, ChevronLeft, ChevronRight, LocateFixed, Minus, Plus, Send } from "lucide-react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { OfflineCard } from "@/components/OfflineBanner";
 import { api, ApiError } from "@/lib/api";
 import { clearDraft, loadDraft, saveDraft, useOnline } from "@/lib/offline";
+import { ScoutMap } from "./ScoutMap";
 
 type Localised = { en: string; uk: string };
 export interface ScoutTask {
@@ -23,7 +24,17 @@ export interface ScoutTask {
   photos: Array<{ id: string; pointIdx: number; url: string }>;
 }
 
-/** The 5-point check (design 12, RFC §10.7): sketch on top, counter in a bottom sheet within thumb reach. */
+const rad = (d: number) => (d * Math.PI) / 180;
+/** Great-circle distance in metres. */
+function distance(a: { lon: number; lat: number }, b: { lon: number; lat: number }): number {
+  const h =
+    Math.sin(rad(b.lat - a.lat) / 2) ** 2 +
+    Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(rad(b.lon - a.lon) / 2) ** 2;
+  return 2 * 6_371_000 * Math.asin(Math.sqrt(h));
+}
+const fmtDist = (m: number) => (m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(1)} km`);
+
+/** The 5-point check (design 12, RFC §10.7): map on top, counter in a bottom sheet within thumb reach. */
 export function ScoutClient({ workspaceId, initial }: { workspaceId: string; initial: ScoutTask }) {
   const t = useTranslations("App");
   const s = useTranslations("Scout");
@@ -53,30 +64,37 @@ export function ScoutClient({ workspaceId, initial }: { workspaceId: string; ini
     else clearDraft(task.id);
   }, [counts, queued, task.id, task.status]);
 
-  // Sketch: project the outline and points into a 320 × 320 box.
-  const sketch = useMemo(() => {
-    const rings: number[][][] =
-      task.outline?.type === "MultiPolygon"
-        ? (task.outline.coordinates as number[][][][]).map((p) => p[0]!)
-        : task.outline
-          ? [(task.outline.coordinates as number[][][])[0]!]
-          : [];
-    const all = [...rings.flat(), ...task.points.map((p) => [p.lon, p.lat])];
-    const lons = all.map((c) => c[0]!);
-    const lats = all.map((c) => c[1]!);
-    const [x0, x1, y0, y1] = [Math.min(...lons), Math.max(...lons), Math.min(...lats), Math.max(...lats)];
-    const k = Math.cos(((y0 + y1) / 2) * (Math.PI / 180));
-    const scale = 280 / Math.max((x1 - x0) * k, y1 - y0, 1e-9);
-    const P = (lon: number, lat: number) => [20 + (lon - x0) * k * scale, 300 - (lat - y0) * scale] as const;
-    return {
-      rings: rings.map((r) => r.map(([lon, lat]) => P(lon!, lat!).join(",")).join(" ")),
-      points: task.points.map((p) => P(p.lon, p.lat)),
-    };
-  }, [task]);
+  // Optional geolocation ("you are here" + distance to the next point); only after the user taps the button.
+  const [geo, setGeo] = useState<"off" | "asking" | "on" | "denied">("off");
+  const [here, setHere] = useState<{ lon: number; lat: number } | null>(null);
+  const watch = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (watch.current !== null) navigator.geolocation.clearWatch(watch.current);
+    },
+    [],
+  );
+  function locate() {
+    if (!("geolocation" in navigator)) return setGeo("denied");
+    setGeo("asking");
+    watch.current = navigator.geolocation.watchPosition(
+      (p) => {
+        setHere({ lon: p.coords.longitude, lat: p.coords.latitude });
+        setGeo("on");
+      },
+      () => setGeo("denied"),
+      { enableHighAccuracy: true, maximumAge: 10_000, timeout: 20_000 },
+    );
+  }
 
   const checked = counts.filter((c) => c !== null).length;
   const current = counts[at];
   const set = (v: number) => setCounts((c) => c.map((x, i) => (i === at ? Math.max(0, Math.min(20, v)) : x)));
+  const nextPoint = (() => {
+    const i = counts.findIndex((c, k) => c === null && k >= at);
+    const j = i >= 0 ? i : counts.findIndex((c) => c === null);
+    return j >= 0 ? { i: j, p: task.points[j]! } : null;
+  })();
   const last = at === task.points.length - 1;
   const pestName = task.pest.name[locale];
 
@@ -147,7 +165,10 @@ export function ScoutClient({ workspaceId, initial }: { workspaceId: string; ini
           <ArrowLeft aria-hidden className="size-5" />
           {s("back")}
         </Link>
-        <span className="text-small text-ok">{s("offline")}</span>
+        <span className="flex items-center gap-1 text-small text-ok">
+          <Check aria-hidden className="size-4" />
+          {s("offline")}
+        </span>
       </header>
       <section className="px-4">
         <h1 className="text-h2 text-ink">{s("title")}</h1>
@@ -155,48 +176,31 @@ export function ScoutClient({ workspaceId, initial }: { workspaceId: string; ini
           {task.fieldName} · {pestName}
         </p>
       </section>
-      <svg
-        viewBox="0 0 320 320"
-        role="img"
-        aria-label={s("route_label")}
-        className="my-3 block w-full bg-ink"
-      >
-        {sketch.rings.map((r, i) => (
-          <polygon key={i} points={r} className="fill-ok/40 stroke-signal" strokeWidth="2.5" />
-        ))}
-        <polyline
-          points={sketch.points.map((p) => p.join(",")).join(" ")}
-          fill="none"
-          className="stroke-surface"
-          strokeDasharray="5 5"
-          strokeWidth="2"
-        />
-        {sketch.points.map(([x, y], i) => (
-          <g key={i} onClick={() => setAt(i)} className="cursor-pointer">
-            <circle
-              cx={x}
-              cy={y}
-              r={i === at ? 14 : 11}
-              className={
-                i === at
-                  ? "fill-signal stroke-ink"
-                  : counts[i] !== null
-                    ? "fill-ok stroke-surface"
-                    : "fill-surface stroke-ink"
-              }
-              strokeWidth="2"
-            />
-            <text
-              x={x}
-              y={y + 4}
-              textAnchor="middle"
-              className={`text-[11px] font-bold ${counts[i] !== null && i !== at ? "fill-surface" : "fill-ink"}`}
-            >
-              {i + 1}
-            </text>
-          </g>
-        ))}
-      </svg>
+      <ScoutMap
+        outline={task.outline}
+        points={task.points}
+        counts={counts}
+        at={at}
+        onSelect={setAt}
+        user={here}
+        label={t("scMapLabel")}
+      />
+      <div className="flex items-center justify-between gap-3 px-4 py-2 text-small text-ink-2">
+        {here && nextPoint ? (
+          <span aria-live="polite">
+            {t("scDistance", { n: nextPoint.i + 1, d: fmtDist(distance(here, nextPoint.p)) })}
+          </span>
+        ) : geo === "denied" ? (
+          <span role="status">{t("scGeoDenied")}</span>
+        ) : (
+          <span>{geo === "asking" ? t("scLocating") : s("route")}</span>
+        )}
+        {geo === "off" && (
+          <Button variant="outline" icon={<LocateFixed />} onClick={locate}>
+            {t("scLocate")}
+          </Button>
+        )}
+      </div>
 
       {task.status === "sent" ? (
         <section className="mx-4 rounded-card bg-surface p-5">
