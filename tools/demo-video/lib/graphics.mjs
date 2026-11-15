@@ -41,18 +41,22 @@ export async function openGraph(take, cfg, L) {
   const { page } = take;
   // 1. read what the app states for this field
   await page.goto(`${cfg.base}/fields/${cfg.fieldId}`);
-  const heading = page.getByText(/The first autumn frost comes \d+ days? later/).first();
-  await heading.waitFor({ timeout: 45000 });
+  const row = page.getByText(/How this field's climate has changed/).first();
+  await row.waitFor({ timeout: 45000 });
   await settle(page, 600);
-  const card = await take.card(heading, "shift", 300);
-  const txt = await fieldLines(page, card);
-  const i = must(
-    txt.findIndex((l) => l === "First autumn frost"),
-    "first frost row",
-  );
-  const app = { base: txt[i + 3], recent: txt[i + 5], value: txt[i + 7], trend: txt[i + 9] };
-  const kicker = (await page.getByText(/FIELD SHIFT/i).first().innerText()).replace(/\s+/g, " ");
-  const yr = must(kicker.match(/NASA POWER (\d{4})\D+(\d{4})/), "kicker");
+  await row.click();
+  await page.waitForTimeout(700);
+  const txt = await row.evaluate((el) => {
+    let n = el;
+    for (let i = 0; i < 8 && n.parentElement; i++) {
+      n = n.parentElement;
+      if (n.innerText.includes("All metrics")) break;
+    }
+    return n.innerText;
+  });
+  const mv = must(txt.match(/The first autumn frost comes (\d+ days? later)/), "first frost takeaway");
+  const md = must(txt.match(/(\w{3} \d+) → (\w{3} \d+) · (about [^\n]+)/), "frost dates line");
+  const app = { base: md[1], recent: md[2], value: mv[1], trend: md[3] };
   // 2. the real annual series of the field's grid cell, computed with the project's own code
   const S = await loadFrostSeries();
   const date = (doy) =>
@@ -62,7 +66,7 @@ export async function openGraph(take, cfg, L) {
     baseline: [date(S.baseline), app.base],
     recent: [date(S.recent), app.recent],
     value: [`${delta} days later`, app.value],
-    trend: [S.metric.trend.significant ? "clear trend" : "no clear trend", app.trend],
+    trend: [`about ${Math.round(S.metric.trend.slopePerDecade)} days later every 10 years`, app.trend],
   };
   for (const [k, [mine, theirs]] of Object.entries(checks))
     if (mine !== theirs) throw new Error(`series ${k} (${mine}) does not match the app (${theirs})`);
@@ -84,7 +88,7 @@ export async function openGraph(take, cfg, L) {
         <svg id="cv" viewBox="0 0 1920 1080" width="1920" height="1080" style="position:absolute;inset:0"></svg>
         <div id="res" style="position:absolute;right:96px;top:110px;display:flex;flex-direction:column;align-items:flex-end;gap:var(--ts-s3);opacity:0">
           <div style="background:var(--ts-signal);color:var(--ts-on-signal);padding:var(--ts-s3) var(--ts-s6);border-radius:var(--ts-r-card);box-shadow:var(--ts-shadow-hero);font-size:76px;font-weight:700;letter-spacing:-0.03em;font-family:var(--ts-mono)">${D.value}</div>
-          <div style="background:var(--ts-ink);color:var(--ts-surface);padding:var(--ts-s2) var(--ts-s5);border-radius:var(--ts-r-chip);font-size:34px;font-weight:600">${D.trend}</div>
+          <div style="background:var(--ts-ink);color:var(--ts-surface);padding:var(--ts-s2) var(--ts-s5);border-radius:var(--ts-r-chip);font-size:30px;font-weight:600">${D.trend}</div>
         </div>`;
       const svg = document.getElementById("cv");
       const el = (n, a) => {
@@ -185,7 +189,7 @@ export async function openGraph(take, cfg, L) {
       recent: `${S.recent} (${app.recent})`,
       slopePerDecade: S.metric.trend.slopePerDecade,
       app,
-      kicker,
+      significant: S.metric.trend.significant,
     },
     clicks: [],
   };
@@ -195,14 +199,13 @@ export async function openGraph(take, cfg, L) {
 export async function sources(take, cfg, L) {
   const { page } = take;
   await page.goto(`${cfg.base}/fields/${cfg.fieldId}`);
-  const ctxLine = page.getByText(/^Context: /).first();
-  await ctxLine.waitFor({ timeout: 45000 });
+  const askBtn = page.getByText("Ask the assistant about your fields…").first();
+  await askBtn.waitFor({ timeout: 45000 });
   await settle(page, 500);
-  const markHtml = await ctxLine.evaluate((el) => el.parentElement.parentElement.firstElementChild.outerHTML);
+  const svgHtml = await askBtn.evaluate((el) => el.closest("button,div").querySelector("svg").outerHTML);
+  const markHtml = `<span style="display:flex;color:var(--ts-surface)">${svgHtml.replace(/<svg /, '<svg style="color:var(--ts-surface);width:24px;height:24px" ').replace(/class="[^"]*"/, "")}</span>`;
   const body = await page.locator("body").innerText();
   for (const need of [/NASA POWER/, /USDA/]) if (!need.test(body)) throw new Error("source name not on the field page: " + need);
-  const kicker = (await page.getByText(/FIELD SHIFT/i).first().innerText()).replace(/\s+/g, " ");
-  const years = must(kicker.match(/NASA POWER (\d{4}).(\d{4})/), "kicker");
   await stage(take, cfg);
   const t0 = take.mark("ready");
   await page.evaluate(
@@ -260,7 +263,7 @@ export async function sources(take, cfg, L) {
     {
       markHtml,
       chips: [
-        { text: `NASA POWER ${years[1]}–${years[2]}`, accent: true },
+        { text: "NASA POWER", accent: true },
         { text: "MODIS NDVI" },
         { text: "ESA Copernicus" },
         { text: "USDA" },
@@ -268,103 +271,90 @@ export async function sources(take, cfg, L) {
     },
   );
   await page.waitForTimeout((L + 0.4) * 1000);
-  return { segs: [{ from: t0, to: t0 + L + 0.4 }], facts: { years: years.slice(1, 3) }, clicks: [] };
+  return { segs: [{ from: t0, to: t0 + L + 0.4 }], facts: { chips: ["NASA POWER", "MODIS NDVI", "ESA Copernicus", "USDA"] }, clicks: [] };
 }
 
-// ---------------------------------------------------------------- c. split screen of three real screens
+// ---------------------------------------------------------------- c. three fast full-frame cuts: what changed / what to watch / what to plant
 export async function tiles(take, cfg, L) {
   const { page } = take;
-  const shot = async (sel) => `data:image/png;base64,${(await page.locator(sel).screenshot({ type: "png" })).toString("base64")}`;
   await page.goto(`${cfg.base}/fields/${cfg.fieldId}`);
-  const heading = page.getByText(/The first autumn frost comes \d+ days? later/).first();
-  await heading.waitFor({ timeout: 45000 });
-  await settle(page, 900);
-  const shift = await take.card(heading, "t1", 300);
+  const row = page.getByText(/How this field's climate has changed/).first();
+  await row.waitFor({ timeout: 45000 });
   const risksH = page.getByRole("heading", { name: "Top risks" }).first();
-  const risks = await take.card(risksH, "t2", 200);
-  const shiftVal = must((await heading.innerText()).match(/comes (\d+ days? later)/), "frost days")[1];
-  const nRisks = must((await page.getByText(/^Show all \d+$/).first().innerText()).match(/\d+/), "risks")[0];
-  const box1 = await page.evaluate((sel) => {
-    const c = document.querySelector(sel).getBoundingClientRect();
-    const rows = [...document.querySelectorAll("*")].filter((e) => e.children.length === 0 && /^Trend: .* per (decade|year)$/.test(e.textContent.trim()));
-    const last = rows[2].getBoundingClientRect();
-    return { x: c.left, y: c.top + window.scrollY, width: c.width, height: last.bottom - c.top + 14 };
-  }, shift);
-  const img1 = `data:image/png;base64,${(await page.screenshot({ type: "png", clip: box1, fullPage: true })).toString("base64")}`;
-  const img2 = await shot(risks);
-  await page.goto(`${cfg.base}/fields/${cfg.fieldId}/rotation`);
-  const oh = page.getByText(/We compared \d+ options over \d+ seasons/).first();
-  await oh.waitFor({ timeout: 45000 });
+  await risksH.waitFor({ timeout: 45000 });
   await settle(page, 900);
-  const om = must((await oh.innerText()).match(/compared (\d+) options over (\d+) seasons/), "options");
-  const range = must(
-    (await page.getByText(/Cumulative margin.*\d{4}.\d{4}/).first().innerText()).match(/(\d{4})\D(\d{4})/),
-    "range",
-  );
-  // the options grid: from the heading to the end of the first row of option cards
-  const optsBox = await page.evaluate(() => {
-    const h = [...document.querySelectorAll("*")].find((e) => e.children.length === 0 && /We compared \d+ options/.test(e.textContent));
-    const btn = [...document.querySelectorAll("button")].find((b) => /Choose this option|Chosen/.test(b.textContent));
-    const a = h.getBoundingClientRect(),
-      b = btn.getBoundingClientRect();
-    return { x: Math.max(0, a.left - 12), y: a.top + window.scrollY - 8, width: Math.min(1100, 1920 - a.left), height: b.bottom - a.top + 28 };
-  });
-  const img3 = `data:image/png;base64,${(await page.screenshot({ type: "png", clip: optsBox, fullPage: true })).toString("base64")}`;
-  await stage(take, cfg);
+  const rowSel = await take.card(row, "row", 40);
+  const risks = await take.card(risksH, "risks", 200);
+  const attention = must((await page.getByText(/^\d+ items? needs? attention$/).first().innerText()).trim(), "attention chip");
+  const nDays = must((await page.getByRole("heading", { name: /^Next \d+ days$/ }).first().innerText()).match(/\d+/), "days")[0];
+  const q = (L + 0.4) / 3;
+  // beat 1: the climate row opens (three plain takeaways)
+  await take.cam(rowSel, { dur: 1, fill: [0.7, 0.2], anchor: [0.5, 0.35], maxScale: 1.3 });
   const t0 = take.mark("ready");
-  await page.evaluate(
-    ({ img1, img2, img3, shiftVal, nRisks, nOpt, nSeasons, range }) => {
-      const st = document.getElementById("stage");
-      const tok = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-      const tile = (img, css, label, from, delay, accent) => {
-        const w = document.createElement("div");
-        w.style.cssText = `position:absolute;${css};border-radius:var(--ts-r-card);`;
-        w.innerHTML = `<div style="overflow:hidden;border-radius:var(--ts-r-card);border:2px solid var(--ts-line);box-shadow:var(--ts-shadow-hero);max-height:inherit"><img src="${img}" style="display:block;width:100%;transform-origin:50% 0"></div>
-          <div style="position:absolute;left:0;top:0;padding:var(--ts-s2) var(--ts-s5);border-radius:var(--ts-r-chip);background:${accent ? "var(--ts-signal)" : "var(--ts-ink)"};color:${accent ? "var(--ts-on-signal)" : "var(--ts-surface)"};font-size:32px;font-weight:700;letter-spacing:-0.02em;transform:translateY(-120%)">${label}</div>`;
-        st.appendChild(w);
-        w.animate(
-          [{ transform: `translate(${from[0]}px,${from[1]}px)`, opacity: 0 }, { transform: "none", opacity: 1 }],
-          { duration: 420, delay, easing: tok("--ts-ease-enter"), fill: "both" },
-        );
-        w.firstElementChild.animate([{ transform: "scale(1)" }, { transform: "scale(1.06)" }], {
-          duration: 4200, delay, easing: "linear", fill: "both",
-        });
-      };
-      tile(img1, "left:96px;top:128px;width:900px", "What changed", [-700, 0], 200, true);
-      tile(img2, "left:1040px;top:128px;width:784px", "What to watch today", [700, 0], 1550, false);
-      tile(img3, "left:96px;top:610px;width:900px;max-height:340px", "What to plant", [0, 500], 2750, true);
-      const card = document.createElement("div");
-      card.style.cssText = "position:absolute;left:1040px;top:470px;width:784px;display:flex;flex-direction:column;gap:var(--ts-s4)";
-      const rows = [
-        [shiftVal, "first autumn frost", 650],
-        [`${nRisks} risks`, "ranked for this field", 2000],
-        [`${nSeasons} seasons`, `${range[1]}–${range[2]}, ${nOpt} options`, 3200],
-      ];
-      rows.forEach(([big, small, delay], i) => {
-        const r = document.createElement("div");
-        r.style.cssText = `display:flex;align-items:baseline;gap:var(--ts-s5);padding:var(--ts-s3) var(--ts-s6);border-radius:var(--ts-r-card);background:${i === 1 ? "var(--ts-ink)" : "var(--ts-signal)"};color:${i === 1 ? "var(--ts-surface)" : "var(--ts-on-signal)"};box-shadow:var(--ts-shadow-hero);width:fit-content`;
-        r.innerHTML = `<span style="font-family:var(--ts-mono);font-size:58px;font-weight:700;letter-spacing:-0.04em">${big}</span><span style="font-size:28px;font-weight:500">${small}</span>`;
-        if (i === 2) r.style.cssText += ";margin-top:150px";
-        card.appendChild(r);
-        r.animate([{ opacity: 0, transform: "translateY(22px)" }, { opacity: 1, transform: "none" }], {
-          duration: 240, delay, easing: tok("--ts-ease-enter"), fill: "both",
-        });
-      });
-      st.appendChild(card);
-    },
-    { img1, img2, img3, shiftVal, nRisks, nOpt: om[1], nSeasons: om[2], range }
-  );
-  await page.waitForTimeout((L + 0.4) * 1000);
-  return { segs: [{ from: t0, to: t0 + L + 0.4 }], facts: { shiftVal, nRisks, options: om[1], seasons: om[2], range: range.slice(1) }, clicks: [] };
+  await take.cursorClick(row, "row", { dur: 450 });
+  const clicks = [take.now()];
+  await row.click();
+  await page.waitForTimeout(350);
+  const takeaway = must(
+    (await row.evaluate((el) => {
+      let n = el;
+      for (let i = 0; i < 8 && n.parentElement; i++) {
+        n = n.parentElement;
+        if (n.innerText.includes("All metrics")) break;
+      }
+      return n.innerText;
+    })).match(/The first autumn frost comes (\d+ days? later)/),
+    "takeaway",
+  )[1];
+  const camA = take.cam(rowSel, { dur: 600, fill: [0.86, 0.62], anchor: [0.5, 0.45], maxScale: 1.6 });
+  await take.d("say", [{ segs: [{ id: "a", text: takeaway, mono: true }, { text: "first autumn frost", small: true }], accent: true, size: px(52) }], { pos: "bl" });
+  await take.d("countUp", "a", takeaway, 600);
+  await camA;
+  const tB = t0 + q;
+  if (tB - take.now() > 0.05) await take.cam(rowSel, { dur: (tB - take.now()) * 1000, ease: "--ts-ease-enter", fill: [0.9, 0.66], anchor: [0.5, 0.45], maxScale: 1.7 });
+  // beat 2: top risks and the week
+  const camB = take.cam(risks, { dur: 450, fill: [0.86, 0.8], anchor: [0.5, 0.5], maxScale: 1.5 });
+  await take.d("say", [{ segs: [{ text: attention }], accent: true, size: px(46) }, { segs: [{ id: "b", text: nDays, mono: true }, { text: "days ahead" }], size: px(40) }], { pos: "bl" });
+  await camB;
+  const tC = t0 + 2 * q;
+  if (tC - take.now() > 0.05) await take.cam(risks, { dur: (tC - take.now()) * 1000, ease: "--ts-ease-enter", fill: [0.9, 0.84], anchor: [0.5, 0.5], maxScale: 1.6 });
+  const tEndA = take.now();
+  // beat 3: the rotation decision (a page load, cut out)
+  await page.goto(`${cfg.base}/fields/${cfg.fieldId}/rotation`);
+  const dec = page.getByText(/^Sow .+ in \d{4}$/).first();
+  await dec.waitFor({ timeout: 45000 });
+  await page.getByText(/We compared \d+ options over \d+ seasons/).first().waitFor();
+  await settle(page, 900);
+  const title = (await dec.innerText()).trim();
+  const gain = must((await page.getByText(/\$\d+\s+per\s+ac\s+a\s+year\s+more\s+than\s+today/).first().innerText()).replace(/\s+/g, " ").match(/\$\d+ per ac a year more than today/), "gain line")[0];
+  const plan = (await page.getByText(/Plan for \d{4}.\d{4}:/).first().innerText()).trim();
+  const range = must(plan.match(/(\d{4}).(\d{4})/), "plan range");
+  const decCard = await take.card(dec, "dec", 200);
+  const opts = await take.tag(page.getByRole("button", { name: /Choose this option|Chosen/ }).first(), "optsbtn");
+  await take.cam(decCard, { dur: 1, fill: [0.74, 0.6], anchor: [0.5, 0.4], maxScale: 1.3 });
+  const tStart = take.mark("rotation");
+  take.cam(decCard, { dur: 500, fill: [0.86, 0.66], anchor: [0.5, 0.42], maxScale: 1.55 });
+  await take.d("say", [{ segs: [{ text: title }], accent: true, size: px(46) }, { segs: [{ text: gain }], size: px(36) }], { pos: "bl" });
+  await page.waitForTimeout(700);
+  await take.cam(null, { union: [decCard, opts], dur: Math.max(300, (q + 0.1) * 1000 - 700), ease: "--ts-ease-enter", fill: [0.9, 0.9], anchor: [0.5, 0.5], maxScale: 1.3 });
+  void tEndA;
+  return {
+    segs: [
+      { from: t0, to: tEndA },
+      { from: tStart, to: tStart + q + 0.1 },
+    ],
+    facts: { takeaway, attention, nDays, title, gain, plan, range: range.slice(1) },
+    clicks,
+  };
 }
 
 // ---------------------------------------------------------------- d. proof: the missed years ringed one after another
 export async function proof(take, cfg, L) {
   const { page } = take;
   await page.goto(`${cfg.base}/fields/${cfg.fieldId}/trust`);
-  const head = page.getByText(/How closely the model follows what happened/).first();
+  const head = page.getByText("The short answer", { exact: true }).first();
   await head.waitFor({ timeout: 45000 });
-  await page.getByText(/r = -?[\d.]+, mean error/).first().waitFor();
+  await page.getByText(/r = -?[\d.]+ · mean error/).first().waitFor();
   await settle(page, 900);
   const chartCard = await take.card(page.getByText(/Model, official yield and field greenness by year/).first(), "chartcard", 200);
   await page.locator("svg").filter({ hasText: /2022/ }).first().waitFor();
@@ -387,8 +377,9 @@ export async function proof(take, cfg, L) {
       });
   });
   if (rings.length !== ringText.length) throw new Error(`rings ${rings.length} vs years ${ringText.length}`);
-  const txt = (await fieldLines(page, await take.card(head, "card", 150))).join("\n");
-  const m = [...txt.matchAll(/r = (-?[\d.]+), mean error/g)].map((x) => x[1]);
+  const body = await page.locator("main").innerText();
+  const m = [...body.matchAll(/r = (-?[\d.]+) · mean error/g)].map((x) => x[1]);
+  if (m.length < 2) throw new Error("two r values expected");
   await take.cam(chartCard, { dur: 1, fill: [0.74, 0.84], anchor: [0.4, 0.5], maxScale: 1.7 });
   const t0 = take.mark("ready");
   const camP = take.cam(chartCard, { dur: 900, fill: [0.84, 0.88], anchor: [0.4, 0.5], maxScale: 1.8 });
@@ -423,4 +414,78 @@ export async function proof(take, cfg, L) {
   if (left > 0.25) await take.cam(chartCard, { dur: left * 1000, ease: "--ts-ease-enter", fill: [0.88, 0.9], anchor: [0.4, 0.5], maxScale: 1.9 });
   void start;
   return { segs: [{ from: t0, to: end }], facts: { r: m.slice(0, 2), missed: ringText }, clicks };
+}
+
+// ---------------------------------------------------------------- e. ask the assistant (one live Gemini call; recorded once)
+export async function askLive(take, cfg, L) {
+  const { page } = take;
+  const QUESTION = "Has the climate of this field changed?";
+  await page.goto(`${cfg.base}/fields/${cfg.fieldId}`);
+  const askBar = page.getByText("Ask the assistant about your fields…").first();
+  await askBar.waitFor({ timeout: 45000 });
+  await settle(page, 900);
+  await take.cam(null, { dur: 1 });
+  const t0 = take.mark("ready");
+  const clicks = [];
+  await take.cursorClick(askBar, "askbar", { dur: 700 });
+  await askBar.click();
+  clicks.push(take.now());
+  await page.waitForTimeout(350);
+  await page.keyboard.type(QUESTION, { delay: 32 });
+  await page.waitForTimeout(250);
+  const tTyped = take.mark("typed");
+  await page.keyboard.press("Enter");
+  await page.waitForURL(/\/assistant/, { timeout: 20000 });
+  const composer = page.getByRole("textbox").first();
+  await composer.waitFor({ timeout: 20000 });
+  await settle(page, 600);
+  // a fresh chat, with the question in the composer (the palette hands it over without sending)
+  const val = async () => (await composer.inputValue().catch(() => "")).trim();
+  if ((await val()) !== QUESTION) throw new Error("composer does not hold the question: " + (await val()));
+  const newChat = page.getByRole("button", { name: "New chat" });
+  await newChat.click().catch(() => {});
+  await page.waitForTimeout(500);
+  if ((await val()) !== QUESTION) {
+    await composer.fill("");
+    await composer.pressSequentially(QUESTION, { delay: 20 });
+  }
+  const tReady = take.mark("composer");
+  const send = page.locator("form button[type=submit], button[aria-label*='Send' i]").last();
+  await take.cursorClick(send, "send", { dur: 600 });
+  await send.click();
+  clicks.push(take.now());
+  const tSend = take.mark("sent");
+  const badge = page.getByText(/\d+ numbers? checked against the models/).first();
+  await badge.waitFor({ timeout: 150000 });
+  await page.waitForTimeout(500);
+  const tAnswer = take.mark("answered");
+  const badgeText = (await badge.innerText()).trim().split("\n")[0];
+  const bm = must(badgeText.match(/^(\d+)\s+(.*)$/), "badge");
+  const answer = (await page.locator("main").innerText()).replace(/\s+/g, " ");
+  // open the data card ("Show the numbers")
+  const show = page.getByRole("button", { name: /Show the numbers|numbers? checked/ }).first();
+  try {
+    await take.cursorClick(show, "show", { dur: 550 });
+    await show.click({ timeout: 5000 });
+    clicks.push(take.now());
+  } catch {
+    clicks.push(take.now());
+  }
+  await page.waitForTimeout(500);
+  const tCard = take.mark("card");
+  const badgeSel = await take.tag(badge, "badge");
+  take.d("pulse", badgeSel);
+  await take.d("say", [{ segs: [{ id: "n", text: bm[1], mono: true }, { text: bm[2] }], accent: true, size: px(44) }], { pos: "bl" });
+  await take.d("countUp", "n", bm[1], 600);
+  await page.waitForTimeout(1600);
+  return {
+    segs: [
+      { from: t0, to: tTyped + 0.3, ramp: 1.4 },
+      { from: tTyped + 0.3, to: tSend + 0.15, ramp: 0.8 },
+      { from: tSend + 0.15, to: tAnswer - 0.1, ramp: 0.3 },
+      { from: tAnswer - 0.1, to: take.now() },
+    ],
+    facts: { question: QUESTION, badge: badgeText, answer: answer.slice(0, 700) },
+    clicks: [clicks[0], clicks[1], clicks[2]],
+  };
 }

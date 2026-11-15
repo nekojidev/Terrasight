@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { OUT, ROOT } from "./env.mjs";
 import { settle } from "./take.mjs";
-import { openGraph, sources, tiles, proof } from "./graphics.mjs";
+import { openGraph, sources, tiles, proof, askLive } from "./graphics.mjs";
 
 const must = (v, what) => {
   if (v == null || (Array.isArray(v) && !v.length)) throw new Error("Could not read from the page: " + what);
@@ -574,7 +574,6 @@ async function addField(take, cfg, L) {
   const { page } = take;
   await page.goto(cfg.base + "/fields/new");
   const choose = page.getByRole("button", { name: "Choose a file" });
-  await page.locator("canvas").first().waitFor({ timeout: 30000 });
   await settle(page, 1200);
   const modeFile = page.getByText("Upload a file", { exact: true }).first();
   const needMode = !(await choose.isVisible().catch(() => false));
@@ -637,7 +636,7 @@ async function addField(take, cfg, L) {
       { from: tUp, to: tPrev, ramp: 0.8 },
       { from: tPrev, to: tEnd },
     ],
-    facts: { area: areaStr, tier, loc, name: NEW_FIELD_NAME },
+    facts: { area: areaStr, tier, loc, name: NEW_FIELD_NAME, fieldId: page.url().split("/").pop() },
     clicks,
   };
 }
@@ -875,4 +874,4 @@ export async function renderPhoneBackdrop(browser, cfg, stateFile, file) {
   return geo;
 }
 
-export const SHOTS = { openGraph, sources, tiles, proof, coldOpen, addField, climate, overview, plan, trust, ask1, ask2, endCard, hook, briefHome, briefField, rotation, assistant, owner };
+export const SHOTS = { openGraph, sources, tiles, proof, askLive, coldOpen, addField, climate, overview, plan, trust, ask1, ask2, endCard, hook, briefHome, briefField, rotation, assistant, owner };

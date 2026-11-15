@@ -12,7 +12,7 @@ Motion graphics fed with real data (`lib/graphics.mjs`, pages built from `design
 `openGraph` draws the first autumn frost of every year 1981-2025 for North quarter's NASA POWER grid cell (lat 38,
 lon -100.625; the series is fetched once with the `power` adapter of `packages/sources` into `out/power-cell.json`, annual values
 from `packages/climate` `seasonSeries`, Theil-Sen from `theilSen`) and asserts that baseline, recent, "9 days later" and
-"clear trend" equal what the field page states; `sources` (the data sources converge into the assistant mark), `tiles` (three real
+"clear trend" equal what the field page states; `sources` (the data sources converge into the assistant mark), `tiles` (three fast full-frame cuts of the field page and the rotation page, re-recorded on design v6; the
 screenshots of the field page and the rotation page, the GPM line cropped out), `proof` (the app's own rings for the missed years
 appear one by one). `lib/series.mjs` is the data step.
 
@@ -100,3 +100,5 @@ cd tools/demo-video && npm install
 voice `DEMO_GEMINI_VOICE`, default `Charon`; per-line voices in `STORY`; model `DEMO_GEMINI_TTS_MODEL`, default `gemini-3.8-flash-tts`) or `say`
 (offline macOS voice, a draft). Without `DEMO_TTS`: ElevenLabs when its key exists, else Gemini, else `say`.
 Audio is cached per line by text, provider and voice; scene lengths follow the measured line durations.
+
+Design v6 re-record: `addField` (archived afterwards through the API), `askLive` (one live Gemini call: the Ask field in the top bar -> palette -> assistant composer -> Send -> answer -> "Show the numbers") and all other screens were re-recorded on the redesigned interface; `RECUT` re-cuts `addField`.

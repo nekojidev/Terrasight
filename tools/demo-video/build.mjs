@@ -59,7 +59,7 @@ const STORY = [
     min: 4.3,
     line: "Ask it anything. Every number is checked against the models.",
     voice: NARRATOR,
-    shots: [["ask1", 1]],
+    shots: [["askLive", 1]],
   },
   {
     id: "proof",
@@ -90,20 +90,10 @@ const RECUT = {
       { from: c.clicks[1] - 0.85, to: c.clicks[2] + 0.35, ramp: 0.6 },
     ];
   },
-  ask1: (c) => {
-    const m = c.marks;
-    const post = c.segs.at(-1);
-    c.segs = [
-      { from: m.ready, to: m.typed, ramp: 1.25 },
-      { from: m.typed, to: m.sent + 0.23 },
-      { from: m.sent + 0.23, to: m.answered - 0.1, ramp: 0.3 },
-      post,
-    ];
-  },
 };
 const DISCLOSURE =
   "Narration: AI-generated voices (Google Gemini TTS). Screen recording of the real application; no AI-generated imagery.";
-const ONCE = new Set(["addField", "ask1", "ask2", "assistant", "owner"]);
+const ONCE = new Set(["addField", "askLive", "ask1", "ask2", "assistant", "owner"]);
 const NEEDED = new Set(STORY.flatMap((s) => s.shots.map(([id]) => id)));
 const fmt = (s) => {
   const ms = Math.round(s * 1000);
