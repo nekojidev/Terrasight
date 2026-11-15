@@ -22,13 +22,14 @@ import { useEffect, useRef, useState } from "react";
 import { AnalysisCard } from "@/components/AnalysisCard";
 import { AiMark } from "@/components/AiMark";
 import { AskOwnerSheet } from "@/components/AskOwnerSheet";
+import { FarmStressCard } from "@/components/FarmStressCard";
 import { OutlookRailLine } from "@/components/OutlookRailLine";
 import { QueryState } from "@/components/QueryState";
 import { TodayCard, TodayRow } from "@/components/TodayCard";
 import { TodayWindows } from "@/components/TodayWindows";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import { useWorkspaceEvents } from "@/lib/events";
-import type { AskOwnerBody, DecisionList } from "@terrasight/shared";
+import type { AskOwnerBody, DecisionList, FarmStress } from "@terrasight/shared";
 import { briefHeadline, formatKeyNumber, humanizeDates } from "@/lib/brief";
 import { greetingKey, useNow } from "@/lib/time";
 import { useActionToast } from "@/lib/useActionToast";
@@ -92,7 +93,10 @@ interface Done {
 }
 
 /** Message lookup with a `has` check, for keys built at run time (`kn_<id>`). */
-type DynamicT = { (key: string, values?: Record<string, string | number>): string; has: (key: string) => boolean };
+type DynamicT = {
+  (key: string, values?: Record<string, string | number>): string;
+  has: (key: string) => boolean;
+};
 
 const day = (iso: string) => Date.parse(`${iso}T00:00:00Z`);
 
@@ -130,6 +134,29 @@ export function Brief({
     queryKey: ["decisions", workspaceId, "all"],
     queryFn: () => api<DecisionList>(`/api/w/${workspaceId}/decisions?state=all`),
     enabled: isOwner,
+  });
+  // Independent of the brief: it never blocks or delays it. A 404 (API not deployed yet) means "unavailable".
+  const stress = useQuery({
+    queryKey: ["brief", workspaceId, "farm-stress"],
+    queryFn: async (): Promise<FarmStress> => {
+      try {
+        return await api<FarmStress>(`/api/w/${workspaceId}/farm-stress`);
+      } catch (e) {
+        if (e instanceof ApiError && e.problem.status === 404)
+          return {
+            status: "unavailable",
+            stressYear: 2022,
+            season: new Date().getFullYear(),
+            currency: null,
+            current: null,
+            recommended: null,
+            difference: null,
+            counted: [],
+            notCounted: [],
+          };
+        throw e;
+      }
+    },
   });
   const now = useNow();
   const [done, setDone] = useState<Record<string, Done>>({});
@@ -198,7 +225,9 @@ export function Brief({
   const shownNumbers = (i: Item) =>
     i.keyNumbers.flatMap((k) => {
       const value = formatKeyNumber(k, keyFmt);
-      return value !== null && mk.has(`kn_${k.id}`) ? [{ value, label: mk(`kn_${k.id}`), weight: k.weight }] : [];
+      return value !== null && mk.has(`kn_${k.id}`)
+        ? [{ value, label: mk(`kn_${k.id}`), weight: k.weight }]
+        : [];
     });
   const factors = (i: Item): Factor[] => {
     const source = i.evidence.find((e) => e.kind !== "citation")?.source;
@@ -210,7 +239,9 @@ export function Brief({
     }));
   };
   const hello = greetingKey(now, b.timeZone);
-  const openDecisions = (decisions.data?.items ?? []).filter((d) => d.state === "waiting" || d.state === "question");
+  const openDecisions = (decisions.data?.items ?? []).filter(
+    (d) => d.state === "waiting" || d.state === "question",
+  );
 
   async function act(i: Item, kind: "accept" | "snooze" | "ask", note?: string) {
     const body: AskOwnerBody = kind === "ask" && note ? { note } : {};
@@ -227,8 +258,10 @@ export function Brief({
         );
       } else void client.invalidateQueries({ queryKey: key });
     } catch (e) {
-      toast.fail(e, kind === "accept" ? t("acceptBtn") : kind === "snooze" ? m("snooze") : t("askBtn"), () =>
-        void act(i, kind, note),
+      toast.fail(
+        e,
+        kind === "accept" ? t("acceptBtn") : kind === "snooze" ? m("snooze") : t("askBtn"),
+        () => void act(i, kind, note),
       );
     }
   }
@@ -270,7 +303,10 @@ export function Brief({
   const fieldLabel = (i: Item) => i.fieldName + (i.more > 0 ? ` · ${t("more", { n: i.more })}` : "");
   // Urgent first, then this week. A This-week item the API promoted to hero goes back to the week list.
   const heroUrgent = b.hero?.urgency === "urgent" ? b.hero : null;
-  const urgentItems = [...b.urgent, ...(heroUrgent && !b.urgent.some((u) => u.id === heroUrgent.id) ? [heroUrgent] : [])];
+  const urgentItems = [
+    ...b.urgent,
+    ...(heroUrgent && !b.urgent.some((u) => u.id === heroUrgent.id) ? [heroUrgent] : []),
+  ];
   const weekItems = [...(b.hero && !heroUrgent ? [b.hero] : []), ...b.thisWeek];
   const ordered = [...urgentItems, ...weekItems];
   const todayCount = ordered.length;
@@ -343,11 +379,23 @@ export function Brief({
     </Surface>
   );
 
+  const stressCard =
+    b.counts.fields > 0 ? (
+      <FarmStressCard
+        data={stress.data}
+        isLoading={stress.isLoading}
+        isError={stress.isError}
+        onRetry={() => void stress.refetch()}
+        isOwner={isOwner}
+        units={units}
+      />
+    ) : null;
+
   const weatherRows = b.rail.weather.slice(0, 2);
   const nextDays = (
     <Surface as="section" aria-labelledby="next7-h" className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-x-4">
-        <Kicker as="h2" className="" >
+        <Kicker as="h2" className="">
           <span id="next7-h">{m("next7_title")}</span>
         </Kicker>
         <Link
@@ -383,7 +431,9 @@ export function Brief({
       </p>
       <TodayWindows bare workspaceId={workspaceId} units={units} />
       <OutlookRailLine workspaceId={workspaceId} className="" />
-      {b.rail.weather[0]?.attribution && <p className="text-caption text-ink-3">{b.rail.weather[0].attribution}</p>}
+      {b.rail.weather[0]?.attribution && (
+        <p className="text-caption text-ink-3">{b.rail.weather[0].attribution}</p>
+      )}
     </Surface>
   );
 
@@ -424,8 +474,15 @@ export function Brief({
 
       {ownerSection}
 
+      {isOwner && stressCard}
+
       {!isOwner && b.rail.ownerQuestion && (
-        <Surface as="section" tone="inset" pad="sm" className="flex flex-wrap items-center justify-between gap-3">
+        <Surface
+          as="section"
+          tone="inset"
+          pad="sm"
+          className="flex flex-wrap items-center justify-between gap-3"
+        >
           <p className="min-w-0 text-body text-ink">
             <Kicker as="span" className="block">
               {m("rail_o")}
@@ -480,6 +537,8 @@ export function Brief({
         />
       )}
 
+      {!isOwner && stressCard}
+
       {todayCount === 0 ? (
         <Surface pad="md">
           <p className="text-body text-ink-2">{emptyText}</p>
@@ -489,7 +548,8 @@ export function Brief({
           <section aria-labelledby="today-h" className="flex flex-col gap-3">
             <div>
               <h2 id="today-h" className="text-h2 text-ink">
-                {isOwner ? t("ownerFarmTitle") : t("todayTitle")} <span className="text-ink-3">{todayCount}</span>
+                {isOwner ? t("ownerFarmTitle") : t("todayTitle")}{" "}
+                <span className="text-ink-3">{todayCount}</span>
               </h2>
               {isOwner && <p className="text-caption text-ink-2">{t("ownerFarmSub")}</p>}
             </div>
