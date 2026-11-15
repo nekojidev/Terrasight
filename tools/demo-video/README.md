@@ -70,3 +70,14 @@ Frames to review are written to `out/frames/` (one per scene, one per transition
 Put `ELEVENLABS_API_KEY` (and optionally `ELEVENLABS_VOICE_ID`) in the repo `.env` and run `pnpm demo:video`: the audio is
 regenerated, the scene lengths follow the new durations (shots are recorded again, except the once-only ones).
 Without a key the draft uses `say`.
+
+## Installing Playwright
+
+This folder is deliberately NOT part of the pnpm workspace: Playwright is needed only here, and keeping it out of the
+root lockfile means the product's install never depends on it. Install it once in this folder:
+
+```sh
+cd tools/demo-video && npm install
+```
+
+(npm goes through the same registry mirror as the rest of the repo, so it needs a valid token.)
