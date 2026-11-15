@@ -19,7 +19,9 @@ import { ScenariosService } from "../scenarios/scenarios.service.js";
 import { CountyYieldsService } from "../yields/yields.service.js";
 import {
   NOT_MODELLED,
+  buildDryland,
   buildTable,
+  isModelFlat,
   missReason,
   type ActualPoint,
   type ActualSources,
@@ -57,6 +59,8 @@ const empty = (fieldId: string, status: TrustReport["status"], reason?: string):
   notModelled: NOT_MODELLED,
   caveats: [],
   retrospective: null,
+  modelFlat: false,
+  dryland: null,
 });
 
 /** "How far can you trust this" (S-10.08, S-10.10): the simulator over past seasons against what happened. */
@@ -155,22 +159,36 @@ export class TrustService {
 
     const actual = await this.actual(field);
     const fieldPractice = input.irrigated ? "irrigated" : "non-irrigated";
-    const table = buildTable(rows, actual.sources, fieldPractice, (row) => {
-      const sowing = sowingDate(input.sowing, row.crop, row.year);
+    const reasonWith = (inp: EngineInput) => (row: SeasonRow) => {
+      const sowing = sowingDate(inp.sowing, row.crop, row.year);
       const sim = simulateSeason(
         {
-          site: input.site,
+          site: inp.site,
           crops: [{ crop: row.crop, sowing }],
-          irrigated: input.irrigated,
-          ...(input.waterCapMm !== undefined ? { waterCapMm: input.waterCapMm } : {}),
+          irrigated: inp.irrigated,
+          ...(inp.waterCapMm !== undefined ? { waterCapMm: inp.waterCapMm } : {}),
           startDepletionMm: 0,
         },
-        input.weatherByYear.get(row.year) ?? [],
+        inp.weatherByYear.get(row.year) ?? [],
       );
       const harvest = sim.crops[0]?.harvest;
-      return harvest ? missReason(row.year, input.weatherByYear, { sowing, harvest }) : "unknown";
-    });
+      return harvest ? missReason(row.year, inp.weatherByYear, { sowing, harvest }) : "unknown";
+    };
+    const table = buildTable(rows, actual.sources, fieldPractice, reasonWith(input));
     for (const c of table.caveats) caveats.add(c);
+
+    // The same model without irrigation, only for an irrigated field (a rainfed field's main comparison is that check).
+    let dryland: TrustReport["dryland"] = null;
+    if (input.irrigated) {
+      const { waterCapMm: _cap, ...rest } = input;
+      const dryInput: EngineInput = { ...rest, irrigated: false };
+      const dryHind = hindcastSeasons(
+        dryInput,
+        known.map((s) => ({ year: s.season, crop: s.mainCrop })),
+      );
+      const dryRows: SeasonRow[] = dryHind.map((h) => ({ year: h.year, crop: h.crop, relative: h.relative, ndviPeak: null }));
+      dryland = buildDryland(dryRows, actual.sources, reasonWith(dryInput));
+    }
 
     const noCounty = actual.sources.kind === "none" || !actual.connected;
     return {
@@ -189,6 +207,8 @@ export class TrustService {
       notModelled: NOT_MODELLED,
       caveats: [...caveats].sort(),
       retrospective: await this.retrospective(workspaceId, fieldId, input),
+      modelFlat: isModelFlat(table.years),
+      dryland,
     };
   }
 

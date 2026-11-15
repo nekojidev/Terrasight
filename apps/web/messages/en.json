@@ -1786,6 +1786,23 @@
     "retro_recommended": "Recommended",
     "retro_total": "Total",
     "retro_diff": "Difference (recommended minus current)",
-    "retro_nodata": "no data"
+    "retro_nodata": "no data",
+    "flat_title": "The model cannot be checked against yields for this field",
+    "flat_body_example": "For this irrigated field the model shows the same yield every year: it assumes irrigation always covers the crop's need. Real yields still moved (for example {value} in {year} against the county trend). So for this field the model cannot be checked against yields: there is nothing in it to compare.",
+    "flat_body": "For this irrigated field the model shows the same yield every year: it assumes irrigation always covers the crop's need. Real yields still moved. So for this field the model cannot be checked against yields: there is nothing in it to compare.",
+    "c22_modelflat_below": "The model shows no change; the county yield was {value}% below its trend.",
+    "c22_modelflat_above": "The model shows no change; the county yield was {value}% above its trend.",
+    "c22_modelflat_at": "The model shows no change; the county yield was at its trend.",
+    "read_flat": "Cannot be compared: the model does not vary.",
+    "dry_title": "The same model without irrigation",
+    "dry_intro": "We ran the same model with this field's soil and weather but without irrigation, and compared it with non-irrigated yields of {area}. This checks the part the model does compute: losses from lack of water. It is not this field's result.",
+    "dry_fit": "Model without irrigation vs non-irrigated yields",
+    "dry_chart_title": "Model without irrigation and non-irrigated yields by year",
+    "dry_series_model": "Model without irrigation",
+    "dry_series_actual": "Non-irrigated yields",
+    "dry_chart_aria": "Chart of deviations by year: the model run without irrigation and non-irrigated yields. A table with the same numbers follows.",
+    "dry_chart_caption": "Deviation by year, % from the usual level (model without irrigation)",
+    "dry_miss_title": "Years the model without irrigation missed",
+    "dry_miss_intro": "Years where the model without irrigation and the non-irrigated yields differ by more than 20 points."
   }
 }
