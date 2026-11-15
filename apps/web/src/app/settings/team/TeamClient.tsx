@@ -7,7 +7,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useState, type FormEvent } from "react";
 import { api, ApiError } from "@/lib/api";
 
-type Role = "owner" | "admin" | "agronomist" | "viewer";
+type Role = "owner" | "agronomist";
 interface Member {
   id: string;
   name: string;
@@ -22,7 +22,7 @@ interface Fresh {
 }
 
 /** Team page: list, add a user, change role, remove, copy-once setup links. */
-export function TeamClient({ workspaceId, role, meId }: { workspaceId: string; role: Role; meId: string }) {
+export function TeamClient({ workspaceId, meId }: { workspaceId: string; meId: string }) {
   const t = useTranslations("App");
   const locale = useLocale();
   const client = useQueryClient();
@@ -42,9 +42,7 @@ export function TeamClient({ workspaceId, role, meId }: { workspaceId: string; r
     role: "agronomist",
   });
 
-  // An Admin can't create or manage Owners (the API enforces it too).
-  const assignable: Role[] =
-    role === "owner" ? ["owner", "admin", "agronomist", "viewer"] : ["admin", "agronomist", "viewer"];
+  const assignable: Role[] = ["owner", "agronomist"];
   const options = (rs: Role[]) => rs.map((r) => ({ value: r, label: t(`role_${r}`) }));
   const date = (iso: string) =>
     new Intl.DateTimeFormat(locale === "uk" ? "uk-UA" : "en-US", {
@@ -189,7 +187,7 @@ export function TeamClient({ workspaceId, role, meId }: { workspaceId: string; r
           </h2>
           <ul className="flex flex-col gap-3">
             {members.map((m) => {
-              const manageable = m.id !== meId && (role === "owner" || m.role !== "owner");
+              const manageable = m.id !== meId;
               return (
                 <li key={m.id} className="flex flex-col gap-3 rounded-card border border-line bg-surface p-4">
                   <div className="flex flex-wrap items-start justify-between gap-2">
@@ -264,8 +262,12 @@ export function TeamClient({ workspaceId, role, meId }: { workspaceId: string; r
               value={form.role}
               onChange={(e) => setForm({ ...form, role: e.target.value as Role })}
               options={options(assignable)}
-              hint={t(`teamRoleHelp_${form.role}`)}
             />
+            <ul className="flex flex-col gap-2 text-small text-ink-2">
+              {assignable.map((r) => (
+                <li key={r}>{t(`teamRoleHelp_${r}`)}</li>
+              ))}
+            </ul>
             <Button
               type="submit"
               size={56}

@@ -47,7 +47,7 @@ export default async function RotationPage({ params }: { params: Promise<{ id: s
         thumb={field.data.thumb ?? null}
         crop={lastCrop}
         units={ws.data.units}
-        canSave={ws.data.role !== "viewer"}
+        canSave
       />
     </AppShell>
   );

@@ -71,7 +71,7 @@ describe("notifications (L-06)", () => {
   it("creates per-recipient rows with an event, lists newest first and marks read", async () => {
     const ws = await workspace();
     const a = await user(ws, "agronomist");
-    const b = await user(ws, "admin");
+    const b = await user(ws, "owner");
     await service.create(prisma.system, ws, [
       {
         userId: a,

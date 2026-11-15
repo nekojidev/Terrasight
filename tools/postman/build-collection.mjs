@@ -59,7 +59,7 @@ const collection = {
           "  const run = Date.now().toString(36);",
           "  pm.collectionVariables.set('run', run);",
           "  pm.collectionVariables.set('ownerEmail', `owner-${run}@example.com`);",
-          "  pm.collectionVariables.set('viewerEmail', `viewer-${run}@example.com`);",
+          "  pm.collectionVariables.set('agronomistEmail', `viewer-${run}@example.com`);",
           "}",
         ],
       },
@@ -172,11 +172,15 @@ const collection = {
       ],
     },
     {
-      name: "Invite the owner as a Viewer (S-01.03, S-01.04)",
+      name: "Invite an agronomist; the Agronomist role is limited (S-01.03, S-01.04, PD v2.10)",
       item: [
         req("Invite by email", "POST", "/api/w/{{ws}}/invitations", {
-          body: { email: "{{viewerEmail}}", role: "viewer" },
+          body: { email: "{{agronomistEmail}}", role: "agronomist" },
           tests: [status(201), `pm.collectionVariables.set("inviteToken", pm.response.json().token);`],
+        }),
+        req("The retired roles admin and viewer are refused", "POST", "/api/w/{{ws}}/invitations", {
+          body: { email: "retired-{{run}}@example.com", role: "viewer" },
+          tests: problem(422),
         }),
         req("Phone numbers are not accepted", "POST", "/api/w/{{ws}}/invitations", {
           body: { email: "+1 620 555 0100" },
@@ -185,40 +189,58 @@ const collection = {
         req("Invitation info is public", "GET", "/api/invitations/{{inviteToken}}", {
           tests: [
             status(200),
-            `pm.test("open, for the viewer", () => { const b = pm.response.json(); pm.expect(b.status).to.eql("open"); pm.expect(b.role).to.eql("viewer"); pm.expect(b.workspaceName).to.eql("Prairie Field Co."); });`,
+            `pm.test("open, for the agronomist", () => { const b = pm.response.json(); pm.expect(b.status).to.eql("open"); pm.expect(b.role).to.eql("agronomist"); pm.expect(b.workspaceName).to.eql("Prairie Field Co."); });`,
           ],
         }),
         req("Sign out", "POST", "/api/auth/logout", { tests: [status(204)] }),
         req("Signed out: me is 401", "GET", "/api/me", { tests: problem(401) }),
-        req("Sign up the invited viewer", "POST", "/api/auth/signup", {
-          body: { email: "{{viewerEmail}}", password: "viewer long password", name: "John Miller" },
+        req("Sign up the invited agronomist", "POST", "/api/auth/signup", {
+          body: { email: "{{agronomistEmail}}", password: "agronomist long password", name: "John Miller" },
           tests: [status(201)],
         }),
         req("Accept the invitation", "POST", "/api/invitations/{{inviteToken}}/accept", {
           tests: [
             status(200),
-            `pm.test("joined as viewer", () => pm.expect(pm.response.json().role).to.eql("viewer"));`,
+            `pm.test("joined as agronomist", () => pm.expect(pm.response.json().role).to.eql("agronomist"));`,
           ],
         }),
         req("An invitation works once", "POST", "/api/invitations/{{inviteToken}}/accept", {
           tests: problem(410, "invitation-used"),
         }),
-        req("Viewer can read the workspace", "GET", "/api/w/{{ws}}", {
+        req("Agronomist can read the workspace", "GET", "/api/w/{{ws}}", {
           tests: [
             status(200),
-            `pm.test("role viewer", () => pm.expect(pm.response.json().role).to.eql("viewer"));`,
+            `pm.test("role agronomist", () => pm.expect(pm.response.json().role).to.eql("agronomist"));`,
           ],
         }),
-        req("Viewer cannot change settings", "PATCH", "/api/w/{{ws}}", {
+        req("Agronomist cannot change settings", "PATCH", "/api/w/{{ws}}", {
           body: { name: "Hacked" },
           tests: problem(403),
         }),
-        req("Viewer cannot see members", "GET", "/api/w/{{ws}}/members", { tests: problem(403) }),
-        req("Viewer cannot invite", "POST", "/api/w/{{ws}}/invitations", {
+        req("Agronomist cannot see members", "GET", "/api/w/{{ws}}/members", { tests: problem(403) }),
+        req("Agronomist cannot invite", "POST", "/api/w/{{ws}}/invitations", {
           body: { email: "x-{{run}}@example.com" },
           tests: problem(403),
         }),
-        req("Viewer can open the event stream topic list (read)", "GET", "/api/w/{{ws}}/events?topics=nope", {
+        req("Agronomist cannot create users", "POST", "/api/w/{{ws}}/members", {
+          body: { name: "X", email: "x-{{run}}@example.com", role: "agronomist" },
+          tests: problem(403),
+        }),
+        req("Agronomist cannot create report links", "POST", "/api/w/{{ws}}/report-links", {
+          body: { language: "en" },
+          tests: problem(403),
+        }),
+        req("Agronomist cannot list report links", "GET", "/api/w/{{ws}}/report-links", { tests: problem(403) }),
+        req(
+          "Agronomist cannot answer a decision",
+          "POST",
+          "/api/w/{{ws}}/decisions/00000000-0000-4000-8000-000000000000/answer",
+          { body: { answer: "approve" }, tests: problem(403) },
+        ),
+        req("Agronomist can read the decisions", "GET", "/api/w/{{ws}}/decisions?state=all", {
+          tests: [status(200)],
+        }),
+        req("Agronomist can open the event stream topic list (read)", "GET", "/api/w/{{ws}}/events?topics=nope", {
           tests: problem(422),
         }),
       ],
@@ -233,24 +255,28 @@ const collection = {
         req("Members list", "GET", "/api/w/{{ws}}/members", {
           tests: [
             status(200),
-            `const m = pm.response.json().members; pm.test("owner + viewer", () => pm.expect(m.map((x) => x.role).sort()).to.eql(["owner", "viewer"]));`,
+            `const m = pm.response.json().members; pm.test("owner + agronomist", () => pm.expect(m.map((x) => x.role).sort()).to.eql(["agronomist", "owner"]));`,
             `pm.collectionVariables.set("ownerId", m.find((x) => x.role === "owner").id);`,
-            `pm.collectionVariables.set("viewerId", m.find((x) => x.role === "viewer").id);`,
+            `pm.collectionVariables.set("agronomistId", m.find((x) => x.role === "agronomist").id);`,
           ],
         }),
         req("The last Owner cannot step down", "PATCH", "/api/w/{{ws}}/members/{{ownerId}}", {
-          body: { role: "admin" },
+          body: { role: "agronomist" },
           tests: problem(409, "last-owner"),
         }),
-        req("Promote the viewer to agronomist", "PATCH", "/api/w/{{ws}}/members/{{viewerId}}", {
-          body: { role: "agronomist" },
+        req("The retired roles are refused", "PATCH", "/api/w/{{ws}}/members/{{agronomistId}}", {
+          body: { role: "admin" },
+          tests: problem(422),
+        }),
+        req("Promote the agronomist to owner", "PATCH", "/api/w/{{ws}}/members/{{agronomistId}}", {
+          body: { role: "owner" },
           tests: [status(200)],
         }),
-        req("Remove the member", "DELETE", "/api/w/{{ws}}/members/{{viewerId}}", { tests: [status(204)] }),
+        req("Remove the member", "DELETE", "/api/w/{{ws}}/members/{{agronomistId}}", { tests: [status(204)] }),
       ],
     },
     {
-      name: "Owner creates users (PD v2.9)",
+      name: "Owner creates users (PD v2.9, v2.10)",
       item: [
         req("Create an agronomist: a one-time setup link", "POST", "/api/w/{{ws}}/members", {
           body: { name: "Ira Agro", email: "ira-{{run}}@example.com", role: "agronomist" },
@@ -262,7 +288,7 @@ const collection = {
           ],
         }),
         req("The same email is already a member", "POST", "/api/w/{{ws}}/members", {
-          body: { name: "Ira Agro", email: "ira-{{run}}@example.com", role: "viewer" },
+          body: { name: "Ira Agro", email: "ira-{{run}}@example.com", role: "agronomist" },
           tests: problem(409, "already-member"),
         }),
         req("Members list shows who has not set a password", "GET", "/api/w/{{ws}}/members", {
@@ -302,7 +328,7 @@ const collection = {
           tests: problem(410, "setup-link-invalid"),
         }),
         req("An agronomist cannot create users", "POST", "/api/w/{{ws}}/members", {
-          body: { name: "X", email: "x-{{run}}@example.com", role: "viewer" },
+          body: { name: "X", email: "x-{{run}}@example.com", role: "owner" },
           tests: problem(403),
         }),
         req("Owner signs back in", "POST", "/api/auth/login", {
@@ -581,7 +607,7 @@ const collection = {
           "/api/scouting-photos/00000000-0000-4000-8000-000000000000?exp=1&sig=x",
           { tests: problem(403) },
         ),
-        req("Owner decisions (PD v2.7)", "GET", "/api/w/{{ws}}/decisions?state=all", {
+        req("Owner decisions (PD v2.7, v2.10)", "GET", "/api/w/{{ws}}/decisions?state=all", {
           tests: [
             status(200),
             `pm.test("shape", () => { const r = pm.response.json(); pm.expect(r.items).to.be.an("array"); pm.expect(r.recipients).to.be.an("array"); pm.expect(r.counts).to.have.keys("waiting", "question", "decided"); pm.expect(["en", "uk"]).to.include(r.language); });`,

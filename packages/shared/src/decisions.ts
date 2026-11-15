@@ -10,8 +10,8 @@
  *   POST /recommendations/:id/ask-owner        body AskOwnerBody     → the recommendation view (with undoUntil)
  *   POST /recommendations/:id/undo             (existing)            cancels ask-owner within 8 s, like accept
  *   GET  /decisions?state=waiting|question|decided|all               → DecisionList
- *   POST /decisions/:id/answer                 body AnswerBody       → Decision        (Viewer / owner)
- *   POST /decisions/:id/replies                body { text }         → Decision        (Owner, Admin, Agronomist)
+ *   POST /decisions/:id/answer                 body AnswerBody       → Decision        (Owner)
+ *   POST /decisions/:id/replies                body { text }         → Decision        (Owner, Agronomist)
  *   POST /decisions/:id/reply-draft            body {}               → { draft: string; language: "en" | "uk" }
  *   POST /decisions/:id/republish              body {}               → Decision        (the advice changed since asked)
  *   Report links (unchanged CRUD at /report-links) open the owner view without an account:
@@ -62,7 +62,7 @@ export interface DecisionList {
   /** Language the owner reads in (workspace report language). */
   language: "en" | "uk";
   counts: { waiting: number; question: number; decided: number };
-  /** Names of the company's Viewers (owner / manager) who receive decisions. */
+  /** Names of the company's Owners who receive decisions. */
   recipients: string[];
   items: Decision[];
 }

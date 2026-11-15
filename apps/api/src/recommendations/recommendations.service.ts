@@ -429,7 +429,7 @@ export class RecommendationsService {
             target: rec.id,
           },
         });
-        // Viewers (the owner / manager) hear about the new decision.
+        // The Owners hear about the new decision.
         await this.notifications.create(
           tx,
           rec.workspaceId,

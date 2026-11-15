@@ -185,7 +185,7 @@ export class DecisionsService {
     return i;
   }
 
-  /** The staff view: all live decisions, counts per state, the Owners and Viewers who receive them. */
+  /** The staff view: all live decisions, counts per state, the Owners who receive them. */
   async list(workspaceId: string, state: "waiting" | "question" | "decided" | "all"): Promise<DecisionList> {
     const ws = await this.prisma.system.workspace.findUniqueOrThrow({
       where: { id: workspaceId },
@@ -193,8 +193,8 @@ export class DecisionsService {
     });
     const all = await this.decisions(workspaceId);
     const decided = (d: Decision) => d.state === "approved" || d.state === "not_now";
-    const viewers = await this.prisma.system.membership.findMany({
-      where: { workspaceId, role: { in: ["owner", "viewer"] } },
+    const owners = await this.prisma.system.membership.findMany({
+      where: { workspaceId, role: "owner" },
       orderBy: { createdAt: "asc" },
       select: { user: { select: { name: true } } },
     });
@@ -206,7 +206,7 @@ export class DecisionsService {
         question: all.filter((d) => d.state === "question").length,
         decided: all.filter(decided).length,
       },
-      recipients: viewers.map((v) => v.user.name),
+      recipients: owners.map((v) => v.user.name),
       items: all.filter((d) => state === "all" || (state === "decided" ? decided(d) : d.state === state)),
     };
   }

@@ -20,7 +20,7 @@
           "  const run = Date.now().toString(36);",
           "  pm.collectionVariables.set('run', run);",
           "  pm.collectionVariables.set('ownerEmail', `owner-${run}@example.com`);",
-          "  pm.collectionVariables.set('viewerEmail', `viewer-${run}@example.com`);",
+          "  pm.collectionVariables.set('agronomistEmail', `viewer-${run}@example.com`);",
           "}"
         ]
       }
@@ -477,7 +477,7 @@
       ]
     },
     {
-      "name": "Invite the owner as a Viewer (S-01.03, S-01.04)",
+      "name": "Invite an agronomist; the Agronomist role is limited (S-01.03, S-01.04, PD v2.10)",
       "item": [
         {
           "name": "Invite by email",
@@ -508,7 +508,40 @@
             "url": "{{baseUrl}}/api/w/{{ws}}/invitations",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"{{viewerEmail}}\",\n  \"role\": \"viewer\"\n}"
+              "raw": "{\n  \"email\": \"{{agronomistEmail}}\",\n  \"role\": \"agronomist\"\n}"
+            }
+          }
+        },
+        {
+          "name": "The retired roles admin and viewer are refused",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 422\", () => pm.response.to.have.status(422));",
+                  "pm.test(\"problem+json\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/invitations",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"retired-{{run}}@example.com\",\n  \"role\": \"viewer\"\n}"
             }
           }
         },
@@ -554,7 +587,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
-                  "pm.test(\"open, for the viewer\", () => { const b = pm.response.json(); pm.expect(b.status).to.eql(\"open\"); pm.expect(b.role).to.eql(\"viewer\"); pm.expect(b.workspaceName).to.eql(\"Prairie Field Co.\"); });"
+                  "pm.test(\"open, for the agronomist\", () => { const b = pm.response.json(); pm.expect(b.status).to.eql(\"open\"); pm.expect(b.role).to.eql(\"agronomist\"); pm.expect(b.workspaceName).to.eql(\"Prairie Field Co.\"); });"
                 ]
               }
             }
@@ -620,7 +653,7 @@
           }
         },
         {
-          "name": "Sign up the invited viewer",
+          "name": "Sign up the invited agronomist",
           "event": [
             {
               "listen": "test",
@@ -647,7 +680,7 @@
             "url": "{{baseUrl}}/api/auth/signup",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"{{viewerEmail}}\",\n  \"password\": \"viewer long password\",\n  \"name\": \"John Miller\"\n}"
+              "raw": "{\n  \"email\": \"{{agronomistEmail}}\",\n  \"password\": \"agronomist long password\",\n  \"name\": \"John Miller\"\n}"
             }
           }
         },
@@ -660,7 +693,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
-                  "pm.test(\"joined as viewer\", () => pm.expect(pm.response.json().role).to.eql(\"viewer\"));"
+                  "pm.test(\"joined as agronomist\", () => pm.expect(pm.response.json().role).to.eql(\"agronomist\"));"
                 ]
               }
             }
@@ -703,7 +736,7 @@
           }
         },
         {
-          "name": "Viewer can read the workspace",
+          "name": "Agronomist can read the workspace",
           "event": [
             {
               "listen": "test",
@@ -711,7 +744,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
-                  "pm.test(\"role viewer\", () => pm.expect(pm.response.json().role).to.eql(\"viewer\"));"
+                  "pm.test(\"role agronomist\", () => pm.expect(pm.response.json().role).to.eql(\"agronomist\"));"
                 ]
               }
             }
@@ -728,7 +761,7 @@
           }
         },
         {
-          "name": "Viewer cannot change settings",
+          "name": "Agronomist cannot change settings",
           "event": [
             {
               "listen": "test",
@@ -761,7 +794,7 @@
           }
         },
         {
-          "name": "Viewer cannot see members",
+          "name": "Agronomist cannot see members",
           "event": [
             {
               "listen": "test",
@@ -786,7 +819,7 @@
           }
         },
         {
-          "name": "Viewer cannot invite",
+          "name": "Agronomist cannot invite",
           "event": [
             {
               "listen": "test",
@@ -819,7 +852,155 @@
           }
         },
         {
-          "name": "Viewer can open the event stream topic list (read)",
+          "name": "Agronomist cannot create users",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"problem+json\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/members",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"X\",\n  \"email\": \"x-{{run}}@example.com\",\n  \"role\": \"agronomist\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Agronomist cannot create report links",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"problem+json\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/report-links",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"language\": \"en\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Agronomist cannot list report links",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"problem+json\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/report-links"
+          }
+        },
+        {
+          "name": "Agronomist cannot answer a decision",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"problem+json\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/decisions/00000000-0000-4000-8000-000000000000/answer",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"answer\": \"approve\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Agronomist can read the decisions",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/decisions?state=all"
+          }
+        },
+        {
+          "name": "Agronomist can open the event stream topic list (read)",
           "event": [
             {
               "listen": "test",
@@ -889,9 +1070,9 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
-                  "const m = pm.response.json().members; pm.test(\"owner + viewer\", () => pm.expect(m.map((x) => x.role).sort()).to.eql([\"owner\", \"viewer\"]));",
+                  "const m = pm.response.json().members; pm.test(\"owner + agronomist\", () => pm.expect(m.map((x) => x.role).sort()).to.eql([\"agronomist\", \"owner\"]));",
                   "pm.collectionVariables.set(\"ownerId\", m.find((x) => x.role === \"owner\").id);",
-                  "pm.collectionVariables.set(\"viewerId\", m.find((x) => x.role === \"viewer\").id);"
+                  "pm.collectionVariables.set(\"agronomistId\", m.find((x) => x.role === \"agronomist\").id);"
                 ]
               }
             }
@@ -937,12 +1118,45 @@
             "url": "{{baseUrl}}/api/w/{{ws}}/members/{{ownerId}}",
             "body": {
               "mode": "raw",
+              "raw": "{\n  \"role\": \"agronomist\"\n}"
+            }
+          }
+        },
+        {
+          "name": "The retired roles are refused",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 422\", () => pm.response.to.have.status(422));",
+                  "pm.test(\"problem+json\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/members/{{agronomistId}}",
+            "body": {
+              "mode": "raw",
               "raw": "{\n  \"role\": \"admin\"\n}"
             }
           }
         },
         {
-          "name": "Promote the viewer to agronomist",
+          "name": "Promote the agronomist to owner",
           "event": [
             {
               "listen": "test",
@@ -966,10 +1180,10 @@
                 "value": "application/json"
               }
             ],
-            "url": "{{baseUrl}}/api/w/{{ws}}/members/{{viewerId}}",
+            "url": "{{baseUrl}}/api/w/{{ws}}/members/{{agronomistId}}",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"role\": \"agronomist\"\n}"
+              "raw": "{\n  \"role\": \"owner\"\n}"
             }
           }
         },
@@ -994,13 +1208,13 @@
                 "value": "XMLHttpRequest"
               }
             ],
-            "url": "{{baseUrl}}/api/w/{{ws}}/members/{{viewerId}}"
+            "url": "{{baseUrl}}/api/w/{{ws}}/members/{{agronomistId}}"
           }
         }
       ]
     },
     {
-      "name": "Owner creates users (PD v2.9)",
+      "name": "Owner creates users (PD v2.9, v2.10)",
       "item": [
         {
           "name": "Create an agronomist: a one-time setup link",
@@ -1067,7 +1281,7 @@
             "url": "{{baseUrl}}/api/w/{{ws}}/members",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Ira Agro\",\n  \"email\": \"ira-{{run}}@example.com\",\n  \"role\": \"viewer\"\n}"
+              "raw": "{\n  \"name\": \"Ira Agro\",\n  \"email\": \"ira-{{run}}@example.com\",\n  \"role\": \"agronomist\"\n}"
             }
           }
         },
@@ -1319,7 +1533,7 @@
             "url": "{{baseUrl}}/api/w/{{ws}}/members",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"X\",\n  \"email\": \"x-{{run}}@example.com\",\n  \"role\": \"viewer\"\n}"
+              "raw": "{\n  \"name\": \"X\",\n  \"email\": \"x-{{run}}@example.com\",\n  \"role\": \"owner\"\n}"
             }
           }
         },
@@ -2242,7 +2456,7 @@
           }
         },
         {
-          "name": "Owner decisions (PD v2.7)",
+          "name": "Owner decisions (PD v2.7, v2.10)",
           "event": [
             {
               "listen": "test",

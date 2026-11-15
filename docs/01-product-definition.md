@@ -1,8 +1,8 @@
-# Terrasight — Product Definition (v2.9)
+# Terrasight — Product Definition (v2.10)
 
 | | |
 | --- | --- |
-| **Status** | Draft v2.9 — **supersedes v1** (direction change on 2026-11-14) |
+| **Status** | Draft v2.10 — **supersedes v1** (direction change on 2026-11-14) |
 | **Date** | 2026-11-14 |
 | **Stage** | 1 of 3 — Product Definition → RFC → Tech Design |
 | **Context** | NASA Space Apps Challenge 2026, *Field Shift: Adapting Farms with NASA Data* |
@@ -11,6 +11,7 @@
 | **What changed in v2.2** | Competitors & differentiation (EOSDA Crop Monitoring, §7); new requirements: scouting tasks, stable zones, yield range, work log, integrations (§9); non-goals updated: zones are in scope, prescribing rates is not, open imagery only. Full analysis: [`competitor-eos.md`](competitor-eos.md) |
 | **What changed in v2.3** | Rotation horizon is **5 seasons (2026–2030)** instead of 10. The headline is the decision for next season; the 5-season comparison is its evidence; the plan is recomputed every autumn (§5, Rotation horizon) |
 | **What changed in v2.4** | Design review outcomes (v2.4.1: wording aligned across the whole document): urgency rules (§9), confidence on every home card, partial-failure state of **Analyze fields**, first-run onboarding and empty home, notifications, Fields map, rotation call to action, scouting completion and ownership, "Owner report" naming, honest "Coming soon" for integrations; review decisions in §12 (6–10) |
+| **What changed in v2.10** | **Two roles (2026-11-15):** the **Admin** and **Viewer** roles are removed; only **Owner** and **Agronomist** remain. **Owner** = the farming company's owner: creates users (owners or agronomists), manages the company, report links and billing, **answers decisions** (Approve / Not now / Ask…) and sees everything; may also do field work but never sees "Ask the owner". **Agronomist** does the field work and **asks the owner**; cannot manage users, the company or links, and cannot answer decisions. Existing Viewers and Admins become Owners (Viewers were the farm owners reading decisions; Admins keep their management rights). Decisions go to Owners. Onboarding step 2 becomes **Add your agronomist** (create the user, copy the one-time setup link; skippable) |
 | **What changed in v2.9** | **Roles revised (2026-11-15):** **Owner = the farming company's owner.** The Owner **creates the company's users** (name, email, role → a one-time "set your password" link valid 7 days, shown once; an existing account is just added) instead of inviting by email; sees everything and **answers decisions** (Approve / Not now / Ask…); never sees "Ask the owner" actions. **Agronomist** does the field work and asks the owner. **Admin** (optional) helps manage users and settings. **Viewer** reads (e.g. a manager) and may answer decisions. Decisions go to Owners and Viewers. The sidebar can be collapsed |
 | **What changed in v2.8** | **AI-proposed rotations (2026-11-15):** besides the rotation library, the assistant (Gemini) proposes 3–5 crop sequences for 2026–2030 from the field's own data (crop history, soil, climate, region, irrigation, crops with verified prices) with a short rationale. Every proposal passes rule checks (only modelled crops with verified prices, no forbidden host repeats, irrigation requirements) and is simulated by the same engine (150 weather runs × 10 price scenarios); **all numbers come from the models, never from the AI**. Shown as "Proposed by the assistant" next to library options |
 | **What changed in v2.7** | **Owner decisions replace the Owner report (2026-11-15):** **Accept** puts advice into the agronomist's own plan and no longer reaches the owner. A separate, deliberate **Ask the owner** (with an optional note, 8 s Undo) is used only for items that need the owner's approval (money, seed, a rotation change). Each becomes a **decision card with a thread**: advice snapshot → agronomist note → owner **Approve / Not now / Ask…** → agronomist reply (draft from the item). The owner's home is "N decisions need you"; report links open the same view without an account. The monthly report and "Accept and add to the report" are gone. Contract: `packages/shared/src/decisions.ts` |
@@ -60,12 +61,12 @@ In-season advice (pests, diseases, irrigation, alerts) goes beyond the challenge
 
 ## 3. Users
 
-**Primary user: the agronomist / crop advisor.** The company's owner or manager is a reader, not an operator.
+**Primary user: the agronomist / crop advisor.** The company's owner decides: they answer the agronomist's questions and manage the team.
 
 | User | Context | Job to be done | Surface |
 | --- | --- | --- | --- |
 | **Agronomist / crop advisor** (primary) | Works inside one farming company; dozens to hundreds of fields across regions; plans seasons; answers the owner's questions | "Tell me which of our fields need attention today and why, with evidence I can show the owner." | Desktop workspace + mobile in the field |
-| Company owner / manager | Pays and decides; little time | "Tell me what to do on our fields and why, in plain words." | **Shared report** (read-only, simple, mobile-first), as a Viewer |
+| Company owner / manager | Pays and decides; little time | "Tell me what to do on our fields and why, in plain words." | **Decisions** (Approve / Not now / Ask…, simple, mobile-first) as an **Owner**, or the no-account report link |
 | Farm staff | Executes work | "What do I need to do this week?" | Shared report |
 | External reader (bank, insurer) | Receives a field passport | "Is this field managed with a credible plan?" | Shared PDF / link |
 
@@ -73,13 +74,13 @@ In-season advice (pests, diseases, irrigation, alerts) goes beyond the challenge
 
 | Role | Permissions |
 | --- | --- |
-| Owner | Everything, including billing and deleting the workspace |
-| Admin | Members, fields, prices, sharing |
-| Agronomist (Editor) | Fields, recommendations, assistant, plans, **Analyze fields**; publishes recommendations to the report |
-| Viewer | Read-only: the report and passports. Usually the company owner or manager, and farm staff |
+| **Owner** (Власник) | The farming company's owner. Creates users (owners or agronomists), manages the company, report links and billing, can delete the workspace; **answers decisions** (Approve / Not now / Ask…); sees everything. May also do field work, but never sees "Ask the owner" |
+| **Agronomist** (Агроном) | Field work: fields, **Analyze fields**, accept / snooze, assistant, scouting, plans, **Ask the owner**, replies in decision threads. Cannot manage users, the company or links, and cannot answer decisions |
+
+Only these two roles exist (v2.10; Admin and Viewer were removed). The Owner creates the other users on the Team page.
 
 - **One workspace = one farming company** with all its fields, which may lie in different regions (e.g. Kansas, Colorado, Nebraska). Every field belongs to the company (§12, decision 3).
-- The agronomist works inside the company's workspace. The owner or manager reads the report as a **Viewer**. Whoever pays for the workspace holds the Owner role; it can be the same person.
+- The agronomist works inside the company's workspace. The owner answers decisions as an **Owner**. Whoever pays for the workspace holds the Owner role; it can be the same person as the agronomist, and a company can have several Owners.
 - An agronomist who works for several companies has a membership in each workspace and switches between them.
 - The report for the company's owner or manager is called the **Owner report** in the UI. Older text in this document may say "farmer report"; it means the same thing.
 - **Scouting** is done by the agronomist in the hackathon. Assigning a scouting task to farm staff through a link is P2 (§12, decision 6).
@@ -98,7 +99,7 @@ flowchart LR
     A -. "feedback: was it right?" .-> M
 ```
 
-0. **Create the company** (first run, 2 steps): company name, **time zone** (detected; it sets the 06:00 morning check), units (ha °C mm / ac °F in), report language; then invite the owner or manager as a Viewer (optional, can be done later on Reports). The home page shows an empty state until the first field is added (§9, First run).
+0. **Create the company** (first run, 2 steps): company name, **time zone** (detected; it sets the 06:00 morning check), units (ha °C mm / ac °F in), report language; then **add your agronomist** (name and email; Terrasight creates the account and shows a one-time setup link to copy; optional, can be done later on the Team page). The home page shows an empty state until the first field is added (§9, First run).
 1. **Add fields.** Draw or import boundaries; Terrasight reconstructs 18 seasons of history (as in v1).
 2. **Morning check and on-demand analysis.** Every morning at **06:00** (workspace time zone), Terrasight re-checks all fields: weather, crop stage, soil water and the risk models that matter **in the current season** (§5, Seasonal checks). The agronomist can also run **Analyze fields** at any time, for all fields or selected ones. Each field shows its progress, and the run ends with a summary: "8 fields checked, 1 new recommendation". The home page shows when the last analysis ran.
 3. **Home page.** All the company's fields, grouped by urgency (**Urgent / This week / All good**): what, where, how urgent, why, what evidence, how confident (§9, Home page).
@@ -302,7 +303,7 @@ Data tiers stay as in v1: **A Full data** (US), **B Basic data** (EU), **C Estim
 | Seasonal checks beyond the demo types | P2 | Design only |
 | UA / EN | P1 | Yes |
 | First-run onboarding: company, time zone, units, report language | P0 | Yes |
-| Invite the owner or manager as a Viewer (onboarding step 2 or the Reports page) | P1 | Yes |
+| Add your agronomist (onboarding step 2 or the Team page) | P1 | Yes |
 | Empty home (no fields yet) with the three steps and **Add your first field** (no demo company, v2.6) | P1 | Yes |
 | **Analyze fields** partial failure: per-field "No data", the run summary says what failed, "Retry" for that field | P0 | Yes |
 | Notifications (bell): owner questions, new urgent items, scouting results | P2 | Design only |
@@ -454,7 +455,7 @@ All resolved on 2026-11-14. Decisions 1 and 3 were revised in v2.1.
 | --- | --- | --- |
 | 1 | Which pests and diseases for the demo? | Library: [`data/pests.json`](../data/pests.json): 62 pests, diseases and parasitic plants, each with risk drivers, data signals, scouting and prevention advice in EN/UA. **Demo set (v2.1):** western corn rootworm on **Pivot 12** (corn) and barley yellow dwarf with its aphid vectors in a warm autumn on **Pivot 14** (winter wheat); disease: **wheat streak mosaic virus** on a dryland winter-wheat field in north-eastern Colorado (region `us-central-high-plains` since library v2) (volunteer-wheat green bridge, early sowing, warm autumn). The Ukrainian sunflower example (broomrape, sclerotinia) is dropped from the demo; both stay in the library. Every model threshold marked `verify: true` must be checked against a cited extension source before it is used; the source is shown in the UI |
 | 2 | Which LLM, and can field data be sent to it? | **Google Gemini API with function calling.** The assistant calls our tools (field history, risk models, rotation simulator, weather). Only derived field data is sent, no personal data. Every number in an answer must match a tool result; otherwise the tool result is shown instead |
-| 3 | Workspace model | **One workspace = one farming company** with many fields, possibly in several regions (e.g. Kansas, Colorado, Nebraska). The agronomist works inside the company; the owner or manager reads the report as a Viewer |
+| 3 | Workspace model | **One workspace = one farming company** with many fields, possibly in several regions (e.g. Kansas, Colorado, Nebraska). The agronomist works inside the company; the owner answers decisions as an Owner |
 | 4 | Weather forecast source | **Open-Meteo** (paid plan, required for commercial use); **NOAA NWS** as the US fallback |
 | 5 | Does the farmer confirm items in the report? | **Optional one-tap answer per item:** "Done" / "Not yet" / "I have a question". Nothing is forced. Answers go back to the agronomist and feed the outcome loop (§4, step 6) |
 

@@ -4,20 +4,19 @@ import { planDecisionAsked, planReportAnswered, planRunFailed, planUrgent, type 
 const members: Member[] = [
   { userId: "o", role: "owner" },
   { userId: "a", role: "agronomist" },
-  { userId: "m", role: "admin" },
-  { userId: "v", role: "viewer" },
+  { userId: "b", role: "agronomist" },
 ];
 const NOW = new Date("2026-06-10T08:00:00Z");
 
 describe("notification producers (RFC §15.4)", () => {
-  it("report answer goes to staff except the actor and viewers", () => {
+  it("report answer goes to everyone except the actor", () => {
     const d = planReportAnswered(members, {
       reportItemId: "i",
       answer: "question",
       fieldName: "Pivot 12",
       actorId: "o",
     });
-    expect(d.map((x) => x.userId).sort()).toEqual(["a", "m"]);
+    expect(d.map((x) => x.userId).sort()).toEqual(["a", "b"]);
     expect(d[0]).toMatchObject({
       kind: "report_answered",
       payload: { reportItemId: "i", answer: "question" },
@@ -30,9 +29,9 @@ describe("notification producers (RFC §15.4)", () => {
     ).toHaveLength(3);
   });
 
-  it("an asked decision notifies the Owners and Viewers only", () => {
+  it("an asked decision notifies the Owners only", () => {
     const d = planDecisionAsked(members, { decisionId: "d", recommendationId: "r", fieldName: "Pivot 12" });
-    expect(d.map((x) => x.userId).sort()).toEqual(["o", "v"]);
+    expect(d.map((x) => x.userId).sort()).toEqual(["o"]);
     expect(d[0]).toMatchObject({
       kind: "decision_asked",
       payload: { decisionId: "d", recommendationId: "r", fieldName: "Pivot 12" },
@@ -48,7 +47,8 @@ describe("notification producers (RFC §15.4)", () => {
     ];
     const d = planUrgent(members, recs, NOW, "America/Chicago");
     expect(d.filter((x) => x.userId === "a").map((x) => x.payload.recommendationId)).toEqual(["r1", "r3"]);
-    expect(d.some((x) => x.userId === "v")).toBe(false);
+    // The Owner does field work too, so Urgent items reach them as well.
+    expect(d.some((x) => x.userId === "o")).toBe(true);
   });
 
   it("failed run: the requester, or staff for the scheduled run; nothing when no failures", () => {

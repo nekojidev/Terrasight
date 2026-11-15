@@ -1,44 +1,27 @@
 "use client";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import type { Decision, DecisionList } from "@terrasight/shared";
 import { Button, Skeleton } from "@terrasight/ui";
-import { Copy, Eye, Link2, UserPlus, X } from "lucide-react";
+import { Eye, X } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { useId, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { OwnerDecisions } from "@/components/OwnerDecisions";
 import { api } from "@/lib/api";
 import { useWorkspaceEvents } from "@/lib/events";
 import { DecisionCard } from "./DecisionCard";
 
-type Role = "owner" | "admin" | "agronomist" | "viewer";
 type Tab = "waiting" | "question" | "decided";
-interface ReportLink {
-  id: string;
-  language: "en" | "uk";
-  expiresAt: string | null;
-  revokedAt: string | null;
-  createdAt: string;
-}
-
 const TABS: Tab[] = ["waiting", "question", "decided"];
 const tabOf = (d: Decision): Tab =>
   d.state === "waiting" ? "waiting" : d.state === "question" ? "question" : "decided";
 
 /**
- * Owner decisions (design 15, PD v2.7): the items the agronomist asked the owner about, as cards with a thread.
+ * Owner decisions (design 15, PD v2.7): the items the agronomist asked the owner about (agronomist view; the Owner answers in OwnerDecisionsClient), as cards with a thread.
  * Tabs Waiting · Questions · Decided; the rail shows who receives decisions, the invite and the no-account links.
  */
-export function DecisionsClient({
-  workspaceId,
-  role,
-  fieldId,
-}: {
-  workspaceId: string;
-  role: Role;
-  fieldId: string | null;
-}) {
+export function DecisionsClient({ workspaceId, fieldId }: { workspaceId: string; fieldId: string | null }) {
   const t = useTranslations("App");
   useWorkspaceEvents(workspaceId, ["brief"], () => [["decisions", workspaceId]]);
   const list = useQuery({
@@ -47,8 +30,6 @@ export function DecisionsClient({
   });
   const [tab, setTab] = useState<Tab | null>(null);
   const preview = useRef<HTMLDialogElement>(null);
-  const manage = role === "owner" || role === "admin";
-  const canReply = role !== "viewer";
 
   const items = useMemo(
     () => (list.data?.items ?? []).filter((d) => !fieldId || d.fieldId === fieldId),
@@ -127,9 +108,7 @@ export function DecisionsClient({
                 {items.length === 0 ? t("decEmptyAll") : t(`decEmpty_${current}`)}
               </p>
             ) : (
-              shown.map((d) => (
-                <DecisionCard key={d.id} d={d} workspaceId={workspaceId} canReply={canReply} />
-              ))
+              shown.map((d) => <DecisionCard key={d.id} d={d} workspaceId={workspaceId} canReply />)
             )}
           </div>
         </div>
@@ -147,17 +126,7 @@ export function DecisionsClient({
               <p className="text-small text-ink-2">{t("decNoRecipients")}</p>
             )}
             <p className="mt-3 text-small text-ink-2">{t("decWhoSub")}</p>
-            {manage && (
-              <Link
-                href="/settings/team"
-                className="focus-ring mt-4 inline-flex min-h-tap items-center gap-2 text-body font-semibold text-ink underline"
-              >
-                <UserPlus aria-hidden className="size-4" />
-                {t("teamManage")}
-              </Link>
-            )}
           </section>
-          {manage && <Links workspaceId={workspaceId} />}
         </aside>
       </div>
 
@@ -198,83 +167,5 @@ function Dialog({
       </div>
       <div className="max-h-[75vh] overflow-y-auto p-5">{children}</div>
     </dialog>
-  );
-}
-
-function Links({ workspaceId, bare = false }: { workspaceId: string; bare?: boolean }) {
-  const t = useTranslations("App");
-  const client = useQueryClient();
-  const key = ["report-links", workspaceId];
-  const headId = useId();
-  const links = useQuery({
-    queryKey: key,
-    queryFn: () => api<ReportLink[]>(`/api/w/${workspaceId}/report-links`),
-  });
-  const [fresh, setFresh] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
-  const body = (
-    <>
-      {!bare && (
-        <h2 id={headId} className="text-h3 text-ink">
-          {t("decLinkTitle")}
-        </h2>
-      )}
-      <p className="mb-3 text-small text-ink-2">{t("decLinkSub")}</p>
-      <Button
-        variant="outline"
-        icon={<Link2 />}
-        onClick={async () => {
-          const l = await api<{ path: string }>(`/api/w/${workspaceId}/report-links`, {
-            body: { language: "en" },
-          });
-          setFresh(`${window.location.origin}${l.path}`);
-          setCopied(false);
-          void client.invalidateQueries({ queryKey: key });
-        }}
-      >
-        {t("rpNewLink")}
-      </Button>
-      {fresh && (
-        <div className="mt-3 flex flex-col gap-2 rounded-input bg-surface-2 p-3">
-          <p className="text-small text-week">{t("rpLinkOnce")}</p>
-          <code className="text-micro break-all text-ink">{fresh}</code>
-          <Button
-            variant="ghost"
-            icon={<Copy />}
-            onClick={() => void navigator.clipboard.writeText(fresh).then(() => setCopied(true))}
-          >
-            {copied ? t("rpCopied") : t("rpCopy")}
-          </Button>
-        </div>
-      )}
-      <ul className="mt-3 flex flex-col gap-2">
-        {(links.data ?? []).map((l) => (
-          <li key={l.id} className="flex items-center justify-between gap-2 text-small text-ink-2">
-            <span>
-              {new Date(l.createdAt).toLocaleDateString()} · {l.language.toUpperCase()}
-              {l.revokedAt ? ` · ${t("rpRevoked")}` : ""}
-            </span>
-            {!l.revokedAt && (
-              <Button
-                variant="link"
-                onClick={async () => (
-                  await api(`/api/w/${workspaceId}/report-links/${l.id}`, { method: "DELETE" }),
-                  client.invalidateQueries({ queryKey: key })
-                )}
-              >
-                {t("rpRevoke")}
-              </Button>
-            )}
-          </li>
-        ))}
-      </ul>
-    </>
-  );
-  return bare ? (
-    body
-  ) : (
-    <section aria-labelledby={headId} className="rounded-card border border-line bg-surface p-5">
-      {body}
-    </section>
   );
 }

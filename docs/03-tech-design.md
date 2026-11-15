@@ -133,7 +133,7 @@ Shared rules: ESLint + Prettier, `tsc --noEmit` in CI, Conventional Commits, one
 | --- | --- | --- |
 | `auth` | Sign up / sign in (email + password), JWT access cookie, refresh rotation, CSRF | §16 |
 | `workspaces` | Create the company (onboarding), settings (time zone, units, report language), demo copy | §14 |
-| `members` | Memberships, roles, invitations (Viewer invite), permission guard | §14.1 |
+| `members` | Memberships, roles (Owner, Agronomist), invitations, create-user with setup link, permission guard | §14.1 |
 | `library` | Loads and validates library files at boot; exposes versions; region matching | §6.3, §11.1 |
 | `geo` | Reverse geocoding (ISO 3166-2, US county) from local PostGIS boundary tables | §6.3, §14.1 |
 | `fields` | CRUD, PostGIS geometry, area, centroid, county, region, aliases for the LLM | D1 |
@@ -195,8 +195,8 @@ erDiagram
 | `users` | id, email (unique, citext), password_hash (argon2id), name, ui_language, created_at | |
 | `refresh_tokens` | id, user_id, family_id, token_hash, expires_at, revoked_at, replaced_by | Rotation with family revocation |
 | `workspaces` | id, name, slug, time_zone (IANA), units (`metric`/`imperial`), report_language (`uk`/`en`), currency, is_demo, demo_template_id, created_at | One workspace = one company |
-| `memberships` | workspace_id, user_id, role (`owner`/`admin`/`agronomist`/`viewer`) | PK (workspace_id, user_id) |
-| `invitations` | id, workspace_id, email, role, token_hash, expires_at, accepted_at | Viewer invite at onboarding |
+| `memberships` | workspace_id, user_id, role (`owner`/`agronomist`) | PK (workspace_id, user_id) |
+| `invitations` | id, workspace_id, email, role, token_hash, expires_at, accepted_at | Optional; users are normally created by the Owner |
 | `report_links` | id, workspace_id, token_hash, language, expires_at, revoked_at | Optional link for staff without an account |
 | `fields` | id, workspace_id, name, alias_no (int, per workspace), geom (`MultiPolygon, 4326`), centroid, area_ha, admin_code (ISO 3166-2), country, county_name, region_id (library) or null, tier, irrigation (`irrigated`/`dryland`/`unknown`), irrigation_source, slope_pct, thumbnail_key, created_by, archived_at | GIST index on geom |
 | `crop_seasons` | field_id, season (harvest year), main_crop, second_crop, confidence, source (`cdl`/`lpis`/`ndvi`/`user`), is_override | PK (field_id, season) |
@@ -529,18 +529,18 @@ REST under `/api`, JSON, zod-validated (nestjs-zod), errors as `application/prob
 | Area | Endpoints | Roles |
 | --- | --- | --- |
 | Auth | `POST /auth/signup`, `/auth/login`, `/auth/refresh`, `/auth/logout`, `GET /me` | — |
-| Workspaces | `POST /workspaces` (onboarding), `GET/PATCH /w/:ws`, `POST /w/:ws/demo-copy` | Owner, Admin for PATCH |
-| Members | `GET /w/:ws/members`, `POST /w/:ws/invitations`, `POST /invitations/:token/accept`, `PATCH/DELETE /w/:ws/members/:userId` | Owner, Admin |
-| Fields | `GET/POST /w/:ws/fields`, `GET/PATCH/DELETE /w/:ws/fields/:id`, `POST /w/:ws/fields/preview` (area, county, region before saving) | Agronomist+; Viewer read |
+| Workspaces | `POST /workspaces` (onboarding), `GET/PATCH /w/:ws`, `POST /w/:ws/demo-copy` | Owner for PATCH |
+| Members | `GET /w/:ws/members`, `POST /w/:ws/invitations`, `POST /invitations/:token/accept`, `PATCH/DELETE /w/:ws/members/:userId` | Owner |
+| Fields | `GET/POST /w/:ws/fields`, `GET/PATCH/DELETE /w/:ws/fields/:id`, `POST /w/:ws/fields/preview` (area, county, region before saving) | Agronomist, Owner |
 | History | `GET /w/:ws/fields/:id/history`, `PUT /w/:ws/fields/:id/crop-seasons/:season` (override), `PUT …/season-records/:season`, `POST …/irrigation/confirm` | Agronomist+ |
 | Gather | `GET /w/:ws/fields/:id/gather`, `POST …/gather/sources/:source/retry` | Agronomist+ |
 | Analysis | `POST /w/:ws/analysis-runs {fieldIds?}`, `GET /w/:ws/analysis-runs/latest`, `POST /w/:ws/analysis-runs/:id/fields/:fieldId/retry` | Agronomist+ |
-| Brief | `GET /w/:ws/brief` (groups, hero, last run, rail data) | Agronomist+; Admin, Owner read |
+| Brief | `GET /w/:ws/brief` (groups, hero, last run, rail data) | Agronomist, Owner |
 | Recommendations | `GET /w/:ws/recommendations/:id`, `POST …/accept`, `…/undo`, `…/snooze`, `…/dismiss`, `PATCH …` (text), `POST …/outcome` | Agronomist+ |
-| Scenarios | `POST /w/:ws/fields/:id/scenario-runs {overrides}`, `GET …/scenario-runs/:runId`, `PUT /w/:ws/fields/:id/plans/:season` | Agronomist+ (Viewer can explore) |
+| Scenarios | `POST /w/:ws/fields/:id/scenario-runs {overrides}`, `GET …/scenario-runs/:runId`, `PUT /w/:ws/fields/:id/plans/:season` | Agronomist+ |
 | Scouting | `POST /w/:ws/recommendations/:id/scouting-tasks`, `GET /w/:ws/scouting-tasks/:id`, `POST …/photos/presign`, `POST …/send` | Agronomist+ |
-| Reports | `GET /w/:ws/report`, `POST /w/:ws/report-items/:id/republish`, `POST …/reply-draft`, `POST /w/:ws/report-links`, `DELETE /w/:ws/report-links/:id` | Agronomist+; Viewer read and answer |
-| Owner answers | `POST /w/:ws/report-items/:id/answers`, `GET /r/:token`, `POST /r/:token/items/:id/answers` | Viewer; link holder |
+| Reports | `GET /w/:ws/report`, `POST /w/:ws/report-items/:id/republish`, `POST …/reply-draft`, `POST /w/:ws/report-links`, `DELETE /w/:ws/report-links/:id` | Agronomist, Owner (links: Owner) |
+| Owner answers | `POST /w/:ws/report-items/:id/answers`, `GET /r/:token`, `POST /r/:token/items/:id/answers` | Owner; link holder |
 | Assistant | `POST /w/:ws/conversations`, `GET /w/:ws/conversations`, `POST …/:id/messages`, `DELETE …/:id` | Agronomist+ |
 | Events (SSE) | `GET /w/:ws/events?topics=brief,analysis,field:<id>,conversation:<id>` | Member |
 
@@ -550,16 +550,18 @@ REST under `/api`, JSON, zod-validated (nestjs-zod), errors as `application/prob
 - Passwords: argon2id. CSRF: SameSite cookies + required `X-Requested-With` header on mutating requests.
 - Report links: 32-byte random token, only its SHA-256 stored; rate-limited; read + answer only.
 
-| Permission | Owner | Admin | Agronomist | Viewer | Report link |
-| --- | --- | --- | --- | --- | --- |
-| Billing, delete workspace | ✓ | | | | |
-| Members, invitations, settings, report links | ✓ | ✓ | | | |
-| Fields: create, edit, delete | ✓ | ✓ | ✓ | | |
-| Analyze fields, accept / snooze / dismiss / edit, outcomes | ✓ | ✓ | ✓ | | |
-| Scouting, assistant, plans | ✓ | ✓ | ✓ | | |
-| Read brief, fields, history | ✓ | ✓ | ✓ | | |
-| Explore rotation scenarios (no save) | ✓ | ✓ | ✓ | ✓ | |
-| Read Owner report, passports; answer items | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Permission | Owner | Agronomist | Report link |
+| --- | --- | --- | --- |
+| Billing, delete workspace | ✓ | | |
+| Members (create users), settings, report links | ✓ | | |
+| Answer decisions (`report.answer`) | ✓ | | ✓ |
+| Fields: create, edit, delete | ✓ | ✓ | |
+| Analyze fields, accept / snooze / dismiss / edit, outcomes | ✓ | ✓ | |
+| Scouting, assistant, plans, **Ask the owner**, replies | ✓ | ✓ | |
+| Read brief, fields, history, scenarios, decisions | ✓ | ✓ | |
+| Read the decisions through the link | | | ✓ |
+
+Two roles only (PD v2.10). The Owner may do field work, but the UI never shows them "Ask the owner". Migration `20261115200000_two_roles` maps `admin` and `viewer` to `owner` in memberships and invitations.
 
 Every row has an API test (§16).
 
@@ -729,3 +731,4 @@ All resolved on 2026-11-14.
 | 2026-11-15 | Owner decisions replace the Owner report: Accept no longer creates a report item; `POST /recommendations/:id/ask-owner` does (after the 8 s Undo); `/decisions` API with a thread (note → answers → replies); report_items / owner_answers / report_replies tables reused as decisions / answers / replies | Owner feedback: accepting and sending to the owner were one button although most advice doesn't concern the owner; the monthly report read as paperwork (product definition v2.7) |
 | 2026-11-15 | AI-proposed rotations: Gemini proposes crop sequences (structured output, crop ids from the library), validated by rules and simulated by the scenario engine; cached with the scenario inputs hash | Owner request; the library is thin for Ukraine; the number rule holds because the engine computes every metric (product definition v2.8) |
 | 2026-11-15 | Owner creates users: `POST /w/:ws/members` creates the account (no password) + a one-time setup token (hash stored, 7 days) → `/setup/:token` sets the password; existing email → membership only. Decision recipients = Owner + Viewer; "Ask the owner" hidden for Owners | Owner feedback: the Owner is the farm owner, not the agronomist who signed up (product definition v2.9) |
+| 2026-11-15 | Two roles only, Owner and Agronomist: enum `Role` loses `admin` and `viewer`; migration maps both to `owner`; `report.answer`, `members.manage`, `workspace.settings`, `reportLinks.manage`, billing and workspace delete are Owner only; decision recipients and `decision_asked` notifications = Owners; onboarding step 2 creates an agronomist with a setup link | Owner feedback: Admin and Viewer add nothing; Owner and Agronomist are enough (product definition v2.10) |

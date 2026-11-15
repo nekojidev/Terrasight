@@ -24,7 +24,6 @@ export default async function AddFieldPage() {
   if (!active) redirect("/onboarding");
   const ws = await serverGet<WorkspaceDetail>(`/api/w/${active.id}`);
   if (!ws.ok) redirect("/");
-  if (ws.data.role === "viewer") redirect("/");
   const t = await getTranslations("AddField");
   const a = await getTranslations("App");
 

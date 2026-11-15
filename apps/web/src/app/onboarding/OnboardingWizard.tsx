@@ -11,9 +11,11 @@ import { api, ApiError, setCookie, WORKSPACE_COOKIE } from "@/lib/api";
 interface CreatedWorkspace {
   id: string;
 }
-interface CreatedInvitation {
-  email: string;
-  token: string;
+interface CreatedAgronomist {
+  name: string;
+  /** Absent when the person already had an account and was just added. */
+  setupUrl?: string;
+  expiresAt?: string;
 }
 
 /** Offset label like "UTC−6" for a zone, at the current date. */
@@ -32,7 +34,7 @@ function zoneLabel(tz: string): string {
   return `${tz.replaceAll("_", " ").replace("/", " / ")} (${utcOffset(tz) === "UTC" ? "UTC" : utcOffset(tz)})`;
 }
 
-/** Design 02: create the company in two steps (RFC §14.2). */
+/** Design 02: create the company, then add your agronomist (PD v2.10) in two steps (RFC §14.2). */
 export function OnboardingWizard() {
   const t = useTranslations("Onboarding");
   const a = useTranslations("App");
@@ -54,7 +56,7 @@ export function OnboardingWizard() {
   const [reportLanguage, setReportLanguage] = useState<"uk" | "en">(locale === "uk" ? "uk" : "en");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
-  const [invitation, setInvitation] = useState<CreatedInvitation | null>(null);
+  const [agronomist, setAgronomist] = useState<CreatedAgronomist | null>(null);
   const [copied, setCopied] = useState(false);
 
   async function createCompany(e: FormEvent<HTMLFormElement>) {
@@ -79,17 +81,23 @@ export function OnboardingWizard() {
     }
   }
 
-  async function invite(e: FormEvent<HTMLFormElement>) {
+  async function addAgronomist(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const email = String(new FormData(e.currentTarget).get("email") ?? "");
+    const form = new FormData(e.currentTarget);
+    const name = String(form.get("agname") ?? "");
+    const email = String(form.get("email") ?? "");
     setBusy(true);
     setError(null);
     try {
-      setInvitation(
-        await api<CreatedInvitation>(`/api/w/${workspaceId}/invitations`, {
-          body: { email, role: "viewer" },
-        }),
+      const r = await api<{ userId: string; setupUrl?: string; expiresAt?: string }>(
+        `/api/w/${workspaceId}/members`,
+        { body: { name, email, role: "agronomist" } },
       );
+      setAgronomist({
+        name,
+        ...(r.setupUrl ? { setupUrl: r.setupUrl } : {}),
+        ...(r.expiresAt ? { expiresAt: r.expiresAt } : {}),
+      });
     } catch (err) {
       setError(err instanceof ApiError ? err : null);
     } finally {
@@ -101,7 +109,7 @@ export function OnboardingWizard() {
     router.replace("/");
     router.refresh();
   };
-  const inviteUrl = invitation ? `${window.location.origin}/invite/${invitation.token}` : "";
+  const setupUrl = agronomist?.setupUrl ? `${window.location.origin}${agronomist.setupUrl}` : "";
 
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-[560px] flex-col gap-6 px-4 py-10">
@@ -177,48 +185,63 @@ export function OnboardingWizard() {
               {t("next")} <ArrowRight aria-hidden className="size-5" />
             </Button>
           </form>
-        ) : invitation ? (
+        ) : agronomist ? (
           <div className="flex flex-col gap-5">
-            <h1 className="text-h2 text-ink">{a("inviteLinkTitle", { email: invitation.email })}</h1>
-            <p className="text-body text-ink-2">{a("inviteLinkNote")}</p>
-            <div className="flex gap-2">
-              <input
-                readOnly
-                value={inviteUrl}
-                aria-label={a("copy")}
-                className="min-h-13 w-full rounded-input border border-line bg-surface-2 px-4 font-mono text-small"
-              />
-              <Button
-                variant="outline"
-                size={52}
-                icon={<Copy />}
-                onClick={() => void navigator.clipboard.writeText(inviteUrl).then(() => setCopied(true))}
-              >
-                {copied ? a("copied") : a("copy")}
-              </Button>
-            </div>
+            <h1 className="text-h2 text-ink">{a("teamLinkTitle", { name: agronomist.name })}</h1>
+            {setupUrl ? (
+              <>
+                <p className="text-body text-ink-2">
+                  {a("teamLinkOnce", {
+                    name: agronomist.name,
+                    date: new Date(agronomist.expiresAt ?? Date.now()).toLocaleDateString(locale),
+                  })}
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    readOnly
+                    value={setupUrl}
+                    aria-label={a("teamCopyLink")}
+                    className="min-h-13 w-full rounded-input border border-line bg-surface-2 px-4 font-mono text-small"
+                  />
+                  <Button
+                    variant="outline"
+                    size={52}
+                    icon={<Copy />}
+                    onClick={() => void navigator.clipboard.writeText(setupUrl).then(() => setCopied(true))}
+                  >
+                    {copied ? a("teamCopied") : a("teamCopyLink")}
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <p className="text-body text-ink-2">{a("teamExisting", { name: agronomist.name })}</p>
+            )}
             <Button size={56} className="w-full justify-center" onClick={finish}>
               {a("continue")}
             </Button>
           </div>
         ) : (
-          <form onSubmit={invite} className="flex flex-col gap-6" noValidate>
+          <form onSubmit={addAgronomist} className="flex flex-col gap-6" noValidate>
             <div>
               <h1 className="text-h1 text-ink">{t("s2t")}</h1>
               <p className="mt-2 text-body text-ink-2">{t("s2s")}</p>
             </div>
             <TextField
+              label={t("agname")}
+              name="agname"
+              autoComplete="off"
+              required
+              maxLength={100}
+              error={error?.field("name")}
+            />
+            <TextField
               label={t("email")}
               name="email"
               type="email"
-              autoComplete="email"
+              autoComplete="off"
               required
               error={error?.field("email")}
             />
-            <div className="rounded-input bg-surface-2 p-4">
-              <p className="text-body font-semibold text-ink">{t("role")}</p>
-              <p className="text-small text-ink-2">{t("role_s")}</p>
-            </div>
             <div className="flex flex-col gap-3 sm:flex-row">
               <Button
                 type="button"

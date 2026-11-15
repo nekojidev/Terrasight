@@ -36,7 +36,7 @@ async function workspace(): Promise<string> {
   );
   return r.rows[0].id as string;
 }
-async function member(ws: string, role: string): Promise<{ id: string; role: "owner" | "admin" }> {
+async function member(ws: string, role: string): Promise<{ id: string; role: "owner" | "agronomist" }> {
   const r = await client.query(
     `INSERT INTO users (id, email, password_hash, name) VALUES (gen_random_uuid(), $1, 'x', 'U') RETURNING id`,
     [`${Math.random().toString(36).slice(2)}@example.com`],
@@ -47,7 +47,7 @@ async function member(ws: string, role: string): Promise<{ id: string; role: "ow
     id,
     role,
   ]);
-  return { id, role: role as "owner" | "admin" };
+  return { id, role: role as "owner" | "agronomist" };
 }
 
 beforeAll(async () => {
@@ -133,21 +133,21 @@ describe("owner creates users (PD v2.9)", () => {
     const r = await workspaces.createUser(ws, owner, {
       name: "Someone",
       email: email.toUpperCase(),
-      role: "viewer",
+      role: "agronomist",
     });
     expect(r).toEqual({ userId: other.id, existing: true });
     const m = await client.query(`SELECT role FROM memberships WHERE workspace_id = $1 AND user_id = $2`, [
       ws,
       other.id,
     ]);
-    expect(m.rows[0].role).toBe("viewer");
+    expect(m.rows[0].role).toBe("agronomist");
     // The existing password stays untouched and no setup token is issued.
     const u = (
       await client.query(`SELECT password_hash, setup_token_hash FROM users WHERE id = $1`, [other.id])
     ).rows[0];
     expect(u).toEqual({ password_hash: "x", setup_token_hash: null });
 
-    expect(await code(workspaces.createUser(ws, owner, { name: "Someone", email, role: "viewer" }))).toBe(
+    expect(await code(workspaces.createUser(ws, owner, { name: "Someone", email, role: "agronomist" }))).toBe(
       409,
     );
   });
@@ -158,7 +158,7 @@ describe("owner creates users (PD v2.9)", () => {
     const created = await workspaces.createUser(ws, owner, {
       name: "Max",
       email: `max-${Math.random().toString(36).slice(2)}@example.com`,
-      role: "viewer",
+      role: "agronomist",
     });
     if (!("setupUrl" in created)) throw new Error("expected a setup link");
     const next = await workspaces.newSetupLink(ws, owner, created.userId);
@@ -193,12 +193,16 @@ describe("owner creates users (PD v2.9)", () => {
     );
   });
 
-  it("an Admin cannot create an Owner, but can create the other roles", async () => {
+  it("only the two roles exist: the old values are rejected by the database", async () => {
     const ws = await workspace();
-    const admin = await member(ws, "admin");
-    const email = `boss-${Math.random().toString(36).slice(2)}@example.com`;
-    expect(await code(workspaces.createUser(ws, admin, { name: "Boss", email, role: "owner" }))).toBe(403);
-    expect((await client.query(`SELECT 1 FROM users WHERE email = $1`, [email])).rowCount).toBe(0);
-    expect(await code(workspaces.createUser(ws, admin, { name: "Vi", email, role: "viewer" }))).toBeNull();
+    for (const role of ["admin", "viewer"]) {
+      await expect(
+        client.query(
+          `INSERT INTO invitations (id, workspace_id, email, role, token_hash, expires_at)
+           VALUES (gen_random_uuid(), $1, 'x@example.com', $2, $3, now() + interval '1 day')`,
+          [ws, role, Math.random().toString(36)],
+        ),
+      ).rejects.toThrow();
+    }
   });
 });

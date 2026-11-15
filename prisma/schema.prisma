@@ -17,9 +17,7 @@ datasource db {
 
 enum Role {
   owner
-  admin
   agronomist
-  viewer
 }
 
 enum Units {
