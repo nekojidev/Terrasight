@@ -5,6 +5,7 @@ import {
   Button,
   Chip,
   ConfirmDialog,
+  Disclosure,
   FieldThumb,
   InfoHint,
   Menu,
@@ -37,12 +38,14 @@ import { useActionToast } from "@/lib/useActionToast";
 import { useFormat } from "@/lib/useFormat";
 import { QueryState } from "@/components/QueryState";
 import { FieldAssistant } from "@/components/FieldAssistant";
+import { SuggestionChips } from "@/components/SuggestionChips";
 import { YieldCard } from "./YieldCard";
 import { OutlookCard } from "./OutlookCard";
 import { SeasonPlanner } from "./SeasonPlanner";
 import { SeasonHistory } from "./SeasonHistory";
 import { GatherFocus, ICON as TASK_ICON, isFirstBuild } from "./GatherFocus";
-import { FieldBrief, NextDays, RisksCard, StatusChips, type Risk } from "./Overview";
+import { FieldBrief, NextDays, RisksCard, StatusChips, risksWithoutBrief, type Risk } from "./Overview";
+import { useNarrow } from "./useNarrow";
 import { fieldFormatOptions } from "./fieldFormat";
 import { cropLabel, type GatherStatus, type History } from "./fieldTypes";
 import { LandSuitabilityCard, type LandView } from "@/components/LandSuitability";
@@ -143,32 +146,12 @@ export function FieldClient({
     queryFn: () =>
       api<{ season: number; crop: { value: string | null } }>(`${base}/season-records/current`),
   });
-  const rotations = useQuery({
-    queryKey: ["rotations", workspaceId],
-    queryFn: () =>
-      api<{
-        season: number;
-        fields: Array<{
-          fieldId: string;
-          plan: { crop: string } | null;
-          recommendation: { firstCrop: string | null } | null;
-        }>;
-      }>(`/api/w/${workspaceId}/rotations`),
-  });
-  const mine = rotations.data?.fields.find((x) => x.fieldId === id);
 
   const country = field.data.country ?? initial.country ?? null;
   const fmt = useFormat(fieldFormatOptions(country, units));
   const cropName = (c: string) => (history.data ? cropLabel(history.data.cropNames, locale, c) : "—");
   const lastSeason = history.data ? [...history.data.seasons].sort((a, b) => b.season - a.season)[0] : undefined;
   const currentCrop = record.data?.crop.value ?? lastSeason?.mainCrop ?? null;
-  const plan = rotations.data
-    ? {
-        season: rotations.data.season,
-        crop: mine?.plan?.crop ?? mine?.recommendation?.firstCrop ?? null,
-        agreed: Boolean(mine?.plan),
-      }
-    : null;
   const suitability = field.data.suitability ?? null;
   const landLimited = suitability?.status === "limited" || suitability?.status === "unsuitable";
   const attention = (risks.data ?? []).filter((r) => r.level === "high" || r.level === "moderate").length;
@@ -182,16 +165,20 @@ export function FieldClient({
     }
     router.replace(next === "overview" ? pathname : `${pathname}?tab=${next}`, { scroll: false });
   };
+  const narrow = useNarrow();
   const tabs = [
     { id: "overview", label: f("tabOverview") },
     { id: "season", label: f("tabSeason") },
     { id: "plan", label: f("tabPlan") },
-    { id: "data", label: f("tabData") },
+    { id: "data", label: narrow ? f("tabDataShort") : f("tabData") },
   ];
+  const [askOpen, setAskOpen] = useState(false);
+  const irrWord = field.data.irrigation !== "unknown" ? t(field.data.irrigation) : null;
 
   const meta = [
     fmt.area(initial.areaHa),
     currentCrop && history.data ? cropName(currentCrop) : null,
+    irrWord,
     field.data.countyName,
   ]
     .filter(Boolean)
@@ -202,7 +189,7 @@ export function FieldClient({
       .then(() => gather.refetch())
       .catch((e) => fail(e, f("gf_retryWhat"), () => retrySource(source)));
 
-  const climateCard = (compact: boolean) => (
+  const climateCard = (compact: boolean, collapsed = false) => (
     <ClimateShiftCard
       data={climate.data}
       isLoading={climate.isLoading}
@@ -212,8 +199,19 @@ export function FieldClient({
       units={units}
       trustHref={`/fields/${id}/trust`}
       compact={compact}
+      collapsed={collapsed}
     />
   );
+
+  const questions = [
+    { id: "week", text: f("ov_q_week") },
+    field.data.irrigation === "irrigated"
+      ? { id: "water", text: f("ov_q_water") }
+      : { id: "risk", text: f("ov_q_risk") },
+    { id: "next", text: f("ov_q_next") },
+  ];
+  const askAssistant = (q: { text: string }) =>
+    router.push(`/assistant?ask=${encodeURIComponent(q.text)}&field=${encodeURIComponent(id)}`);
 
   const loadingHistory = (
     <QueryState query={history} skeletonVariant="card" what={t("historyTitle")}>
@@ -289,7 +287,6 @@ export function FieldClient({
           </>
         ) : tab === "overview" ? (
           <>
-            {climateCard(true)}
             {history.data ? (
               <FieldBrief
                 fieldId={id}
@@ -299,14 +296,13 @@ export function FieldClient({
                 sources={historySources(history.data)}
                 country={country}
                 units={units}
+                tier={field.data.tier}
               />
             ) : (
               loadingHistory
             )}
+            {canEdit && <SuggestionChips questions={questions} onAsk={askAssistant} label={f("ov_ask_t")} />}
             <StatusChips
-              crop={currentCrop && history.data ? cropName(currentCrop) : null}
-              plan={plan && plan.crop && history.data ? { ...plan, crop: cropName(plan.crop) } : null}
-              irrigation={field.data.irrigation}
               land={suitability ? { status: suitability.status, overridden: Boolean(suitability.override) } : null}
               attention={attention}
               country={country}
@@ -322,13 +318,22 @@ export function FieldClient({
               />
             )}
             <QueryState query={risks} skeletonVariant="rows" what={f("risks_t")}>
-              {(r) => <RisksCard risks={r} />}
+              {(r) => <RisksCard risks={risksWithoutBrief(r)} />}
             </QueryState>
             <NextDays workspaceId={workspaceId} fieldId={id} units={units} country={country} />
+            {climateCard(true, true)}
             {history.data && (
               <SeasonHistory history={history.data} fieldId={id} units={units} country={country} compact />
             )}
-            {canEdit && <FieldAssistant workspaceId={workspaceId} fieldId={id} fieldName={field.data.name} />}
+            {canEdit && (
+              <section aria-label={f("ov_ask_t")} className="rounded-card border border-line bg-surface px-4 py-1">
+                <Disclosure summary={f("ov_ask_t")} open={askOpen} onOpenChange={setAskOpen}>
+                  <div className="pb-3">
+                    {askOpen && <FieldAssistant workspaceId={workspaceId} fieldId={id} fieldName={field.data.name} />}
+                  </div>
+                </Disclosure>
+              </section>
+            )}
           </>
         ) : tab === "season" ? (
           <>
@@ -357,13 +362,23 @@ export function FieldClient({
           </>
         ) : (
           <>
+            <h2 className="text-h2 text-ink">{f("dt_h_expect")}</h2>
             <YieldCard workspaceId={workspaceId} fieldId={id} units={units} country={country} />
             <OutlookCard workspaceId={workspaceId} fieldId={id} units={units} country={country} />
+            <h2 className="text-h2 text-ink">{f("dt_h_record")}</h2>
             {history.data ? (
               <SeasonHistory history={history.data} fieldId={id} units={units} country={country} />
             ) : (
               loadingHistory
             )}
+            <LandSuitabilityCard
+              workspaceId={workspaceId}
+              fieldId={id}
+              suitability={suitability}
+              canEdit={canEdit}
+              country={country}
+            />
+            <h2 className="text-h2 text-ink">{f("dt_h_more")}</h2>
             {gather.data && (
               <GatherPanel
                 status={gather.data}
@@ -373,22 +388,15 @@ export function FieldClient({
                 onRetry={retrySource}
               />
             )}
-            <LandSuitabilityCard
-              workspaceId={workspaceId}
-              fieldId={id}
-              suitability={suitability}
-              canEdit={canEdit}
-              country={country}
-            />
             <Surface as="section" aria-labelledby="more-title">
-              <h2 id="more-title" className="text-h2 text-ink">
+              <h3 id="more-title" className="text-h3 text-ink">
                 {f("dataLinksTitle")}
-              </h2>
+              </h3>
               <ul className="mt-2 flex flex-col divide-y divide-line">
                 {[
+                  { href: `/fields/${id}/trust`, label: f("trustTitle"), desc: f("trustDesc"), icon: <Gauge /> },
                   { href: `/fields/${id}/zones`, label: t("tabZones"), desc: f("zonesDesc"), icon: <CalendarRange /> },
                   { href: `/fields/${id}/log`, label: t("tabLog"), desc: f("logDesc"), icon: <NotebookPen /> },
-                  { href: `/fields/${id}/trust`, label: f("trustTitle"), desc: f("trustDesc"), icon: <Gauge /> },
                 ].map((l) => (
                   <li key={l.href}>
                     <Link href={l.href} className="focus-ring flex min-h-tap items-center gap-3 py-3 hover:bg-muted">

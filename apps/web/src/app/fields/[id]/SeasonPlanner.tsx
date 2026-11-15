@@ -362,8 +362,12 @@ function PlannerForm({
     </div>
   );
 
+  // A sowing date still ahead is a plan, not a fact: the screen never says "Sown" before the date (wording only).
+  const sowAhead = !planning && sownDate !== null && sownDate > today;
   const stageChip = (
-    <Chip tone={planning ? "info" : "ok"}>{t(`spStage_${stage}`)}</Chip>
+    <Chip tone={planning || sowAhead ? "info" : "ok"}>
+      {sowAhead && sownDate ? f("spStage_plannedSow", { date: d(sownDate) }) : t(`spStage_${stage}`)}
+    </Chip>
   );
   const emergenceMethod =
     sug?.emergence &&
@@ -621,7 +625,7 @@ function PlannerForm({
                 editing={editing}
                 canEdit={canEdit}
                 id="sowing"
-                label={t("spSownOn")}
+                label={sowAhead ? f("spPlannedSowOn") : t("spSownOn")}
                 value={sownDate ? d(sownDate) : "—"}
                 note={t("spYourValue")}
                 editor={rowEditor(

@@ -9,7 +9,6 @@ import {
   ChevronRight,
   CloudRain,
   HelpCircle,
-  Leaf,
   CalendarDays,
   Microscope,
   RefreshCw,
@@ -17,17 +16,17 @@ import {
   ShieldCheck,
   Snowflake,
   Sparkles,
-  Sprout,
   Sun,
   TriangleAlert,
   X,
-  Droplet,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
 import { AiMark } from "@/components/AiMark";
+import { Evidence } from "@/components/Evidence";
+import { TrustLine } from "@/components/TrustLine";
 import { useAssistantBus } from "@/components/AssistantBus";
 import { QueryState } from "@/components/QueryState";
 import { StatusMark } from "@/components/TodayWindows";
@@ -36,6 +35,7 @@ import { api } from "@/lib/api";
 import { useFormat } from "@/lib/useFormat";
 import { OPERATIONS, workWindowsKey, type WindowStatus, type WorkWindowsView } from "@/lib/work-windows";
 import { fieldFormatOptions } from "./fieldFormat";
+import { useNarrow } from "./useNarrow";
 
 type Localised = { en: string; uk: string };
 interface Risk {
@@ -85,11 +85,12 @@ const LEVEL_ORDER = { high: 0, moderate: 1, low: 2, none: 3, unknown: 4 } as con
 export function FieldTabs({ fieldId, active = 0 }: { fieldId: string; active?: 0 | 1 | 2 | 3 }) {
   const r = useTranslations("Field");
   const current = active === 0 ? 0 : active === 2 ? 2 : 3;
+  const narrow = useNarrow();
   const tabs = [
     { label: r("tabOverview"), href: `/fields/${fieldId}` },
     { label: r("tabSeason"), href: `/fields/${fieldId}?tab=season` },
     { label: r("tabPlan"), href: `/fields/${fieldId}/rotation` },
-    { label: r("tabData"), href: `/fields/${fieldId}?tab=data` },
+    { label: narrow ? r("tabDataShort") : r("tabData"), href: `/fields/${fieldId}?tab=data` },
   ];
   return (
     <nav aria-label={r("tabs")} className="flex max-w-full gap-1 overflow-x-auto border-b border-line [scrollbar-width:none]">
@@ -107,9 +108,26 @@ export function FieldTabs({ fieldId, active = 0 }: { fieldId: string; active?: 0
   );
 }
 
+/** The one risk the brief is about: the first high or moderate non-rotation item, else a moderate rotation item. */
+export function briefRisk(risks: Risk[]): Risk | undefined {
+  const rotation = risks.find((x) => x.type === "rotation");
+  return (
+    risks.find((x) => x.type !== "rotation" && (x.level === "high" || x.level === "moderate")) ??
+    (rotation?.level === "moderate" ? rotation : undefined)
+  );
+}
+
+/** The risks list without the rotation item when that item already is the brief (it is said once). */
+export function risksWithoutBrief(risks: Risk[]): Risk[] {
+  const top = briefRisk(risks);
+  return top?.type === "rotation" ? risks.filter((x) => x.id !== top.id) : risks;
+}
+
+const TIER_RELIABILITY = { A: "high", B: "medium", C: "low" } as const;
+
 /**
- * "The main thing on this field" (S-04.07): the top risk and numbers that need no degree days, with the sources the
- * numbers come from. The rotation numbers arrive with the scenario engine (S-06.03).
+ * "The main thing on this field" (S-04.07): the top risk, at most three numbers (money first), one primary action,
+ * the trust line and the evidence one click away.
  */
 export function FieldBrief({
   fieldId,
@@ -119,6 +137,7 @@ export function FieldBrief({
   sources,
   country,
   units,
+  tier,
 }: {
   fieldId: string;
   risks: Risk[];
@@ -128,15 +147,14 @@ export function FieldBrief({
   sources: string[];
   country?: string | null;
   units: "metric" | "imperial";
+  tier?: "A" | "B" | "C";
 }) {
   const t = useTranslations("App");
   const r = useTranslations("Field");
   const locale = useLocale() as "en" | "uk";
   const fmt = useFormat(fieldFormatOptions(country, units));
   const rotation = risks.find((x) => x.type === "rotation");
-  const top =
-    risks.find((x) => x.type !== "rotation" && (x.level === "high" || x.level === "moderate")) ??
-    (rotation?.level === "moderate" ? rotation : undefined);
+  const top = briefRisk(risks);
   const router = useRouter();
   // The assistant panel listens on the bus; with no panel (or a conversation already open) open the recommendation.
   const bus = useAssistantBus();
@@ -149,46 +167,58 @@ export function FieldBrief({
   let inRow = 0;
   if (last)
     for (const s of sorted) if (s.mainCrop === last.mainCrop && s.season === last.season - inRow) inRow += 1;
-  const num = (k: { id: string; value: number | string }) =>
-    typeof k.value === "number"
-      ? k.id === "marginVsCurrent"
-        ? `${k.value >= 0 ? "+" : "−"}${fmt.money(Math.abs(k.value), "USD")}`
-        : fmt.number(k.value)
-      : k.value;
+  const source = top ?? rotation;
+  const numbers = [...(source?.keyNumbers ?? [])]
+    .sort((a, b) => Number(b.id === "marginVsCurrent") - Number(a.id === "marginVsCurrent"))
+    .slice(0, 3)
+    .map((k) => {
+      const value =
+        typeof k.value !== "number"
+          ? k.value
+          : k.id === "marginVsCurrent"
+            ? `${k.value >= 0 ? "+" : "−"}${fmt.moneyPerArea(Math.abs(k.value), "USD", { maximumFractionDigits: 0 })}`
+            : fmt.number(k.value);
+      const own = `bfn_${k.id}`;
+      const label = r.has(own as "bf_k")
+        ? (r(own as "bf_k", { n: typeof k.value === "number" ? k.value : 0 } as never) as string)
+        : t.has(`kn_${k.id}`)
+          ? t(`kn_${k.id}`)
+          : "—";
+      return { id: k.id, value, label };
+    });
+  if (numbers.length === 0 && last)
+    numbers.push({
+      id: "inRow",
+      value: fmt.number(inRow),
+      label: `${r("bfn_lastCropInRow", { n: inRow })} · ${cropName(last.mainCrop)}`,
+    });
+  const trustHref = `/fields/${fieldId}/trust`;
+  const headline = top ? top.text.title[locale] : t("fieldAllFine");
+  const sourcesLine = sources.length > 0 ? r("sourcesLine", { sources: sources.join(", ") }) : null;
   return (
     <Surface tone="hero" pad="lg" className="flex flex-col gap-5">
       <Kicker>{r("bf_k")}</Kicker>
-      <h2 className="text-h1 text-ink">{top ? top.text.title[locale] : t("fieldAllFine")}</h2>
-      <div className="grid gap-4 sm:grid-cols-3 sm:gap-6">
-        {rotation &&
-          rotation.keyNumbers.slice(0, 3).map((k) => (
-            <div key={k.id} className="border-t-2 border-ink pt-3">
-              <p className="font-mono text-big-number text-ink">{num(k)}</p>
-              <p className="text-caption text-ink-2">{t.has(`kn_${k.id}`) ? t(`kn_${k.id}`) : "—"}</p>
-            </div>
-          ))}
-        {!rotation && last && (
-          <div className="border-t-2 border-ink pt-3">
-            <p className="font-mono text-big-number text-ink">{fmt.number(inRow)}</p>
-            <p className="text-caption text-ink-2">
-              {t("fieldInRow", {
-                crop: cropName(last.mainCrop),
-                from: last.season - inRow + 1,
-                to: last.season,
-              })}
-            </p>
-          </div>
+      <h2 className="text-h1 text-ink">
+        {top ? (
+          <Link href={`/recommendations/${top.id}`} className="focus-ring rounded-btn hover:underline">
+            {headline}
+          </Link>
+        ) : (
+          headline
         )}
-        {!rotation &&
-          top?.keyNumbers.slice(0, 2).map((k) => (
+        {top?.textSource === "ai" && <AiMark />}
+      </h2>
+      {numbers.length > 0 && (
+        <div className="grid gap-4 sm:grid-cols-3 sm:gap-6">
+          {numbers.map((k) => (
             <div key={k.id} className="border-t-2 border-ink pt-3">
-              <p className="font-mono text-big-number text-ink">{num(k)}</p>
-              <p className="text-caption text-ink-2">{t.has(`kn_${k.id}`) ? t(`kn_${k.id}`) : "—"}</p>
+              <p className="font-mono text-big-number text-ink">{k.value}</p>
+              <p className="text-caption text-ink-2">{k.label}</p>
             </div>
           ))}
-      </div>
+        </div>
+      )}
       {top && <p className="text-body text-ink">{top.text.action[locale]}</p>}
-      {sources.length > 0 && <p className="text-caption text-ink-2">{r("sourcesLine", { sources: sources.join(", ") })}</p>}
       <div className="flex flex-wrap items-center gap-3">
         <Link
           href={`/fields/${fieldId}/rotation`}
@@ -201,23 +231,40 @@ export function FieldBrief({
           {r("bf_ask")}
         </Button>
       </div>
+      <TrustLine
+        {...(tier ? { reliability: TIER_RELIABILITY[tier], dataLevel: tier, estimate: tier === "C" } : {})}
+        sources={sources}
+      />
+      <Evidence summary={sourcesLine ?? r("bf_k")}>
+        <div className="flex flex-col gap-2">
+          {sourcesLine && <p className="text-caption text-ink-2">{sourcesLine}</p>}
+          <Link
+            href={trustHref}
+            className="focus-ring inline-flex min-h-tap items-center gap-1 self-start text-body font-semibold text-ink underline underline-offset-4"
+          >
+            {r("cs_trust")}
+            <ChevronRight aria-hidden className="size-4" />
+          </Link>
+        </div>
+      </Evidence>
     </Surface>
   );
 }
 
-/** Status chips: crop, plan, irrigation, land suitability and how many risks need attention. Words and icons, not colour. */
+/**
+ * Status chips, exceptions only: land that is limited or not suitable, and how many risks need attention.
+ * Crop, plan and irrigation are in the header; the plan is said once, in the brief. Words and icons, not colour.
+ */
 export function StatusChips({
-  crop,
-  plan,
-  irrigation,
   land,
   attention,
   country,
   units,
 }: {
-  crop: string | null;
-  plan: { season: number; crop: string | null; agreed: boolean } | null;
-  irrigation: "irrigated" | "dryland" | "unknown";
+  /** Kept for callers; no longer shown as chips. */
+  crop?: string | null;
+  plan?: { season: number; crop: string | null; agreed: boolean } | null;
+  irrigation?: "irrigated" | "dryland" | "unknown";
   land: { status: LandStatus; overridden: boolean } | null;
   attention: number;
   country?: string | null;
@@ -240,30 +287,11 @@ export function StatusChips({
       ? t("landChip_overridden")
       : t(`landStatus_${land.status}`)
     : null;
+  const showLand = Boolean(land && landWord && land.status !== "suitable" && land.status !== "unknown");
+  if (!showLand && attention <= 0) return null;
   return (
     <ul aria-label={r("statusLabel")} className="flex flex-wrap gap-2">
-      {crop && (
-        <li>
-          <Chip tone="neutral" icon={<Leaf />}>
-            {r("chipCrop", { crop })}
-          </Chip>
-        </li>
-      )}
-      {plan?.crop && (
-        <li>
-          <Chip tone={plan.agreed ? "ok" : "info"} icon={<Sprout />}>
-            {r("chipPlan", { season: plan.season, crop: plan.crop })} · {plan.agreed ? t("fcAgreed") : t("fcNotAgreed")}
-          </Chip>
-        </li>
-      )}
-      {irrigation !== "unknown" && (
-        <li>
-          <Chip tone="info" icon={<Droplet />}>
-            {t(irrigation)}
-          </Chip>
-        </li>
-      )}
-      {land && landWord && (
+      {land && landWord && showLand && (
         <li>
           <Chip
             tone={landTone}
@@ -283,8 +311,8 @@ export function StatusChips({
           </Chip>
         </li>
       )}
-      <li>
-        {attention > 0 ? (
+      {attention > 0 && (
+        <li>
           <Chip tone="week" icon={<AlertTriangle />}>
             {fmt.plural(attention, {
               one: r.raw("chipRisks_one") as string,
@@ -293,12 +321,8 @@ export function StatusChips({
               other: r.raw("chipRisks_other") as string,
             })}
           </Chip>
-        ) : (
-          <Chip tone="ok" icon={<Check />}>
-            {r("chipRisks0")}
-          </Chip>
-        )}
-      </li>
+        </li>
+      )}
     </ul>
   );
 }
