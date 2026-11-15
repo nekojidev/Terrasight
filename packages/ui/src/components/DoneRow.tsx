@@ -17,7 +17,7 @@ export interface DoneRowProps {
 }
 
 /**
- * Done state for Accept and Snooze (design 17): ink row with a lime check, Undo and a visible countdown bar.
+ * Done state for Accept and Snooze (design 17): ink row with a lime check, Undo and a CSS countdown bar.
  * The countdown follows the server's `undoUntil`, so it matches what the server will still accept.
  */
 export function DoneRow({ label, undoLabel, undoUntil, onUndo, now = Date.now, className }: DoneRowProps) {
@@ -60,8 +60,9 @@ export function DoneRow({ label, undoLabel, undoUntil, onUndo, now = Date.now, c
       </div>
       {open && (
         <span aria-hidden className="block h-1 overflow-hidden rounded-chip bg-line">
+          {/* CSS countdown: runs for what is left of the server's window, so it matches what the server accepts. */}
           <span
-            className="animate-countdown block h-full bg-ok"
+            className="animate-countdown block h-full bg-ok motion-reduce:animate-none"
             style={{ animationDuration: `${initial}ms` }}
           />
         </span>
