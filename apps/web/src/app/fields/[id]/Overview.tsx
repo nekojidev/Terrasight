@@ -7,6 +7,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { AiMark } from "@/components/AiMark";
+import { useAssistantBus } from "@/components/AssistantBus";
+import { QueryState } from "@/components/QueryState";
 import { api } from "@/lib/api";
 
 type Localised = { en: string; uk: string };
@@ -110,20 +112,11 @@ export function FieldBrief({
     risks.find((x) => x.type !== "rotation" && (x.level === "high" || x.level === "moderate")) ??
     (rotation?.level === "moderate" ? rotation : undefined);
   const router = useRouter();
-  // The assistant panel is a sibling component: fill its question box and send, or open the recommendation.
+  // The assistant panel listens on the bus; with no panel (or a conversation already open) open the recommendation.
+  const bus = useAssistantBus();
   const ask = () => {
-    const input = document.querySelector<HTMLInputElement>("aside input[type=text], aside input:not([type])");
-    if (!input) {
-      if (top) router.push(`/recommendations/${top.id}`);
-      return;
-    }
-    input.scrollIntoView({ behavior: "smooth", block: "center" });
-    input.focus({ preventScroll: true });
-    if (input.value !== "" || input.disabled) return;
     const question = top ? t("bfWhyQ", { title: top.text.title[locale] }) : t("faSugg1");
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, question);
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-    setTimeout(() => input.form?.requestSubmit(), 0);
+    if (!bus.ask(question) && top) router.push(`/recommendations/${top.id}`);
   };
   const sorted = [...seasons].sort((a, b) => b.season - a.season);
   const last = sorted[0];
@@ -277,7 +270,13 @@ export function WeatherCard({
           </span>
         )}
       </div>
-      {days.length === 0 ? (
+      {w.data === undefined ? (
+        <div className="mt-3">
+          <QueryState query={w} className="w-full">
+            {() => null}
+          </QueryState>
+        </div>
+      ) : days.length === 0 ? (
         <p className="mt-2 text-small text-ink-2">{t("noForecast")}</p>
       ) : (
         <ol className="mt-4 grid grid-cols-7 gap-0.5 text-center sm:gap-1">

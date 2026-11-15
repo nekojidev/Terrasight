@@ -29,9 +29,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AiMark } from "@/components/AiMark";
 import { useLocale, useTranslations } from "next-intl";
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { AskOwnerBody } from "@terrasight/shared";
 import { AskOwnerSheet } from "@/components/AskOwnerSheet";
+import { useReportError } from "@/components/useReportError";
 import { api } from "@/lib/api";
 
 type Localised = { en: string; uk: string };
@@ -301,12 +302,25 @@ export function RecommendationClient({
   const [asking, setAsking] = useState(false);
   const [asked, setAsked] = useState(false);
   const router = useRouter();
+  const report = useReportError();
+  // The undo window ends with a refetch; don't leave the timer running after the page closes.
+  const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (undoTimer.current) clearTimeout(undoTimer.current);
+    },
+    [],
+  );
   async function startCheck() {
-    const task = await api<{ id: string }>(
-      `/api/w/${workspaceId}/recommendations/${initial.id}/scouting-tasks`,
-      { body: {} },
-    );
-    router.push(`/scout/${task.id}`);
+    try {
+      const task = await api<{ id: string }>(
+        `/api/w/${workspaceId}/recommendations/${initial.id}/scouting-tasks`,
+        { body: {} },
+      );
+      router.push(`/scout/${task.id}`);
+    } catch (e) {
+      report(e);
+    }
   }
   const r = rec.data;
   const base = `/api/w/${workspaceId}/recommendations/${r.id}`;
@@ -380,26 +394,38 @@ export function RecommendationClient({
 
   async function act(action: "accept" | "snooze" | "dismiss" | "undo" | "ask-owner", note?: string) {
     const body: AskOwnerBody = action === "ask-owner" && note ? { note } : {};
-    const next = await api<RecView>(`${base}/${action}`, { body });
-    setAsked(action === "ask-owner");
-    client.setQueryData(key, { ...r, ...next });
-    void client.invalidateQueries({ queryKey: ["brief", workspaceId] });
-    if (next.undoUntil)
-      setTimeout(() => void rec.refetch(), new Date(next.undoUntil).getTime() - Date.now() + 1_500);
+    try {
+      const next = await api<RecView>(`${base}/${action}`, { body });
+      setAsked(action === "ask-owner");
+      client.setQueryData(key, { ...r, ...next });
+      void client.invalidateQueries({ queryKey: ["brief", workspaceId] });
+      if (undoTimer.current) clearTimeout(undoTimer.current);
+      if (next.undoUntil)
+        undoTimer.current = setTimeout(
+          () => void rec.refetch(),
+          new Date(next.undoUntil).getTime() - Date.now() + 1_500,
+        );
+    } catch (e) {
+      report(e);
+    }
   }
   async function saveText(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     const v = (k: string) => String(fd.get(k) ?? "").trim();
-    const next = await api<RecView>(base, {
-      method: "PATCH",
-      body: {
-        title: { en: v("titleEn"), uk: v("titleUk") },
-        action: { en: v("actionEn"), uk: v("actionUk") },
-      },
-    });
-    client.setQueryData(key, { ...r, ...next });
-    setEditing(false);
+    try {
+      const next = await api<RecView>(base, {
+        method: "PATCH",
+        body: {
+          title: { en: v("titleEn"), uk: v("titleUk") },
+          action: { en: v("actionEn"), uk: v("actionUk") },
+        },
+      });
+      client.setQueryData(key, { ...r, ...next });
+      setEditing(false);
+    } catch (e) {
+      report(e);
+    }
   }
 
   const askedOwner = asked || Boolean(r.askedOwnerAt);
@@ -423,7 +449,7 @@ export function RecommendationClient({
   return (
     <div className="grid gap-8 xl:grid-cols-[1fr_380px]">
       <div className="flex min-w-0 flex-col gap-6">
-        <nav aria-label="breadcrumb" className="flex w-fit items-center gap-2 text-body text-ink-2">
+        <nav aria-label={t("breadcrumb")} className="flex w-fit items-center gap-2 text-body text-ink-2">
           <Link href="/" className="flex items-center gap-1 hover:text-ink">
             <ArrowLeft aria-hidden className="size-4" />
             {r9("back")}

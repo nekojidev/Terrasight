@@ -5,6 +5,8 @@ import { Button } from "@terrasight/ui";
 import { Copy, Link2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useId, useState } from "react";
+import { QueryState } from "@/components/QueryState";
+import { useReportError } from "@/components/useReportError";
 import { api } from "@/lib/api";
 
 interface ReportLink {
@@ -25,6 +27,7 @@ export function ReportLinks({ workspaceId }: { workspaceId: string }) {
     queryKey: key,
     queryFn: () => api<ReportLink[]>(`/api/w/${workspaceId}/report-links`),
   });
+  const report = useReportError();
   const [fresh, setFresh] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const body = (
@@ -37,12 +40,16 @@ export function ReportLinks({ workspaceId }: { workspaceId: string }) {
         variant="outline"
         icon={<Link2 />}
         onClick={async () => {
-          const l = await api<{ path: string }>(`/api/w/${workspaceId}/report-links`, {
-            body: { language: "en" },
-          });
-          setFresh(`${window.location.origin}${l.path}`);
-          setCopied(false);
-          void client.invalidateQueries({ queryKey: key });
+          try {
+            const l = await api<{ path: string }>(`/api/w/${workspaceId}/report-links`, {
+              body: { language: "en" },
+            });
+            setFresh(`${window.location.origin}${l.path}`);
+            setCopied(false);
+            void client.invalidateQueries({ queryKey: key });
+          } catch (e) {
+            report(e);
+          }
         }}
       >
         {t("rpNewLink")}
@@ -60,8 +67,11 @@ export function ReportLinks({ workspaceId }: { workspaceId: string }) {
           </Button>
         </div>
       )}
-      <ul className="mt-3 flex flex-col gap-2">
-        {(links.data ?? []).map((l) => (
+      <div className="mt-3">
+      <QueryState query={links}>
+        {(list) => (
+      <ul className="flex flex-col gap-2">
+        {list.map((l) => (
           <li key={l.id} className="flex items-center justify-between gap-2 text-small text-ink-2">
             <span>
               {new Date(l.createdAt).toLocaleDateString()} · {l.language.toUpperCase()}
@@ -70,10 +80,14 @@ export function ReportLinks({ workspaceId }: { workspaceId: string }) {
             {!l.revokedAt && (
               <Button
                 variant="link"
-                onClick={async () => (
-                  await api(`/api/w/${workspaceId}/report-links/${l.id}`, { method: "DELETE" }),
-                  client.invalidateQueries({ queryKey: key })
-                )}
+                onClick={async () => {
+                  try {
+                    await api(`/api/w/${workspaceId}/report-links/${l.id}`, { method: "DELETE" });
+                    await client.invalidateQueries({ queryKey: key });
+                  } catch (e) {
+                    report(e);
+                  }
+                }}
               >
                 {t("rpRevoke")}
               </Button>
@@ -81,6 +95,9 @@ export function ReportLinks({ workspaceId }: { workspaceId: string }) {
           </li>
         ))}
       </ul>
+        )}
+      </QueryState>
+      </div>
     </>
   );
   return (

@@ -2,11 +2,11 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Decision, DecisionList } from "@terrasight/shared";
-import { Skeleton } from "@terrasight/ui";
 import { UserPlus } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { OwnerDecisions } from "@/components/OwnerDecisions";
+import { QueryState } from "@/components/QueryState";
 import { api } from "@/lib/api";
 import { ReportLinks } from "./ReportLinks";
 
@@ -19,8 +19,7 @@ export function OwnerDecisionsClient({ workspaceId }: { workspaceId: string }) {
     queryKey: key,
     queryFn: () => api<DecisionList>(`/api/w/${workspaceId}/decisions?state=all`),
   });
-  if (list.isError && !list.data) return <p className="text-body text-ink-2">{t("errGeneric")}</p>;
-  if (!list.data) return <Skeleton label={t("loading")} />;
+  if (!list.data) return <QueryState query={list}>{() => null}</QueryState>;
   return (
     <div className="mx-auto grid max-w-[900px] gap-6 lg:grid-cols-[minmax(0,520px)_minmax(0,340px)]">
       <OwnerDecisions

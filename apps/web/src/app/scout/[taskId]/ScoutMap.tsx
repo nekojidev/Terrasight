@@ -11,7 +11,7 @@ import {
   type LngLatBoundsLike,
 } from "maplibre-gl";
 import { useEffect, useRef } from "react";
-import { ATTRIBUTION, BASEMAP, token } from "@/components/FieldMap";
+import { mapStyle, token } from "@/lib/map-style";
 
 /** Same worker and basemap as the outline map (FieldMap). */
 if (typeof window !== "undefined") setWorkerUrl(`/maplibre-gl-worker.mjs?v=${getVersion()}`);
@@ -48,13 +48,7 @@ export function ScoutMap(props: ScoutMapProps) {
     const coords = [...polys.flatMap((q) => q[0] ?? []), ...p.points.map((x) => [x.lon, x.lat])];
     const m = new MLMap({
       container: box.current,
-      style: {
-        version: 8,
-        sources: {
-          sat: { type: "raster", tiles: [BASEMAP], tileSize: 256, attribution: ATTRIBUTION, maxzoom: 15 },
-        },
-        layers: [{ id: "sat", type: "raster", source: "sat" }],
-      },
+      style: mapStyle(),
       center: [coords[0]?.[0] ?? -100.88, coords[0]?.[1] ?? 37.97],
       zoom: 14,
       attributionControl: { compact: true },

@@ -83,6 +83,13 @@ export async function api<T>(path: string, opts: ApiOptions = {}): Promise<T> {
 /** Active workspace, kept in a cookie (Tech Design §15.2). */
 export const WORKSPACE_COOKIE = "ts_ws";
 
+/** Cookie attributes for a client-set cookie: `Secure` whenever the page itself is served over https. */
+export function cookieString(name: string, value: string, days = 365, protocol = "http:"): string {
+  return `${name}=${encodeURIComponent(value)}; Path=/; Max-Age=${days * 86400}; SameSite=Lax${
+    protocol === "https:" ? "; Secure" : ""
+  }`;
+}
+
 export function setCookie(name: string, value: string, days = 365): void {
-  document.cookie = `${name}=${encodeURIComponent(value)}; Path=/; Max-Age=${days * 86400}; SameSite=Lax`;
+  document.cookie = cookieString(name, value, days, window.location.protocol);
 }

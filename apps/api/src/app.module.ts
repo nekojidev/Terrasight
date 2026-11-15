@@ -6,7 +6,9 @@ import { reqSerializer } from "./http/redact.js";
 import { MailModule } from "./mail/mail.module.js";
 import { AnalysisModule } from "./analysis/analysis.module.js";
 import { AssistantModule } from "./assistant/assistant.module.js";
+import { AccountModule } from "./account/account.module.js";
 import { AuthModule } from "./auth/auth.module.js";
+import { ExportModule } from "./export/export.module.js";
 import { ConfigModule } from "./config/config.module.js";
 import { DbModule } from "./db/db.module.js";
 import { EventsModule } from "./events/events.module.js";
@@ -52,6 +54,8 @@ const env = loadEnv();
     MailModule,
     MessagingModule,
     AuthModule,
+    AccountModule,
+    ExportModule,
     EventsModule,
     WorkspacesModule,
     FieldsModule,

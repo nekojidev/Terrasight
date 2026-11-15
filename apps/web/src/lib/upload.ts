@@ -1,6 +1,6 @@
 "use client";
 
-import type { LngLat } from "@/components/FieldMap";
+import type { LngLat } from "@/lib/map-style";
 
 /** First polygon's outer ring from an uploaded GeoJSON, KML or zipped Shapefile (S-02.01). Parsed in the browser. */
 export async function ringFromFile(file: File): Promise<LngLat[]> {

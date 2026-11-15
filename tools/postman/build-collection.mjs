@@ -736,6 +736,42 @@ const collection = {
         req("A revoked link stops working at once", "GET", "/api/r/{{linkToken}}", { tests: problem(404) }),
         req("Archive the field", "DELETE", "/api/w/{{ws}}/fields/{{fieldId}}", { tests: [status(204)] }),
         req("An archived field is gone", "GET", "/api/w/{{ws}}/fields/{{fieldId}}", { tests: problem(404) }),
+        req("The Owner lists archived fields", "GET", "/api/w/{{ws}}/fields/archived", {
+          tests: [
+            status(200),
+            `pm.test("holds the archived field", () => pm.expect(pm.response.json().map((f) => f.id)).to.include(pm.collectionVariables.get("fieldId")));`,
+          ],
+        }),
+        req("Restore the archived field", "POST", "/api/w/{{ws}}/fields/{{fieldId}}/restore", { tests: [status(204)] }),
+        req("A restored field is back", "GET", "/api/w/{{ws}}/fields/{{fieldId}}", { tests: [status(200)] }),
+        req("Restoring a field that is not archived is 404", "POST", "/api/w/{{ws}}/fields/{{fieldId}}/restore", {
+          tests: problem(404),
+        }),
+        req("Owner data export (JSON)", "GET", "/api/w/{{ws}}/export", {
+          tests: [
+            status(200),
+            `pm.test("attachment", () => pm.expect(pm.response.headers.get("Content-Disposition")).to.include("attachment"));`,
+            `pm.test("shape", () => { const r = pm.response.json(); pm.expect(r.fields.type).to.eql("FeatureCollection"); pm.expect(r.fields.features.length).to.be.above(0); ["seasonRecords", "plans", "recommendations", "decisions"].forEach((k) => pm.expect(r[k]).to.be.an("array")); });`,
+          ],
+        }),
+        req("Save my name and interface language on the server", "PATCH", "/api/me", {
+          body: { name: "Olena K.", uiLanguage: "uk" },
+          tests: [
+            status(200),
+            `pm.test("saved", () => { const m = pm.response.json(); pm.expect(m.name).to.eql("Olena K."); pm.expect(m.uiLanguage).to.eql("uk"); });`,
+          ],
+        }),
+        req("An empty profile change is invalid", "PATCH", "/api/me", { body: {}, tests: problem(422) }),
+        req("Password change with a wrong current password is 401", "POST", "/api/auth/password", {
+          body: { currentPassword: "not my password", newPassword: "a brand new long password" },
+          tests: problem(401, "bad-credentials"),
+        }),
+        req("A too short new password is invalid", "POST", "/api/auth/password", {
+          body: { currentPassword: "correct horse battery", newPassword: "short" },
+          tests: problem(422),
+        }),
+        req("Sign out everywhere", "POST", "/api/auth/logout-all", { tests: [status(204)] }),
+        req("After signing out everywhere the session is gone", "GET", "/api/me", { tests: problem(401) }),
       ],
     },
     {

@@ -1,7 +1,7 @@
 "use client";
 
 import { BottomTabs, Sidebar, TopBar, type NavItem } from "@terrasight/ui";
-import { FileText, Home, LogOut, Map, RefreshCw, Sparkles, Users, Wind } from "lucide-react";
+import { FileText, Home, LogOut, Map, RefreshCw, Settings, Sparkles, Users, Wind } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import type { DecisionList } from "@terrasight/shared";
 import { usePathname, useRouter } from "next/navigation";
@@ -60,7 +60,9 @@ export function AppShell({
     queryKey: ["decisions", workspace.id, "all"],
     queryFn: () => api<DecisionList>(`/api/w/${workspace.id}/decisions?state=all`),
     enabled: answers,
+    retry: false,
   });
+  // A badge is a hint, not content: when the request fails the nav simply shows no count (silent).
   const needYou = answers ? (open.data?.counts.waiting ?? 0) : 0;
 
   const items: NavItem[] = [
@@ -91,6 +93,12 @@ export function AppShell({
           },
         ]
       : []),
+    {
+      href: user.role === "owner" ? "/settings/workspace" : "/settings/account",
+      label: a("navSettings"),
+      icon: <Settings />,
+      active: path.startsWith("/settings") && !path.startsWith("/settings/team"),
+    },
   ];
 
   const setLocale = (l: "uk" | "en") => {

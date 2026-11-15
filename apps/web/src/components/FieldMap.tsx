@@ -11,31 +11,16 @@ import {
   type MapTouchEvent,
   type Point,
 } from "maplibre-gl";
-import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
+import { useEffect, useImperativeHandle, useRef, type Ref } from "react";
+import { mapStyle, token, type LngLat } from "@/lib/map-style";
 
-export type LngLat = [number, number];
+export type { LngLat };
 
 /** The worker copied to public/ by scripts/maplibre-worker.mjs (the bundled default path does not resolve). */
 if (typeof window !== "undefined") setWorkerUrl(`/maplibre-gl-worker.mjs?v=${getVersion()}`);
 
 /** Screen distance between traced vertices. */
 const TRACE_PX = 12;
-
-/**
- * Satellite basemap for outlining fields. Default: EOX Sentinel-2 cloudless 2016 (CC BY 4.0; later EOX years are
- * non-commercial). Override with NEXT_PUBLIC_BASEMAP_TILES (an XYZ template) for another provider.
- */
-export const BASEMAP =
-  process.env.NEXT_PUBLIC_BASEMAP_TILES ??
-  "https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless_3857/default/g/{z}/{y}/{x}.jpg";
-export const ATTRIBUTION =
-  process.env.NEXT_PUBLIC_BASEMAP_ATTRIBUTION ??
-  'Sentinel-2 cloudless — <a href="https://s2maps.eu" target="_blank" rel="noreferrer">s2maps.eu</a> by EOX IT Services GmbH (contains modified Copernicus Sentinel data 2016)';
-
-/** MapLibre paint needs literal colours: read them from design/tokens.css at runtime. */
-export function token(name: string): string {
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-}
 
 export interface FieldMapHandle {
   flyTo(lon: number, lat: number, zoom?: number): void;
@@ -51,10 +36,12 @@ export interface FieldMapProps {
   onFinish: () => void;
   label: string;
   initial?: { lon: number; lat: number; zoom: number };
+  /** Imperative handle (a prop, not forwardRef: next/dynamic does not forward refs). */
+  mapRef?: Ref<FieldMapHandle>;
 }
 
 /** MapLibre map with click-or-trace outline drawing (design 13). */
-export const FieldMap = forwardRef<FieldMapHandle, FieldMapProps>(function FieldMap(props, ref) {
+export function FieldMap(props: FieldMapProps) {
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<MLMap | null>(null);
   const handlers = useRef(props);
@@ -65,13 +52,7 @@ export const FieldMap = forwardRef<FieldMapHandle, FieldMapProps>(function Field
     const init = props.initial ?? { lon: -100.88, lat: 37.97, zoom: 12 };
     const m = new MLMap({
       container: container.current,
-      style: {
-        version: 8,
-        sources: {
-          sat: { type: "raster", tiles: [BASEMAP], tileSize: 256, attribution: ATTRIBUTION, maxzoom: 15 },
-        },
-        layers: [{ id: "sat", type: "raster", source: "sat" }],
-      },
+      style: mapStyle(),
       center: [init.lon, init.lat],
       zoom: init.zoom,
       doubleClickZoom: false,
@@ -208,7 +189,7 @@ export const FieldMap = forwardRef<FieldMapHandle, FieldMapProps>(function Field
     else m.once("load", update);
   }, [props.ring, props.closed]);
 
-  useImperativeHandle(ref, () => ({
+  useImperativeHandle(props.mapRef, () => ({
     flyTo: (lon, lat, zoom = 14) => map.current?.flyTo({ center: [lon, lat], zoom }),
     fitBounds: (b) =>
       map.current?.fitBounds(
@@ -229,4 +210,4 @@ export const FieldMap = forwardRef<FieldMapHandle, FieldMapProps>(function Field
       style={{ cursor: props.drawing ? "crosshair" : undefined }}
     />
   );
-});
+}

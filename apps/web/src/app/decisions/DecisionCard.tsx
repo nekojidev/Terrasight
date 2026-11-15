@@ -17,6 +17,7 @@ import {
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useId, useState, type ReactNode } from "react";
+import { useReportError } from "@/components/useReportError";
 import { api } from "@/lib/api";
 
 const STATE: Record<DecisionState, { tone: ChipTone; icon: ReactNode }> = {
@@ -199,6 +200,7 @@ export function DecisionCard({
   const client = useQueryClient();
   const day = useDateFormat();
   const [busy, setBusy] = useState(false);
+  const report = useReportError();
   const refresh = () => client.invalidateQueries({ queryKey: ["decisions", workspaceId] });
   const s = STATE[d.state];
   // A question that was already replied to is no longer waiting for the agronomist.
@@ -253,6 +255,8 @@ export function DecisionCard({
                 try {
                   await api(`/api/w/${workspaceId}/decisions/${d.id}/republish`, { body: {} });
                   await refresh();
+                } catch (e) {
+                  report(e);
                 } finally {
                   setBusy(false);
                 }

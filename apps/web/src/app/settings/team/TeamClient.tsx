@@ -1,10 +1,11 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, SelectField, Skeleton, TextField } from "@terrasight/ui";
+import { Button, ConfirmDialog, SelectField, TextField } from "@terrasight/ui";
 import { Copy, Trash2, UserPlus } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { useState, type FormEvent } from "react";
+import { QueryState } from "@/components/QueryState";
 import { api, ApiError } from "@/lib/api";
 
 type Role = "owner" | "agronomist";
@@ -36,6 +37,7 @@ export function TeamClient({ workspaceId, meId }: { workspaceId: string; meId: s
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [removing, setRemoving] = useState<Member | null>(null);
   const [form, setForm] = useState<{ name: string; email: string; role: Role }>({
     name: "",
     email: "",
@@ -125,7 +127,7 @@ export function TeamClient({ workspaceId, meId }: { workspaceId: string; meId: s
   }
 
   async function remove(m: Member) {
-    if (!window.confirm(t("teamRemoveConfirm", { name: m.name }))) return;
+    setRemoving(null);
     setError(null);
     try {
       await api(`/api/w/${workspaceId}/members/${m.id}`, { method: "DELETE" });
@@ -135,16 +137,25 @@ export function TeamClient({ workspaceId, meId }: { workspaceId: string; meId: s
     void client.invalidateQueries({ queryKey: key });
   }
 
-  if (list.isError && !list.data) return <p className="text-body text-ink-2">{t("errGeneric")}</p>;
-  if (!list.data) return <Skeleton label={t("loading")} className="h-64 w-full" />;
+  if (!list.data) return <QueryState query={list}>{() => null}</QueryState>;
   const members = list.data.members;
 
   return (
     <div className="flex min-w-0 flex-col gap-6">
       <header>
-        <h1 className="text-h1 text-ink">{t("teamTitle")}</h1>
+        <h2 className="text-h2 text-ink">{t("teamTitle")}</h2>
         <p className="mt-1 max-w-[60ch] text-body text-ink-2">{t("teamSub")}</p>
       </header>
+      <ConfirmDialog
+        open={removing !== null}
+        title={t("teamRemoveTitle", { name: removing?.name ?? "" })}
+        confirmLabel={t("teamRemove")}
+        cancelLabel={t("cancel")}
+        onConfirm={() => removing && void remove(removing)}
+        onCancel={() => setRemoving(null)}
+      >
+        {t("teamRemoveBody")}
+      </ConfirmDialog>
       {error && (
         <p role="alert" className="rounded-input bg-urgent-soft px-4 py-3 text-body text-urgent">
           {error}
@@ -224,7 +235,7 @@ export function TeamClient({ workspaceId, meId }: { workspaceId: string; meId: s
                       </Button>
                     )}
                     {manageable && (
-                      <Button variant="ghost" icon={<Trash2 />} onClick={() => void remove(m)}>
+                      <Button variant="ghost" icon={<Trash2 />} onClick={() => setRemoving(m)}>
                         {t("teamRemove")}
                       </Button>
                     )}

@@ -2,7 +2,8 @@
 
 import { Send, Sparkles } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
+import { useAssistantAsk } from "@/components/AssistantBus";
 import { Chat } from "@/components/Chat";
 import { api, ApiError } from "@/lib/api";
 
@@ -55,10 +56,18 @@ export function FieldAssistant({
     e.preventDefault();
     void start(text);
   };
+  const panel = useRef<HTMLElement>(null);
+  // "Why so?" on the field card asks through the bus instead of poking at this panel's input.
+  useAssistantAsk((question) => {
+    if (id || busy) return false;
+    panel.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    void start(question);
+    return true;
+  });
   const suggestions = [t("faSugg1"), t("faSugg2"), t("faSugg3")];
 
   return (
-    <section className="flex min-h-[560px] flex-col rounded-hero border border-line bg-surface">
+    <section ref={panel} className="flex min-h-[560px] flex-col rounded-hero border border-line bg-surface">
       <header className="flex items-center gap-3 border-b border-line p-4">
         <span className="inline-flex size-10 items-center justify-center rounded-btn bg-ink text-surface">
           <Sparkles aria-hidden className="size-5" strokeWidth={1.7} />

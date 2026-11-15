@@ -7,6 +7,8 @@ import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useMemo, useState } from "react";
 import { Chat } from "@/components/Chat";
+import { QueryState } from "@/components/QueryState";
+import { useReportError } from "@/components/useReportError";
 import { api } from "@/lib/api";
 
 interface FieldRow {
@@ -32,6 +34,7 @@ export function AssistantClient({
   const t = useTranslations("Assistant");
   const app = useTranslations("App");
   const client = useQueryClient();
+  const report = useReportError();
   const key = ["conversations", workspaceId];
   const list = useQuery({ queryKey: key, queryFn: () => api<Item[]>(`/api/w/${workspaceId}/conversations`) });
   const locale = useLocale();
@@ -80,9 +83,13 @@ export function AssistantClient({
   const hasContext = Boolean(context.fieldId || context.recommendationId);
 
   async function start() {
-    const c = await api<{ id: string }>(`/api/w/${workspaceId}/conversations`, { body: {} });
-    await client.invalidateQueries({ queryKey: key });
-    setCurrent(c.id);
+    try {
+      const c = await api<{ id: string }>(`/api/w/${workspaceId}/conversations`, { body: {} });
+      await client.invalidateQueries({ queryKey: key });
+      setCurrent(c.id);
+    } catch (e) {
+      report(e);
+    }
   }
   const [ran, setRan] = useState<"idle" | "busy" | "done" | "error">("idle");
   async function analyze() {
@@ -96,9 +103,13 @@ export function AssistantClient({
     }
   }
   async function remove(id: string) {
-    await api(`/api/w/${workspaceId}/conversations/${id}`, { method: "DELETE" });
-    if (current === id) setCurrent(null);
-    void client.invalidateQueries({ queryKey: key });
+    try {
+      await api(`/api/w/${workspaceId}/conversations/${id}`, { method: "DELETE" });
+      if (current === id) setCurrent(null);
+      void client.invalidateQueries({ queryKey: key });
+    } catch (e) {
+      report(e);
+    }
   }
 
   useEffect(() => {
@@ -114,6 +125,7 @@ export function AssistantClient({
           {t("new")}
         </Button>
         <h2 className="mt-2 font-mono text-small tracking-wide text-ink-2 uppercase">{t("hist")}</h2>
+        {!list.data && <QueryState query={list}>{() => null}</QueryState>}
         {groups.map((g) => (
           <div key={g.key} className="flex flex-col gap-1">
             <h3 className="px-3 pt-1 font-mono text-micro tracking-wide text-ink-3 uppercase">{app(g.key)}</h3>
