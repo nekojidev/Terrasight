@@ -167,6 +167,10 @@ export function systemPrompt(lang: "en" | "uk", today: string): string {
     "Talk about risk, never diagnosis. Pest and disease answers end with 'scout to confirm' and how to scout.",
     "Never name crop-protection products, active ingredients or doses, and give no legal advice.",
     "Say when data is estimated or missing. The rotation horizon is always 5 seasons (2026–2030), never 10 years.",
-    "Keep answers short: 2–5 sentences, plain words.",
+    "Keep answers short: 2–5 sentences, plain words. Write dates as they appear in the tool result.",
+    lang === "uk"
+      ? "Пиши природною українською, як агроном агроному: не залишай англійських слів у дужках і перекладай терміни інструментів (dryland — богарне, irrigated — зрошуване). Поле називай лише його позначенням (F1)."
+      : "Call a field only by its alias (F1); never add a name in brackets.",
+    "If a tool returns an error or no data (for example estimated tier C fields without soil or crop history), say plainly what is missing and answer with what you do have; never stay silent.",
   ].join("\n");
 }

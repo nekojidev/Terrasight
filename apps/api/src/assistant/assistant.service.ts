@@ -74,6 +74,8 @@ export class AssistantService implements OnModuleInit, OnModuleDestroy {
   private readonly ai: GoogleGenAI | null;
   private readonly safety: SafetyFilter;
   private timer: NodeJS.Timeout | null = null;
+  /** Cleared when the configured model rejects thinkingConfig. */
+  private thinking = true;
 
   constructor(
     @Inject(ENV) private readonly env: Env,
@@ -309,18 +311,29 @@ export class AssistantService implements OnModuleInit, OnModuleDestroy {
     try {
       for (let step = 0; ; step++) {
         const withTools = runs.length < MAX_TOOL_CALLS;
-        const resp = await this.ai.models.generateContent({
-          model: this.env.GEMINI_MODEL,
-          contents,
-          config: {
-            systemInstruction: systemPrompt(lang, localDate(ws.timeZone)),
-            temperature: 0.2,
-            // Low thinking keeps a tool-using turn inside the 30 s budget (RFC §12.7).
-            thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-            abortSignal: signal,
-            ...(withTools ? { tools: [{ functionDeclarations: functionDeclarations() }] } : {}),
-          },
-        });
+        const request = (thinking: boolean) =>
+          this.ai!.models.generateContent({
+            model: this.env.GEMINI_MODEL,
+            contents,
+            config: {
+              systemInstruction: systemPrompt(lang, localDate(ws.timeZone)),
+              temperature: 0.2,
+              // Low thinking keeps a tool-using turn inside the 30 s budget (RFC §12.7).
+              ...(thinking ? { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } } : {}),
+              abortSignal: signal,
+              ...(withTools ? { tools: [{ functionDeclarations: functionDeclarations() }] } : {}),
+            },
+          });
+        let resp;
+        try {
+          resp = await request(this.thinking);
+        } catch (e) {
+          // A model that rejects the thinking level (INVALID_ARGUMENT mentioning it) is retried without it, for good.
+          if (!this.thinking || !/think/i.test((e as Error).message)) throw e;
+          this.log.warn(`${this.env.GEMINI_MODEL} rejected thinkingConfig; continuing without it`);
+          this.thinking = false;
+          resp = await request(false);
+        }
         const calls = resp.functionCalls ?? [];
         if (!calls.length || !withTools) {
           answer = resp.text ?? "";
@@ -404,9 +417,10 @@ export class AssistantService implements OnModuleInit, OnModuleDestroy {
         runs,
       );
     }
-    return finish(
-      { text: shown.join(" ") || UNAVAILABLE[lang], checked: true, numbersChecked: numbers },
-      runs,
-    );
+    if (!shown.length) {
+      this.log.warn(`empty answer for message ${messageId} (model ${this.env.GEMINI_MODEL})`);
+      return finish({ text: "", checked: false, error: UNAVAILABLE[lang] }, runs);
+    }
+    return finish({ text: shown.join(" "), checked: true, numbersChecked: numbers }, runs);
   }
 }
