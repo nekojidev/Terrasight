@@ -5,11 +5,12 @@ import { useState } from "react";
 import { OwnerDecisions } from "@/components/OwnerDecisions";
 import { api } from "@/lib/api";
 
+/** The owner's decisions through the link: one column, phone first, no sign-in. */
 export function ReportLinkClient({ token, initial }: { token: string; initial: PublicDecisions }) {
   const [data, setData] = useState(initial);
   const base = `/api/r/${encodeURIComponent(token)}`;
   return (
-    <main className="mx-auto min-h-dvh max-w-[430px] bg-canvas p-4 md:max-w-[560px] md:py-8">
+    <main className="mx-auto min-h-dvh w-full max-w-[560px] bg-bg px-4 py-6 md:py-10">
       <OwnerDecisions
         items={data.items}
         language={data.language}

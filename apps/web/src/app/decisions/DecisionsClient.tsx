@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import type { Decision, DecisionList } from "@terrasight/shared";
-import { Button } from "@terrasight/ui";
+import { Button, Surface, Tabs } from "@terrasight/ui";
 import { Eye, X } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
@@ -12,24 +12,28 @@ import { QueryState } from "@/components/QueryState";
 import { api } from "@/lib/api";
 import { useWorkspaceEvents } from "@/lib/events";
 import { DecisionCard } from "./DecisionCard";
+import { ReportLinks } from "./ReportLinks";
 
-type Tab = "waiting" | "question" | "decided";
-const TABS: Tab[] = ["waiting", "question", "decided"];
-const tabOf = (d: Decision): Tab =>
-  d.state === "waiting" ? "waiting" : d.state === "question" ? "question" : "decided";
+type Tab = "waiting" | "answered";
+const tabOf = (d: Decision): Tab => (d.state === "waiting" ? "waiting" : "answered");
+/** Questions first: they need the agronomist's reply. */
+const rank = (d: Decision) => (d.state === "question" ? 0 : 1);
 
 /**
- * Owner decisions (design 15, PD v2.7): the items the agronomist asked the owner about (agronomist view; the Owner answers in OwnerDecisionsClient), as cards with a thread.
- * Tabs Waiting · Questions · Decided; the rail shows who receives decisions, the invite and the no-account links.
+ * Decisions, agronomist view: the items asked of the owner, as collapsed cards (one open at a time) with a thread.
+ * Tabs Waiting for the owner · Answered (an owner's question sits in Answered, first); the rail shows who receives
+ * decisions and the link for the owner. The Owner answers in OwnerDecisionsClient.
  */
 export function DecisionsClient({ workspaceId, fieldId }: { workspaceId: string; fieldId: string | null }) {
   const t = useTranslations("App");
+  const rp = useTranslations("Reports");
   useWorkspaceEvents(workspaceId, ["brief"], () => [["decisions", workspaceId]]);
   const list = useQuery({
     queryKey: ["decisions", workspaceId],
     queryFn: () => api<DecisionList>(`/api/w/${workspaceId}/decisions?state=all`),
   });
   const [tab, setTab] = useState<Tab | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null);
   const preview = useRef<HTMLDialogElement>(null);
 
   const items = useMemo(
@@ -37,24 +41,30 @@ export function DecisionsClient({ workspaceId, fieldId }: { workspaceId: string;
     [list.data, fieldId],
   );
   const counts = useMemo(() => {
-    const c = { waiting: 0, question: 0, decided: 0 };
+    const c: Record<Tab, number> = { waiting: 0, answered: 0 };
     for (const d of items) c[tabOf(d)]++;
     return c;
   }, [items]);
 
-  if (!list.data) return <QueryState query={list}>{() => null}</QueryState>;
+  if (!list.data)
+    return (
+      <QueryState query={list} skeletonVariant="rows" what={rp("whatDecisions")}>
+        {() => null}
+      </QueryState>
+    );
 
-  // Open on the tab that needs the agronomist most: questions, then waiting, then decided.
-  const current: Tab = tab ?? (counts.question > 0 ? "question" : counts.waiting > 0 ? "waiting" : "decided");
-  const shown = items.filter((d) => tabOf(d) === current);
+  // Open on the tab that needs the agronomist most: an owner's question, then waiting, then answered.
+  const hasQuestion = items.some((d) => d.state === "question");
+  const current: Tab = tab ?? (hasQuestion || counts.waiting === 0 ? "answered" : "waiting");
+  const shown = items.filter((d) => tabOf(d) === current).sort((a, b) => rank(a) - rank(b));
   const recipients = list.data.recipients;
 
   return (
     <div className="flex min-w-0 flex-col gap-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-h1 text-ink">{t("decTitle")}</h1>
-          <p className="text-body text-ink-2">{t("decSub")}</p>
+          <h1 className="text-h1 text-ink">{rp("title")}</h1>
+          <p className="text-body text-ink-2">{rp("sub")}</p>
         </div>
         <Button variant="outline" icon={<Eye />} onClick={() => preview.current?.showModal()}>
           {t("rqOwnerSees")}
@@ -64,7 +74,7 @@ export function DecisionsClient({ workspaceId, fieldId }: { workspaceId: string;
       {fieldId && (
         <p className="flex items-center gap-3 text-small text-ink-2">
           {t("rqFieldOnly")}
-          <Link href="/decisions" className="font-semibold text-ink underline">
+          <Link href="/decisions" className="focus-ring inline-flex min-h-tap items-center font-semibold text-ink underline">
             {t("rqShowAll")}
           </Link>
         </p>
@@ -72,44 +82,41 @@ export function DecisionsClient({ workspaceId, fieldId }: { workspaceId: string;
 
       <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
         <div className="flex min-w-0 flex-col gap-4">
-          <div
-            role="tablist"
-            aria-label={t("decTitle")}
-            className="flex w-fit max-w-full gap-1 overflow-x-auto rounded-input bg-muted p-1"
-          >
-            {TABS.map((k) => (
-              <button
-                key={k}
-                type="button"
-                role="tab"
-                id={`dec-tab-${k}`}
-                aria-selected={current === k}
-                aria-controls="dec-panel"
-                onClick={() => setTab(k)}
-                className={`focus-ring min-h-tap rounded-btn px-3 text-body font-semibold whitespace-nowrap sm:px-4 ${current === k ? "bg-ink text-surface" : "text-ink hover:bg-surface"}`}
-              >
-                {t(`decTab_${k}`)} <span className="font-mono">{counts[k]}</span>
-              </button>
-            ))}
-          </div>
-          <div
-            id="dec-panel"
-            role="tabpanel"
-            aria-labelledby={`dec-tab-${current}`}
-            className="flex flex-col gap-4"
-          >
+          <Tabs
+            label={rp("tabs")}
+            value={current}
+            onChange={(id) => {
+              setTab(id as Tab);
+              setOpenId(null);
+            }}
+            items={[
+              { id: "waiting", label: rp("tab_waiting"), count: counts.waiting },
+              { id: "answered", label: rp("tab_answered"), count: counts.answered },
+            ]}
+          />
+          <div role="tabpanel" className="flex flex-col gap-3">
             {shown.length === 0 ? (
               <p className="rounded-card border border-line bg-surface p-6 text-body text-ink-2">
-                {items.length === 0 ? t("decEmptyAll") : t(`decEmpty_${current}`)}
+                {items.length === 0 ? rp("empty_all") : rp(`empty_${current}`)}
               </p>
             ) : (
-              shown.map((d) => <DecisionCard key={d.id} d={d} workspaceId={workspaceId} canReply />)
+              shown.map((d) => (
+                <DecisionCard
+                  key={d.id}
+                  d={d}
+                  workspaceId={workspaceId}
+                  canReply
+                  open={openId === d.id}
+                  onToggle={() => setOpenId(openId === d.id ? null : d.id)}
+                />
+              ))
             )}
           </div>
         </div>
 
         <aside className="flex min-w-0 flex-col gap-4">
-          <section className="rounded-card border border-line bg-surface p-5">
+          <ReportLinks workspaceId={workspaceId} />
+          <Surface as="section">
             <h2 className="mb-2 text-h3 text-ink">{t("decWho")}</h2>
             {recipients.length > 0 ? (
               <ul className="flex flex-col gap-1 text-body text-ink">
@@ -121,7 +128,7 @@ export function DecisionsClient({ workspaceId, fieldId }: { workspaceId: string;
               <p className="text-small text-ink-2">{t("decNoRecipients")}</p>
             )}
             <p className="mt-3 text-small text-ink-2">{t("decWhoSub")}</p>
-          </section>
+          </Surface>
         </aside>
       </div>
 
@@ -151,7 +158,7 @@ function Dialog({
     <dialog
       ref={ref}
       aria-label={title}
-      className="m-auto w-[min(560px,calc(100vw-32px))] rounded-hero bg-bg p-0 text-ink shadow-sheet backdrop:bg-ink/40 dark:backdrop:bg-bg/70"
+      className="m-auto w-[min(560px,calc(100vw-32px))] rounded-hero bg-bg p-0 text-ink shadow-sheet backdrop:bg-scrim"
       onClick={(e) => e.target === e.currentTarget && e.currentTarget.close()}
     >
       <div className="flex items-center justify-between border-b border-line bg-surface px-5 py-3">

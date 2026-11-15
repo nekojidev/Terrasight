@@ -15,7 +15,7 @@ const MESSAGES = {
   uk: { ...designUk, ...appUk },
 };
 
-/** Design 16: the Owner report through a report link — no app chrome, read and answer only (S-08.03). */
+/** Design 16: the owner's decisions through a link — no app chrome, read and answer only (S-08.03). */
 export default async function ReportLinkPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
   const report = await serverGet<PublicDecisions>(`/api/r/${encodeURIComponent(token)}`);
@@ -24,14 +24,14 @@ export default async function ReportLinkPage({ params }: { params: Promise<{ tok
     // unknown here, so the message is shown in both languages.
     const gone = report.status === 404;
     return (
-      <main className="mx-auto flex min-h-dvh max-w-[430px] flex-col justify-center gap-6 bg-canvas p-6">
+      <main className="mx-auto flex min-h-dvh w-full max-w-[560px] flex-col justify-center gap-8 bg-bg px-4 py-8">
         {(["uk", "en"] as const).map((l) => (
           <section key={l} lang={l} role={gone ? undefined : "alert"}>
             <h1 className="text-h2 text-ink">
-              {MESSAGES[l].App[gone ? "rpExpiredTitle" : "rpUnavailTitle"]}
+              {MESSAGES[l].Report[gone ? "expiredTitle" : "unavailTitle"]}
             </h1>
             <p className="mt-1 text-body text-ink-2">
-              {MESSAGES[l].App[gone ? "rpExpiredBody" : "rpUnavailBody"]}
+              {MESSAGES[l].Report[gone ? "expiredBody" : "unavailBody"]}
             </p>
           </section>
         ))}

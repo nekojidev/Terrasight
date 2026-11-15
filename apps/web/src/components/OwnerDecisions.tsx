@@ -1,18 +1,27 @@
 "use client";
 
 import type { Decision, DecisionAnswer, DecisionState } from "@terrasight/shared";
-import { Button } from "@terrasight/ui";
-import { Check, ChevronDown, Clock, MessageCircleQuestion } from "lucide-react";
+import { Button, Disclosure, Kicker, Surface } from "@terrasight/ui";
+import { Check, Clock, MessageCircleQuestion, Pause } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
+import { keyNumberViews } from "@/app/decisions/key-numbers";
+import { useFormat } from "@/lib/useFormat";
+import { useActionToast } from "@/lib/useActionToast";
 
 export type AnswerFn = (id: string, answer: DecisionAnswer, text?: string) => Promise<Decision | void>;
 
 const OPEN: DecisionState[] = ["waiting", "question"];
+const ANSWER_ICON = {
+  approve: <Check />,
+  not_now: <Pause />,
+  question: <MessageCircleQuestion />,
+} as const;
 
 /**
- * What the owner sees (v2.7): "N decisions need you", each a card with a thread and one-tap Approve / Not now / Ask…
- * `onAnswer={null}` is the read-only preview (staff "What the owner sees").
+ * What the owner sees: the decisions the agronomist asked about, waiting ones first, each with the plain question,
+ * up to three key numbers and answer buttons (Approve / Not now / Ask a question).
+ * Used on the Owner's Decisions page, on the public link, and read-only (`onAnswer={null}`) as the agronomist's preview.
  */
 export function OwnerDecisions({
   items,
@@ -26,11 +35,15 @@ export function OwnerDecisions({
   onAnswer: AnswerFn | null;
 }) {
   const t = useTranslations("App");
+  const r = useTranslations("Report");
+  const f = useFormat();
+  const { fail } = useActionToast();
   // Server data is the base; answered cards are overridden locally (optimistic, then the API's Decision).
   const [local, setLocal] = useState<Record<string, Decision>>({});
-  const [errors, setErrors] = useState<Record<string, { answer: DecisionAnswer; text?: string }>>({});
   const [busy, setBusy] = useState<Record<string, boolean>>({});
   const [live, setLive] = useState("");
+  // Cards answered in this visit stay in place, so the confirmation is not hidden in the "Decided" list.
+  const [kept, setKept] = useState<Set<string>>(new Set());
   const serverRef = useRef(items);
   useEffect(() => {
     // Fresh server data wins over stale local copies.
@@ -41,16 +54,13 @@ export function OwnerDecisions({
   }, [items]);
 
   const merged = items.map((d) => local[d.id] ?? d);
-  const needs = merged.filter((d) => OPEN.includes(d.state));
-  const decided = merged.filter((d) => !OPEN.includes(d.state));
-  const dayFmt = (iso: string) =>
-    new Intl.DateTimeFormat(L === "uk" ? "uk-UA" : "en-US", {
-      timeZone: "UTC",
-      day: "numeric",
-      month: "short",
-    }).format(new Date(iso.length === 10 ? `${iso}T12:00:00Z` : iso));
+  const openCount = merged.filter((d) => OPEN.includes(d.state)).length;
+  const needs = merged.filter((d) => OPEN.includes(d.state) || kept.has(d.id));
+  const decided = merged.filter((d) => !OPEN.includes(d.state) && !kept.has(d.id));
+  const day = (iso: string) =>
+    iso.length === 10 ? f.date(`${iso}T12:00:00Z`, "dayMonth", { timeZone: "UTC" }) : f.date(iso, "dayMonth");
 
-  const send = async (d: Decision, answer: DecisionAnswer, text?: string) => {
+  const send = async (d: Decision, answer: DecisionAnswer, text?: string): Promise<void> => {
     if (!onAnswer || busy[d.id]) return;
     const before = local[d.id];
     const now = new Date().toISOString();
@@ -70,11 +80,7 @@ export function OwnerDecisions({
       ],
     };
     setBusy((b) => ({ ...b, [d.id]: true }));
-    setErrors((e) => {
-      const rest = { ...e };
-      delete rest[d.id];
-      return rest;
-    });
+    setKept((k) => new Set(k).add(d.id));
     setLocal((l) => ({ ...l, [d.id]: optimistic }));
     try {
       const saved = await onAnswer(d.id, answer, text);
@@ -82,39 +88,42 @@ export function OwnerDecisions({
       setLive(
         answer === "approve" ? t("odLiveApproved") : answer === "not_now" ? t("odLiveNotNow") : t("odLiveAsked"),
       );
-    } catch {
+    } catch (e) {
       setLocal((l) => {
         const rest = { ...l };
         delete rest[d.id];
         return before ? { ...rest, [d.id]: before } : rest;
       });
-      setErrors((e) => ({ ...e, [d.id]: { answer, ...(text !== undefined ? { text } : {}) } }));
+      setKept((k) => {
+        const rest = new Set(k);
+        rest.delete(d.id);
+        return rest;
+      });
+      fail(e, r("whatAnswer"), () => void send(d, answer, text));
     } finally {
       setBusy((b) => ({ ...b, [d.id]: false }));
     }
   };
 
   const card = (d: Decision) => (
-    <DecisionCard
+    <OwnerCard
       key={d.id}
       d={d}
       L={L}
-      day={dayFmt}
+      day={day}
+      answered={kept.has(d.id)}
       readOnly={!onAnswer}
       busy={!!busy[d.id]}
-      failed={errors[d.id] ?? null}
       onSend={(a, text) => void send(d, a, text)}
     />
   );
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex min-w-0 flex-col gap-5">
       <header>
-        <p className="text-small text-ink-2">
-          {t("odFrom")} · {workspaceName}
-        </p>
-        <h1 className="text-h1 text-ink">
-          {needs.length > 0 ? t("odNeedYou", { n: needs.length }) : t("odNothing")}
+        <Kicker>{r("fromLine", { name: workspaceName })}</Kicker>
+        <h1 className="mt-1 text-h1 text-ink">
+          {openCount > 0 ? t("odNeedYou", { n: openCount }) : t("odNothing")}
         </h1>
         {needs.length === 0 && decided.length === 0 && (
           <p className="mt-1 text-body text-ink-2">{t("odEmpty")}</p>
@@ -132,37 +141,35 @@ export function OwnerDecisions({
         </section>
       )}
       {decided.length > 0 && (
-        <details className="group">
-          <summary className="focus-ring flex min-h-tap cursor-pointer list-none items-center justify-between gap-2 rounded-btn text-h3 text-ink">
-            {t("odSecDecided", { n: decided.length })}
-            <ChevronDown aria-hidden className="size-5 text-ink-2 transition-transform group-open:rotate-180" />
-          </summary>
-          <div className="mt-3 flex flex-col gap-3">{decided.map(card)}</div>
-        </details>
+        <Disclosure summary={<span className="text-h3">{t("odSecDecided", { n: decided.length })}</span>}>
+          <div className="flex flex-col gap-3 pt-3">{decided.map(card)}</div>
+        </Disclosure>
       )}
-      <p className="text-micro text-ink-3">{t("rpFoot")}</p>
+      <p className="text-caption text-ink-3">{r("foot")}</p>
     </div>
   );
 }
 
-function DecisionCard({
+function OwnerCard({
   d,
   L,
   day,
+  answered,
   readOnly,
   busy,
-  failed,
   onSend,
 }: {
   d: Decision;
   L: "en" | "uk";
   day: (iso: string) => string;
+  answered: boolean;
   readOnly: boolean;
   busy: boolean;
-  failed: { answer: DecisionAnswer; text?: string } | null;
   onSend: (a: DecisionAnswer, text?: string) => void;
 }) {
   const t = useTranslations("App");
+  const r = useTranslations("Report");
+  const f = useFormat();
   const [asking, setAsking] = useState(false);
   const [changing, setChanging] = useState(false);
   const [question, setQuestion] = useState("");
@@ -170,13 +177,11 @@ function DecisionCard({
   const note = d.thread.find((e) => e.kind === "note" && e.text);
   const overdue = d.deadline !== null && d.deadline < new Date().toISOString().slice(0, 10);
   const lastAnswer = [...d.thread].reverse().find((e) => e.kind === "answer");
-  const numbers = d.keyNumbers.slice(0, 3).map((k) => {
-    const v =
-      typeof k.value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(k.value)
-        ? day(k.value)
-        : `${k.value}${k.unit && k.unit !== "seasons" ? ` ${k.unit}` : ""}`;
-    return { id: k.id, value: v, label: t.has(`kn_${k.id}`) ? t(`kn_${k.id}`) : k.id };
-  });
+  const numbers = keyNumberViews(
+    d,
+    { number: f.number, date: day },
+    (id) => (t.has(`kn_${id}`) ? t(`kn_${id}`) : null),
+  );
   const showButtons = !readOnly && (open || changing);
   const date = lastAnswer ? day(lastAnswer.at) : "";
   const stateLine =
@@ -198,40 +203,45 @@ function DecisionCard({
   const thread = d.thread.filter((e) => e.kind !== "note");
 
   return (
-    <article className="flex flex-col gap-3 rounded-card border border-line bg-surface p-4">
+    <Surface
+      as="article"
+      pad="sm"
+      className={`flex flex-col gap-3 ${answered ? "animate-flash" : ""}`}
+    >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-small font-semibold text-ink">{d.fieldName}</p>
         {d.deadline && open && (
           <span
-            className={`flex items-center gap-1 rounded-chip px-2.5 py-1 text-small font-semibold ${overdue ? "bg-urgent-soft text-urgent" : "bg-week-soft text-week"}`}
+            className={`flex items-center gap-1 rounded-chip px-2.5 py-1 text-caption font-semibold ${overdue ? "bg-urgent-soft text-urgent" : "bg-week-soft text-week"}`}
           >
             <Clock aria-hidden className="size-3.5" />
             {overdue ? `${t("rpOverdue")} · ${day(d.deadline)}` : t("rpDeadline", { date: day(d.deadline) })}
           </span>
         )}
       </div>
-      <h3 className="text-[18px] leading-6 font-semibold text-ink">{d.title[L]}</h3>
-      {note && (
-        <blockquote className="border-l-2 border-line-strong pl-3 text-body text-ink">
-          <span className="font-semibold">{note.author.name}: </span>
-          {note.text}
-        </blockquote>
-      )}
-      <p className="text-body text-ink-2">{d.action[L]}</p>
+      <h3 className="text-h3 text-ink">{d.title[L]}</h3>
+      <p className="text-body text-ink">{d.action[L]}</p>
       {numbers.length > 0 && (
-        <dl className="grid grid-cols-3 gap-2">
+        <dl className="grid grid-cols-[repeat(auto-fit,minmax(110px,1fr))] gap-2">
           {numbers.map((n) => (
             <div key={n.id} className="flex min-w-0 flex-col rounded-input bg-surface-2 p-2">
               <dd className="text-body font-semibold text-ink">{n.value}</dd>
-              <dt className="text-micro text-ink-3">{n.label}</dt>
+              <dt className="text-caption text-ink-2">{n.label}</dt>
             </div>
           ))}
         </dl>
       )}
+      {note && (
+        <blockquote className="border-l-2 border-line-control pl-3 text-body text-ink">
+          <span className="block text-caption font-semibold text-ink-2">{r("agroNote")}</span>
+          {note.text}
+        </blockquote>
+      )}
       <p className="text-small text-ink-2">
-        <span className="font-semibold text-ink">{t("rpWhy")}: </span>
+        <span className="font-semibold text-ink">{r("why")}: </span>
         {d.why[L]}
       </p>
+      <p className="text-caption text-ink-3">{r("askedLine", { name: d.askedBy.name, date: day(d.askedAt) })}</p>
       {thread.length > 0 && (
         <ul className="flex flex-col gap-2" aria-label={t("odThread")}>
           {thread.map((e) => {
@@ -249,7 +259,7 @@ function DecisionCard({
                   )}
                   {e.text}
                 </div>
-                <span className="mt-0.5 text-micro text-ink-3">
+                <span className="mt-0.5 text-caption text-ink-3">
                   {mine ? t("odYou") : e.author.name} · {day(e.at)}
                 </span>
               </li>
@@ -261,21 +271,18 @@ function DecisionCard({
         <p
           role="status"
           aria-live="polite"
-          className={`text-small font-semibold ${d.state === "question" ? "text-ink-2" : "text-ok"}`}
+          className={`flex items-center gap-2 text-small font-semibold ${d.state === "question" ? "text-ink-2" : "text-ok"}`}
         >
+          {d.state === "approved" ? (
+            <Check aria-hidden className="size-4" />
+          ) : d.state === "not_now" ? (
+            <Pause aria-hidden className="size-4" />
+          ) : (
+            <MessageCircleQuestion aria-hidden className="size-4" />
+          )}
           {stateLine}
+          {answered && d.state !== "question" ? ` · ${r("sent")}` : ""}
         </p>
-      )}
-      {failed && (
-        <div
-          role="alert"
-          className="flex flex-wrap items-center justify-between gap-2 rounded-input bg-urgent-soft p-3 text-small text-urgent"
-        >
-          {t("odError")}
-          <Button variant="outline" onClick={() => onSend(failed.answer, failed.text)}>
-            {t("odRetry")}
-          </Button>
-        </div>
       )}
       {!readOnly && !open && !changing && (
         <Button variant="link" className="min-h-tap self-start" onClick={() => setChanging(true)}>
@@ -283,26 +290,19 @@ function DecisionCard({
         </Button>
       )}
       {showButtons && (
-        <div className="grid grid-cols-3 gap-2">
+        <div role="group" aria-label={r("answerLabel")} className="flex flex-col gap-2 sm:flex-row">
           {(["approve", "not_now", "question"] as const).map((a) => (
-            <button
+            <Button
               key={a}
-              type="button"
+              size={48}
+              variant={a === "approve" ? "primary" : "outline"}
+              icon={ANSWER_ICON[a]}
               disabled={busy}
               onClick={() => pick(a)}
-              className={`focus-ring flex min-h-14 flex-col items-center justify-center gap-1 rounded-btn border px-1 text-small font-semibold disabled:opacity-40 ${
-                a === "approve" ? "border-ink bg-ink text-surface" : "border-line-strong bg-surface text-ink"
-              }`}
+              className="w-full justify-center sm:flex-1"
             >
-              {a === "approve" ? (
-                <Check aria-hidden className="size-5" />
-              ) : a === "not_now" ? (
-                <Clock aria-hidden className="size-5" />
-              ) : (
-                <MessageCircleQuestion aria-hidden className="size-5" />
-              )}
               {t(`odBtn_${a}`)}
-            </button>
+            </Button>
           ))}
         </div>
       )}
@@ -326,18 +326,18 @@ function DecisionCard({
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             maxLength={1000}
-            className="min-h-20 rounded-input border border-line-strong bg-surface p-3 text-body"
+            className="focus-ring min-h-24 rounded-input border border-line-control bg-surface p-3 text-body"
           />
-          <div className="grid grid-cols-2 gap-2">
-            <Button type="button" variant="outline" onClick={() => setAsking(false)}>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Button type="button" variant="outline" size={48} className="w-full justify-center sm:flex-1" onClick={() => setAsking(false)}>
               {t("rpCancel")}
             </Button>
-            <Button type="submit" disabled={!question.trim() || busy}>
-              {t("rpSendQuestion")}
+            <Button type="submit" size={48} className="w-full justify-center sm:flex-1" disabled={!question.trim() || busy}>
+              {r("questionSend")}
             </Button>
           </div>
         </form>
       )}
-    </article>
+    </Surface>
   );
 }
