@@ -392,6 +392,8 @@
     "rqFieldOnly": "Showing one field",
     "rqShowAll": "Show all fields",
     "rotSow": "Sow {crop}",
+    "rotAiChip": "Proposed by the assistant",
+    "rotAiUnavailable": "The assistant could not propose extra options just now, so only the rotation library is shown. Try again later.",
     "rotSlidersSub": "Shift the climate or cap irrigation water and re-run to see whether the ranking holds.",
     "rotDipTag": "Establishment year",
     "rotDip": "Option {letters}: {year} is an establishment year, so the margin dips first and recovers in later seasons.",

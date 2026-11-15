@@ -40,6 +40,8 @@ interface RunView {
     sequence: Array<string | { main: string; second: string }>;
   }>;
   priceAsOf: string;
+  /** AI-proposed options: "unavailable" = the assistant could not be reached, only library options are shown. */
+  aiStatus?: "ok" | "unavailable" | "skipped";
   names: Record<string, Localised>;
   cropNames?: Record<string, Localised>;
   result: {
@@ -331,8 +333,10 @@ export function RotationClient({
           ? t("rotDetected")
           : t("rotCurrent")
       : (run.data!.names[s.id]?.[locale] ?? s.id);
+  const rationaleOf = (s: ScenarioResult) =>
+    (s as ScenarioResult & { rationale?: Localised }).rationale?.[locale] ?? "";
   const cropName = (c: string) => run.data!.cropNames?.[c]?.[locale] ?? c.replace(/_/g, " ");
-  const letters = ["A", "B", "C"];
+  const letters = ["A", "B", "C", "D", "E"];
   const current = run.data.result.current;
   const seasons = Array.from({ length: 5 }, (_, i) => first + i);
 
@@ -413,6 +417,7 @@ export function RotationClient({
         {t("rotNote", { n: run.data.result.candidates + 1 })}
         {run.data.regionVerify && <span className="ml-2 text-week">{t("rotVerify")}</span>}
       </p>
+      {run.data.aiStatus === "unavailable" && <p className="text-small text-ink-2">{t("rotAiUnavailable")}</p>}
       {run.data.soilBasis === "soilgrids" && <p className="text-small text-ink-2">{t("rotSoilEstimate")}</p>}
       {(run.data.unmodelledCrops?.length ?? 0) > 0 && (
         <p className="text-small text-ink-2">
@@ -474,7 +479,15 @@ export function RotationClient({
                       </span>
                     )}
                   </div>
+                  {s.source === "ai" && (
+                    <Chip tone="neutral" icon={<Sparkles />} className="mb-2">
+                      {t("rotAiChip")}
+                    </Chip>
+                  )}
                   <h3 className="text-h2 text-ink">{name(s)}</h3>
+                  {s.source === "ai" && rationaleOf(s) && (
+                    <p className="mt-1 text-small text-ink-2">{rationaleOf(s)}</p>
+                  )}
                   <p className="text-small text-ink-2">
                     {s.plan.map((p) => p.crops.map(cropName).join(" + ")).join(" → ")}
                   </p>
@@ -711,7 +724,7 @@ export function RotationClient({
               <polyline
                 fill="none"
                 strokeWidth={k === scenarios.indexOf(pick!) ? 3.5 : 2}
-                className={k === 0 ? "stroke-ink-2" : k === 1 ? "stroke-ink" : "stroke-week"}
+                className={k === 0 ? "stroke-ink-2" : k === 1 ? "stroke-ink" : k === 2 ? "stroke-week" : k === 3 ? "stroke-ok" : "stroke-line-strong"}
                 points={c.map((v, i) => `${X(i)},${Y(v)}`).join(" ")}
               />
               {c.map((v, i) => (
@@ -720,7 +733,7 @@ export function RotationClient({
                   cx={X(i)}
                   cy={Y(v)}
                   r="3.5"
-                  className={k === 0 ? "fill-ink-2" : k === 1 ? "fill-ink" : "fill-week"}
+                  className={k === 0 ? "fill-ink-2" : k === 1 ? "fill-ink" : k === 2 ? "fill-week" : k === 3 ? "fill-ok" : "fill-line-strong"}
                 />
               ))}
               <text x="572" y={endY[k]} className="fill-ink text-[12px] font-semibold">

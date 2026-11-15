@@ -22,6 +22,7 @@ import {
   type SoilGridsSummary,
   type SoilSummary,
 } from "@terrasight/sources";
+import { CROPS } from "@terrasight/simulator";
 import { ENV, type Env } from "../config/config.js";
 import { PrismaService } from "../db/prisma.service.js";
 import type { Prisma } from "../generated/prisma/client.js";
@@ -31,6 +32,16 @@ import { ProblemException } from "../http/problem.js";
 import { LIBRARY } from "../library/library.module.js";
 import { SeasonsService } from "../seasons/seasons.service.js";
 import { SourcesService } from "../sources/sources.service.js";
+import {
+  AiRotationsService,
+  doubleCropPairs,
+  irrigationOnlyCrops,
+  toRotations,
+  type AiStatus,
+  type HistoryEntry,
+  type Proposal,
+  type ProposalContext,
+} from "./ai-rotations.service.js";
 
 /** How the inputs were obtained: shown in the UI so estimates are never presented as measurements. */
 export interface InputMeta {
@@ -92,6 +103,7 @@ export class ScenariosService {
     private readonly sources: SourcesService,
     private readonly geo: GeoService,
     private readonly seasons: SeasonsService,
+    private readonly ai: AiRotationsService,
   ) {}
 
   /** Builds the engine input; null fields mean "No rotation library for this region yet". */
@@ -103,10 +115,10 @@ export class ScenariosService {
     workspaceId: string,
     fieldId: string,
     o: Overrides,
-  ): Promise<{ input: EngineInput; meta: InputMeta }> {
+  ): Promise<{ input: EngineInput; meta: InputMeta; aiCtx: ProposalContext | null }> {
     const field = await this.prisma.db.field.findFirst({
       where: { id: fieldId, workspaceId, archivedAt: null },
-      select: { id: true, regionId: true, irrigation: true, slopePct: true },
+      select: { id: true, regionId: true, irrigation: true, slopePct: true, tier: true },
     });
     if (!field) throw new ProblemException(404, "not-found");
     const region = field.regionId ? this.lib.rotations.regions[field.regionId] : undefined;
@@ -222,20 +234,86 @@ export class ScenariosService {
       pestModels,
       history: crops.slice(-3).map((c) => c.mainCrop),
     };
+    const soilBasis: InputMeta["soilBasis"] = s ? "ssurgo" : tex ? "soilgrids" : "default";
+    const aiCtx = region
+      ? this.proposalContext(input, field.regionId!, region, field.tier, soilBasis, basis, crops)
+      : null;
     return {
       input,
-      meta: {
-        currentBasis: basis,
-        currentSequence: input.current.sequence,
-        soilBasis: s ? "ssurgo" : tex ? "soilgrids" : "default",
-        lastSeason,
+      meta: { currentBasis: basis, currentSequence: input.current.sequence, soilBasis, lastSeason },
+      aiCtx,
+    };
+  }
+
+  /** What the assistant is told about the field (and what its proposals are checked against). No name, no coordinates. */
+  private proposalContext(
+    input: EngineInput,
+    regionId: string,
+    region: Library["rotations"]["regions"][string],
+    tier: "A" | "B" | "C",
+    soilBasis: string,
+    currentBasis: string,
+    crops: Array<{ season: number; mainCrop: string; secondCrop: string | null; source: string; isOverride: boolean }>,
+  ): ProposalContext {
+    const irrOnly = irrigationOnlyCrops(this.lib.rotations.rotations);
+    const allowed = Object.keys(input.prices)
+      .filter((c) => CROPS[c] && this.lib.rotations.crops[c] && (input.irrigated || !irrOnly.includes(c)))
+      .sort()
+      .map((id) => ({ id, name: this.lib.rotations.crops[id]!.en }));
+    const usable = splitRotations(input.rotations, input.prices).usable;
+    const years = [...input.weatherByYear.values()].filter((d) => d.length >= 360);
+    const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
+    const names = new Map(
+      this.lib.rotations.rotations.map((r) => [r.id, (r as unknown as { name: { en: string } }).name.en]),
+    );
+    const sources = { cdl: "cdl", lpis: "lpis", ndvi: "estimate", user: "agronomist" } as const;
+    const history: HistoryEntry[] = crops.slice(-5).map((c) => ({
+      season: c.season,
+      crop: c.mainCrop,
+      ...(c.secondCrop ? { second: c.secondCrop } : {}),
+      source: c.isOverride ? "agronomist" : (sources[c.source as keyof typeof sources] ?? "estimate"),
+    }));
+    return {
+      regionId,
+      regionName: { en: region.en, uk: region.uk },
+      countries: region.countries,
+      tier,
+      irrigated: input.irrigated,
+      southern: !!input.southern,
+      firstSeason: input.firstSeason,
+      soil: {
+        waterCapacityMmPerM: Math.round(input.site.awsMmPerM),
+        hydrologicGroup: input.site.hydGroup ?? "unknown",
+        basis: soilBasis,
       },
+      climate: years.length
+        ? {
+            meanSeasonRainfallMm: Math.round(mean(years.map((d) => d.reduce((a, x) => a + x.precip, 0)))),
+            meanSeasonTempC:
+              Math.round(mean(years.map((d) => mean(d.map((x) => (x.tmin + x.tmax) / 2)))) * 10) / 10,
+            weatherYears: years.length,
+          }
+        : null,
+      history,
+      currentRotation: { basis: currentBasis, sequence: input.current.sequence },
+      allowed,
+      irrigationOnly: irrOnly,
+      doubleCrops: doubleCropPairs(usable),
+      libraryExamples: usable
+        .filter((r) => input.irrigated || r.irrigation !== "required")
+        .slice(0, 8)
+        .map((r) => ({ name: names.get(r.id) ?? r.id, sequence: r.sequence })),
+      pestModels: input.pestModels ?? [],
+      existingPlans: [
+        ...input.rotations.map((r) => planSeasons(r.sequence, 0, input.firstSeason)),
+        planSeasons(input.current.sequence, input.current.position, input.firstSeason),
+      ].map((plan) => plan.map((p) => p.crops.join("+") || "fallow").join(",")),
     };
   }
 
   /** Runs (or reuses) the scenarios for a field with the given overrides. */
-  async run(workspaceId: string, fieldId: string, o: Overrides) {
-    const { input: full, meta } = await this.build(workspaceId, fieldId, o);
+  async run(workspaceId: string, fieldId: string, o: Overrides, aiMode: "generate" | "cached" = "generate") {
+    const { input: full, meta, aiCtx } = await this.build(workspaceId, fieldId, o);
     if (!full.rotations.length) return { id: null, noLibrary: true as const };
     const missing = [
       ...new Set(
@@ -267,7 +345,14 @@ export class ScenariosService {
       );
     }
     meta.unmodelled = split.unmodelled;
-    const input: EngineInput = { ...full, rotations: split.usable };
+    // AI proposals join the library candidates and go through the same engine path (numbers come only from the engine).
+    const ai: { status: AiStatus; proposals: Proposal[] } = aiCtx
+      ? await this.ai.propose(aiCtx, aiMode)
+      : { status: "skipped", proposals: [] };
+    const input: EngineInput = {
+      ...full,
+      rotations: [...split.usable, ...toRotations(ai.proposals, full.irrigated)],
+    };
     const hash = createHash("sha256")
       .update(
         stableStringify({
@@ -291,6 +376,7 @@ export class ScenariosService {
         missing,
         input,
         meta,
+        ai,
       );
     const t0 = Date.now();
     const result = await this.inWorker(input);
@@ -305,7 +391,7 @@ export class ScenariosService {
       },
     });
     this.log.log(`scenarios for ${fieldId}: ${result.candidates} candidates in ${durationMs} ms`);
-    return this.view(row.id, result, row.createdAt, durationMs, missing, input, meta);
+    return this.view(row.id, result, row.createdAt, durationMs, missing, input, meta, ai);
   }
 
   /** Nothing is simulated: the agronomist sees what is missing (prices awaiting verification, or the last crops). */
@@ -424,10 +510,15 @@ export class ScenariosService {
     missingPrices: string[],
     input: EngineInput,
     meta: InputMeta,
+    ai: { status: AiStatus; proposals: Proposal[] },
   ) {
     const regionId =
       this.lib.rotations.rotations.find((x) => x.id === input.rotations[0]?.id)?.region ?? null;
     const regionPrices = regionId ? (this.lib.prices.regions[regionId]?.crops ?? {}) : {};
+    const proposed = new Map(ai.proposals.map((p) => [p.id, p]));
+    // Names and reasons of the assistant's options; all their numbers are already in the engine result.
+    const decorate = <T extends { id: string }>(s: T) =>
+      proposed.has(s.id) ? { ...s, source: "ai" as const, rationale: proposed.get(s.id)!.rationale } : s;
     return {
       id,
       noLibrary: false as const,
@@ -448,16 +539,18 @@ export class ScenariosService {
       cropNames: Object.fromEntries(
         Object.entries(this.lib.rotations.crops).map(([id, c]) => [id, { en: c.en, uk: c.uk }]),
       ),
+      aiStatus: ai.status,
       names: Object.fromEntries(
         input.rotations.map((r) => [
           r.id,
+          proposed.get(r.id)?.name ??
           (
             this.lib.rotations.rotations.find((x) => x.id === r.id) as unknown as
               { name: { en: string; uk: string } } | undefined
           )?.name ?? { en: r.id, uk: r.id },
         ]),
       ),
-      result,
+      result: { ...result, alternatives: result.alternatives.map(decorate) },
     };
   }
 
@@ -486,7 +579,7 @@ export class ScenariosService {
    * the default deadline. Returns whether the item is new.
    */
   async upsertRecommendation(workspaceId: string, fieldId: string, runId: string | null): Promise<boolean> {
-    const view = await this.run(workspaceId, fieldId, {});
+    const view = await this.run(workspaceId, fieldId, {}, "cached");
     if (view.noLibrary || !("result" in view)) return false;
     const { result, firstSeason, regionId } = view;
     const all = [result.current, ...result.alternatives];
