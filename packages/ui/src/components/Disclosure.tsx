@@ -9,22 +9,50 @@ export interface DisclosureProps {
   children: ReactNode;
   defaultOpen?: boolean;
   className?: string;
+  /** Quiet text after the title, visible only while closed (e.g. "3 checks · 2 sources"). */
+  summaryNote?: string;
+  /** Controlled mode: pass `open` and `onOpenChange` together. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** Id of the collapsible region (an anchor target for links). */
+  id?: string;
 }
 
 /** Expand/collapse section: aria-expanded button, rotating chevron, height animates via grid rows. */
-export function Disclosure({ summary, children, defaultOpen = false, className }: DisclosureProps) {
-  const [open, setOpen] = useState(defaultOpen);
-  const id = useId();
+export function Disclosure({
+  summary,
+  children,
+  defaultOpen = false,
+  className,
+  summaryNote,
+  open: openProp,
+  onOpenChange,
+  id: idProp,
+}: DisclosureProps) {
+  const [inner, setInner] = useState(defaultOpen);
+  const generated = useId();
+  const id = idProp ?? generated;
+  const open = openProp ?? inner;
+  const toggle = () => {
+    const next = !open;
+    if (openProp === undefined) setInner(next);
+    onOpenChange?.(next);
+  };
   return (
     <div className={className}>
       <button
         type="button"
         aria-expanded={open}
         aria-controls={id}
-        onClick={() => setOpen((o) => !o)}
+        onClick={toggle}
         className="focus-ring flex min-h-tap w-full items-center justify-between gap-3 rounded-btn text-left text-body font-semibold text-ink"
       >
-        <span className="min-w-0 flex-1">{summary}</span>
+        <span className="min-w-0 flex-1">
+          {summary}
+          {summaryNote && !open && (
+            <span className="ml-2 text-small font-normal text-ink-3">{summaryNote}</span>
+          )}
+        </span>
         <ChevronDown
           aria-hidden
           strokeWidth={1.7}

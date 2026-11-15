@@ -126,6 +126,50 @@ In `apps/web`: `lib/format.ts` and `useFormat()` (dates, numbers, money, units, 
 
 Only state changes animate; nothing moves for decoration. Looping animations (spinner, shimmer, pulse) use `motion-safe:`. Under `prefers-reduced-motion: reduce`, `tokens.css` sets animation and transition duration to 0.01 ms, one iteration, and `scroll-behavior: auto`, so end states are kept and nothing flashes.
 
+## 3b. v6: reading rules
+
+Source: `docs/design-review-v6.md` §3. These are rules a developer can follow; the new components live in `packages/ui` (kit) and `apps/web/src/components` (they need translations). Copy is in `design/i18n/21-System.json` (namespace `System`).
+
+### The eight decisions as rules
+
+1. **Decision first, evidence one click away.** The first viewport holds one main thought and one action. Proof (checks, sources, numbers) goes into `<Evidence>`; link to it with `#evidence`.
+2. **One trust line.** Trust is always the same line, `<TrustLine>`: reliability, data level, sources, date. Never invent a second pattern (badges, bars, percentages).
+3. **One colour, one meaning** (table below). Risk colours are never used for reliability or for decoration.
+4. **At most three key numbers per card**, each with its unit and what it means ("+0.8 t/ha vs. your rotation"). More numbers go behind the evidence.
+5. **One visible notice per screen** (`<NoticeStack>`); the rest fold into "N more notes". Caveat lists use the same rule.
+6. **Units by the field's country, money included** (`useFormat({ country })`: `fmt.area`, `fmt.yield`, `fmt.moneyPerArea`). US fields are imperial; never hand-build "$12k" or "12 ha".
+7. **One date rule.** `fmt.date(d, "short")` = "12 Nov"; `"long"` = "12 November 2026" (day first in English too). Words only for yesterday, today, tomorrow: `fmt.dateRel(d)`. Never "3 days ago", never ISO dates in the UI.
+8. **States have one shape**: what happened · what you still see · one action (`EmptyState`, `ErrorCard`, `Skeleton`, `QueryState`).
+
+### Colour meaning
+
+| Token / look | Means | Chip `tone` | `StatusDot` tone |
+| --- | --- | --- | --- |
+| `urgent` (red) | Act today | `urgent` | `urgent` |
+| `week` (amber) | Act this week | `week` | `week` |
+| `ok` (green) | Fine, nothing to do | `ok` | `ok` |
+| `info` (blue) | Neutral information | `info` | `info` |
+| dashed outline, no fill, ink-2 text | Estimate: not measured, modelled or global | `estimate` | (use `muted`) |
+| `signal` (lime) | Fill only, e.g. the primary mark; never text colour, never a status | `signal` | none |
+
+Reliability is not a risk: `TrustLine` draws it as ink text with a shield icon (`ShieldCheck` high, `Shield` medium, `ShieldAlert` low). No new colour tokens were needed for v6.
+
+### New and extended components
+
+| Component | Usage |
+| --- | --- |
+| `TrustLine` (web) | `<TrustLine reliability="high" dataLevel="A" sources={["NASA POWER","USDA CDL"]} lastDate="2026-11-12" estimate href="#evidence" />`. Data levels are named Full data / Basic data / Estimate (UK Повні дані / Базові дані / Оцінка). Two sources, then "+N". `compact` keeps only reliability, level and the estimate mark. `href` or `onClick` makes the line a 44 px link or button. |
+| `Evidence` (web) | `<Evidence summary="3 checks · 2 sources · numbers verified" count={3} id="evidence">…</Evidence>`: title "Evidence", the summary stays visible while closed, opens by URL hash `#<id>`, remembers nothing. |
+| `NoticeStack` (web) | `<NoticeStack notices={[{ id, tone: "info\|week\|urgent", title, body?, action? }]} moreLabel? />`: first notice visible (order = priority), the rest under "N more notes". Urgent uses `role="alert"`. |
+| `SuggestionChips` (web) | `<SuggestionChips questions={[{ id, text }]} onAsk={(q) => …} />`: 2–3 questions in the farmer's words; the caller fills the composer or navigates. |
+| `InsightRow` (web) | `<InsightRow icon={<Sprout />} title value="+0.2 t/ha" note href linkLabel />`: a once-a-season insight as one row; the whole row is the link, the value is mono. |
+| `Disclosure` (ui) | New: `summaryNote` (quiet text while closed), `open` + `onOpenChange` (controlled), `id` (region id). |
+| `EmptyState`, `ErrorCard` (ui) | New optional slots: `what` (what happened / what is empty; wins over `text` / `body`), `still` (what you still see). `EmptyState` without `actionLabel` / `onAction` has no button. `QueryState` passes `still` through. |
+| `Chip tone="estimate"` (ui) | Dashed outline for estimates. |
+| `useFormat` (web) | New: `moneyPerArea(amountPerHa, currency)`, `count(n, forms)` (plurals), `dateRel(d, { now?, style?, timeZone? })`; `date` styles `short` / `long`. |
+
+`CaveatNotes` keeps its props and now renders through `NoticeStack`.
+
 ## 4. Behaviour that must match the RFC
 
 - **Accept / Snooze (RFC §10.4):**

@@ -1,7 +1,7 @@
 "use client";
 
 import { clsx } from "clsx";
-import { AlertTriangle, ArrowRight, RotateCw } from "lucide-react";
+import { AlertTriangle, ArrowRight, Eye, RotateCw } from "lucide-react";
 import type { ReactNode } from "react";
 import { Button } from "./Button";
 import { Chip } from "./Chip";
@@ -79,17 +79,32 @@ export function Skeleton({
   );
 }
 
+function StillLine({ children }: { children: ReactNode }) {
+  return (
+    <p className="mt-2 flex items-start gap-2 text-small text-ink-2" data-slot="still">
+      <Eye aria-hidden strokeWidth={1.7} className="mt-0.5 size-4 shrink-0" />
+      <span>{children}</span>
+    </p>
+  );
+}
+
 /** Source error: what failed, what is shown instead, and Retry (design 17, RFC §10.2). */
 export function ErrorCard({
   title,
   body,
+  what,
+  still,
   stamp,
   retryLabel,
   onRetry,
   className,
 }: {
   title: string;
+  /** What happened (kept for compatibility; `what` is the same slot and wins when both are given). */
   body: string;
+  what?: string;
+  /** What you still see ("Showing the last check from 06:00"). */
+  still?: string;
   stamp?: string;
   retryLabel: string;
   onRetry: () => void;
@@ -106,7 +121,8 @@ export function ErrorCard({
         </span>
         <div>
           <p className="text-[18px] leading-6 font-semibold text-ink">{title}</p>
-          <p className="text-body text-ink-2">{body}</p>
+          <p className="text-body text-ink-2">{what ?? body}</p>
+          {still && <StillLine>{still}</StillLine>}
         </div>
       </div>
       {stamp && (
@@ -124,20 +140,28 @@ export function ErrorCard({
 /** Empty state with one action (design 17, 03). */
 export function EmptyState({
   text,
+  what,
+  still,
   actionLabel,
   onAction,
   icon,
   className,
 }: {
+  /** What is empty (kept for compatibility; `what` is the same slot and wins when both are given). */
   text: string;
-  actionLabel: string;
-  onAction: () => void;
+  what?: string;
+  /** What you still see or can do meanwhile. */
+  still?: string;
+  actionLabel?: string;
+  onAction?: () => void;
   icon?: ReactNode;
   className?: string;
 }) {
   return (
     <div className={clsx("rounded-card border border-line bg-surface p-5", className)}>
-      <p className="mb-4 text-body text-ink-2">{text}</p>
+      <p className={clsx("text-body text-ink-2", actionLabel && onAction ? "mb-4" : "")}>{what ?? text}</p>
+      {still && <StillLine>{still}</StillLine>}
+      {actionLabel && onAction && (
       <Button
         variant="outline"
         size={48}
@@ -147,6 +171,7 @@ export function EmptyState({
       >
         {actionLabel}
       </Button>
+      )}
     </div>
   );
 }

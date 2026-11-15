@@ -1933,5 +1933,26 @@
     "markerLabel": "Chosen place",
     "privacy": "Nothing you click here is stored with your identity. The server logs only the weather grid cell and whether the request worked, not the exact place. Your network address is held only by the request limiter, for a few minutes.",
     "data": "Weather: NASA POWER, daily data since 1981. Ready outlines: real fields the team recorded."
+  },
+  "System": {
+    "reliability": "Reliability",
+    "reliabilityHigh": "High",
+    "reliabilityMedium": "Medium",
+    "reliabilityLow": "Low",
+    "levelA": "Full data",
+    "levelB": "Basic data",
+    "levelC": "Estimate",
+    "estimateMark": "≈ estimate",
+    "dataTo": "data to {date}",
+    "moreSources": "+{n}",
+    "trustOpen": "Open the evidence",
+    "evidence": "Evidence",
+    "moreNotes": "{n, plural, one {# more note} other {# more notes}}",
+    "notices": "Notes",
+    "toneInfo": "Note",
+    "toneWeek": "This week",
+    "toneUrgent": "Today",
+    "ask": "Ask",
+    "askLabel": "Ask the assistant"
   }
 }
