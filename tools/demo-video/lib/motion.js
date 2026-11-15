@@ -112,7 +112,8 @@
       const ax = (o.anchor?.[0] ?? 0.5) * W();
       const ay = (o.anchor?.[1] ?? 0.5) * H();
       const sY = window.scrollY;
-      to = { s, x: ax - s * (r.left + r.width / 2), y: ay + sY - s * (r.top + sY + r.height / 2) };
+      const sX = window.scrollX;
+      to = { s, x: ax + sX - s * (r.left + sX + r.width / 2), y: ay + sY - s * (r.top + sY + r.height / 2) };
     }
     const from = { ...cam };
     await tween(dur, bezier(o.ease ?? "--ts-ease-standard"), (e) => {
@@ -177,13 +178,16 @@
   let current = null;
   function block(parts, pos) {
     const el = document.createElement("div");
-    const edge = "calc(var(--ts-s10) * 1.6)";
+    // safe margins: 5 % of the frame at the sides and top, bottom 12 % kept clear for captions
+    const ex = "96px",
+      ey = "58px",
+      eb = "132px";
     const p = {
-      bl: `left:${edge};bottom:${edge}`,
-      tl: `left:${edge};top:calc(var(--ts-s10) * 2.6)`,
-      bc: `left:50%;bottom:${edge};translate:-50% 0`,
-      br: `right:${edge};bottom:${edge}`,
-      tr: `right:${edge};top:calc(var(--ts-s10) * 2.6)`,
+      bl: `left:${ex};bottom:${eb}`,
+      tl: `left:${ex};top:${ey}`,
+      bc: `left:50%;bottom:${eb};translate:-50% 0`,
+      br: `right:${ex};bottom:${eb}`,
+      tr: `right:${ex};top:${ey}`,
     }[pos || "bl"];
     el.style.cssText = `position:absolute;${p};display:flex;flex-direction:column;gap:var(--ts-s3);align-items:${pos && pos.endsWith("r") ? "flex-end" : "flex-start"};font-family:var(--ts-font);max-width:78%`;
     for (const part of parts) {
@@ -221,8 +225,8 @@
               { transform: "none", opacity: 1 },
             ],
             {
-              duration: ms("--ts-dur-slow"),
-              delay: i * ms("--ts-stagger") * 3,
+              duration: ms("--ts-dur-base"),
+              delay: i * ms("--ts-stagger") * 2,
               easing: tok("--ts-ease-enter"),
               fill: "both",
             },
@@ -279,6 +283,31 @@
     ).finished;
     ring.remove();
   }
+  // Act title: same place and animation every time (top left), in 240 ms, held, out 160 ms. Does not wait.
+  function title(text, holdMs = 800, sub) {
+    const el = document.createElement("div");
+    el.style.cssText = `position:absolute;left:96px;top:58px;display:flex;gap:var(--ts-s4);align-items:center;font-family:var(--ts-font);
+      padding:var(--ts-s3) var(--ts-s6);border-radius:var(--ts-r-card);box-shadow:var(--ts-shadow-hero);background:var(--ts-signal);color:var(--ts-on-signal);
+      font-size:44px;font-weight:700;letter-spacing:-0.03em;line-height:1.15`;
+    el.textContent = text;
+    layer.appendChild(el);
+    const a = el.animate(
+      [
+        { transform: "translateY(24px)", opacity: 0 },
+        { transform: "none", opacity: 1 },
+      ],
+      { duration: ms("--ts-dur-base"), easing: tok("--ts-ease-enter"), fill: "both" },
+    );
+    a.finished.then(() =>
+      setTimeout(() => {
+        el.animate([{ opacity: 1 }, { opacity: 0 }], {
+          duration: ms("--ts-dur-fast"),
+          easing: tok("--ts-ease-exit"),
+          fill: "both",
+        }).finished.then(() => el.remove());
+      }, holdMs),
+    );
+  }
   async function smoothScroll(top, durMs) {
     const from = window.scrollY;
     await tween(durMs, bezier("--ts-ease-standard"), (e) => nativeScrollTo(0, from + (top - from) * e));
@@ -295,6 +324,7 @@
     countUp,
     pulse,
     smoothScroll,
+    title,
     cam,
     place,
     lock,

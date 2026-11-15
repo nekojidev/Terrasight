@@ -1,5 +1,20 @@
 # Demo video (30 s)
 
+**Story: three acts, "We add a field, we see what the data say, we ask the assistant."** Cold open (2 s, the field from
+space, "Ask your field.") -> act 1 add a field (upload the real outline, checklist fills in, "Add the field") -> act 2
+North quarter: 45 years of NASA POWER weather (three clear trends and the rainfall row that says "no clear trend"), risks /
+week / 18 seasons, the 2026-2030 plan and the "How far can you trust this" proof -> act 3 the assistant answers a typed
+question, "N numbers checked against the models" -> end card. Straight cuts inside an act, one lime wipe between acts.
+Two AI voices (Gemini TTS): the narrator "we" (`Charon`) and the assistant (`Kore`); set per line with `voice:` in `STORY`
+(`build.mjs`; defaults via `DEMO_VOICE_NARRATOR` / `DEMO_VOICE_ASSISTANT`; the cache key includes the voice). To change a
+line, edit its `line` in `STORY` and rebuild: scene lengths follow the measured voice, and the build fails outside 29.0-29.9 s.
+Voice lines start 0.15 s before their picture (J-cut). Sound design is synthesised with ffmpeg (clicks on clicks, a whoosh
+on each act wipe, 10 ms fades), mixed under the voice and normalised to -16 LUFS.
+
+Once-only takes (not re-recorded unless `--rerecord-all` or the cache file is removed): `addField` (really adds a field to the
+company: running it again adds another), `ask1` (a live Gemini call), `assistant` and `owner` (older cached takes; `assistant`
+is used in act 3, `owner` is not in the current cut). `ask2` exists but is not used in the cut.
+
 Records the real running app and assembles `demo/terrasight-30s.mp4` (1920x1080, 30 fps, H.264 + AAC) and
 `demo/terrasight-30s.srt`. One command from the repo root:
 
@@ -31,7 +46,7 @@ Cypress).
    of Sarah, Rachel, Daniel, George, ... in the account's voice list). Without a key it falls back to macOS `say`
    and the report calls the result a DRAFT. Changing the text, provider or voice regenerates only what changed.
 2. **Scene lengths** come from the voice: `max(min, voice + lead + tail)`. The build stops if the total is outside
-   28.2 to 31.8 s.
+   29.0 to 29.9 s.
 3. **Takes** (`lib/shots.mjs`, `lib/take.mjs`): one Playwright context per shot, `recordVideo`, `deviceScaleFactor: 2`,
    `en-US`, cookie `ts_locale=en`, light theme, fixed clock (`page.clock.setFixedTime`, 2026-11-15 07:40 Chicago),
    one sign-in per role (storage state in `out/state/`). The shot waits for real content, then the camera starts.
@@ -85,6 +100,6 @@ cd tools/demo-video && npm install
 ## Voice providers
 
 `DEMO_TTS` chooses the voice: `elevenlabs` (needs `ELEVENLABS_API_KEY`), `gemini` (uses the product's `GEMINI_API_KEY`;
-voice `DEMO_GEMINI_VOICE`, default `Charon`; model `DEMO_GEMINI_TTS_MODEL`, default `gemini-3.8-flash-tts`) or `say`
+voice `DEMO_GEMINI_VOICE`, default `Charon`; per-line voices in `STORY`; model `DEMO_GEMINI_TTS_MODEL`, default `gemini-3.8-flash-tts`) or `say`
 (offline macOS voice, a draft). Without `DEMO_TTS`: ElevenLabs when its key exists, else Gemini, else `say`.
 Audio is cached per line by text, provider and voice; scene lengths follow the measured line durations.

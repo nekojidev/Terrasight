@@ -19,7 +19,7 @@ Your field has shifted. Has your plan? Terrasight is an AI assistant for agronom
 
 ## Link to Project Demo
 
-Provide **one** public link, without login. We offer two demos; each fits the official limit on its own (video 29.8 s; deck 7 slides).
+Provide **one** public link, without login. We offer two demos; each fits the official limit on its own (video 29.4 s; deck 7 slides).
 
 - Video (30 seconds or less), AI-generated narration disclosed on the end card and in the file metadata: `https://github.com/nekojidev/Terrasight/blob/main/demo/terrasight-30s.mp4` (raw file: `https://github.com/nekojidev/Terrasight/raw/main/demo/terrasight-30s.mp4`). Captions: `demo/terrasight-30s.srt` in the same folder.
 - Slide deck (7 slides, English): `https://github.com/nekojidev/Terrasight/blob/main/demo/terrasight-deck.pdf`
@@ -59,9 +59,9 @@ The judges must be able to open every link without logging in. Test them in a pr
 
 - **AI coding assistant.** Code, tests and documentation were written and reviewed with an AI coding assistant (Claude Code) under the team's direction. The team set the scope, reviewed the results and owns them.
 - **Google Gemini API inside the product.** It writes the wording of recommendations and assistant answers from model outputs, through function calling over our tools. Every number in an answer is checked against tool results; the interface shows how many were checked. Gemini never produces the numbers.
-- **Demo video narration.** The narration is an AI-generated voice (Google Gemini TTS). The screen recording shows the real application.
+- **Demo video narration.** The narration is spoken by two AI-generated voices (Google Gemini TTS). The screen recording shows the real application.
 - **No AI-generated images or video, and no AI-generated data.** The slides use real screenshots of the app and an HTML diagram. No NASA logos or design elements are used.
-- **Where this is acknowledged:** the README ("AI use" note at the top), the video file metadata (comment and description) and its end card ("Narration: AI-generated voice"), the last slide and footer of the deck, and this page.
+- **Where this is acknowledged:** the README ("AI use" note at the top), the video file metadata (comment and description) and its end card ("Narration: AI-generated voices"), the last slide and footer of the deck, and this page.
 
 ---
 

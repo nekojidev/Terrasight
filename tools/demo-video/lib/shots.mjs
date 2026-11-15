@@ -482,29 +482,24 @@ async function endCard(take, cfg, L) {
         "margin-bottom:var(--ts-s6)",
       ) +
       row(
-        "From NASA data to tomorrow’s decision",
-        "font-size:80px;line-height:1.05;font-weight:700;letter-spacing:-0.035em;max-width:1800px;white-space:nowrap",
+        "The AI assistant for your farm",
+        "font-size:84px;line-height:1.05;font-weight:700;letter-spacing:-0.035em;max-width:1700px;white-space:nowrap",
       ) +
       row(
         "NASA POWER · MODIS NDVI",
         "font-family:var(--ts-mono);font-size:36px;font-weight:600;letter-spacing:.02em;background:var(--ts-signal);color:var(--ts-on-signal);padding:var(--ts-s3) var(--ts-s6);border-radius:var(--ts-r-chip)",
       ) +
-      row("USDA CDL · USDA NASS", "font-family:var(--ts-mono);font-size:22px;color:var(--ts-ink-2)") +
+      row("Explore any place on Earth, no account needed", "font-size:30px;font-weight:500;color:var(--ts-ink)") +
+      row("ESA Copernicus Sentinel-2 · USDA", "font-family:var(--ts-mono);font-size:22px;color:var(--ts-ink-2)") +
       row(
         footer,
-        "font-family:var(--ts-mono);font-size:22px;letter-spacing:.08em;text-transform:uppercase;color:var(--ts-ink-3);margin-top:var(--ts-s6)",
+        "font-family:var(--ts-mono);font-size:22px;letter-spacing:.08em;text-transform:uppercase;color:var(--ts-ink-3);margin-top:var(--ts-s4)",
       ) +
       row(
-        "Narration: AI-generated voice",
+        "Narration: AI-generated voices",
         "font-family:var(--ts-mono);font-size:22px;letter-spacing:.04em;color:var(--ts-ink-2)",
       );
     document.documentElement.appendChild(card);
-    // slow push so the held card never freezes
-    card.animate([{ transform: "scale(1)" }, { transform: "scale(1.04)" }], {
-      duration: 6000,
-      easing: window.__demo.tok("--ts-ease-enter"),
-      fill: "both",
-    });
     const d = window.__demo;
     [...card.children].forEach((r, i) =>
       r.animate(
@@ -513,8 +508,8 @@ async function endCard(take, cfg, L) {
           { transform: "none", opacity: 1 },
         ],
         {
-          duration: d.ms("--ts-dur-slow"),
-          delay: i * d.ms("--ts-stagger") * 3,
+          duration: d.ms("--ts-dur-base"),
+          delay: i * d.ms("--ts-stagger") * 2,
           easing: d.tok("--ts-ease-enter"),
           fill: "both",
         },
@@ -524,6 +519,320 @@ async function endCard(take, cfg, L) {
   await page.waitForTimeout((L + 0.4) * 1000);
   return { segs: [{ from: t0, to: take.now() }] };
 }
+
+
+// ================================================================ the three-act story
+const FIELD_FILE = path.join(ROOT, "data/presentation/fields/north-quarter.geojson");
+const NEW_FIELD_NAME = "Home quarter";
+const lines = async (page, sel) =>
+  (await page.locator(sel).innerText())
+    .split("\n")
+    .map((s) => s.trim())
+    .filter(Boolean);
+// rows of the climate block: "...", "Label:", "9 days later", "increase.", "clear trend"
+const climateRows = (txt) => {
+  const rows = [];
+  txt.forEach((l, i) => {
+    if (/^(no )?clear trend$/.test(l)) rows.push({ label: txt[i - 3].replace(/:$/, ""), value: txt[i - 2], trend: l });
+  });
+  return rows;
+};
+
+// ---------------------------------------------------------------- cold open: the field from space, "Ask your field."
+async function coldOpen(take, cfg, L) {
+  const { page } = take;
+  await page.goto(`${cfg.base}/fields/${cfg.fieldId}/zones`);
+  const canvas = page.locator("canvas").first();
+  await canvas.waitFor({ timeout: 30000 });
+  await settle(page, 1500);
+  // the real map, enlarged to the whole frame for the opening shot
+  const map = await take.tag(canvas.locator("xpath=ancestor::*[contains(@class,'maplibregl-map')][1]"), "map");
+  await page.evaluate((sel) => {
+    const el = document.querySelector(sel);
+    el.style.cssText += ";position:fixed;left:0;top:0;width:1920px;height:1080px;z-index:50;border-radius:0";
+    window.dispatchEvent(new Event("resize"));
+  }, map);
+  await settle(page, 2200);
+  await take.cam(map, { dur: 1, fill: [1, 1], maxScale: 1 });
+  const t0 = take.mark("ready");
+  const push = take.cam(map, { dur: (L + 0.4) * 1000, ease: "--ts-ease-enter", fill: [1.2, 1.2], maxScale: 1.25 });
+  await take.d("say", [{ text: "Ask your field.", accent: true, size: px(84) }], { pos: "tl" });
+  await push;
+  return { segs: [{ from: t0, to: t0 + L + 0.4 }], facts: {}, clicks: [] };
+}
+
+// ---------------------------------------------------------------- act 1: add a field (real; recorded once)
+async function addField(take, cfg, L) {
+  const { page } = take;
+  await page.goto(cfg.base + "/fields/new");
+  const choose = page.getByRole("button", { name: "Choose a file" });
+  await page.locator("canvas").first().waitFor({ timeout: 30000 });
+  await settle(page, 1200);
+  const modeFile = page.getByText("Upload a file", { exact: true }).first();
+  const needMode = !(await choose.isVisible().catch(() => false));
+  if (needMode) {
+    await modeFile.click();
+    await choose.waitFor({ timeout: 10000 });
+    await page.waitForTimeout(500);
+  }
+  const box = await take.card(choose, "upload", 80);
+  const form = await take.card(page.getByText("Your field", { exact: true }).first(), "form", 300);
+  const nameInput = page.locator('input[name="name"]');
+  await take.cam(null, { dur: 1 });
+  const t0 = take.mark("ready");
+  const clicks = [];
+  take.d("title", "Add a field");
+  await take.cursorClick(choose, "choose", { dur: 700 });
+  clicks.push(take.now());
+  await page.locator('input[type="file"]').setInputFiles(FIELD_FILE);
+  const tUp = take.mark("uploaded");
+  take.cam(null, { union: [box, form], dur: 900, fill: [0.86, 0.92], maxScale: 1.3, anchor: [0.5, 0.5] });
+  await page.getByText(/Full data|Basic data|Estimate/).first().waitFor({ timeout: 40000 });
+  await settle(page, 1300);
+  const tPrev = take.mark("checked");
+  const formText = (await page.locator(form).innerText()).replace(/\s+/g, " ");
+  const area = must(formText.match(/(\d[\d,.]*)\s*(ac|ha)\b/), "area");
+  const tier = must(formText.match(/(Full data|Basic data|Estimate)/), "tier")[1];
+  if (tier !== "Full data") throw new Error("expected Full data for the US outline, got " + tier);
+  const loc = must(formText.match(/\b([A-Z][a-z]+ County, [A-Z]{2})/), "location")[1];
+  const areaStr = `${area[1]} ${area[2]}`;
+  await take.d(
+    "say",
+    [
+      { segs: [{ id: "a", text: areaStr, mono: true }], accent: true, size: BIG },
+      { text: `${tier} · ${loc}`, size: px(34), weight: 500 },
+    ],
+    { pos: "bl" },
+  );
+  await take.d("countUp", "a", areaStr, 800);
+  await page.waitForTimeout(500);
+  // name it, say it is dryland, add it
+  await take.cursorClick(nameInput, "name", { dur: 500 });
+  await nameInput.fill("");
+  await nameInput.pressSequentially(NEW_FIELD_NAME, { delay: 40 });
+  await page.waitForTimeout(250);
+  const no = page.getByRole("button", { name: "No", exact: true });
+  await take.cursorClick(no, "no", { dur: 450 });
+  await no.click();
+  clicks.push(take.now());
+  await page.waitForTimeout(300);
+  const add = page.getByRole("button", { name: "Add the field" });
+  await take.cursorClick(add, "add", { dur: 550 });
+  await page.waitForTimeout(150);
+  await add.click();
+  clicks.push(take.now());
+  const tEnd = take.now() + 0.35;
+  await page.waitForURL(/\/fields\/[0-9a-f-]{36}$/, { timeout: 40000 });
+  return {
+    segs: [
+      { from: t0, to: tUp },
+      { from: tUp, to: tPrev, ramp: 0.8 },
+      { from: tPrev, to: tEnd },
+    ],
+    facts: { area: areaStr, tier, loc, name: NEW_FIELD_NAME },
+    clicks,
+  };
+}
+
+// ---------------------------------------------------------------- act 2: the climate shift of the field
+async function climate(take, cfg, L) {
+  const { page } = take;
+  await page.goto(`${cfg.base}/fields/${cfg.fieldId}`);
+  const heading = page.getByText(/The first autumn frost comes \d+ days? later/).first();
+  await heading.waitFor({ timeout: 45000 });
+  await settle(page, 900);
+  const card = await take.card(heading, "shift", 300);
+  const kicker = (await page.getByText(/FIELD SHIFT/i).first().innerText()).replace(/\s+/g, " ");
+  const yr = must(kicker.match(/(\d{4})\D+(\d{4})/), "field shift years");
+  const years = Number(yr[2]) - Number(yr[1]);
+  if (years !== 45) throw new Error("expected 45 years of NASA weather, got " + years);
+  const rows = climateRows(await lines(page, card));
+  const clear = rows.filter((r) => r.trend === "clear trend").slice(0, 3);
+  if (clear.length < 3) throw new Error("expected three clear-trend rows");
+  const short = { "First autumn frost": "first frost", "Frost-free days": "frost-free", "Growing degree days": "growing degrees" };
+  await take.cam(card, { dur: 1, fill: [0.72, 0.8], anchor: [0.5, 0.45], maxScale: 1.25 });
+  const t0 = take.mark("ready");
+  take.d("title", `${years} years of NASA data`, 900);
+  const wait = async (t) => {
+    const d = t0 + t - take.now();
+    if (d > 0.02) await page.waitForTimeout(d * 1000);
+  };
+  const camP = take.cam(card, { dur: 900, fill: [0.84, 0.86], anchor: [0.5, 0.45], maxScale: 1.35 });
+  await wait(0.35);
+  await take.d(
+    "say",
+    clear.map((r, i) => ({
+      segs: [
+        { id: "c" + i, text: r.value, mono: true },
+        { text: short[r.label] ?? r.label.toLowerCase(), small: true },
+      ],
+      accent: i === 0,
+      size: px(40),
+    })),
+    { pos: "bl" },
+  );
+  await Promise.all(clear.map((r, i) => take.d("countUp", "c" + i, r.value, 700)));
+  await camP;
+  await wait(2.15);
+  // honesty: open all metrics and show the rainfall row, which has no clear trend
+  const all = page.getByText("All metrics", { exact: true }).first();
+  await take.cursorClick(all, "all", { dur: 450 });
+  await all.click();
+  const clickAt = take.now() - t0;
+  await page.waitForTimeout(150);
+  const rain = page.getByText("Growing-season rainfall", { exact: true }).first();
+  await rain.waitFor();
+  const rainRow = await rain.evaluate((el) => {
+    let n = el;
+    while (n.parentElement && !/no clear trend/.test(n.innerText)) n = n.parentElement;
+    n.setAttribute("data-demo-target", "rain");
+    return n.innerText;
+  });
+  const rr = climateRows(
+    rainRow
+      .split("\n")
+      .map((x) => x.trim())
+      .filter(Boolean),
+  )[0];
+  if (!rr || rr.trend !== "no clear trend") throw new Error("rainfall row should say no clear trend");
+  const camR = take.cam('[data-demo-target="rain"]', { dur: 700, fill: [0.7, 0.3], anchor: [0.5, 0.42], maxScale: 1.5 });
+  await take.d(
+    "say",
+    [
+      { segs: [{ text: "Rainfall" }, { id: "r", text: rr.value, mono: true }], size: px(40) },
+      { text: "no clear trend", size: px(34), weight: 500 },
+    ],
+    { pos: "bl" },
+  );
+  await camR;
+  const tEnd = t0 + L + 0.4;
+  const left = tEnd - take.now();
+  if (left > 0.1) await page.waitForTimeout(left * 1000);
+  return { segs: [{ from: t0, to: tEnd }], facts: { years, clear, rain: rr }, clicks: [t0 + clickAt] };
+}
+
+// ---------------------------------------------------------------- act 2: risks, week, history (three quick cuts)
+async function overview(take, cfg, L) {
+  const { page } = take;
+  await page.goto(`${cfg.base}/fields/${cfg.fieldId}`);
+  const risks = page.getByRole("heading", { name: "Top risks" }).first();
+  await risks.waitFor({ timeout: 45000 });
+  await settle(page, 900);
+  const nRisks = must((await page.getByText(/^Show all \d+$/).first().innerText()).match(/\d+/), "risk count")[0];
+  const week = page.getByRole("heading", { name: /^Next \d+ days$/ }).first();
+  const nDays = must((await week.innerText()).match(/\d+/), "days")[0];
+  const hist = page.getByRole("heading", { name: /^\d+ seasons on this field$/ }).first();
+  const nSeasons = must((await hist.innerText()).match(/\d+/), "seasons")[0];
+  const c1 = await take.card(risks, "risks", 200);
+  const c2 = await take.card(week, "week", 200);
+  const c3 = await take.card(hist, "hist", 200);
+  const q = L / 3;
+  await take.cam(c1, { dur: 1, fill: [0.7, 0.7], maxScale: 1.4 });
+  const t0 = take.mark("ready");
+  const step = async (sel, parts, until, fill) => {
+    await take.d("say", parts, { pos: "bl" });
+    await take.cam(sel, { dur: 380, fill, maxScale: 1.8 });
+    const left = until - take.now();
+    if (left > 0.2) await take.cam(sel, { dur: left * 1000, ease: "--ts-ease-enter", fill: [fill[0] + 0.04, fill[1] + 0.04], maxScale: 1.8 });
+  };
+  await step(c1, [{ segs: [{ id: "a", text: nRisks, mono: true }, { text: "risks, ranked" }], accent: true, size: px(46) }], t0 + q, [0.76, 0.8]);
+  await step(c2, [{ segs: [{ id: "b", text: nDays, mono: true }, { text: "days ahead" }], size: px(46) }], t0 + 2 * q, [0.74, 0.76]);
+  await step(c3, [{ segs: [{ id: "c", text: nSeasons, mono: true }, { text: "seasons of history" }], accent: true, size: px(46) }], t0 + L + 0.4, [0.9, 0.6]);
+  return { segs: [{ from: t0, to: t0 + L + 0.4 }], facts: { nRisks, nDays, nSeasons }, clicks: [] };
+}
+
+// ---------------------------------------------------------------- act 2: five seasons, the plan
+async function plan(take, cfg, L) {
+  const { page } = take;
+  await page.goto(`${cfg.base}/fields/${cfg.fieldId}/rotation`);
+  const tested = page.getByText(/Tested on \d+ weather paths and \d+ price scenarios/).first();
+  await tested.waitFor({ timeout: 45000 });
+  await page.getByText(/We compared \d+ options over \d+ seasons/).first().waitFor();
+  await page.locator("svg").filter({ hasText: /2030/ }).first().waitFor({ timeout: 30000 });
+  await settle(page, 900);
+  const m = must((await tested.innerText()).match(/Tested on (\d+) weather paths and (\d+) price scenarios/), "tested");
+  const nOpt = must(
+    (await page.getByText(/We compared \d+ options over \d+ seasons/).first().innerText()).match(/compared (\d+) options over (\d+) seasons/),
+    "options",
+  );
+  const optsHead = await take.tag(page.getByText(/We compared \d+ options/).first(), "optshead");
+  const optsBtn = await take.tag(page.getByRole("button", { name: /Choose this option|Chosen/ }).first(), "optsbtn");
+  const chart = await take.card(page.getByText(/What the field earns over/).first(), "chart", 250);
+  const range = must(
+    (await page.getByText(/Cumulative margin.*\d{4}.\d{4}/).first().innerText()).match(/(\d{4})\D(\d{4})/),
+    "range",
+  );
+  await take.cam(null, { union: [optsHead, optsBtn], dur: 1, fill: [0.9, 0.8], anchor: [0.5, 0.42], maxScale: 1.3 });
+  const t0 = take.mark("ready");
+  const half = (L + 0.4) / 2;
+  take.d("say", [{ segs: [{ id: "n", text: nOpt[1], mono: true }, { text: `options, ${range[1]}–${range[2]}` }], accent: true, size: px(46) }], { pos: "bl" });
+  await take.cam(null, { union: [optsHead, optsBtn], dur: half * 1000 - 100, ease: "--ts-ease-enter", fill: [0.95, 0.85], anchor: [0.5, 0.42], maxScale: 1.4 });
+  await take.cam(chart, { dur: 450, fill: [0.7, 0.8] });
+  await take.d(
+    "say",
+    [
+      { segs: [{ id: "p", text: m[1], mono: true }, { text: "weather runs" }], size: px(44) },
+      { segs: [{ id: "s", text: m[2], mono: true }, { text: "price scenarios" }], accent: true, size: px(44) },
+    ],
+    { pos: "bl" },
+  );
+  await holdUntil(take, t0 + L + 0.4, chart, [0.78, 0.86]);
+  return { segs: [{ from: t0, to: t0 + L + 0.4 }], facts: { paths: m[1], prices: m[2], options: nOpt[1], range: range.slice(1) }, clicks: [] };
+}
+
+// ---------------------------------------------------------------- act 3: ask the assistant a real question (live Gemini call; recorded once)
+const askShot = (question, key) =>
+  async function (take, cfg, L) {
+    const { page } = take;
+    await page.goto(`${cfg.base}/fields/${cfg.fieldId}`);
+    const input = page.getByPlaceholder(/Ask about any field/);
+    await input.waitFor({ timeout: 45000 });
+    await settle(page, 700);
+    await page.getByRole("button", { name: "New chat" }).click().catch(() => {});
+    await page.waitForTimeout(500);
+    const panel = await take.card(page.getByText(/^Context: /).first(), "panel", 300);
+    const frame = { union: [panel, panel], fill: [0.9, 0.94], anchor: [0.5, 0.5], maxScale: 1.3 };
+    await take.cam(panel, { dur: 1, ...frame, union: undefined });
+    const t0 = take.mark("ready");
+    if (key === "ask1") take.d("title", "Ask anything");
+    const camP = take.cam(null, { ...frame, dur: 700 });
+    await take.cursorClick(input, "input", { dur: 550 });
+    await input.click();
+    await camP;
+    await input.pressSequentially(question, { delay: 34 });
+    await page.waitForTimeout(250);
+    const tType = take.mark("typed");
+    await input.press("Enter");
+    const tSend = take.mark("sent");
+    const badge = page.getByText(/\d+ numbers? checked against the models/).first();
+    await badge.waitFor({ timeout: 150000 });
+    await page.waitForTimeout(500);
+    const tAnswer = take.mark("answered");
+    const badgeText = (await badge.innerText()).trim();
+    const bm = must(badgeText.match(/^(\d+)\s+(.*)$/), "badge");
+    const badgeSel = await take.tag(badge, "badge");
+    const answerText = (await page.locator(panel).innerText()).replace(/\s+/g, " ");
+    const post0 = take.now();
+    const pulseP = take.d("pulse", badgeSel);
+    await take.d("say", [{ segs: [{ id: "n", text: bm[1], mono: true }, { text: bm[2] }], accent: true, size: px(40) }], { pos: "bl" });
+    await take.d("countUp", "n", bm[1], 600);
+    await pulseP;
+    const keep = Math.max(0.6, L + 0.4 - (tSend + 0.3 - t0) - 0.6);
+    const l = post0 + keep - take.now();
+    if (l > 0.25) await take.cam(null, { ...frame, dur: l * 1000, ease: "--ts-ease-enter", fill: [0.94, 0.9], maxScale: 1.5 });
+    return {
+      segs: [
+        { from: t0, to: tType },
+        { from: tType, to: tSend + 0.3 },
+        { from: tSend + 0.3, to: tAnswer - 0.1, ramp: 0.6 },
+        { from: post0, to: post0 + 6 },
+      ],
+      facts: { question, badge: badgeText, answer: answerText.slice(0, 600) },
+      clicks: [tSend],
+    };
+  };
+const ask1 = askShot("Has the climate of this field changed?", "ask1");
+const ask2 = askShot("What should I plant next season?", "ask2");
 
 // ---------------------------------------------------------------- backdrop for the phone scene (rendered from tokens)
 export async function renderPhoneBackdrop(browser, cfg, stateFile, file) {
@@ -558,4 +867,4 @@ export async function renderPhoneBackdrop(browser, cfg, stateFile, file) {
   return geo;
 }
 
-export const SHOTS = { hook, briefHome, briefField, rotation, assistant, trust, owner, endCard };
+export const SHOTS = { coldOpen, addField, climate, overview, plan, trust, ask1, ask2, endCard, hook, briefHome, briefField, rotation, assistant, owner };

@@ -1,27 +1,27 @@
 1
-00:00:00,100 --> 00:00:05,568
-Forty-five years of NASA weather. One field’s first frost: eight days later.
+00:00:02,450 --> 00:00:03,547
+We add a field.
 
 2
-00:00:06,168 --> 00:00:10,071
-So what do you plant? Each morning, Terrasight says what to do first.
+00:00:07,050 --> 00:00:10,037
+We see what forty-five years of NASA data say about it.
 
 3
-00:00:10,968 --> 00:00:15,189
-Each rotation faces a hundred and fifty weather runs and ten price scenarios.
+00:00:11,050 --> 00:00:13,385
+Risks, weather, history.
 
 4
-00:00:15,868 --> 00:00:19,136
-Ask why. Every number is checked against the models.
+00:00:14,050 --> 00:00:16,744
+A five-season plan, and how far to trust it.
 
 5
-00:00:20,268 --> 00:00:22,995
-And the models are checked against what really happened.
+00:00:17,850 --> 00:00:20,236
+And we ask the assistant whatever we want to know.
 
 6
-00:00:23,668 --> 00:00:25,481
-The owner decides in one tap.
+00:00:23,050 --> 00:00:25,496
+Every number, checked against the models.
 
 7
-00:00:27,068 --> 00:00:29,438
-From NASA data to tomorrow’s decision.
+00:00:25,650 --> 00:00:28,899
+Terrasight. The AI assistant for your farm.

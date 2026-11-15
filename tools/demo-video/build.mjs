@@ -8,7 +8,7 @@ import { ROOT, OUT, loadConfig } from "./lib/env.mjs";
 import { synthesize, FFMPEG } from "./lib/tts.mjs";
 import { launch, signIn, newTake } from "./lib/take.mjs";
 import { SHOTS, renderPhoneBackdrop } from "./lib/shots.mjs";
-import { renderClip, xfadeChain, mixAudio, probe, run, joinClips } from "./lib/ff.mjs";
+import { renderClip, xfadeChain, mixAudio, probe, run, joinClips, makeSfx, mapTime } from "./lib/ff.mjs";
 
 const args = process.argv.slice(2);
 const flag = (n) => args.includes("--" + n);
@@ -17,46 +17,60 @@ const only = args
   ?.slice(7)
   .split(",");
 
-// ---- the story: one voice line per scene; scene length = voice + lead + tail (never shorter than `min`)
-const LEAD = 0.25;
-const TAIL = 0.35;
-const OV = 0.2; // cross-fade between scenes
+// ---- the story: "We add a field. We see what the data say. We ask the assistant."
+// Scene length = voice + lead + tail (never shorter than `min`). `group` = act: wipe between groups, straight cuts inside.
+// Voices: N = narrator ("we", Charon), A = the assistant (Kore). J-cut: a line starts JCUT s before its picture (lead 0).
+const NARRATOR = process.env.DEMO_VOICE_NARRATOR || "Charon";
+const ASSISTANT = process.env.DEMO_VOICE_ASSISTANT || "Kore";
+const LEAD = 0;
+const TAIL = 0.3;
+const JCUT = 0.15;
+const OV = 0.25; // act wipe
 const STORY = [
+  { id: "cold", group: 0, min: 2.0, line: null, shots: [["coldOpen", 1]] },
+  { id: "add", group: 1, min: 5.2, lead: 0.45, line: "We add a field.", voice: NARRATOR, shots: [["addField", 1]] },
   {
-    id: "hook",
-    min: 5.0,
-    lead: 0.1,
-    line: "Forty-five years of NASA weather. One field’s first frost: eight days later.",
-    shots: [["hook", 1]],
+    id: "climate",
+    group: 2,
+    min: 4.0,
+    line: "We see what forty-five years of NASA data say about it.",
+    voice: NARRATOR,
+    shots: [["climate", 1]],
   },
+  { id: "overview", group: 2, min: 3.0, line: "Risks, weather, history.", voice: NARRATOR, shots: [["overview", 1]] },
   {
-    id: "brief",
-    min: 4.8,
-    line: "So what do you plant? Each morning, Terrasight says what to do first.",
+    id: "plan",
+    group: 2,
+    min: 3.8,
+    line: "A five-season plan, and how far to trust it.",
+    voice: NARRATOR,
     shots: [
-      ["briefHome", 0.38],
-      ["briefField", 0.62],
+      ["plan", 0.58],
+      ["trust", 0.42],
     ],
   },
   {
-    id: "rotation",
-    min: 4.9,
-    line: "Each rotation faces a hundred and fifty weather runs and ten price scenarios.",
-    shots: [["rotation", 1]],
+    id: "ask1",
+    group: 3,
+    min: 4.2,
+    line: "And we ask the assistant whatever we want to know.",
+    voice: NARRATOR,
+    shots: [["ask1", 1]],
   },
+  { id: "ask2", group: 3, min: 3.6, lead: 0.85, line: "Every number, checked against the models.", voice: ASSISTANT, shots: [["assistant", 1]] },
   {
-    id: "proofA",
-    min: 4.4,
-    line: "Ask why. Every number is checked against the models.",
-    shots: [["assistant", 1]],
+    id: "end",
+    group: 4,
+    min: 3.6,
+    line: "Terrasight. The AI assistant for your farm.",
+    voice: ASSISTANT,
+    shots: [["endCard", 1]],
   },
-  { id: "proofB", min: 3.4, line: "And the models are checked against what really happened.", shots: [["trust", 1]] },
-  { id: "owner", min: 3.4, line: "The owner decides in one tap.", shots: [["owner", 1]] },
-  { id: "end", min: 3.0, line: "From NASA data to tomorrow’s decision.", shots: [["endCard", 1]] },
 ];
 const DISCLOSURE =
-  "Narration: AI-generated voice (Google Gemini TTS). Screen recording of the real application; no AI-generated imagery.";
-const ONCE = new Set(["assistant", "owner"]);
+  "Narration: AI-generated voices (Google Gemini TTS). Screen recording of the real application; no AI-generated imagery.";
+const ONCE = new Set(["addField", "ask1", "ask2", "assistant", "owner"]);
+const NEEDED = new Set(STORY.flatMap((s) => s.shots.map(([id]) => id)));
 const fmt = (s) => {
   const ms = Math.round(s * 1000);
   const p = (n, w = 2) => String(n).padStart(w, "0");
@@ -70,26 +84,27 @@ fs.mkdirSync(path.join(OUT, "frames"), { recursive: true });
 fs.mkdirSync(path.join(ROOT, "demo"), { recursive: true });
 
 // 1. voice first
-const voice = await synthesize(STORY.map((s) => ({ id: s.id, text: s.line })));
+const voice = await synthesize(STORY.filter((s) => s.line).map((s) => ({ id: s.id, text: s.line, voice: s.voice })));
 console.log(`voice: ${voice.provider} / ${voice.voice}${voice.draft ? "  (DRAFT)" : ""}`);
 let t = 0;
 for (const s of STORY) {
-  s.dur = voice.durations[s.id];
+  s.dur = s.line ? voice.durations[s.id] : 0;
   s.lead = s.lead ?? LEAD;
-  s.len = Math.max(s.min, s.dur + s.lead + TAIL);
+  s.at = s.line ? (s.lead ? s.lead : -JCUT) : 0; // offset of the voice from the scene start (negative: J-cut)
+  s.len = Math.max(s.min, Math.max(s.at, 0) + s.dur + TAIL);
   s.start = t;
   t += s.len;
 }
 const total = t;
 console.log(STORY.map((s) => `${s.id} ${s.len.toFixed(2)}s (voice ${s.dur.toFixed(2)})`).join("\n"));
 console.log(`total ${total.toFixed(2)} s`);
-if (total < 28.2 || total > 29.9)
-  throw new Error(`total ${total.toFixed(2)} s is outside 28.2-29.9 s: edit the lines or the voice rate`);
+if (total < 29.0 || total > 29.9)
+  throw new Error(`total ${total.toFixed(2)} s is outside 29.0-29.9 s: edit the lines or the scene minimums`);
 
 // 2. record (one browser, one take at a time)
 const shotLens = {};
 STORY.forEach((s, si) => {
-  const tailOv = si < STORY.length - 1 ? OV : 0;
+  const tailOv = si < STORY.length - 1 && STORY[si + 1].group !== s.group ? OV : 0;
   s.shots.forEach(([id, w], k) => {
     shotLens[id] = s.len * w + (k === s.shots.length - 1 ? tailOv : 0);
   });
@@ -101,6 +116,7 @@ try {
   const states = {};
   const need = (r) => (states[r] ??= signIn(browser, cfg, r));
   for (const [id, fn] of Object.entries(SHOTS)) {
+    if (!NEEDED.has(id)) continue;
     const cache = path.join(OUT, "takes", id + ".json");
     const len = shotLens[id];
     let useCache =
@@ -118,6 +134,7 @@ try {
         else useCache = false;
       }
       if (useCache) {
+        if (id === "assistant") c.segs[0].from = Math.max(c.segs[0].from, c.marks.click - 0.45); // start close to the click
         results[id] = c;
         console.log("reuse take", id);
         continue;
@@ -143,7 +160,7 @@ try {
     const { file, marks } = await take.finish();
     const dest = path.join(OUT, "takes", id + ".webm");
     fs.copyFileSync(file, dest);
-    results[id] = { file: dest, segs: r.segs, marks, facts: r.facts };
+    results[id] = { file: dest, segs: r.segs, marks, facts: r.facts, clicks: r.clicks };
     fs.writeFileSync(cache, JSON.stringify(results[id], null, 1));
     console.log("  facts", JSON.stringify(r.facts ?? {}));
   }
@@ -155,7 +172,7 @@ try {
   await browser.close();
 }
 
-if (Object.keys(results).length < Object.keys(SHOTS).length) {
+if (Object.keys(results).length < NEEDED.size) {
   // preview: cut the recorded shots and grab a contact sheet of frames
   fs.mkdirSync(path.join(OUT, "preview"), { recursive: true });
   for (const id of only ?? []) {
@@ -226,24 +243,52 @@ STORY.forEach((s, si) => {
   if (parts.length > 1) joinClips(parts, scene);
   else fs.copyFileSync(parts[0], scene);
   sceneClips.push(scene);
-  sceneLens.push(s.len + (si < STORY.length - 1 ? OV : 0));
+  sceneLens.push(s.len + (si < STORY.length - 1 && STORY[si + 1].group !== s.group ? OV : 0));
 });
 
-// 4. join with short cross-fades, mix the voice, normalise to -16 LUFS
+// 4. scenes of one act are joined with straight cuts; acts are joined with the lime wipe
+const groups = [...new Set(STORY.map((s) => s.group))];
+const groupClips = [];
+const groupLens = [];
+for (const g of groups) {
+  const idx = STORY.map((s, i) => (s.group === g ? i : -1)).filter((i) => i >= 0);
+  const out = path.join(OUT, "clips", `act-${g}.mp4`);
+  if (idx.length > 1) joinClips(idx.map((i) => sceneClips[i]), out);
+  else fs.copyFileSync(sceneClips[idx[0]], out);
+  groupClips.push(out);
+  groupLens.push(idx.reduce((a, i) => a + sceneLens[i], 0));
+}
 const silent = path.join(OUT, "video-silent.mp4");
-xfadeChain(sceneClips, sceneLens, OV, silent);
+const seams = xfadeChain(groupClips, groupLens, OV, silent);
+
+// 5. sound: voices (J-cuts), synthesised clicks and whooshes (>= 12 LU under the voice), -16 LUFS
+const sfxFiles = makeSfx(path.join(OUT, "audio"));
+const sfx = seams.map((t) => ({ file: sfxFiles.whoosh, at: Math.max(0.05, t - 0.05), db: -10 }));
+STORY.forEach((s) =>
+  s.shots.forEach(([id], k) => {
+    const r = results[id];
+    if (!r?.clicks?.length) return;
+    const off = s.start + (k ? s.len * s.shots[0][1] : 0);
+    for (const c of r.clicks) {
+      const m = mapTime(r.segs, c);
+      if (m != null && m < shotLens[id]) sfx.push({ file: sfxFiles.click, at: off + m, db: -12 });
+    }
+  }),
+);
 const mix = path.join(OUT, "voice-mix.wav");
 const ln = mixAudio({
-  items: STORY.map((s) => ({ file: voice.files[s.id], at: s.start + s.lead })),
+  items: STORY.filter((s) => s.line).map((s) => ({ file: voice.files[s.id], at: s.start + s.at })),
+  sfx,
   total,
   out: mix,
 });
-console.log("loudnorm measured input", ln.input_i, "LUFS");
+console.log("loudnorm measured input", ln.input_i, "LUFS; voice-only", JSON.stringify(ln.levels));
 
-// 5. captions that match the audio exactly
-const srt = STORY.map(
-  (s, i) => `${i + 1}\n${fmt(s.start + s.lead)} --> ${fmt(s.start + s.lead + s.dur)}\n${s.line}\n`,
-).join("\n");
+// 6. captions that match the audio exactly
+const spoken = STORY.filter((s) => s.line);
+const srt = spoken
+  .map((s, i) => `${i + 1}\n${fmt(s.start + s.at)} --> ${fmt(s.start + s.at + s.dur)}\n${s.line}\n`)
+  .join("\n");
 fs.writeFileSync(path.join(ROOT, "demo/terrasight-30s.srt"), srt);
 
 const final = path.join(ROOT, "demo/terrasight-30s.mp4");
@@ -265,10 +310,16 @@ run([
   "1:a",
   "-c:v",
   "libx264",
+  "-profile:v",
+  "high",
   "-preset",
-  "medium",
+  "slow",
   "-crf",
-  "19",
+  "17",
+  "-maxrate",
+  "5M",
+  "-bufsize",
+  "10M",
   "-pix_fmt",
   "yuv420p",
   "-r",
@@ -296,10 +347,11 @@ fs.mkdirSync(path.join(OUT, "frames"), { recursive: true });
 const grab = (name, at) =>
   run(["-ss", at.toFixed(3), "-i", final, "-frames:v", "1", path.join(OUT, "frames", name + ".png")]);
 STORY.forEach((s) => {
-  grab(`${s.id}-a`, s.start + s.len * 0.62);
+  grab(`${s.id}-a`, s.start + s.len * 0.45);
   grab(`${s.id}-b`, s.start + s.len * 0.92);
 });
-STORY.slice(1).forEach((s) => grab(`transition-${s.id}`, s.start + OV / 2));
+seams.forEach((t, i) => grab(`wipe-${i}`, t + OV / 2));
+for (let i = 0; i < 29; i++) grab(`sec-${String(i).padStart(2, "0")}`, i + 0.5);
 
 // contact sheets (4 frames each, half size) for a quick visual review
 const names = fs

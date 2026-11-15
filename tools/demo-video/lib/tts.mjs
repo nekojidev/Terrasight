@@ -40,13 +40,13 @@ async function pickVoice(key) {
 const GEMINI_STYLE = process.env.DEMO_GEMINI_STYLE || "";
 
 /** One line through Gemini TTS: returns the audio (WAV or raw PCM with its rate). Retries a few times on 429 / 5xx. */
-async function geminiSpeak(g, text) {
+async function geminiSpeak(g, text, voice = g.voice) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${g.model}:generateContent`;
   const body = {
     contents: [{ parts: [{ text: GEMINI_STYLE ? `${GEMINI_STYLE} ${text}` : text }] }],
     generationConfig: {
       responseModalities: ["AUDIO"],
-      speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: g.voice } } },
+      speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } },
     },
   };
   let last = "";
@@ -89,8 +89,9 @@ export async function synthesize(lines) {
   if (forced === "gemini" || (!forced && !el.key && gm.key)) {
     if (!gm.key) throw new Error("DEMO_TTS=gemini needs GEMINI_API_KEY");
     provider = "gemini";
-    voiceId = `${gm.model}:${gm.voice}:${GEMINI_STYLE}`;
-    voiceName = `${gm.voice} (Gemini TTS, ${gm.model})`;
+    voiceId = `${gm.model}:${GEMINI_STYLE}`;
+    const names = [...new Set(lines.map((l) => l.voice || gm.voice))];
+    voiceName = `${names.join(" + ")} (Gemini TTS, ${gm.model})`;
   } else if (forced !== "say" && el.key) {
     provider = "elevenlabs";
     if (el.voice) {
@@ -106,7 +107,7 @@ export async function synthesize(lines) {
   for (const l of lines) {
     const hash = crypto
       .createHash("sha1")
-      .update([l.text, provider, voiceId, SAY_RATE].join("|"))
+      .update([l.text, provider, voiceId, provider === "gemini" ? l.voice || gm.voice : "", SAY_RATE].join("|"))
       .digest("hex")
       .slice(0, 12);
     const wav = path.join(dir, `${l.id}-${hash}.wav`);
@@ -117,7 +118,7 @@ export async function synthesize(lines) {
         execFileSync(FFMPEG, ["-y", "-v", "error", "-i", aiff, "-ar", "48000", "-ac", "1", wav]);
         fs.rmSync(aiff);
       } else if (provider === "gemini") {
-        const { data, isWav, rate } = await geminiSpeak(gm, l.text);
+        const { data, isWav, rate } = await geminiSpeak(gm, l.text, l.voice || gm.voice);
         const raw = wav.replace(/\.wav$/, isWav ? ".src.wav" : ".pcm");
         fs.writeFileSync(raw, data);
         const input = isWav ? ["-i", raw] : ["-f", "s16le", "-ar", String(rate), "-ac", "1", "-i", raw];
