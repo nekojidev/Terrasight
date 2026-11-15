@@ -102,3 +102,5 @@ voice `DEMO_GEMINI_VOICE`, default `Charon`; per-line voices in `STORY`; model `
 Audio is cached per line by text, provider and voice; scene lengths follow the measured line durations.
 
 Design v6 re-record: `addField` (archived afterwards through the API), `askLive` (one live Gemini call: the Ask field in the top bar -> palette -> assistant composer -> Send -> answer -> "Show the numbers") and all other screens were re-recorded on the redesigned interface; `RECUT` re-cuts `addField`.
+
+v5 cut (design v6, fewer larger shots): `openGraph` (compressed to 3 s), `today` (the Today headline card with the data sources flying across), `addField` (re-cut, 2.5 s, zoomed), `tiles` (climate row / Today action / rotation decision), `askLive` (camera on the palette and the chat column, history column hidden, data card opened), `proof` (verdict then chart with rings 0.25 s apart), end card (repository line, linear push, hold under 1 s). The phone / owner beat was dropped.

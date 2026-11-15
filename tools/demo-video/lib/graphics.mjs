@@ -78,17 +78,17 @@ export async function openGraph(take, cfg, L) {
     (D) => {
       const st = document.getElementById("stage");
       const NS = "http://www.w3.org/2000/svg";
-      const X = (y) => 200 + ((y - 1981) / 44) * 1500;
-      const Y = (d) => 910 - ((d - 262) / (324 - 262)) * 520;
+      const X = (y) => 120 + ((y - 1981) / 44) * 1580;
+      const Y = (d) => 940 - ((d - 262) / (324 - 262)) * 520;
       const label = (doy) =>
         new Date(Date.UTC(2025, 0, Math.round(doy))).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
       st.innerHTML = `
         <div style="position:absolute;left:96px;top:58px;font-family:var(--ts-mono);font-size:24px;letter-spacing:.08em;text-transform:uppercase;color:var(--ts-ink-3)">NASA POWER · first autumn frost, every year</div>
-        <div id="yr" style="position:absolute;left:92px;top:96px;font-family:var(--ts-mono);font-size:230px;line-height:1;font-weight:700;letter-spacing:-0.05em">1981</div>
+        <div id="yr" style="position:absolute;left:92px;top:96px;font-family:var(--ts-mono);font-size:300px;line-height:1;font-weight:700;letter-spacing:-0.05em">1981</div>
         <svg id="cv" viewBox="0 0 1920 1080" width="1920" height="1080" style="position:absolute;inset:0"></svg>
-        <div id="res" style="position:absolute;right:96px;top:110px;display:flex;flex-direction:column;align-items:flex-end;gap:var(--ts-s3);opacity:0">
-          <div style="background:var(--ts-signal);color:var(--ts-on-signal);padding:var(--ts-s3) var(--ts-s6);border-radius:var(--ts-r-card);box-shadow:var(--ts-shadow-hero);font-size:76px;font-weight:700;letter-spacing:-0.03em;font-family:var(--ts-mono)">${D.value}</div>
-          <div style="background:var(--ts-ink);color:var(--ts-surface);padding:var(--ts-s2) var(--ts-s5);border-radius:var(--ts-r-chip);font-size:30px;font-weight:600">${D.trend}</div>
+        <div id="res" style="position:absolute;right:96px;top:90px;display:flex;flex-direction:column;align-items:flex-end;gap:var(--ts-s3);opacity:0">
+          <div style="background:var(--ts-signal);color:var(--ts-on-signal);padding:var(--ts-s3) var(--ts-s6);border-radius:var(--ts-r-card);box-shadow:var(--ts-shadow-hero);font-size:96px;font-weight:700;letter-spacing:-0.03em;font-family:var(--ts-mono)">${D.value}</div>
+          <div style="background:var(--ts-ink);color:var(--ts-surface);padding:var(--ts-s2) var(--ts-s5);border-radius:var(--ts-r-chip);font-size:34px;font-weight:600">${D.trend}</div>
         </div>`;
       const svg = document.getElementById("cv");
       const el = (n, a) => {
@@ -98,8 +98,8 @@ export async function openGraph(take, cfg, L) {
         return e;
       };
       [274, 288, 305, 319].forEach((d) => {
-        el("line", { x1: 200, x2: 1700, y1: Y(d), y2: Y(d), stroke: "var(--ts-line)", "stroke-width": 2 });
-        const t = el("text", { x: 1730, y: Y(d) + 8, fill: "var(--ts-ink-3)", "font-size": 24, "font-family": "var(--ts-mono)" });
+        el("line", { x1: 120, x2: 1700, y1: Y(d), y2: Y(d), stroke: "var(--ts-line)", "stroke-width": 2 });
+        const t = el("text", { x: 1716, y: Y(d) + 8, fill: "var(--ts-ink-3)", "font-size": 24, "font-family": "var(--ts-mono)" });
         t.textContent = label(d);
       });
       [1981, 2000, 2006, 2025].forEach((y) => {
@@ -126,7 +126,7 @@ export async function openGraph(take, cfg, L) {
         stroke: "var(--ts-ink)", "stroke-width": 4, "stroke-linecap": "round", opacity: 0,
       });
       const ease = (k) => (k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2);
-      const RACE = 2400;
+      const RACE = 1300;
       const start = performance.now();
       const n = D.years.length;
       const yrEl = document.getElementById("yr");
@@ -150,24 +150,26 @@ export async function openGraph(take, cfg, L) {
       const tok = (nme) => getComputedStyle(document.documentElement).getPropertyValue(nme).trim();
       const fadeIn = (e, delay, dur = 300) =>
         e.animate([{ opacity: 0 }, { opacity: 1 }], { duration: dur, delay, easing: tok("--ts-ease-enter"), fill: "both" });
-      [...b, ...r].forEach((e) => fadeIn(e, RACE + 100));
+      [...b, ...r].forEach((e) => fadeIn(e, RACE + 50, 200));
       const sweep = (e, delay) => {
         const len = Math.hypot(X(2025) - X(1981), Y(D.a + D.b * 2025) - Y(D.a + D.b * 1981));
         e.setAttribute("stroke-dasharray", len);
         e.animate([{ strokeDashoffset: len, opacity: 1 }, { strokeDashoffset: 0, opacity: 1 }], {
-          duration: 650, delay, easing: tok("--ts-ease-standard"), fill: "forwards",
+          duration: 450, delay, easing: tok("--ts-ease-standard"), fill: "forwards",
         });
       };
-      sweep(ts, RACE + 500);
-      sweep(tsInk, RACE + 500);
+      sweep(ts, RACE + 150);
+      sweep(tsInk, RACE + 150);
       const res = document.getElementById("res");
       res.animate(
         [
           { opacity: 0, transform: "translateY(26px) scale(.96)" },
           { opacity: 1, transform: "none" },
         ],
-        { duration: 260, delay: RACE + 1000, easing: tok("--ts-ease-emphasis"), fill: "both" },
+        { duration: 260, delay: RACE + 600, easing: tok("--ts-ease-emphasis"), fill: "both" },
       );
+      // never a still frame: a slow push over the whole chart
+      st.animate([{ transform: "scale(1)" }, { transform: "scale(1.06)" }], { duration: 3600, easing: "linear", fill: "both" });
     },
     {
       years: S.years,
@@ -274,27 +276,27 @@ export async function sources(take, cfg, L) {
   return { segs: [{ from: t0, to: t0 + L + 0.4 }], facts: { chips: ["NASA POWER", "MODIS NDVI", "ESA Copernicus", "USDA"] }, clicks: [] };
 }
 
-// ---------------------------------------------------------------- c. three fast full-frame cuts: what changed / what to watch / what to plant
+// ---------------------------------------------------------------- c. three calm shots: what changed / what to do today / what to plant
 export async function tiles(take, cfg, L) {
   const { page } = take;
+  const q = (L + 0.4) / 3;
+  const clicks = [];
+  const wait = async (t0, t) => {
+    const d = t0 + t - take.now();
+    if (d > 0.02) await page.waitForTimeout(d * 1000);
+  };
+  // ---- (a) the field's climate row opens into three plain takeaways
   await page.goto(`${cfg.base}/fields/${cfg.fieldId}`);
   const row = page.getByText(/How this field's climate has changed/).first();
   await row.waitFor({ timeout: 45000 });
-  const risksH = page.getByRole("heading", { name: "Top risks" }).first();
-  await risksH.waitFor({ timeout: 45000 });
   await settle(page, 900);
   const rowSel = await take.card(row, "row", 40);
-  const risks = await take.card(risksH, "risks", 200);
-  const attention = must((await page.getByText(/^\d+ items? needs? attention$/).first().innerText()).trim(), "attention chip");
-  const nDays = must((await page.getByRole("heading", { name: /^Next \d+ days$/ }).first().innerText()).match(/\d+/), "days")[0];
-  const q = (L + 0.4) / 3;
-  // beat 1: the climate row opens (three plain takeaways)
-  await take.cam(rowSel, { dur: 1, fill: [0.7, 0.2], anchor: [0.5, 0.35], maxScale: 1.3 });
+  await take.cam(rowSel, { dur: 1, fill: [0.74, 0.3], anchor: [0.5, 0.42], maxScale: 1.45 });
   const t0 = take.mark("ready");
-  await take.cursorClick(row, "row", { dur: 450 });
-  const clicks = [take.now()];
+  await take.cursorClick(row, "row", { dur: 400 });
+  clicks.push(take.now());
   await row.click();
-  await page.waitForTimeout(350);
+  await page.waitForTimeout(250);
   const takeaway = must(
     (await row.evaluate((el) => {
       let n = el;
@@ -306,20 +308,28 @@ export async function tiles(take, cfg, L) {
     })).match(/The first autumn frost comes (\d+ days? later)/),
     "takeaway",
   )[1];
-  const camA = take.cam(rowSel, { dur: 600, fill: [0.86, 0.62], anchor: [0.5, 0.45], maxScale: 1.6 });
-  await take.d("say", [{ segs: [{ id: "a", text: takeaway, mono: true }, { text: "first autumn frost", small: true }], accent: true, size: px(52) }], { pos: "bl" });
-  await take.d("countUp", "a", takeaway, 600);
+  const camA = take.cam(rowSel, { dur: 650, fill: [0.8, 0.56], anchor: [0.5, 0.45], maxScale: 1.75 });
+  await take.d("say", [{ segs: [{ id: "a", text: takeaway, mono: true }, { text: "first autumn frost", small: true }], accent: true, size: px(68) }], { pos: "bl" });
+  take.d("countUp", "a", takeaway, 550);
   await camA;
-  const tB = t0 + q;
-  if (tB - take.now() > 0.05) await take.cam(rowSel, { dur: (tB - take.now()) * 1000, ease: "--ts-ease-enter", fill: [0.9, 0.66], anchor: [0.5, 0.45], maxScale: 1.7 });
-  // beat 2: top risks and the week
-  const camB = take.cam(risks, { dur: 450, fill: [0.86, 0.8], anchor: [0.5, 0.5], maxScale: 1.5 });
-  await take.d("say", [{ segs: [{ text: attention }], accent: true, size: px(46) }, { segs: [{ id: "b", text: nDays, mono: true }, { text: "days ahead" }], size: px(40) }], { pos: "bl" });
-  await camB;
-  const tC = t0 + 2 * q;
-  if (tC - take.now() > 0.05) await take.cam(risks, { dur: (tC - take.now()) * 1000, ease: "--ts-ease-enter", fill: [0.9, 0.84], anchor: [0.5, 0.5], maxScale: 1.6 });
-  const tEndA = take.now();
-  // beat 3: the rotation decision (a page load, cut out)
+  await take.cam(rowSel, { dur: Math.max(300, (t0 + q - take.now()) * 1000), ease: "--ts-ease-enter", fill: [0.84, 0.6], anchor: [0.5, 0.45], maxScale: 1.85 });
+  const endA = take.now();
+  // ---- (b) Today: the headline card with its action sentence and the trust line
+  await page.goto(cfg.base + "/");
+  const startWith = page.getByText("Start with this", { exact: true }).first();
+  await startWith.waitFor({ timeout: 45000 });
+  await settle(page, 900);
+  const card = await take.card(startWith, "tcard", 300);
+  const lines = await fieldLines(page, card);
+  const action = must(lines.find((l) => /^Scout the field/.test(l)), "action sentence");
+  const am = must(action.match(/^(\w+) the field[^.]*?before (\w+ \d+)/), "action parse");
+  const trust = must(lines.find((l) => /^Reliability: /.test(l)), "trust line");
+  await take.cam(card, { dur: 1, fill: [0.72, 0.74], anchor: [0.5, 0.45], maxScale: 1.55 });
+  const tB = take.mark("today");
+  await take.d("say", [{ segs: [{ text: `${am[1]} the field before ${am[2]}` }], accent: true, size: px(56) }, { segs: [{ text: trust }], size: px(30), weight: 500 }], { pos: "bl" });
+  await take.cam(card, { dur: q * 1000 - 100, ease: "--ts-ease-enter", fill: [0.86, 0.84], anchor: [0.5, 0.45], maxScale: 1.8 });
+  const endB = take.now();
+  // ---- (c) the rotation decision, then a flick over the three option cards
   await page.goto(`${cfg.base}/fields/${cfg.fieldId}/rotation`);
   const dec = page.getByText(/^Sow .+ in \d{4}$/).first();
   await dec.waitFor({ timeout: 45000 });
@@ -328,22 +338,21 @@ export async function tiles(take, cfg, L) {
   const title = (await dec.innerText()).trim();
   const gain = must((await page.getByText(/\$\d+\s+per\s+ac\s+a\s+year\s+more\s+than\s+today/).first().innerText()).replace(/\s+/g, " ").match(/\$\d+ per ac a year more than today/), "gain line")[0];
   const plan = (await page.getByText(/Plan for \d{4}.\d{4}:/).first().innerText()).trim();
-  const range = must(plan.match(/(\d{4}).(\d{4})/), "plan range");
   const decCard = await take.card(dec, "dec", 200);
-  const opts = await take.tag(page.getByRole("button", { name: /Choose this option|Chosen/ }).first(), "optsbtn");
-  await take.cam(decCard, { dur: 1, fill: [0.74, 0.6], anchor: [0.5, 0.4], maxScale: 1.3 });
-  const tStart = take.mark("rotation");
-  take.cam(decCard, { dur: 500, fill: [0.86, 0.66], anchor: [0.5, 0.42], maxScale: 1.55 });
-  await take.d("say", [{ segs: [{ text: title }], accent: true, size: px(46) }, { segs: [{ text: gain }], size: px(36) }], { pos: "bl" });
-  await page.waitForTimeout(700);
-  await take.cam(null, { union: [decCard, opts], dur: Math.max(300, (q + 0.1) * 1000 - 700), ease: "--ts-ease-enter", fill: [0.9, 0.9], anchor: [0.5, 0.5], maxScale: 1.3 });
-  void tEndA;
+  const optsHead = await take.tag(page.getByText(/We compared \d+ options over \d+ seasons/).first(), "optshead");
+  const optsBtn = await take.tag(page.getByRole("button", { name: /Choose this option|Chosen/ }).first(), "optsbtn");
+  await take.cam(decCard, { dur: 1, fill: [0.72, 0.62], anchor: [0.5, 0.42], maxScale: 1.5 });
+  const tC = take.mark("rotation");
+  await take.d("say", [{ segs: [{ text: title }], accent: true, size: px(60) }, { segs: [{ text: gain }], size: px(40) }], { pos: "bl" });
+  await take.cam(decCard, { dur: (q - 0.65) * 1000, ease: "--ts-ease-enter", fill: [0.84, 0.7], anchor: [0.5, 0.42], maxScale: 1.7 });
+  await take.cam(null, { union: [optsHead, optsBtn], dur: 550, fill: [0.9, 0.84], anchor: [0.5, 0.5], maxScale: 1.35 });
   return {
     segs: [
-      { from: t0, to: tEndA },
-      { from: tStart, to: tStart + q + 0.1 },
+      { from: t0, to: endA },
+      { from: tB, to: endB },
+      { from: tC, to: take.now() },
     ],
-    facts: { takeaway, attention, nDays, title, gain, plan, range: range.slice(1) },
+    facts: { takeaway, action, trust, title, gain, plan },
     clicks,
   };
 }
@@ -356,16 +365,15 @@ export async function proof(take, cfg, L) {
   await head.waitFor({ timeout: 45000 });
   await page.getByText(/r = -?[\d.]+ · mean error/).first().waitFor();
   await settle(page, 900);
+  const verdictSel = await take.card(head, "verdict", 100);
   const chartCard = await take.card(page.getByText(/Model, official yield and field greenness by year/).first(), "chartcard", 200);
   await page.locator("svg").filter({ hasText: /2022/ }).first().waitFor();
   const ringText = must(
     (await page.getByText(/the model missed this year/).first().innerText()).match(/\(([\d, ]+)\)/),
     "missed years",
-  )[1]
-    .split(",")
-    .map((s) => s.trim());
+  )[1].split(",").map((s) => s.trim());
   const rings = await page.evaluate(() => {
-    const svg = [...document.querySelectorAll("svg")].find((s) => /2022/.test(s.textContent) && s.querySelector("circle.stroke-urgent"));
+    const svg = [...document.querySelectorAll("svg")].find((x) => /2022/.test(x.textContent) && x.querySelector("circle.stroke-urgent"));
     return [...svg.querySelectorAll("circle.stroke-urgent")]
       .sort((a, b) => a.getAttribute("cx") - b.getAttribute("cx"))
       .map((c, i) => {
@@ -380,40 +388,34 @@ export async function proof(take, cfg, L) {
   const body = await page.locator("main").innerText();
   const m = [...body.matchAll(/r = (-?[\d.]+) · mean error/g)].map((x) => x[1]);
   if (m.length < 2) throw new Error("two r values expected");
-  await take.cam(chartCard, { dur: 1, fill: [0.74, 0.84], anchor: [0.4, 0.5], maxScale: 1.7 });
+  const verdict = must(body.match(/The short answer\s+([^\n]+)/), "verdict")[1];
+  await take.cam(verdictSel, { dur: 1, fill: [0.74, 0.6], anchor: [0.5, 0.42], maxScale: 2.0 });
   const t0 = take.mark("ready");
-  const camP = take.cam(chartCard, { dur: 900, fill: [0.84, 0.88], anchor: [0.4, 0.5], maxScale: 1.8 });
-  await take.d(
-    "say",
-    [
-      { segs: [{ text: "r", small: true }, { text: m[0], mono: true }, { text: "vs official yields", small: true }], accent: true, size: px(46) },
-    ],
-    { pos: "tr" },
-  );
-  await camP;
-  const start = take.now();
   const wait = async (t) => {
     const d = t0 + t - take.now();
     if (d > 0.02) await page.waitForTimeout(d * 1000);
   };
+  take.cam(verdictSel, { dur: 1100, ease: "--ts-ease-enter", fill: [0.8, 0.64], anchor: [0.5, 0.42], maxScale: 2.2 });
+  await take.d("say", [{ segs: [{ text: "r" , small: true }, { id: "r", text: m[0], mono: true }, { text: "vs official yields", small: true }], accent: true, size: px(68) }], { pos: "bl" });
+  take.d("countUp", "r", m[0], 500);
+  await wait(1.25);
+  await take.cam(chartCard, { dur: 600, fill: [0.78, 0.9], anchor: [0.5, 0.5], maxScale: 1.8 });
   const clicks = [];
+  const tr = take.now() - t0;
   for (let i = 0; i < rings.length; i++) {
-    await wait(1.25 + i * 0.5);
+    await wait(Math.max(tr, 1.9) + 0.1 + i * 0.25);
     clicks.push(take.now());
     await page.evaluate((i) => {
       const c = document.querySelector(`[data-demo-ring="${i}"]`);
       c.style.opacity = 1;
-      c.animate([{ transform: "scale(2.6)", opacity: 0 }, { transform: "scale(1)", opacity: 1 }], {
-        duration: 320, easing: window.__demo.tok("--ts-ease-emphasis"),
-      });
+      c.animate([{ transform: "scale(2.6)", opacity: 0 }, { transform: "scale(1)", opacity: 1 }], { duration: 260, easing: window.__demo.tok("--ts-ease-emphasis") });
     }, i);
-    await take.d("say", [{ segs: [{ text: "Missed" }, { text: ringText.slice(0, i + 1).join(" · "), mono: true }], size: px(46) }], { pos: "bl" });
   }
+  await take.d("say", [{ segs: [{ text: "Missed" }, { text: ringText.join(" · "), mono: true }], accent: false, size: px(64) }], { pos: "bl" });
   const end = t0 + L + 0.4;
   const left = end - take.now();
-  if (left > 0.25) await take.cam(chartCard, { dur: left * 1000, ease: "--ts-ease-enter", fill: [0.88, 0.9], anchor: [0.4, 0.5], maxScale: 1.9 });
-  void start;
-  return { segs: [{ from: t0, to: end }], facts: { r: m.slice(0, 2), missed: ringText }, clicks };
+  if (left > 0.25) await take.cam(chartCard, { dur: left * 1000, ease: "--ts-ease-enter", fill: [0.82, 0.92], anchor: [0.5, 0.5], maxScale: 1.9 });
+  return { segs: [{ from: t0, to: end }], facts: { r: m.slice(0, 2), missed: ringText, verdict }, clicks };
 }
 
 // ---------------------------------------------------------------- e. ask the assistant (one live Gemini call; recorded once)
@@ -427,28 +429,42 @@ export async function askLive(take, cfg, L) {
   await take.cam(null, { dur: 1 });
   const t0 = take.mark("ready");
   const clicks = [];
-  await take.cursorClick(askBar, "askbar", { dur: 700 });
+  await take.cursorClick(askBar, "askbar", { dur: 650 });
   await askBar.click();
   clicks.push(take.now());
-  await page.waitForTimeout(350);
+  const dlg = page.getByRole("dialog").first();
+  await dlg.waitFor({ timeout: 10000 });
+  const dlgSel = await take.tag(dlg, "dlg");
+  const camD = take.cam(dlgSel, { dur: 550, fill: [0.6, 0.86], anchor: [0.5, 0.5], maxScale: 1.55 });
+  await page.waitForTimeout(300);
   await page.keyboard.type(QUESTION, { delay: 32 });
-  await page.waitForTimeout(250);
+  await camD;
+  await page.waitForTimeout(300);
   const tTyped = take.mark("typed");
   await page.keyboard.press("Enter");
   await page.waitForURL(/\/assistant/, { timeout: 20000 });
   const composer = page.getByRole("textbox").first();
   await composer.waitFor({ timeout: 20000 });
   await settle(page, 600);
-  // a fresh chat, with the question in the composer (the palette hands it over without sending)
   const val = async () => (await composer.inputValue().catch(() => "")).trim();
   if ((await val()) !== QUESTION) throw new Error("composer does not hold the question: " + (await val()));
-  const newChat = page.getByRole("button", { name: "New chat" });
-  await newChat.click().catch(() => {});
+  await page.getByRole("button", { name: "New chat" }).click().catch(() => {});
   await page.waitForTimeout(500);
   if ((await val()) !== QUESTION) {
     await composer.fill("");
     await composer.pressSequentially(QUESTION, { delay: 20 });
   }
+  // earlier test chats are not part of the film: the history column is hidden once the fresh chat is open
+  await page.evaluate(() => {
+    const nc = [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "New chat");
+    if (!nc) return;
+    let col = nc.parentElement;
+    while (col && col.parentElement && col.parentElement.getBoundingClientRect().width < 500) col = col.parentElement;
+    if (col) col.style.visibility = "hidden";
+  });
+  const tLoaded = take.mark("loaded");
+  const composerBox = await take.tag(composer.locator("xpath=ancestor::form[1]"), "composer");
+  await take.cam(composerBox, { dur: 1, fill: [0.74, 0.3], anchor: [0.5, 0.78], maxScale: 1.6 });
   const tReady = take.mark("composer");
   const send = page.locator("form button[type=submit], button[aria-label*='Send' i]").last();
   await take.cursorClick(send, "send", { dur: 600 });
@@ -461,31 +477,95 @@ export async function askLive(take, cfg, L) {
   const tAnswer = take.mark("answered");
   const badgeText = (await badge.innerText()).trim().split("\n")[0];
   const bm = must(badgeText.match(/^(\d+)\s+(.*)$/), "badge");
+  await page.evaluate((Q) => {
+    const dark = (el) => {
+      const m = getComputedStyle(el).backgroundColor.match(/\d+/g) || [];
+      return m.length >= 3 && Number(m[0]) + Number(m[1]) + Number(m[2]) < 200 && !/rgba\(0, 0, 0, 0\)/.test(getComputedStyle(el).backgroundColor);
+    };
+    const el = [...document.querySelectorAll("*")].filter((e) => e.children.length === 0 && e.textContent.trim() === Q).map((e) => {
+      let n = e;
+      for (let i = 0; i < 3 && n; i++, n = n.parentElement) if (dark(n)) return n;
+      return null;
+    }).find(Boolean);
+    if (el) el.setAttribute("data-demo-target", "bubble");
+  }, QUESTION);
+  const bubble = '[data-demo-target="bubble"]';
+  const badgeSel = await take.tag(badge, "badge");
   const answer = (await page.locator("main").innerText()).replace(/\s+/g, " ");
+  const camAns = take.cam(null, { union: [bubble, badgeSel], dur: 650, fill: [0.64, 0.5], anchor: [0.5, 0.42], maxScale: 1.75 });
+  take.d("pulse", badgeSel);
+  await take.d("say", [{ segs: [{ id: "n", text: bm[1], mono: true }, { text: bm[2] }], accent: true, size: px(64) }], { pos: "bl" });
+  take.d("countUp", "n", bm[1], 600);
+  await camAns;
+  await take.cam(null, { union: [bubble, badgeSel], dur: 1100, ease: "--ts-ease-enter", fill: [0.68, 0.54], anchor: [0.5, 0.42], maxScale: 1.85 });
   // open the data card ("Show the numbers")
   const show = page.getByRole("button", { name: /Show the numbers|numbers? checked/ }).first();
   try {
     await take.cursorClick(show, "show", { dur: 550 });
     await show.click({ timeout: 5000 });
-    clicks.push(take.now());
   } catch {
-    clicks.push(take.now());
+    // keep going: the answer itself is on screen
   }
-  await page.waitForTimeout(500);
+  clicks.push(take.now());
   const tCard = take.mark("card");
-  const badgeSel = await take.tag(badge, "badge");
-  take.d("pulse", badgeSel);
-  await take.d("say", [{ segs: [{ id: "n", text: bm[1], mono: true }, { text: bm[2] }], accent: true, size: px(44) }], { pos: "bl" });
-  await take.d("countUp", "n", bm[1], 600);
-  await page.waitForTimeout(1600);
+  await page.waitForTimeout(450);
+  const end = page.getByText(/Open the field/).first();
+  await take.cam(null, { union: [bubble, (await end.count()) ? await take.tag(end, "endlink") : badgeSel], dur: 700, fill: [0.66, 0.7], anchor: [0.5, 0.45], maxScale: 1.75 }).catch(() => {});
+  await take.cam(null, { union: [bubble, (await end.count()) ? '[data-demo-target="endlink"]' : badgeSel], dur: 2600, ease: "--ts-ease-enter", fill: [0.7, 0.76], anchor: [0.5, 0.45], maxScale: 1.9 }).catch(() => {});
+  void tReady;
+  void tCard;
   return {
     segs: [
-      { from: t0, to: tTyped + 0.3, ramp: 1.4 },
-      { from: tTyped + 0.3, to: tSend + 0.15, ramp: 0.8 },
+      { from: t0, to: tTyped + 0.25, ramp: 1.5 },
+      { from: tLoaded, to: tSend + 0.15, ramp: 0.8 },
       { from: tSend + 0.15, to: tAnswer - 0.1, ramp: 0.3 },
       { from: tAnswer - 0.1, to: take.now() },
     ],
     facts: { question: QUESTION, badge: badgeText, answer: answer.slice(0, 700) },
-    clicks: [clicks[0], clicks[1], clicks[2]],
+    clicks,
   };
+}
+
+// ---------------------------------------------------------------- the Today page: the product arrives (sources fly across as an overlay)
+export async function today(take, cfg, L) {
+  const { page } = take;
+  await page.goto(cfg.base + "/");
+  const startWith = page.getByText("Start with this", { exact: true }).first();
+  await startWith.waitFor({ timeout: 45000 });
+  await settle(page, 900);
+  const h1 = page.getByRole("heading", { level: 1 }).first();
+  const cardSel = await take.card(startWith, "tcard", 300);
+  const lines = await fieldLines(page, cardSel);
+  const sowIdx = must(lines.findIndex((l) => l === "sowing date"), "sowing date label");
+  const sow = lines[sowIdx - 1];
+  const action = must(lines.find((l) => /^Scout the field/.test(l)), "action sentence");
+  const hSel = await take.tag(h1, "h1");
+  void hSel;
+  await take.cam(cardSel, { dur: 1, fill: [0.66, 0.66], anchor: [0.5, 0.42], maxScale: 1.6 });
+  const t0 = take.mark("ready");
+  const camP = take.cam(cardSel, { dur: (L + 0.4) * 1000, ease: "--ts-ease-enter", fill: [0.72, 0.7], anchor: [0.5, 0.42], maxScale: 1.75 });
+  await take.d("say", [{ segs: [{ id: "a", text: sow, mono: true }, { text: "sowing date", small: true }], accent: true, size: px(68) }], { pos: "bl" });
+  take.d("countUp", "a", sow, 600);
+  // the data sources fly across the shot (0.8 s) toward the product
+  await page.evaluate(() => {
+    const layer = document.getElementById("demo-layer");
+    const tok = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+    ["NASA POWER", "MODIS NDVI", "ESA Copernicus", "USDA"].forEach((t, i) => {
+      const e = document.createElement("div");
+      e.textContent = t;
+      e.style.cssText = `position:absolute;left:50%;top:${18 + i * 17}%;padding:var(--ts-s3) var(--ts-s6);border-radius:var(--ts-r-chip);font-family:var(--ts-mono);font-size:34px;font-weight:600;white-space:nowrap;background:${i === 0 ? "var(--ts-signal)" : "var(--ts-surface)"};color:${i === 0 ? "var(--ts-on-signal)" : "var(--ts-ink)"};border:2px solid var(--ts-ink);box-shadow:var(--ts-shadow-hero);translate:-50% 0`;
+      layer.appendChild(e);
+      const dir = i % 2 ? 1 : -1;
+      e.animate(
+        [
+          { transform: `translateX(${dir * 1400}px)`, opacity: 0 },
+          { transform: `translateX(${dir * 120}px)`, opacity: 1, offset: 0.5 },
+          { transform: "translateX(0) scale(.5)", opacity: 0 },
+        ],
+        { duration: 800, delay: 900 + i * 120, easing: tok("--ts-ease-standard"), fill: "both" },
+      ).finished.then(() => e.remove());
+    });
+  });
+  await camP;
+  return { segs: [{ from: t0, to: t0 + L + 0.4 }], facts: { sow, action }, clicks: [] };
 }

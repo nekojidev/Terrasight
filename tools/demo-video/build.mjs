@@ -30,25 +30,25 @@ const STORY = [
   {
     id: "open",
     group: 0,
-    min: 4.8,
+    min: 3.0,
     lead: 0.3,
-    line: "Every field has a history. NASA has recorded forty-five years of it.",
+    line: "Forty-five years of NASA weather.",
     voice: NARRATOR,
     shots: [["openGraph", 1]],
   },
   {
-    id: "sources",
-    group: 0,
-    min: 3.2,
+    id: "today",
+    group: 1,
+    min: 3.1,
     line: "Terrasight is the AI assistant that reads it for you.",
     voice: NARRATOR,
-    shots: [["sources", 1]],
+    shots: [["today", 1]],
   },
-  { id: "add", group: 1, min: 3.0, line: "Add your field.", voice: NARRATOR, shots: [["addField", 1]] },
+  { id: "add", group: 1, min: 2.5, line: "Add your field.", voice: NARRATOR, shots: [["addField", 1]] },
   {
     id: "tiles",
     group: 1,
-    min: 5.4,
+    min: 6.4,
     line: "It shows what changed, what to do today, and what to plant for five seasons.",
     voice: NARRATOR,
     shots: [["tiles", 1]],
@@ -56,7 +56,8 @@ const STORY = [
   {
     id: "ask",
     group: 2,
-    min: 4.3,
+    min: 7.2,
+    lead: 0.9,
     line: "Ask it anything. Every number is checked against the models.",
     voice: NARRATOR,
     shots: [["askLive", 1]],
@@ -64,8 +65,8 @@ const STORY = [
   {
     id: "proof",
     group: 2,
-    min: 5.0,
-    lead: 0.4,
+    min: 4.0,
+    lead: 0.5,
     line: "And it shows you where it was wrong.",
     voice: NARRATOR,
     shots: [["proof", 1]],
@@ -73,7 +74,9 @@ const STORY = [
   {
     id: "end",
     group: 3,
-    min: 3.4,
+    min: 3.0,
+    jcut: 0.3,
+    tail: 0.05,
     line: "Terrasight. The AI assistant for your farm.",
     voice: ASSISTANT,
     shots: [["endCard", 1]],
@@ -84,16 +87,22 @@ const RECUT = {
   addField: (c) => {
     const m = c.marks;
     c.segs = [
-      { from: m.uploaded - 0.42, to: m.uploaded },
-      { from: m.uploaded, to: m.checked, ramp: 0.8, zoom: { from: 1, to: 1.22, cx: 0.35, cy: 0.55 } },
-      { from: m.checked, to: m.checked + 1.19 },
-      { from: c.clicks[1] - 0.85, to: c.clicks[2] + 0.35, ramp: 0.6 },
+      { from: m.uploaded, to: m.checked, ramp: 0.75, zoom: { from: 1.7, to: 1.35, cx: 0.386, cy: 0.86 } },
+      { from: m.checked, to: m.checked + 1.0, zoom: { from: 1.3, to: 1.5, cx: 1, cy: 0.74 } },
+      { from: c.clicks[1] - 0.8, to: c.clicks[2] + 0.2, ramp: 0.75, zoom: { from: 1.5, to: 1.75, cx: 1, cy: 0.74 } },
     ];
+  },
+  askLive: (c) => {
+    // the last segment is trimmed so the beat is 7.2 s long
+    const out = (s) => (s.ramp ? s.ramp : s.to - s.from);
+    const rest = c.segs.slice(0, -1).reduce((a, s) => a + out(s), 0);
+    const last = c.segs.at(-1);
+    last.to = last.from + Math.max(1, 7.2 + 0.4 - rest);
   },
 };
 const DISCLOSURE =
   "Narration: AI-generated voices (Google Gemini TTS). Screen recording of the real application; no AI-generated imagery.";
-const ONCE = new Set(["addField", "askLive", "ask1", "ask2", "assistant", "owner"]);
+const ONCE = new Set(["addField", "askLive", "ask2", "assistant", "owner"]);
 const NEEDED = new Set(STORY.flatMap((s) => s.shots.map(([id]) => id)));
 const fmt = (s) => {
   const ms = Math.round(s * 1000);
@@ -114,8 +123,8 @@ let t = 0;
 for (const s of STORY) {
   s.dur = s.line ? voice.durations[s.id] : 0;
   s.lead = s.lead ?? 0;
-  s.at = s.line ? (s.lead ? s.lead : -JCUT) : 0; // offset of the voice from the scene start (negative: J-cut)
-  s.len = Math.max(s.min, Math.max(s.at, 0) + s.dur + TAIL);
+  s.at = s.line ? (s.lead ? s.lead : -(s.jcut ?? JCUT)) : 0; // offset of the voice from the scene start (negative: J-cut)
+  s.len = Math.max(s.min, s.at + s.dur + (s.tail ?? TAIL));
   s.start = t;
   t += s.len;
 }

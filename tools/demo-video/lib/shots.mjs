@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { OUT, ROOT } from "./env.mjs";
 import { settle } from "./take.mjs";
-import { openGraph, sources, tiles, proof, askLive } from "./graphics.mjs";
+import { openGraph, sources, tiles, proof, askLive, today } from "./graphics.mjs";
 
 const must = (v, what) => {
   if (v == null || (Array.isArray(v) && !v.length)) throw new Error("Could not read from the page: " + what);
@@ -486,11 +486,12 @@ async function endCard(take, cfg, L) {
         "The AI assistant for your farm",
         "font-size:84px;line-height:1.05;font-weight:700;letter-spacing:-0.035em;max-width:1700px;white-space:nowrap",
       ) +
+      row('<div id="ul" style="height:10px;width:820px;border-radius:6px;background:var(--ts-signal);box-shadow:0 0 0 2px var(--ts-ink);transform-origin:0 50%"></div>', "margin-top:calc(var(--ts-s3) * -1)") +
       row(
         "NASA POWER · MODIS NDVI",
         "font-family:var(--ts-mono);font-size:36px;font-weight:600;letter-spacing:.02em;background:var(--ts-signal);color:var(--ts-on-signal);padding:var(--ts-s3) var(--ts-s6);border-radius:var(--ts-r-chip)",
       ) +
-      row("Explore any place on Earth, no account needed", "font-size:30px;font-weight:500;color:var(--ts-ink)") +
+      row("github.com/nekojidev/Terrasight", "font-family:var(--ts-mono);font-size:30px;font-weight:600;color:var(--ts-ink)") +
       row("ESA Copernicus Sentinel-2 · USDA", "font-family:var(--ts-mono);font-size:22px;color:var(--ts-ink-2)") +
       row(
         footer,
@@ -509,6 +510,8 @@ async function endCard(take, cfg, L) {
       easing: d.tok("--ts-ease-standard"),
       fill: "both",
     });
+    card.animate([{ transform: "scale(1)" }, { transform: "scale(1.035)" }], { duration: 2000, easing: "linear", fill: "both" });
+    document.getElementById("ul").animate([{ transform: "scaleX(0)" }, { transform: "scaleX(1)" }], { duration: 1300, delay: 650, easing: d.tok("--ts-ease-standard"), fill: "both" });
     [...card.children].slice(1).forEach((r, i) =>
       r.animate(
         [
@@ -874,4 +877,4 @@ export async function renderPhoneBackdrop(browser, cfg, stateFile, file) {
   return geo;
 }
 
-export const SHOTS = { openGraph, sources, tiles, proof, askLive, coldOpen, addField, climate, overview, plan, trust, ask1, ask2, endCard, hook, briefHome, briefField, rotation, assistant, owner };
+export const SHOTS = { openGraph, sources, tiles, proof, askLive, today, coldOpen, addField, climate, overview, plan, trust, ask1, ask2, endCard, hook, briefHome, briefField, rotation, assistant, owner };
