@@ -23,7 +23,9 @@ import {
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { OwnerReport, type ReportItem, type ReportView } from "@/components/OwnerReport";
+import type { DecisionList } from "@terrasight/shared";
+import { OwnerDecisions } from "@/components/OwnerDecisions";
+import type { ReportItem, ReportView } from "@/lib/report-types";
 import { api } from "@/lib/api";
 import { useWorkspaceEvents } from "@/lib/events";
 
@@ -80,22 +82,6 @@ export function ReportsClient({
 
   if (report.isError && !report.data) return <p className="text-body text-ink-2">{t("errGeneric")}</p>;
   if (!report.data) return <Skeleton label={t("loading")} />;
-  if (role === "viewer") {
-    return (
-      <div className="mx-auto max-w-[520px]">
-        <OwnerReport
-          report={report.data}
-          onAnswer={async (id, answer, text) => (
-            await api(`/api/w/${workspaceId}/report-items/${id}/answers`, {
-              body: { answer, ...(text ? { text } : {}) },
-            }),
-            refresh()
-          )}
-        />
-      </div>
-    );
-  }
-
   const fmtMonth = (key: string) =>
     new Intl.DateTimeFormat(locale === "uk" ? "uk-UA" : "en-US", {
       month: "long",
@@ -216,7 +202,7 @@ export function ReportsClient({
       </div>
 
       <Dialog ref={preview} title={t("rqOwnerSees")}>
-        <OwnerReport report={report.data} onAnswer={null} />
+        <OwnerPreview workspaceId={workspaceId} />
       </Dialog>
       {manage && (
         <Dialog ref={share} title={t("rqShare")}>
@@ -224,6 +210,24 @@ export function ReportsClient({
         </Dialog>
       )}
     </div>
+  );
+}
+
+function OwnerPreview({ workspaceId }: { workspaceId: string }) {
+  const t = useTranslations("App");
+  const list = useQuery({
+    queryKey: ["decisions", workspaceId, "all"],
+    queryFn: () => api<DecisionList>(`/api/w/${workspaceId}/decisions?state=all`),
+  });
+  if (list.isError) return <p className="text-body text-ink-2">{t("errGeneric")}</p>;
+  if (!list.data) return <Skeleton label={t("loading")} />;
+  return (
+    <OwnerDecisions
+      items={list.data.items}
+      language={list.data.language}
+      workspaceName={list.data.workspaceName}
+      onAnswer={null}
+    />
   );
 }
 

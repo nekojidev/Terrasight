@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { NextIntlClientProvider } from "next-intl";
 import { serverGet } from "@/lib/server-api";
-import type { ReportView } from "@/components/OwnerReport";
+import type { PublicDecisions } from "@terrasight/shared";
 import designEn from "../../../../messages/en.json";
 import designUk from "../../../../messages/uk.json";
 import appEn from "../../../messages/app.en.json";
@@ -18,7 +18,7 @@ const MESSAGES = {
 /** Design 16: the Owner report through a report link — no app chrome, read and answer only (S-08.03). */
 export default async function ReportLinkPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  const report = await serverGet<ReportView>(`/api/r/${encodeURIComponent(token)}`);
+  const report = await serverGet<PublicDecisions>(`/api/r/${encodeURIComponent(token)}`);
   if (!report.ok) {
     // The API answers 404 for an unknown, expired or revoked link (it does not say which). The link's language is
     // unknown here, so the message is shown in both languages.

@@ -24,6 +24,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   if (!active) redirect("/onboarding");
   const ws = await serverGet<WorkspaceDetail>(`/api/w/${active.id}`);
   if (!ws.ok) redirect("/");
+  if (ws.data.role === "viewer") redirect("/decisions");
   const t = await getTranslations("Reports");
   return (
     <AppShell
