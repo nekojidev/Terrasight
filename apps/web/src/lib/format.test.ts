@@ -55,7 +55,7 @@ describe("units", () => {
     expect(formatYield(8, "metric", "uk")).toBe("8\u00A0т/га");
     expect(formatTemp(20, "imperial", "en")).toBe("68°F");
     expect(formatTemp(20, "metric", "en")).toBe("20°C");
-    expect(formatWind(10, "metric", "en")).toBe("36 km/h");
+    expect(formatWind(10, "metric", "en")).toBe("10 m/s");
     expect(formatWind(10, "imperial", "en")).toBe("22 mph");
     expect(formatRain(25.4, "imperial", "en")).toBe("1 in");
     expect(formatRain(4.25, "metric", "en")).toBe("4.3 mm");

@@ -14,7 +14,6 @@ const HA_PER_AC = 0.40468564224;
 const M_PER_FT = 0.3048;
 const M_PER_MI = 1609.344;
 const MM_PER_IN = 25.4;
-const KMH_PER_MS = 3.6;
 const MPH_PER_MS = 2.2369362920544;
 
 const tag = (locale: FormatLocale): string => intlLocale(locale);
@@ -114,7 +113,8 @@ export function formatTemp(celsius: number, units: Units, locale: FormatLocale):
 export function formatWind(metresPerSecond: number, units: Units, locale: FormatLocale): string {
   return units === "imperial"
     ? unitNumber(metresPerSecond * MPH_PER_MS, locale, "mile-per-hour", 0)
-    : unitNumber(metresPerSecond * KMH_PER_MS, locale, "kilometer-per-hour", 0);
+    : // Metric wind stays in m/s: the work-window thresholds and local forecasts are stated in m/s.
+      unitNumber(metresPerSecond, locale, "meter-per-second", metresPerSecond < 10 ? 1 : 0);
 }
 
 /** Millimetres in; mm or in. */
