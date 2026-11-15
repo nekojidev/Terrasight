@@ -8,7 +8,13 @@ import { useEffect, useRef, useState } from "react";
 import { OfflineCard } from "@/components/OfflineBanner";
 import { api, ApiError } from "@/lib/api";
 import { clearDraft, loadDraft, saveDraft, useOnline } from "@/lib/offline";
-import { ScoutMap } from "./ScoutMap";
+import dynamic from "next/dynamic";
+import { MapSkeleton } from "@/components/MapSkeleton";
+
+const ScoutMap = dynamic(() => import("./ScoutMap").then((m) => m.ScoutMap), {
+  ssr: false,
+  loading: () => <MapSkeleton />,
+});
 
 type Localised = { en: string; uk: string };
 export interface ScoutTask {

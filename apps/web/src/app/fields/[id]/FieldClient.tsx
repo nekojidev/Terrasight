@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Button,
   Chip,
+  ConfirmDialog,
   FieldThumb,
   InfoHint,
   SeasonLabel,
@@ -13,6 +14,7 @@ import {
 } from "@terrasight/ui";
 import {
   AlertTriangle,
+  Archive,
   CalendarDays,
   Check,
   Droplet,
@@ -25,10 +27,13 @@ import {
   Sun,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useState, type FormEvent } from "react";
 import { api } from "@/lib/api";
 import { useWorkspaceEvents } from "@/lib/events";
+import { QueryState } from "@/components/QueryState";
+import { useReportError } from "@/components/useReportError";
 import { FieldAssistant } from "@/components/FieldAssistant";
 import { TodayWindows } from "@/components/TodayWindows";
 import { YieldCard } from "./YieldCard";
@@ -110,6 +115,23 @@ export function FieldClient({
   const f = useTranslations("Field");
   const id = initial.id;
   const base = `/api/w/${workspaceId}/fields/${id}`;
+  const report = useReportError();
+  const router = useRouter();
+  const qc = useQueryClient();
+  const [confirmArchive, setConfirmArchive] = useState(false);
+  const archive = useMutation({
+    mutationFn: () => api(base, { method: "DELETE" }),
+    onSuccess: () => {
+      setConfirmArchive(false);
+      void qc.invalidateQueries({ queryKey: ["fields", workspaceId] });
+      router.push("/fields");
+      router.refresh();
+    },
+    onError: (e) => {
+      setConfirmArchive(false);
+      report(e);
+    },
+  });
   // SSE topic `field:<id>` invalidates every query under ["field", ws, id] (lib/events defaultTopicKeys).
   useWorkspaceEvents(workspaceId, [`field:${id}`]);
 
@@ -179,7 +201,12 @@ export function FieldClient({
               crop={history.data?.seasons.at(-1)?.mainCrop ?? null}
               size={64}
             />
-            <h1 className="text-h1 text-ink">{field.data.name}</h1>
+            <h1 className="min-w-0 flex-1 text-h1 text-ink">{field.data.name}</h1>
+            {canEdit && (
+              <Button variant="outline" icon={<Archive />} onClick={() => setConfirmArchive(true)}>
+                {t("archiveField")}
+              </Button>
+            )}
           </div>
           <p className="flex flex-wrap items-center gap-3 text-body text-ink-2">
             {meta}
@@ -192,6 +219,17 @@ export function FieldClient({
             <InfoHint label={t("hintLabel")}>{t(`hintTier_${initial.tier}` as "hintTier_A")}</InfoHint>
           </p>
         </header>
+        <ConfirmDialog
+          open={confirmArchive}
+          title={t("archiveTitle", { name: field.data.name })}
+          confirmLabel={t("archiveConfirm")}
+          cancelLabel={t("cancel")}
+          busy={archive.isPending}
+          onConfirm={() => archive.mutate()}
+          onCancel={() => setConfirmArchive(false)}
+        >
+          {t("archiveBody")}
+        </ConfirmDialog>
         <FieldTabs fieldId={id} />
         <GatherFocus
           status={gather.data}
@@ -200,9 +238,9 @@ export function FieldClient({
           outline={field.data.thumb ?? null}
           canEdit={canEdit}
           onRetry={(source) =>
-            void api(`${base}/gather/sources/${source}/retry`, { method: "POST" }).then(() =>
-              gather.refetch(),
-            )
+            void api(`${base}/gather/sources/${source}/retry`, { method: "POST" })
+              .then(() => gather.refetch())
+              .catch(report)
           }
         />
         <div
@@ -210,6 +248,7 @@ export function FieldClient({
           aria-hidden={building || undefined}
           className={`flex min-w-0 flex-col gap-6 transition-opacity duration-rise ease-ts ${building ? "pointer-events-none select-none opacity-40" : ""}`}
         >
+          {!history.data && <QueryState query={history}>{() => null}</QueryState>}
           {history.data && (
             <FieldBrief
               fieldId={id}
@@ -227,7 +266,7 @@ export function FieldClient({
             />
           )}
           <YieldCard workspaceId={workspaceId} fieldId={id} units={units} />
-          <RisksCard risks={risks.data ?? []} />
+          <QueryState query={risks}>{(r) => <RisksCard risks={r} />}</QueryState>
           <WeatherCard workspaceId={workspaceId} fieldId={id} units={units} />
           <OutlookCard workspaceId={workspaceId} fieldId={id} units={units} />
           <TodayWindows workspaceId={workspaceId} fieldId={id} units={units} />
@@ -365,9 +404,14 @@ function GatherPanel({
   const problems = status.sources.some((s) => s.status === "failed" || s.status === "partial");
   const title =
     status.status === "running" ? t("gatherTitle") : problems ? t("gatherPartial") : t("gatherDone");
+  const report = useReportError();
   const retry = async (source: string) => {
-    await api(`${base}/gather/sources/${source}/retry`, { method: "POST" });
-    onRetried();
+    try {
+      await api(`${base}/gather/sources/${source}/retry`, { method: "POST" });
+      onRetried();
+    } catch (e) {
+      report(e);
+    }
   };
   return (
     <section
@@ -541,9 +585,11 @@ function IrrigationCard({
 }) {
   const t = useTranslations("App");
   const client = useQueryClient();
+  const report = useReportError();
   const [open, setOpen] = useState(false);
   const [info, setInfo] = useState(false);
   const set = useMutation({
+    onError: report,
     mutationFn: (irrigation: "irrigated" | "dryland") => api(base, { method: "PATCH", body: { irrigation } }),
     onSuccess: () => {
       setOpen(false);
@@ -628,11 +674,13 @@ function SeasonCard({
   const locale = useLocale();
   const client = useQueryClient();
   const [saved, setSaved] = useState(false);
+  const report = useReportError();
   const record = useQuery({
     queryKey: ["field", workspaceId, fieldId, "season"],
     queryFn: () => api<SeasonRecord>(`${base}/season-records/current`),
   });
   const save = useMutation({
+    onError: report,
     mutationFn: (body: Record<string, string | null>) =>
       api<SeasonRecord>(`${base}/season-records/${record.data!.season}`, { method: "PUT", body }),
     onSuccess: (r) => {

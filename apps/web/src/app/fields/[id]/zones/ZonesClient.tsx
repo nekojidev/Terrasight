@@ -7,7 +7,16 @@ import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError, type Problem } from "@/lib/api";
 import { FieldTabs } from "../Overview";
-import { ZonesMap, type FieldGeometry, type Layer, type NdviImage } from "./ZonesMap";
+import dynamic from "next/dynamic";
+import { MapSkeleton } from "@/components/MapSkeleton";
+import { QueryState } from "@/components/QueryState";
+import { useReportError } from "@/components/useReportError";
+import type { FieldGeometry, Layer, NdviImage } from "./ZonesMap";
+
+const ZonesMap = dynamic(() => import("./ZonesMap").then((m) => m.ZonesMap), {
+  ssr: false,
+  loading: () => <MapSkeleton />,
+});
 
 export type { FieldGeometry } from "./ZonesMap";
 
@@ -75,7 +84,9 @@ export function ZonesClient({
     queryFn: () => api<NdviResponse>(`${base}/ndvi-latest`),
     staleTime: 10 * 60_000,
   });
+  const report = useReportError();
   const build = useMutation({
+    onError: report,
     mutationFn: () => api<ZonesResponse>(`${base}/zones/build`, { method: "POST" }),
     onSuccess: (d) => qc.setQueryData(["field", workspaceId, fieldId, "zones"], (old: ZonesResponse | undefined) => ({ ...old, ...d })),
   });
@@ -111,6 +122,7 @@ export function ZonesClient({
         <h1 className="text-h1 text-ink">{fieldName}</h1>
         <FieldTabs fieldId={fieldId} active={3} />
       </header>
+      {!zones.data && <QueryState query={zones}>{() => null}</QueryState>}
 
       <section className="flex flex-col gap-4 rounded-card border border-line bg-surface p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">

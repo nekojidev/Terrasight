@@ -74,6 +74,20 @@ export class FieldsController {
     return this.fields.list(req.workspaceId!);
   }
 
+  /** Owner only: archived fields, to restore them from settings. Declared before `:id`. */
+  @Get("archived")
+  @Requires("workspace.settings")
+  archived(@Req() req: AuthedRequest) {
+    return this.fields.listArchived(req.workspaceId!);
+  }
+
+  @Post(":id/restore")
+  @HttpCode(204)
+  @Requires("workspace.settings")
+  async restore(@Param("id") id: string, @Req() req: AuthedRequest): Promise<void> {
+    await this.fields.restore(req.workspaceId!, req.user!.id, fieldId(id));
+  }
+
   @Post("preview")
   @HttpCode(200)
   @Requires("fields.write")

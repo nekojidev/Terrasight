@@ -32,6 +32,15 @@ export function OutlookRailLine({ workspaceId }: { workspaceId: string }) {
     retry: false,
     staleTime: 60 * 60_000,
   });
+  if (!q.data && q.isError)
+    return (
+      <p role="alert" className="mt-3 flex items-center gap-2 rounded-input bg-muted px-3 py-2 text-small text-ink">
+        <span className="flex-1">{t("qsErrShort")}</span>
+        <button type="button" onClick={() => void q.refetch()} className="focus-ring font-semibold underline">
+          {t("retry")}
+        </button>
+      </p>
+    );
   const s = q.data?.summary;
   if (!s?.month || s.withOutlook === 0) return null;
   const top = KEYS.map((k) => [k, s[k]] as const).reduce((a, b) => (b[1] > a[1] ? b : a));

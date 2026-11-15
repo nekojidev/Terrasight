@@ -6,6 +6,7 @@ import { Send, ShieldCheck, Sparkles, TriangleAlert } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api, ApiError } from "@/lib/api";
+import { QueryState } from "@/components/QueryState";
 import { displayText, restoreAliases } from "@/lib/assistant-text";
 import { connectStream } from "@/lib/events";
 
@@ -141,9 +142,12 @@ export function Chat({
   const show = (s: string) => displayText(s, aliases, lang);
   const messages = conv.data?.messages ?? [];
   return (
-    <div className={`flex min-h-0 flex-col ${compact ? "h-[560px]" : "h-[calc(100vh-220px)]"}`}>
+    <div className={`flex min-h-0 flex-col ${compact ? "h-[min(560px,70dvh)]" : "h-[calc(100dvh-220px)]"}`}>
       <div aria-live="polite" className="flex flex-1 flex-col gap-4 overflow-y-auto p-1">
-        {messages.length === 0 && <p className="text-body text-ink-2">{t("aiEmpty")}</p>}
+        {!conv.data && (
+          <QueryState query={conv}>{() => null}</QueryState>
+        )}
+        {conv.data && messages.length === 0 && <p className="text-body text-ink-2">{t("aiEmpty")}</p>}
         {messages.map((m) =>
           m.role === "user" ? (
             <p

@@ -5,6 +5,7 @@ import { RailCard } from "@terrasight/ui";
 import { AlertTriangle, Check, X } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
+import { QueryState } from "@/components/QueryState";
 import { api } from "@/lib/api";
 import {
   OPERATIONS,
@@ -89,10 +90,10 @@ export function TodayWindows({
 
   const body = (
     <>
-      {q.isPending ? (
-        <p className="text-small text-ink-2" aria-busy>
-          …
-        </p>
+      {q.data === undefined ? (
+        <QueryState query={q} className="w-full">
+          {() => null}
+        </QueryState>
       ) : rows.length === 0 ? (
         <p className="text-small text-ink-2">{t("wwUnavail")}</p>
       ) : (

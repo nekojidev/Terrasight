@@ -3,7 +3,9 @@ import { LoggerModule } from "nestjs-pino";
 import { loadEnv } from "./config/config.js";
 import { AnalysisModule } from "./analysis/analysis.module.js";
 import { AssistantModule } from "./assistant/assistant.module.js";
+import { AccountModule } from "./account/account.module.js";
 import { AuthModule } from "./auth/auth.module.js";
+import { ExportModule } from "./export/export.module.js";
 import { ConfigModule } from "./config/config.module.js";
 import { DbModule } from "./db/db.module.js";
 import { EventsModule } from "./events/events.module.js";
@@ -40,6 +42,8 @@ const env = loadEnv();
     RedisModule,
     MessagingModule,
     AuthModule,
+    AccountModule,
+    ExportModule,
     EventsModule,
     WorkspacesModule,
     FieldsModule,

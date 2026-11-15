@@ -3,7 +3,7 @@
 import "maplibre-gl/dist/maplibre-gl.css";
 import { Map as MLMap, NavigationControl, type GeoJSONSource, type ImageSource } from "maplibre-gl";
 import { useEffect, useRef } from "react";
-import { ATTRIBUTION, BASEMAP, token } from "@/components/FieldMap";
+import { mapStyle, token } from "@/lib/map-style";
 
 export type Layer = "zones" | "ndvi";
 
@@ -89,13 +89,7 @@ export function ZonesMap(props: {
     if (!container.current) return;
     const m = new MLMap({
       container: container.current,
-      style: {
-        version: 8,
-        sources: {
-          sat: { type: "raster", tiles: [BASEMAP], tileSize: 256, attribution: ATTRIBUTION, maxzoom: 15 },
-        },
-        layers: [{ id: "sat", type: "raster", source: "sat" }],
-      },
+      style: mapStyle(),
       bounds: bounds(props.geometry),
       fitBoundsOptions: { padding: 40, maxZoom: 17 },
       attributionControl: { compact: true },

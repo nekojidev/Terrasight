@@ -20,7 +20,15 @@ import {
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { FieldMap, type FieldMapHandle, type LngLat } from "@/components/FieldMap";
+import dynamic from "next/dynamic";
+import type { FieldMapHandle } from "@/components/FieldMap";
+import { MapSkeleton } from "@/components/MapSkeleton";
+import type { LngLat } from "@/lib/map-style";
+
+const FieldMap = dynamic(() => import("@/components/FieldMap").then((m) => m.FieldMap), {
+  ssr: false,
+  loading: () => <MapSkeleton className="h-[520px]" />,
+});
 import { api, ApiError } from "@/lib/api";
 import { parseCoordinates, ringFromFile } from "@/lib/upload";
 
@@ -249,7 +257,7 @@ export function AddFieldClient({
       <div className="grid gap-6 lg:grid-cols-[1fr_410px]">
         <div className="relative">
           <FieldMap
-            ref={mapRef}
+            mapRef={mapRef}
             ring={ring}
             closed={closed}
             drawing={drawing}

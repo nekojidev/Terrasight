@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { InfoHint, seasonHintText } from "@terrasight/ui";
 import { useLocale, useTranslations } from "next-intl";
+import { QueryState } from "@/components/QueryState";
 import { api } from "@/lib/api";
 
 interface YieldRangeView {
@@ -64,7 +65,8 @@ export function YieldCard({
     staleTime: 5 * 60_000,
   });
   const d = q.data;
-  if (!d || d.noLibrary || !d.range || !d.crop) return null;
+  if (!d) return <QueryState query={q}>{() => null}</QueryState>;
+  if (d.noLibrary || !d.range || !d.crop) return null;
   const crop = d.crop;
   const name = d.cropNames ? (locale === "uk" ? d.cropNames.uk : d.cropNames.en) : crop;
   const fmt = (v: number) => {

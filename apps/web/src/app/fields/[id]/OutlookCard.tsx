@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { InfoHint } from "@terrasight/ui";
 import { CloudRain, Snowflake, Sun, Thermometer } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
+import { QueryState } from "@/components/QueryState";
 import { api } from "@/lib/api";
 
 export interface OutlookTerciles {
@@ -109,7 +110,8 @@ export function OutlookCard({
     retry: false,
     staleTime: 60 * 60_000,
   });
-  const o = q.data?.outlook;
+  if (!q.data) return <QueryState query={q}>{() => null}</QueryState>;
+  const o = q.data.outlook;
   if (!o) return null;
   const date = new Intl.DateTimeFormat(locale === "uk" ? "uk-UA" : "en-US", {
     day: "numeric",

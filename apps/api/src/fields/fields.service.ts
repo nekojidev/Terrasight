@@ -219,6 +219,34 @@ export class FieldsService {
     });
   }
 
+  /** Archived fields of the company, for the Owner's "Restore" list in settings. */
+  async listArchived(workspaceId: string) {
+    const rows = await this.prisma.db.field.findMany({
+      where: { workspaceId, archivedAt: { not: null } },
+      select: { id: true, name: true, aliasNo: true, areaHa: true, countyName: true, archivedAt: true },
+      orderBy: { archivedAt: "desc" },
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      aliasNo: r.aliasNo,
+      areaHa: r.areaHa,
+      countyName: r.countyName,
+      archivedAt: r.archivedAt,
+    }));
+  }
+
+  async restore(workspaceId: string, userId: string, fieldId: string): Promise<void> {
+    const r = await this.prisma.db.field.updateMany({
+      where: { id: fieldId, workspaceId, archivedAt: { not: null } },
+      data: { archivedAt: null },
+    });
+    if (r.count !== 1) throw new ProblemException(404, "not-found");
+    await this.prisma.db.auditLog.create({
+      data: { workspaceId, userId, action: "field.restore", target: fieldId },
+    });
+  }
+
   async assertField(workspaceId: string, fieldId: string): Promise<void> {
     const f = await this.prisma.db.field.findFirst({
       where: { id: fieldId, workspaceId, archivedAt: null },

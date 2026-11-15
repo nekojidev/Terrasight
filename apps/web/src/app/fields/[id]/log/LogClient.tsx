@@ -3,7 +3,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { InfoHint } from "@terrasight/ui";
 import { Bug, FileText, MessageCircle, Sparkles, Sprout } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
+import { QueryState } from "@/components/QueryState";
 import { api } from "@/lib/api";
 import { FieldTabs } from "../Overview";
 
@@ -34,6 +36,7 @@ export function LogClient({
 }) {
   const t = useTranslations("App");
   const locale = useLocale() as "en" | "uk";
+  const router = useRouter();
   const log = useQuery({
     queryKey: ["field", workspaceId, fieldId, "log"],
     queryFn: () => api<LogEntry[]>(`/api/w/${workspaceId}/fields/${fieldId}/log`),
@@ -67,9 +70,14 @@ export function LogClient({
         <h2 className="mb-3 text-h2 text-ink">
           {t("tabLog")} <InfoHint label={t("hintLabel")}>{t("hintSeasonNow")}</InfoHint>
         </h2>
-        {log.data?.length ? (
+        <QueryState
+          query={log}
+          isEmpty={(d) => d.length === 0}
+          empty={{ text: t("znLogEmpty"), actionLabel: t("znLogEmptyAction"), onAction: () => router.push(`/fields/${fieldId}`) }}
+        >
+          {(entries) => (
           <ol className="flex flex-col gap-4">
-            {log.data.map((e, i) => (
+            {entries.map((e, i) => (
               <li key={i} className="flex gap-3">
                 <span
                   aria-hidden
@@ -86,9 +94,8 @@ export function LogClient({
               </li>
             ))}
           </ol>
-        ) : (
-          <p className="text-small text-ink-2">{t("znLogEmpty")}</p>
-        )}
+          )}
+        </QueryState>
       </section>
     </div>
   );

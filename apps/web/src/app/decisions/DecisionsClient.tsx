@@ -2,12 +2,13 @@
 
 import { useQuery } from "@tanstack/react-query";
 import type { Decision, DecisionList } from "@terrasight/shared";
-import { Button, Skeleton } from "@terrasight/ui";
+import { Button } from "@terrasight/ui";
 import { Eye, X } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useMemo, useRef, useState } from "react";
 import { OwnerDecisions } from "@/components/OwnerDecisions";
+import { QueryState } from "@/components/QueryState";
 import { api } from "@/lib/api";
 import { useWorkspaceEvents } from "@/lib/events";
 import { DecisionCard } from "./DecisionCard";
@@ -41,13 +42,7 @@ export function DecisionsClient({ workspaceId, fieldId }: { workspaceId: string;
     return c;
   }, [items]);
 
-  if (list.isError && !list.data)
-    return (
-      <p role="alert" className="text-body text-ink-2">
-        {t("errGeneric")}
-      </p>
-    );
-  if (!list.data) return <Skeleton label={t("loading")} className="h-64 w-full" />;
+  if (!list.data) return <QueryState query={list}>{() => null}</QueryState>;
 
   // Open on the tab that needs the agronomist most: questions, then waiting, then decided.
   const current: Tab = tab ?? (counts.question > 0 ? "question" : counts.waiting > 0 ? "waiting" : "decided");
@@ -165,7 +160,7 @@ function Dialog({
           <Button variant="icon" label={t("rqClose")} icon={<X />} />
         </form>
       </div>
-      <div className="max-h-[75vh] overflow-y-auto p-5">{children}</div>
+      <div className="max-h-[75dvh] overflow-y-auto p-5">{children}</div>
     </dialog>
   );
 }

@@ -15,6 +15,7 @@
     "library:check": "python3 tools/build_rotations_v2.py --check && pnpm --filter @terrasight/library build && pnpm --filter @terrasight/library validate",
     "i18n:build": "node tools/i18n-build.mjs",
     "i18n:check": "node tools/i18n-build.mjs --check",
+    "i18n:unused": "node tools/i18n-unused.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "golden": "node tools/golden/run.mjs"

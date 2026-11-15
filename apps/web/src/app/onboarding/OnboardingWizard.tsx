@@ -7,6 +7,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useMemo, useState, type FormEvent } from "react";
 import { Brand } from "@/components/Brand";
 import { api, ApiError, setCookie, WORKSPACE_COOKIE } from "@/lib/api";
+import { zoneLabel } from "@/lib/time-zone";
 
 interface CreatedWorkspace {
   id: string;
@@ -16,22 +17,6 @@ interface CreatedAgronomist {
   /** Absent when the person already had an account and was just added. */
   setupUrl?: string;
   expiresAt?: string;
-}
-
-/** Offset label like "UTC−6" for a zone, at the current date. */
-function utcOffset(tz: string): string {
-  try {
-    const part = new Intl.DateTimeFormat("en-US", { timeZone: tz, timeZoneName: "shortOffset" })
-      .formatToParts(new Date())
-      .find((p) => p.type === "timeZoneName")?.value;
-    return (part ?? "GMT").replace("GMT", "UTC").replace("-", "−") || "UTC";
-  } catch {
-    return "UTC";
-  }
-}
-
-function zoneLabel(tz: string): string {
-  return `${tz.replaceAll("_", " ").replace("/", " / ")} (${utcOffset(tz) === "UTC" ? "UTC" : utcOffset(tz)})`;
 }
 
 /** Design 02: create the company, then add your agronomist (PD v2.10) in two steps (RFC §14.2). */
@@ -153,7 +138,7 @@ export function OnboardingWizard() {
               onChange={(e) => setTimeZone(e.target.value)}
               options={zones.map((z) => ({
                 value: z,
-                label: z === detected ? `${zoneLabel(z)} — ${a("tzDetected")}` : zoneLabel(z),
+                label: z === detected ? `${zoneLabel(z, locale)} — ${a("tzDetected")}` : zoneLabel(z, locale),
               }))}
             />
             <Segmented

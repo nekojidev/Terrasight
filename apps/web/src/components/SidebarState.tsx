@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
+import { setCookie } from "@/lib/api";
 import { SIDEBAR_COOKIE } from "@/lib/sidebar";
 
 export { SIDEBAR_COOKIE };
@@ -15,7 +16,7 @@ const Ctx = createContext<SidebarState>({ collapsed: false, toggle: () => undefi
 
 function writeCookie(collapsed: boolean): void {
   try {
-    document.cookie = `${SIDEBAR_COOKIE}=${collapsed ? "1" : "0"}; Path=/; Max-Age=31536000; SameSite=Lax`;
+    setCookie(SIDEBAR_COOKIE, collapsed ? "1" : "0");
   } catch {
     /* cookies blocked: the choice just won't persist */
   }

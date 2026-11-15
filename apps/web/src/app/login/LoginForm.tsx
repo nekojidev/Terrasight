@@ -67,6 +67,11 @@ export function LoginForm() {
     <form onSubmit={submit} noValidate className="flex w-full max-w-[560px] flex-col gap-5">
       <h1 className="text-h1 text-ink">{mode === "signin" ? t("title") : a("signupTitle")}</h1>
       {mode === "signup" && <p className="-mt-3 text-body text-ink-2">{a("signupSub")}</p>}
+      {params.get("expired") === "1" && !message && (
+        <p role="status" className="rounded-input bg-week-soft px-4 py-3 text-body text-week">
+          {a("sessionExpired")}
+        </p>
+      )}
       {message && (
         <p role="alert" className="rounded-input bg-urgent-soft px-4 py-3 text-body text-urgent">
           {message}
