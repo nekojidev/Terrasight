@@ -8,7 +8,8 @@ import { intlLocale } from "./time";
 
 export type FormatLocale = "uk" | "en";
 export type Units = "metric" | "imperial";
-export type DateStyle = "day" | "dayMonth" | "full" | "time" | "dateTime";
+/** `short` ("12 Nov") and `long` ("12 November 2026") are the v6 rule; `dayMonth` / `full` are their older names. */
+export type DateStyle = "day" | "dayMonth" | "full" | "short" | "long" | "time" | "dateTime";
 
 const HA_PER_AC = 0.40468564224;
 const M_PER_FT = 0.3048;
@@ -22,6 +23,8 @@ const DATE_OPTIONS: Record<DateStyle, Intl.DateTimeFormatOptions> = {
   day: { day: "numeric" },
   dayMonth: { day: "numeric", month: "short" },
   full: { day: "numeric", month: "long", year: "numeric" },
+  short: { day: "numeric", month: "short" },
+  long: { day: "numeric", month: "long", year: "numeric" },
   time: { hour: "2-digit", minute: "2-digit" },
   dateTime: { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" },
 };
@@ -33,10 +36,39 @@ export function formatDate(
   style: DateStyle = "dayMonth",
   opts: { timeZone?: string } = {},
 ): string {
-  return new Intl.DateTimeFormat(tag(locale), {
+  // v6 rule: "short" / "long" are day-first in English too ("12 Nov", "12 November 2026"); older styles keep en-US.
+  const dayFirst = style === "short" || style === "long";
+  return new Intl.DateTimeFormat(dayFirst && locale === "en" ? "en-GB" : tag(locale), {
     ...DATE_OPTIONS[style],
     ...(opts.timeZone ? { timeZone: opts.timeZone } : {}),
   }).format(new Date(d));
+}
+
+function dayKey(d: Date, timeZone?: string): number {
+  const p = new Intl.DateTimeFormat("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    ...(timeZone ? { timeZone } : {}),
+  }).format(d);
+  return Date.UTC(+p.slice(0, 4), +p.slice(5, 7) - 1, +p.slice(8, 10)) / 86_400_000;
+}
+
+/**
+ * The one date rule: relative words ONLY for yesterday / today / tomorrow ("today", "сьогодні"); every other day is
+ * `short` ("12 Nov") unless `style` says otherwise. `now` is passed in so the function stays pure.
+ */
+export function formatDateRelative(
+  d: Date | string | number,
+  now: Date | number,
+  locale: FormatLocale,
+  style: DateStyle = "short",
+  opts: { timeZone?: string } = {},
+): string {
+  const diff = dayKey(new Date(d), opts.timeZone) - dayKey(new Date(now), opts.timeZone);
+  if (diff >= -1 && diff <= 1)
+    return new Intl.RelativeTimeFormat(tag(locale), { numeric: "auto" }).format(diff, "day");
+  return formatDate(d, locale, style, opts);
 }
 
 export function formatNumber(
@@ -67,6 +99,17 @@ export function formatMoney(
     maximumFractionDigits: opts.maximumFractionDigits ?? 0,
     ...(opts.compact ? { notation: "compact" as const } : {}),
   }).format(amount);
+}
+
+/**
+ * Money per area in the field's unit system: "$420/ha", "$170/ac" (the amount is always passed per hectare).
+ * Unit 0 may add the same function; keep one when merging.
+ */
+export function moneyPerArea(amountPerHa: number, currency: "USD" | "UAH", units: Units, locale: FormatLocale): string {
+  const imperial = units === "imperial";
+  const amount = imperial ? amountPerHa * HA_PER_AC : amountPerHa;
+  const unit = imperial ? (locale === "uk" ? "акр" : "ac") : locale === "uk" ? "га" : "ha";
+  return `${formatMoney(amount, currency, locale)}/${unit}`;
 }
 
 function unitNumber(n: number, locale: FormatLocale, unit: string, digits: number): string {

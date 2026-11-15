@@ -7,6 +7,7 @@ import {
   formatArea,
   formatDayOfYear,
   formatDate,
+  formatDateRelative,
   formatDistance,
   formatMoney,
   formatNumber,
@@ -18,6 +19,7 @@ import {
   formatTempDelta,
   formatWind,
   formatYield,
+  moneyPerArea,
   plural,
   type DateStyle,
   type FormatLocale,
@@ -48,6 +50,10 @@ export function useFormat(options: UseFormatOptions = {}) {
       percent: (fraction: number, opts?: { maximumFractionDigits?: number }) => formatPercent(fraction, locale, opts),
       money: (amount: number, currency: "USD" | "UAH", opts?: { compact?: boolean; maximumFractionDigits?: number }) =>
         formatMoney(amount, currency, locale, opts),
+      /** Today / tomorrow / yesterday as words, every other day `short`. `now` defaults to the current time. */
+      dateRel: (d: Date | string | number, opts?: { now?: Date | number; style?: DateStyle; timeZone?: string }) =>
+        formatDateRelative(d, opts?.now ?? Date.now(), locale, opts?.style, opts?.timeZone ? { timeZone: opts.timeZone } : {}),
+      moneyPerArea: (amountPerHa: number, currency: "USD" | "UAH") => moneyPerArea(amountPerHa, currency, units, locale),
       area: (hectares: number) => formatArea(hectares, units, locale),
       distance: (metres: number) => formatDistance(metres, units, locale),
       yield: (tPerHa: number) => formatYield(tPerHa, units, locale),
@@ -60,6 +66,7 @@ export function useFormat(options: UseFormatOptions = {}) {
       dayShift: (deltaDays: number, digits?: number) => dayShift(deltaDays, digits),
       wind: (metresPerSecond: number) => formatWind(metresPerSecond, units, locale),
       rain: (mm: number) => formatRain(mm, units, locale),
+      count: (n: number, forms: PluralForms) => plural(n, locale, forms),
       plural: (n: number, forms: PluralForms) => plural(n, locale, forms),
     }),
     [locale, units],

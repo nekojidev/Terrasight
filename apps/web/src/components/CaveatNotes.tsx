@@ -1,10 +1,12 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { NoticeStack } from "./NoticeStack";
 
 /**
  * Plain-language notes for the engine's caveat codes ("unverified-crop-parameters:<crop>", "irrigation-cost-in-budget",
  * "repeat-penalty-not-modelled:<crop>"). `only` limits the notes to some kinds.
+ * Rendered through NoticeStack: one note visible, the rest folded into "N more notes".
  */
 export function CaveatNotes({
   caveats,
@@ -29,10 +31,8 @@ export function CaveatNotes({
   }
   if (!notes.length) return null;
   return (
-    <ul role="note" className={`${className} flex flex-col gap-1 text-small text-ink-2`} data-testid="caveat-notes">
-      {notes.map((n) => (
-        <li key={n}>{n}</li>
-      ))}
-    </ul>
+    <div className={className} data-testid="caveat-notes">
+      <NoticeStack notices={notes.map((n) => ({ id: n, tone: "info" as const, title: n }))} />
+    </div>
   );
 }

@@ -26,13 +26,16 @@ export function QueryState<T>({
   className,
   skeletonVariant,
   what,
+  still,
 }: {
   query: QueryLike<T>;
   children: (data: T) => ReactNode;
   /** Custom loading placeholder; defaults to the card skeleton. */
   skeleton?: ReactNode;
   isEmpty?: (data: T) => boolean;
-  empty?: { text: string; actionLabel: string; onAction: () => void };
+  empty?: { text: string; still?: string; actionLabel: string; onAction: () => void };
+  /** What the user still sees while the query failed ("Showing the last check from 06:00"). */
+  still?: string;
   silent?: boolean;
   className?: string;
   /** Shape of the default loading placeholder (card by default). */
@@ -46,6 +49,7 @@ export function QueryState<T>({
       return (
         <EmptyState
           text={empty.text}
+          {...(empty.still ? { still: empty.still } : {})}
           actionLabel={empty.actionLabel}
           onAction={empty.onAction}
           {...(className ? { className } : {})}
@@ -59,6 +63,7 @@ export function QueryState<T>({
       <ErrorCard
         title={what ? t("qsErrWhat", { what }) : t("qsErrTitle")}
         body={t("qsErrBody")}
+        {...(still ? { still } : {})}
         retryLabel={t("retry")}
         onRetry={() => void query.refetch()}
         {...(className ? { className } : {})}

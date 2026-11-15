@@ -1,7 +1,7 @@
 import { clsx } from "clsx";
 import type { ReactNode } from "react";
 
-export type ChipTone = "urgent" | "week" | "ok" | "signal" | "source" | "neutral" | "info";
+export type ChipTone = "urgent" | "week" | "ok" | "signal" | "source" | "neutral" | "info" | "estimate";
 
 const TONE: Record<ChipTone, string> = {
   urgent: "bg-urgent-soft text-urgent",
@@ -12,6 +12,8 @@ const TONE: Record<ChipTone, string> = {
   signal: "bg-signal text-on-signal",
   source: "bg-muted text-ink-2 font-mono text-[12px] tracking-normal",
   neutral: "bg-muted text-ink",
+  // Estimate = not measured: dashed outline, no fill, ink text. Deliberately not orange (design/README v6 colour table).
+  estimate: "border border-dashed border-line-control bg-transparent text-ink-2",
 };
 
 export interface ChipProps {
