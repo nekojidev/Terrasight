@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AnalysisPanel, Button, Disclosure, InfoHint, Surface, type FieldRunStatus } from "@terrasight/ui";
+import { AnalysisPanel, Button, Disclosure, Surface, type FieldRunStatus } from "@terrasight/ui";
 import { Play } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { dateShortIn, isAutumn, isSameDayIn, timeIn, useNow } from "@/lib/time";
@@ -50,10 +50,13 @@ export function AnalysisCard({
   workspaceId,
   timeZone,
   canRun,
+  fieldsTotal,
 }: {
   workspaceId: string;
   timeZone: string;
   canRun: boolean;
+  /** Fields in the company: the status line says how many of them the last run covered. */
+  fieldsTotal?: number;
 }) {
   const t = useTranslations("App");
   const m = useTranslations("Main");
@@ -93,43 +96,61 @@ export function AnalysisCard({
   const retry = (fieldId: string) => start.mutate([fieldId]);
   const reason = (p: { error: string | null }) => p.error ?? m("an_fail");
 
-  const statusLine = running
+  // One quiet line: what was checked and when. A run that just finished says "Done: x of y fields checked".
+  const fresh =
+    !!r?.finishedAt && !!now && now.getTime() - new Date(r.finishedAt).getTime() < 10 * 60_000 && !!r.summary;
+  const total = fieldsTotal ?? r?.summary?.total ?? 0;
+  const statusLine = running || run.isPending
     ? null
     : !r?.id
-      ? t("anNever")
-      : [
-          when && r.summary ? t("anLast", { when, n: r.summary.total }) : null,
-          r.summary
-            ? t("anDone", {
-                checked: r.summary.checked,
-                total: r.summary.total,
-                n: r.summary.newRecommendations,
-              })
-            : null,
-        ]
-          .filter(Boolean)
-          .join(" · ");
+      ? m("t_an_never")
+      : fresh && r.summary
+        ? [
+            m("t_an_done_fresh", { checked: r.summary.checked, total: r.summary.total }),
+            r.summary.newRecommendations > 0 ? m("t_an_new", { n: r.summary.newRecommendations }) : null,
+          ]
+            .filter(Boolean)
+            .join(" · ")
+        : when && r.summary
+          ? [
+              r.summary.checked >= total
+                ? m("t_an_all", { when, fields: total })
+                : m("t_an_part", { when, checked: r.summary.checked, fields: total }),
+              r.summary.newRecommendations > 0 ? m("t_an_new", { n: r.summary.newRecommendations }) : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")
+          : null;
+  const never = !running && !r?.id && !run.isPending;
 
   return (
     <section aria-live="polite" className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         {statusLine && <p className="min-w-0 text-caption text-ink-2">{statusLine}</p>}
-        {canRun && (
-          <span className="inline-flex items-center gap-2">
+        {canRun &&
+          (never ? (
+            <Button
+              size={56}
+              icon={<Play />}
+              onClick={() => start.mutate(undefined)}
+              disabled={running}
+              aria-busy={running}
+              className="max-sm:w-full"
+            >
+              {running ? m("analyzing") : m("analyze")}
+            </Button>
+          ) : (
             <Button
               variant="link"
               icon={<Play />}
               onClick={() => start.mutate(undefined)}
               disabled={running}
               aria-busy={running}
+              className="min-h-tap"
             >
               {running ? m("analyzing") : m("analyze")}
             </Button>
-            <InfoHint label={t("hintLabel")} align="start">
-              {t("hintAnalyze")}
-            </InfoHint>
-          </span>
-        )}
+          ))}
       </div>
       {running && r?.fields && (
         <AnalysisFocus

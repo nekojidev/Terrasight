@@ -34,9 +34,8 @@ export interface TodayCardProps {
   factors: Factor[];
   /** Up to 3 key numbers, already formatted; unknown ones are left out by the caller. */
   numbers?: Array<{ value: string; label: string; weight: number }>;
-  /** "Reliability: High · Full data". */
-  reliability: string;
-  reliabilityHint?: ReactNode;
+  /** The trust line (reliability, data level, sources). */
+  trust: ReactNode;
   /** "Start with this". */
   startLabel: string;
   moreLabel: string;
@@ -93,11 +92,9 @@ export function TodayCard(p: TodayCardProps) {
           ))}
         </div>
       )}
-      <p className="mt-4 flex flex-wrap items-center gap-1.5 text-caption text-ink-2">
-        {p.reliability}
-        {p.reliabilityHint}
-      </p>
-      <div className="mt-4 flex flex-wrap items-center gap-3 max-sm:sticky max-sm:bottom-[calc(var(--ts-tabbar)+0.5rem)] max-sm:z-10 max-sm:-mx-2 max-sm:rounded-card max-sm:bg-surface max-sm:p-2 max-sm:shadow-hero">
+      <div className="mt-4">{p.trust}</div>
+      {/* In the card's own flow: it never sits on top of the title or the numbers (v6 defect 1). */}
+      <div className="mt-4 flex flex-wrap items-center gap-3">
         {p.onAccept && (
           <Button size={56} icon={<Check />} onClick={p.onAccept} className="max-sm:flex-1">
             {p.labels.accept}
@@ -128,7 +125,7 @@ export interface TodayRowProps {
   title: string;
   titleMark?: ReactNode;
   /** One-line reason. */
-  reason: string;
+  reason?: string;
   href: string;
   thumb?: ReactNode;
   /** Position in the list: drives the rise-in delay. */
@@ -161,7 +158,7 @@ export function TodayRow(p: TodayRowProps) {
           {p.titleMark}
         </span>
         <span className="block truncate text-caption text-ink-2">
-          {p.fieldName} · {p.reason}
+          {p.fieldName}{p.reason ? ` · ${p.reason}` : ""}
         </span>
       </span>
       <span className="flex shrink-0 items-center gap-1 text-caption font-semibold whitespace-nowrap text-ink-2">
