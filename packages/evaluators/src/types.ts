@@ -70,6 +70,9 @@ export interface Evidence {
   value?: number | string;
   unit?: string;
   note?: string;
+  /** Degree-day models: the accumulated heat per day the evaluator used (forecast days flagged) and the stage thresholds. */
+  series?: Array<{ date: string; dd: number; forecast?: true }>;
+  stages?: Array<{ name: string; dd: number }>;
 }
 
 export interface Citation {
