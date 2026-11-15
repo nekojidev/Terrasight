@@ -91,10 +91,15 @@ export class GatherSourceConsumer extends JobConsumer<GatherSourceJob> implement
 
     let result: SourceResult;
     try {
-      while (!(await this.limits.take(`source:${source}`, BUCKET)))
-        await new Promise((r) => setTimeout(r, 250));
-      const signal = AbortSignal.timeout(SOURCE_TIMEOUT_MS[source]);
-      result = await adapter.fetch(field, { signal, fetch, today: day });
+      result = await this.sources.breaker.run(
+        source,
+        async () => {
+          await this.limits.takeWithin(`source:${source}`, BUCKET, 250);
+          const signal = AbortSignal.timeout(SOURCE_TIMEOUT_MS[source]);
+          return adapter.fetch(field, { signal, fetch, today: day });
+        },
+        (r) => r.status === "failed",
+      );
     } catch (e) {
       const err = e as Error;
       const retryable = err instanceof SourceError ? err.retryable : true;

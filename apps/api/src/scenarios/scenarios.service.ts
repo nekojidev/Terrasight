@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
+import { availableParallelism } from "node:os";
 import { Worker } from "node:worker_threads";
-import { Inject, Injectable, Logger } from "@nestjs/common";
+import { Inject, Injectable, Logger, type OnModuleDestroy } from "@nestjs/common";
 import type { Library } from "@terrasight/library";
 import { stableStringify } from "@terrasight/evaluators";
 import {
@@ -32,6 +33,7 @@ import { ProblemException } from "../http/problem.js";
 import { LIBRARY } from "../library/library.module.js";
 import { SeasonsService } from "../seasons/seasons.service.js";
 import { SourcesService } from "../sources/sources.service.js";
+import { PoolBusyError, WorkerPool, WorkerTimeoutError } from "./worker-pool.js";
 import {
   AiRotationsService,
   doubleCropPairs,
@@ -64,6 +66,12 @@ export interface Overrides {
 const DEFAULT_SOIL_C = 45;
 const WORKER_TIMEOUT_MS = 60_000;
 
+/** Pool size: SCENARIO_WORKERS, else all cores but one (the API's event loop keeps one). */
+export function scenarioPoolSize(raw = process.env.SCENARIO_WORKERS): number {
+  const n = Math.floor(Number(raw));
+  return n >= 1 ? n : Math.max(1, availableParallelism() - 1);
+}
+
 /** Season windows by harvest year from a POWER daily series: 1 Sep (year−1) → 31 Aug (north); 1 Jul → 30 Jun (south). */
 export function seasonWindows(power: PowerSeries, southern: boolean): Map<number, WeatherDay[]> {
   const v = power.values;
@@ -92,9 +100,10 @@ export function seasonWindows(power: PowerSeries, southern: boolean): Map<number
 
 /** Rotation scenarios for a field (RFC D4–D5, Tech Design §9): inputs from the gathered sources, cached by inputs hash. */
 @Injectable()
-export class ScenariosService {
+export class ScenariosService implements OnModuleDestroy {
   private readonly log = new Logger(ScenariosService.name);
   private readonly yieldCache = new Map<string, ReturnType<typeof yieldRange>>();
+  private pool: WorkerPool<EngineInput, EngineResult> | null = null;
 
   constructor(
     @Inject(ENV) private readonly env: Env,
@@ -560,23 +569,26 @@ export class ScenariosService {
     };
   }
 
-  private inWorker(input: EngineInput): Promise<EngineResult> {
-    return new Promise((resolve, reject) => {
-      const w = new Worker(new URL("./scenario.worker.js", import.meta.url), { workerData: input });
-      const timer = setTimeout(() => {
-        void w.terminate();
-        reject(new ProblemException(503, "scenarios-timeout", "The scenario run took too long"));
-      }, WORKER_TIMEOUT_MS);
-      w.once("message", (r: EngineResult) => {
-        clearTimeout(timer);
-        resolve(r);
-        void w.terminate();
-      });
-      w.once("error", (e) => {
-        clearTimeout(timer);
-        reject(e);
-      });
-    });
+  async onModuleDestroy(): Promise<void> {
+    await this.pool?.close();
+  }
+
+  /** Runs the engine on a reusable worker thread from a fixed-size pool; extra runs wait in the pool's queue. */
+  private async inWorker(input: EngineInput): Promise<EngineResult> {
+    this.pool ??= new WorkerPool<EngineInput, EngineResult>(
+      () => new Worker(new URL("./scenario.worker.js", import.meta.url)),
+      { size: scenarioPoolSize(), timeoutMs: WORKER_TIMEOUT_MS },
+    );
+    try {
+      return await this.pool.run(input);
+    } catch (e) {
+      if (e instanceof WorkerTimeoutError)
+        throw new ProblemException(503, "scenarios-timeout", "The scenario run took too long");
+      if (e instanceof PoolBusyError)
+        throw new ProblemException(503, "scenarios-busy", "Too many scenario runs; try again shortly");
+      this.log.error(`scenario worker failed: ${(e as Error).message}`);
+      throw e;
+    }
   }
 
   /**

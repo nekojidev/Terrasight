@@ -7,6 +7,8 @@ import type { OutboxRow } from "./outbox.js";
 import { relayOnce, type OutboxStore, type PendingRow } from "./outbox-relay.js";
 
 const TICK_MS = 500;
+/** Published rows are kept this long for debugging, then deleted. */
+export const OUTBOX_RETENTION_DAYS = 7;
 
 type Tx = Pick<Prisma.TransactionClient, "outbox">;
 
@@ -59,6 +61,14 @@ export class OutboxService implements OnModuleInit, OnModuleDestroy, OutboxStore
     } finally {
       this.running = false;
     }
+  }
+
+  /** Deletes published rows older than the retention window; unpublished rows are never touched. */
+  async purgePublished(now = new Date(), days = OUTBOX_RETENTION_DAYS): Promise<number> {
+    const r = await this.prisma.system.outbox.deleteMany({
+      where: { publishedAt: { lt: new Date(now.getTime() - days * 864e5) } },
+    });
+    return r.count;
   }
 
   async withPending(limit: number, fn: (rows: PendingRow[]) => Promise<bigint[]>): Promise<number> {

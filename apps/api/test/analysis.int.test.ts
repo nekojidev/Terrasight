@@ -7,13 +7,14 @@ import { forecastCell, POWER_PARAMETERS, type DailyWeather, type Forecast } from
 import { GenericContainer } from "testcontainers";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { AnalysisService, type FieldCheckJob } from "../src/analysis/analysis.service.js";
+import { AnalysisService, STALE_REASON, type FieldCheckJob } from "../src/analysis/analysis.service.js";
 import { FieldCheckConsumer } from "../src/analysis/field-check.consumer.js";
 import { AiRecommendationsService } from "../src/analysis/ai-recommendations.service.js";
 import { AlertsService } from "../src/analysis/alerts.service.js";
 import { EvalInputsService } from "../src/analysis/eval-inputs.service.js";
 import { ForecastService } from "../src/analysis/forecast.service.js";
 import { AnalysisScheduler } from "../src/analysis/scheduler.js";
+import { AssistantService } from "../src/assistant/assistant.service.js";
 import { ToolError, ToolExecutor } from "../src/assistant/executor.js";
 import type { ScenariosService } from "../src/scenarios/scenarios.service.js";
 import { ScoutingService } from "../src/scouting/scouting.service.js";
@@ -51,6 +52,9 @@ let client: pg.Client;
 let env: Env;
 let prisma: PrismaService;
 let analysis: AnalysisService;
+let outboxSvc: OutboxService;
+let limitsSvc: RateLimitService;
+let eventsStub: EventsService;
 let consumer: FieldCheckConsumer;
 let aiConsumer: FieldCheckConsumer;
 let aiService: AiRecommendationsService;
@@ -190,8 +194,11 @@ beforeAll(async () => {
   prisma = new PrismaService(env);
   const broker = new FakeBroker();
   const outbox = new OutboxService(prisma, broker, env);
+  outboxSvc = outbox;
   const events = { registerStateProvider: () => undefined } as unknown as EventsService;
+  eventsStub = events;
   const limits = new RateLimitService(new RedisService(env));
+  limitsSvc = limits;
   const real = loadLibrary(DATA_DIR);
   const lib: Library = { ...real, enabledModels: [verifiedRootworm(real)] };
   geo = new GeoService(prisma, lib);
@@ -329,7 +336,7 @@ describe("analysis run", () => {
   it("fails a field with no usable data, and says what failed", async () => {
     const { ws, field } = await workspaceWithField("Dryland 3", [-103.2, 40.6]);
     const run = await analysis.start(ws, "manual", null, AS_OF);
-    for (const job of await jobsFor(run.id)) await consumer.handle(job);
+    for (const job of await jobsFor(run.id)) await consumer.handle(job, 2); // last retry: no more waiting
     const done = await analysis.view(ws, run.id);
     expect(done.fields[0]!.status).toBe("failed");
     expect(done.fields[0]!.error).toContain("NASA POWER");
@@ -354,6 +361,109 @@ describe("analysis run", () => {
       expect(v.status).toBe("done");
       expect(v.fields[0]!.status).toBe("ok");
     }
+  });
+});
+
+describe("stuck checks (reliability)", () => {
+  const ago = (ms: number) => new Date(Date.now() - ms);
+  const MIN = 60_000;
+
+  it("a transient failure on the first attempt goes back to waiting and throws, so the consumer retries it", async () => {
+    const { ws, field } = await workspaceWithField("Dryland 4", [-103.3, 40.7]); // no weather cached
+    const run = await analysis.start(ws, "manual", null, AS_OF);
+    const [job] = await jobsFor(run.id);
+    await expect(consumer.handle(job!, 0)).rejects.toThrow();
+    const row = await prisma.system.analysisRunField.findUniqueOrThrow({
+      where: { runId_fieldId: { runId: run.id, fieldId: field } },
+    });
+    expect(row.status).toBe("waiting");
+    expect((await analysis.view(ws, run.id)).status).toBe("running");
+  });
+
+  it("a redelivered message re-claims a stale running row; a fresh one does not", async () => {
+    const { ws, field } = await workspaceWithField("Pivot 31");
+    await seedWeather(field);
+    const run = await analysis.start(ws, "manual", null, AS_OF);
+    const [job] = await jobsFor(run.id);
+    // The first worker took it and died: running, untouched for 20 minutes.
+    await client.query(
+      `UPDATE analysis_run_fields SET status = 'running', updated_at = $3 WHERE run_id = $1 AND field_id = $2`,
+      [run.id, field, ago(20 * MIN)],
+    );
+    expect(await analysis.running(ws, run.id, field)).toBe(false); // first delivery semantics: only "waiting"
+    expect(await analysis.running(ws, run.id, field, 15 * MIN)).toBe(true); // redelivery: stale, re-claimed
+    expect(await analysis.running(ws, run.id, field, 15 * MIN)).toBe(false); // now fresh: no double claim
+    await client.query(`UPDATE analysis_run_fields SET status = 'waiting' WHERE run_id = $1`, [run.id]);
+    await consumer.handle(job!, 1);
+    const v = await analysis.view(ws, run.id);
+    expect(v.status).toBe("done");
+    expect(v.fields[0]!.status).toBe("ok");
+  });
+
+  it("the reaper fails stale running checks with a reason, finishes the run, and leaves fresh ones alone", async () => {
+    const stale = await workspaceWithField("Pivot 32");
+    const fresh = await workspaceWithField("Pivot 33");
+    const staleRun = await analysis.start(stale.ws, "manual", null, AS_OF);
+    const freshRun = await analysis.start(fresh.ws, "manual", null, AS_OF);
+    await client.query(
+      `UPDATE analysis_run_fields SET status = 'running', updated_at = $2 WHERE run_id = $1`,
+      [staleRun.id, ago(30 * MIN)],
+    );
+    await client.query(`UPDATE analysis_run_fields SET status = 'running' WHERE run_id = $1`, [freshRun.id]);
+
+    expect(await analysis.reapStale()).toBeGreaterThanOrEqual(1);
+
+    const done = await analysis.view(stale.ws, staleRun.id);
+    expect(done.status).toBe("done");
+    expect(done.fields[0]).toMatchObject({ status: "failed", error: STALE_REASON });
+    expect(done.summary).toMatchObject({ total: 1, checked: 0, problems: [{ status: "failed", error: STALE_REASON }] });
+    expect((await analysis.view(fresh.ws, freshRun.id)).status).toBe("running");
+    expect(await analysis.reapStale()).toBe(0); // idempotent
+  });
+
+  it("the reaper also fails a check that never started (lost job) after a long wait", async () => {
+    const { ws } = await workspaceWithField("Pivot 34");
+    const run = await analysis.start(ws, "manual", null, AS_OF);
+    await client.query(`UPDATE analysis_run_fields SET updated_at = $2 WHERE run_id = $1`, [run.id, ago(2 * 60 * MIN)]);
+    await analysis.reapStale();
+    expect((await analysis.view(ws, run.id)).status).toBe("done");
+  });
+
+  it("marks assistant messages left empty after a crash as errored, but not recent or finished ones", async () => {
+    const { ws } = await workspaceWithField("Pivot 35");
+    const conv = await prisma.system.conversation.create({
+      data: { workspaceId: ws, userId: crypto.randomUUID(), expiresAt: ago(-864e5) },
+    });
+    const mk = (data: { text: string; createdAt: Date; error?: string }) =>
+      prisma.system.message.create({ data: { conversationId: conv.id, role: "assistant", ...data } });
+    const lost = await mk({ text: "", createdAt: ago(5 * MIN) });
+    const recent = await mk({ text: "", createdAt: ago(30_000) });
+    const answered = await mk({ text: "Done.", createdAt: ago(5 * MIN) });
+    const svc = new AssistantService(env, prisma, outboxSvc, eventsStub, limitsSvc, null as never);
+    expect(await svc.reapStaleTurns()).toBe(1);
+    const get = (id: string) => prisma.system.message.findUniqueOrThrow({ where: { id } });
+    expect((await get(lost.id)).error).toBeTruthy();
+    expect((await get(recent.id)).error).toBeNull();
+    expect((await get(answered.id)).error).toBeNull();
+    const events = await prisma.system.outbox.findMany({ where: { routingKey: { contains: conv.id } } });
+    expect(JSON.stringify(events.map((e) => e.payload))).toContain(lost.id);
+  });
+});
+
+describe("outbox retention", () => {
+  it("deletes published rows older than 7 days and keeps recent and unpublished ones", async () => {
+    const day = 864e5;
+    const row = (publishedAt: Date | null, createdAt: Date) =>
+      prisma.system.outbox.create({
+        data: { exchange: "x", routingKey: "purge.test", payload: {}, publishedAt, createdAt },
+      });
+    const old = await row(new Date(Date.now() - 8 * day), new Date(Date.now() - 9 * day));
+    const recent = await row(new Date(Date.now() - 2 * day), new Date(Date.now() - 3 * day));
+    const pending = await row(null, new Date(Date.now() - 30 * day));
+    expect(await outboxSvc.purgePublished()).toBeGreaterThanOrEqual(1);
+    const ids = (await prisma.system.outbox.findMany({ where: { routingKey: "purge.test" } })).map((r) => r.id);
+    expect(ids).not.toContain(old.id);
+    expect(ids).toEqual(expect.arrayContaining([recent.id, pending.id]));
   });
 });
 

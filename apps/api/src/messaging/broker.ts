@@ -22,6 +22,8 @@ export interface Broker {
   consume(queue: string, prefetch: number, handler: ConsumeHandler): Promise<void>;
   /** Exclusive, auto-delete queue bound to `exchange` with `pattern`; used by the SSE stream. */
   subscribe(exchange: string, pattern: string, handler: (msg: IncomingMessage) => void): Promise<void>;
+  /** Messages waiting in `queue`; null when unknown (disconnected). */
+  queueDepth(queue: string): Promise<number | null>;
   readonly connected: boolean;
 }
 

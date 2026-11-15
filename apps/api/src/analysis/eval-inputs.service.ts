@@ -66,10 +66,7 @@ export class EvalInputsService {
       select: { regionId: true, tier: true, country: true, irrigation: true, slopePct: true },
     });
     const geom = await this.geo.fieldGeometry(fieldId);
-    const take = async () => {
-      while (!(await this.limits.take("source:power", BUCKET)))
-        await new Promise((res) => setTimeout(res, 250));
-    };
+    const take = () => this.limits.takeWithin("source:power", BUCKET, 250);
     const models = this.lib.enabledModels;
     const needsNdvi = models.some((m) => JSON.stringify(m.tree).includes('"green_bridge"'));
     const [power, forecast, s2] = await Promise.all([

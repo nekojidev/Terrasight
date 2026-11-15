@@ -61,8 +61,7 @@ export class ForecastService {
     ];
     for (const [name, call] of providers) {
       try {
-        while (!(await this.limits.take(`source:forecast:${name}`, BUCKET)))
-          await new Promise((r) => setTimeout(r, 200));
+        await this.limits.takeWithin(`source:forecast:${name}`, BUCKET, 200);
         const forecast = await call();
         const data = {
           source: "forecast",
@@ -113,8 +112,7 @@ export class ForecastService {
     const cached = row?.payload as unknown as HourlyForecast | undefined;
     if (cached && age < FRESH_MS) return { forecast: cached, origin: "cache", ageHours: Math.round(age / 3600_000) };
     try {
-      while (!(await this.limits.take("source:forecast:Open-Meteo", BUCKET)))
-        await new Promise((r) => setTimeout(r, 200));
+      await this.limits.takeWithin("source:forecast:Open-Meteo", BUCKET, 200);
       const forecast = await openMeteoHourly(cell, this.ctx(today), this.env.OPEN_METEO_API_KEY);
       const data = {
         source: "forecast",
