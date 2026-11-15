@@ -100,3 +100,28 @@ describe("bounded waits for rate-limit tokens", () => {
     await settled;
   });
 });
+
+describe("circuit breaker manual probe", () => {
+  const boom = () => Promise.reject(new SourceError("responded 503", true));
+
+  it("force runs the call while open; success closes the circuit, failure keeps it open", async () => {
+    let t = 0;
+    const breaker = new CircuitBreaker({ threshold: 2, cooldownMs: 30_000, now: () => t });
+    for (let i = 0; i < 2; i++) await breaker.run("soilgrids", boom).catch(() => undefined);
+    await expect(breaker.run("soilgrids", async () => "x")).rejects.toBeInstanceOf(CircuitOpenError);
+    await expect(breaker.run("soilgrids", boom, undefined, { force: true })).rejects.toThrow("503");
+    expect(breaker.isOpen("soilgrids")).toBe(true);
+    await expect(breaker.run("soilgrids", async () => "ok", undefined, { force: true })).resolves.toBe("ok");
+    expect(breaker.isOpen("soilgrids")).toBe(false);
+    t += 1;
+    await expect(breaker.run("soilgrids", async () => "again")).resolves.toBe("again");
+  });
+
+  it("the open error carries the wait and a 'retrying' message", async () => {
+    const breaker = new CircuitBreaker({ threshold: 1, cooldownMs: 30_000, now: () => 0 });
+    await breaker.run("soilgrids", boom).catch(() => undefined);
+    const err = (await breaker.run("soilgrids", boom).catch((e: unknown) => e)) as CircuitOpenError;
+    expect(err.retryInMs).toBe(30_000);
+    expect(err.message).toContain("temporarily unavailable, retrying");
+  });
+});

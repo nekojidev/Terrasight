@@ -1,9 +1,11 @@
 import { SourceError } from "@terrasight/sources";
 
 export class CircuitOpenError extends SourceError {
+  readonly retryInMs: number;
   constructor(key: string, retryInMs: number) {
     // Not retryable: the point is to skip the live call and go straight to cache / fixture / stale.
-    super(`is unavailable (paused for ${Math.ceil(retryInMs / 1000)} s after repeated failures; ${key})`, false);
+    super(`is temporarily unavailable, retrying (paused ${Math.ceil(retryInMs / 1000)} s after repeated failures; ${key})`, false);
+    this.retryInMs = retryInMs;
     this.name = "CircuitOpenError";
   }
 }
@@ -79,8 +81,14 @@ export class CircuitBreaker {
    * non-retryable SourceError (a 4xx says the request is wrong, not that the source is down); `failed(result)` lets a
    * caller count a returned failure too.
    */
-  async run<T>(key: string, fn: () => Promise<T>, failed?: (result: T) => boolean): Promise<T> {
-    const wait = this.waitMs(key);
+  async run<T>(
+    key: string,
+    fn: () => Promise<T>,
+    failed?: (result: T) => boolean,
+    opts: { force?: boolean } = {},
+  ): Promise<T> {
+    // A manual retry ("Retry" button) probes now: it skips the pause, and its outcome closes or re-opens the circuit.
+    const wait = opts.force ? 0 : this.waitMs(key);
     if (wait > 0) throw new CircuitOpenError(key, wait);
     try {
       const result = await fn();
