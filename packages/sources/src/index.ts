@@ -51,6 +51,19 @@ export {
   type ForecastDay,
   type HourlyForecast,
 } from "./forecast.js";
+export {
+  fetchCountyYields,
+  parseCountyYields,
+  nassCacheKey,
+  stripKey,
+  toTPerHa,
+  NASS_CROPS,
+  NASS_ATTRIBUTION,
+  type CountyYield,
+  type NassQuery,
+  type NassResult,
+  type Practice,
+} from "./nass.js";
 export { openMeteoSeasonal, parseSeasonal, type SeasonalEnsemble } from "./seasonal.js";
 
 import { cdl } from "./cdl.js";

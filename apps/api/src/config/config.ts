@@ -22,6 +22,8 @@ export const EnvSchema = z.object({
   CDSE_CLIENT_ID: z.string().optional(),
   CDSE_CLIENT_SECRET: z.string().optional(),
   OPENET_API_KEY: z.string().optional(),
+  /** USDA NASS Quick Stats key (EP-10 S-10.07); without it county yields report "not connected". */
+  NASS_API_KEY: z.string().optional(),
   /** Open-Meteo commercial key (RFC §13); without it the free endpoint is used (development only). */
   OPEN_METEO_API_KEY: z.string().optional(),
   EARTHDATA_TOKEN: z.string().optional(),
