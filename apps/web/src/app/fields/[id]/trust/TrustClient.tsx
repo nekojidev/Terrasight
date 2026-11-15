@@ -11,7 +11,7 @@ import { ApiError, api } from "@/lib/api";
 import { useFormat } from "@/lib/useFormat";
 import { FieldTabs } from "../Overview";
 import { cropLabel } from "../log/group";
-import { readCase2022, readFit, readNdvi } from "./trustView";
+import { flatExample, readCase2022, readFit, readNdvi } from "./trustView";
 
 type Fmt = ReturnType<typeof useFormat>;
 type T = ReturnType<typeof useTranslations>;
@@ -41,6 +41,8 @@ function unavailableReport(fieldId: string, reason: string): TrustReport {
     notModelled: [],
     caveats: [],
     retrospective: null,
+    modelFlat: false,
+    dryland: null,
   };
 }
 
@@ -146,15 +148,18 @@ function Ready({ report, cropNames }: { report: TrustReport; cropNames: CropName
   const derz = report.actual.kind === "derzhstat";
   const years = [...report.years].sort((a, b) => a.year - b.year);
   const crop = (c: string | null) => cropLabel(c, cropNames, fmt.locale, t("miss_crop_unknown"));
+  const flat = report.modelFlat === true;
+  const dryland = report.dryland ?? null;
   return (
     <>
-      {report.case2022 && <Case2022 y={report.case2022} fmt={fmt} t={t} />}
+      {flat && <FlatNotice years={years} fmt={fmt} t={t} />}
+      {report.case2022 && <Case2022 y={report.case2022} flat={flat} fmt={fmt} t={t} />}
       <Surface as="section" aria-labelledby="trust-fit" className="flex flex-col gap-4">
         <h2 id="trust-fit" className="text-h2 text-ink">
           {t("fit_title")}
         </h2>
-        <Fit title={t(derz ? "fit_county_derzhstat" : "fit_county")} fit={report.vsCounty} fmt={fmt} t={t} />
-        <Fit title={t("fit_ndvi")} fit={report.vsNdvi} fmt={fmt} t={t} />
+        <Fit title={t(derz ? "fit_county_derzhstat" : "fit_county")} fit={report.vsCounty} flat={flat} fmt={fmt} t={t} />
+        <Fit title={t("fit_ndvi")} fit={report.vsNdvi} flat={flat} fmt={fmt} t={t} />
         <p className="text-caption text-ink-2">{t("fit_rule")}</p>
       </Surface>
       <Surface as="section" aria-labelledby="trust-chart" className="flex flex-col gap-3">
@@ -180,6 +185,7 @@ function Ready({ report, cropNames }: { report: TrustReport; cropNames: CropName
         />
       </Surface>
       <Missed years={years} hasCounty={report.vsCounty !== null} fmt={fmt} t={t} crop={crop} nodata={nodata} />
+      {dryland && <Dryland d={dryland} fmt={fmt} t={t} crop={crop} nodata={nodata} />}
       <NotModelled report={report} t={t} crop={(c) => cropLabel(c, cropNames, fmt.locale, c)} />
       <Surface as="section" aria-labelledby="trust-src">
         <h2 id="trust-src" className="text-h2 text-ink">
@@ -192,6 +198,89 @@ function Ready({ report, cropNames }: { report: TrustReport; cropNames: CropName
   );
 }
 
+/** Neutral note for a field whose model shows the same yield every year (irrigated): icon plus words, not an error. */
+function FlatNotice({ years, fmt, t }: { years: TrustYear[]; fmt: Fmt; t: T }) {
+  const ex = flatExample(years);
+  return (
+    <section
+      aria-labelledby="trust-flat"
+      className="flex gap-3 rounded-card border border-line-strong bg-info-soft p-4"
+    >
+      <svg aria-hidden="true" viewBox="0 0 24 24" width="24" height="24" className="mt-0.5 shrink-0 text-ink" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+        <circle cx="12" cy="12" r="10" />
+        <path d="M12 11v6M12 7.5v.01" />
+      </svg>
+      <div className="min-w-0">
+        <h2 id="trust-flat" className="text-h2 text-ink">
+          {t("flat_title")}
+        </h2>
+        <p className="mt-1 text-body text-ink">
+          {ex
+            ? t("flat_body_example", { value: signedPct(fmt, ex.county, t("c22_nodata")), year: ex.year })
+            : t("flat_body")}
+        </p>
+      </div>
+    </section>
+  );
+}
+
+function Dryland({
+  d,
+  fmt,
+  t,
+  crop,
+  nodata,
+}: {
+  d: NonNullable<TrustReport["dryland"]>;
+  fmt: Fmt;
+  t: T;
+  crop: (c: string | null) => string;
+  nodata: string;
+}) {
+  const years = [...d.years].sort((a, b) => a.year - b.year);
+  const highlight = [2012, 2022]
+    .filter((y) => years.some((r) => r.year === y))
+    .map((y) => ({ year: y, label: String(y) }));
+  return (
+    <>
+      <Surface as="section" aria-labelledby="trust-dry" className="flex flex-col gap-4">
+        <h2 id="trust-dry" className="text-h2 text-ink">
+          {t("dry_title")}
+        </h2>
+        <p className="text-body text-ink">{t("dry_intro", { area: d.area })}</p>
+        <Fit title={t("dry_fit")} fit={d.fit} flat={false} fmt={fmt} t={t} />
+        <p className="text-caption text-ink-2">{t("fit_rule")}</p>
+      </Surface>
+      <Surface as="section" aria-labelledby="trust-dry-chart" className="flex flex-col gap-3">
+        <h2 id="trust-dry-chart" className="text-h2 text-ink">
+          {t("dry_chart_title")}
+        </h2>
+        <ModelVsActualChart
+          years={years.map((y) => y.year)}
+          series={[
+            { id: "model", label: t("dry_series_model"), values: years.map((y) => y.model) },
+            { id: "county", label: t("dry_series_actual"), values: years.map((y) => y.county) },
+          ]}
+          unitLabel={t("chart_unit")}
+          highlightYears={highlight}
+          missYears={years.filter((y) => y.miss).map((y) => y.year)}
+          ariaLabel={t("dry_chart_aria")}
+          tableCaption={t("dry_chart_caption")}
+        />
+      </Surface>
+      <Missed
+        years={years}
+        hasCounty={d.fit !== null && d.fit.n > 0}
+        fmt={fmt}
+        t={t}
+        crop={crop}
+        nodata={nodata}
+        dry
+      />
+    </>
+  );
+}
+
 function sourceText(report: TrustReport, t: T): string {
   const { kind, connected, area } = report.actual;
   if (kind === "nass" && connected) return area ? t("src_nass_area", { area }) : t("src_nass");
@@ -199,16 +288,20 @@ function sourceText(report: TrustReport, t: T): string {
   return t("src_none");
 }
 
-function Case2022({ y, fmt, t }: { y: TrustYear; fmt: Fmt; t: T }) {
+function Case2022({ y, flat, fmt, t }: { y: TrustYear; flat: boolean; fmt: Fmt; t: T }) {
   const nodata = t("c22_nodata");
-  const reading = readCase2022(y);
+  const reading = readCase2022(y, flat);
   const ndvi = readNdvi(y);
   const gap = (n: number) => fmt.number(n, { maximumFractionDigits: 0 });
   const sentence = !reading
     ? t("c22_nomodel")
     : reading.kind === "nocounty"
       ? t("c22_nocounty")
-      : reading.kind === "same"
+      : reading.kind === "modelflat"
+        ? t(Math.round(reading.county) === 0 ? "c22_modelflat_at" : reading.county < 0 ? "c22_modelflat_below" : "c22_modelflat_above", {
+            value: fmt.number(Math.abs(Math.round(reading.county)), { maximumFractionDigits: 0 }),
+          })
+        : reading.kind === "same"
         ? t(reading.close ? "c22_same_close" : "c22_same_far", { gap: gap(reading.gap) })
         : reading.kind === "flat"
           ? t("c22_flat", { gap: gap(reading.gap) })
@@ -236,17 +329,20 @@ function Case2022({ y, fmt, t }: { y: TrustYear; fmt: Fmt; t: T }) {
         {sentence}
         {ndvi && ` ${t(`c22_ndvi_${ndvi}` as "c22_ndvi_same")}`}
       </p>
-      <p className="text-caption text-ink-2">{t("c22_rule")}</p>
+      {!flat && <p className="text-caption text-ink-2">{t("c22_rule")}</p>}
     </Surface>
   );
 }
 
-function Fit({ title, fit, fmt, t }: { title: string; fit: TrustFit | null; fmt: Fmt; t: T }) {
+function Fit({ title, fit, flat, fmt, t }: { title: string; fit: TrustFit | null; flat: boolean; fmt: Fmt; t: T }) {
+  const reading = fit ? readFit(fit, flat) : null;
   return (
     <div>
       <h3 className="text-body font-semibold text-ink">{title}</h3>
       {!fit || fit.n === 0 ? (
         <p className="text-body text-ink-2">{t("fit_none")}</p>
+      ) : reading === "flat" ? (
+        <p className="text-body text-ink">{t("read_flat")}</p>
       ) : (
         <>
           <p className="font-mono text-body text-ink">
@@ -260,8 +356,8 @@ function Fit({ title, fit, fmt, t }: { title: string; fit: TrustFit | null; fmt:
             })}
           </p>
           <p className="mt-1">
-            <Chip tone={readFit(fit) === "close" ? "ok" : readFit(fit) === "loose" ? "week" : readFit(fit) === "few" ? "neutral" : "urgent"}>
-              {t(`read_${readFit(fit)}` as "read_close")}
+            <Chip tone={reading === "close" ? "ok" : reading === "loose" ? "week" : reading === "few" ? "neutral" : "urgent"}>
+              {t(`read_${reading}` as "read_close")}
             </Chip>
           </p>
         </>
@@ -277,9 +373,11 @@ function Missed({
   t,
   crop,
   nodata,
+  dry = false,
 }: {
   years: TrustYear[];
   hasCounty: boolean;
+  dry?: boolean;
   fmt: Fmt;
   t: T;
   crop: (c: string | null) => string;
@@ -287,11 +385,11 @@ function Missed({
 }) {
   const missed = years.filter((y) => y.miss);
   return (
-    <Surface as="section" aria-labelledby="trust-miss">
-      <h2 id="trust-miss" className="text-h2 text-ink">
-        {t("miss_title")}
+    <Surface as="section" aria-labelledby={dry ? "trust-dry-miss" : "trust-miss"}>
+      <h2 id={dry ? "trust-dry-miss" : "trust-miss"} className="text-h2 text-ink">
+        {t(dry ? "dry_miss_title" : "miss_title")}
       </h2>
-      <p className="mt-1 text-body text-ink-2">{t("miss_intro")}</p>
+      <p className="mt-1 text-body text-ink-2">{t(dry ? "dry_miss_intro" : "miss_intro")}</p>
       {missed.length === 0 ? (
         <p className="mt-3 text-body text-ink">{t(hasCounty ? "miss_empty" : "miss_nocounty")}</p>
       ) : (

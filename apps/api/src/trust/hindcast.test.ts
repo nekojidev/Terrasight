@@ -1,10 +1,12 @@
 import type { WeatherDay } from "@terrasight/simulator";
 import { describe, expect, it } from "vitest";
 import {
+  buildDryland,
   buildTable,
   chooseSeries,
   deviationsFromMean,
   fit,
+  isModelFlat,
   missReason,
   pearson,
   pickActual,
@@ -152,5 +154,68 @@ describe("reasons for a miss (T12)", () => {
     expect(missReason(2010, w, corn)).toBe("harvest-rain");
     expect(missReason(2010, weather(() => ({})), corn)).toBe("unknown");
     expect(missReason(1990, w, corn)).toBe("unknown"); // no weather for that year
+  });
+});
+
+describe("flat model", () => {
+  it("is flat with at least 3 non-null years all within 0.05 points of 0", () => {
+    expect(isModelFlat([{ model: 0 }, { model: 0.04 }, { model: -0.05 }, { model: null }])).toBe(true);
+    expect(isModelFlat([{ model: 0 }, { model: 0 }])).toBe(false);
+    expect(isModelFlat([{ model: 0 }, { model: 0 }, { model: 0.2 }])).toBe(false);
+    expect(isModelFlat([])).toBe(false);
+  });
+});
+
+describe("the dryland check", () => {
+  const years = Array.from({ length: 10 }, (_, i) => 2013 + i);
+  const rowsFor = (crop: string): SeasonRow[] =>
+    years.map((year, i) => ({ year, crop, relative: 1 + (i % 3) * 0.1, ndviPeak: null }));
+  const series = (practice: ActualPoint["practice"], from: number, n: number, base = 5): ActualPoint[] =>
+    pts(practice, from, Array.from({ length: n }, (_, i) => base + (i % 3) * 0.5));
+  const src = (county: ActualSources["county"], state: ActualSources["state"]): ActualSources => ({
+    kind: "nass",
+    connected: true,
+    county,
+    state,
+    oblast: false,
+  });
+
+  it("uses the county non-irrigated series when it has 8+ values in the compared years; ignores irrigated and all", () => {
+    const d = buildDryland(
+      rowsFor("corn"),
+      src({ corn: { area: "Finney County, KS", points: [...series("non-irrigated", 2013, 10), ...series("irrigated", 2013, 10, 12), ...series("all", 2013, 10, 9)] } }, {}),
+      () => "unknown",
+    )!;
+    expect(d.area).toBe("Finney County, KS (non-irrigated)");
+    expect(d.years.every((y) => y.practice === "non-irrigated")).toBe(true);
+    expect(d.fit!.n).toBe(10);
+    expect(d.fit!.r).toBeCloseTo(1, 2);
+    expect(d.case2022!.year).toBe(2022);
+  });
+
+  it("falls back to the state non-irrigated series when the county has fewer than 8 values, never mixing", () => {
+    const d = buildDryland(
+      rowsFor("corn"),
+      src(
+        { corn: { area: "Finney County, KS", points: series("non-irrigated", 2013, 5) } },
+        { corn: { area: "Kansas", points: series("non-irrigated", 2005, 20) } },
+      ),
+      () => "unknown",
+    )!;
+    expect(d.area).toBe("Kansas (state level, non-irrigated)");
+    expect(d.years.every((y) => y.county !== null)).toBe(true);
+  });
+
+  it("a crop without any non-irrigated series carries county null; no series at all gives null", () => {
+    const rows = [...rowsFor("corn"), ...rowsFor("soybean")];
+    const d = buildDryland(
+      rows,
+      src({ corn: { area: "Kansas", points: series("non-irrigated", 2013, 10) }, soybean: { area: "Finney County, KS", points: series("all", 2013, 10) } }, {}),
+      () => "unknown",
+    )!;
+    expect(d.years.filter((y) => y.crop === "soybean").every((y) => y.county === null && !y.miss)).toBe(true);
+    expect(d.years.filter((y) => y.crop === "corn").every((y) => y.county !== null)).toBe(true);
+    expect(buildDryland(rowsFor("corn"), src({ corn: { area: "X", points: series("irrigated", 2013, 10) } }, {}), () => "unknown")).toBeNull();
+    expect(buildDryland(rowsFor("corn"), { ...src({}, {}), kind: "none" }, () => "unknown")).toBeNull();
   });
 });

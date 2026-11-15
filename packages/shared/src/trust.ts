@@ -71,4 +71,21 @@ export interface TrustReport {
   /** Engine caveats carried over, e.g. "unverified-crop-parameters:winter_wheat". */
   caveats: string[];
   retrospective: Retrospective | null;
+  /**
+   * True when the model shows no year-to-year change for this field (an irrigated field: the simulator assumes
+   * irrigation always covers the crop's need, so its relative yield is 1 in every year). Then `vsCounty` and `vsNdvi`
+   * have r = null and the page must say that the model cannot be checked against yields for this field.
+   */
+  modelFlat: boolean;
+  /**
+   * The same model, soil and weather WITHOUT irrigation, against non-irrigated yields (state level when the county
+   * has too few). It checks what the simulator actually models (water stress); it is not this field's own result.
+   * Null when the field is rainfed already (the main comparison is that check) or when no non-irrigated series exists.
+   */
+  dryland: {
+    area: string;
+    years: TrustYear[];
+    fit: TrustFit | null;
+    case2022: TrustYear | null;
+  } | null;
 }

@@ -374,3 +374,50 @@ export function buildTable(
     caveats: [...new Set(caveats)],
   };
 }
+
+// ---------- flat model and the dryland check ----------
+
+/** A model value within this many points of 0 counts as "no change". */
+export const FLAT_POINTS = 0.05;
+
+/** True when every non-null model deviation is 0 (within FLAT_POINTS) and there are at least 3 such years. */
+export function isModelFlat(years: Array<{ model: number | null }>): boolean {
+  const vals = years.map((y) => y.model).filter((m): m is number => m !== null);
+  return vals.length >= 3 && vals.every((m) => Math.abs(m) <= FLAT_POINTS);
+}
+
+export type Dryland = NonNullable<TrustReport["dryland"]>;
+
+/**
+ * The same model without irrigation against NON-IRRIGATED yields only (never "all" or irrigated values): the county
+ * series when it has at least MIN_COUNTY_VALUES values in the compared years, else the state series. A crop without
+ * a non-irrigated series keeps `county: null`. Null when no crop has any such series. `rows` must come from a run
+ * with irrigation switched off.
+ */
+export function buildDryland(
+  rows: SeasonRow[],
+  actual: ActualSources,
+  reasonFor: (row: SeasonRow) => MissReason,
+): Dryland | null {
+  const only = (m: ActualSources["county"]): ActualSources["county"] =>
+    Object.fromEntries(
+      Object.entries(m)
+        .map(([c, s]) => [c, { area: s.area, points: s.points.filter((p) => p.practice === "non-irrigated") }] as const)
+        .filter(([, s]) => s.points.length > 0),
+    );
+  if (actual.oblast) return null;
+  const dry: ActualSources = { ...actual, county: only(actual.county), state: only(actual.state) };
+  const t = buildTable(
+    rows.map((r) => ({ ...r, ndviPeak: null })),
+    dry,
+    "non-irrigated",
+    reasonFor,
+  );
+  if (t.area === null || t.vsCounty === null) return null;
+  return {
+    area: t.area,
+    years: t.years,
+    fit: t.vsCounty,
+    case2022: t.years.find((y) => y.year === 2022) ?? null,
+  };
+}

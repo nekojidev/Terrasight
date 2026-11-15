@@ -86,8 +86,20 @@ const base = (over: Partial<TrustReport> = {}): TrustReport => ({
   notModelled: ["heat", "pests"],
   caveats: ["unverified-crop-parameters:corn"],
   retrospective: null,
+  modelFlat: false,
+  dryland: null,
   ...over,
 });
+
+const dry = (over: Partial<NonNullable<TrustReport["dryland"]>> = {}): NonNullable<TrustReport["dryland"]> => ({
+  area: "Kansas (state level, non-irrigated)",
+  years: [2012, 2020, 2021, 2022].map((y) => year(y, { practice: "non-irrigated" })),
+  fit: { n: 9, r: 0.81, mae: 7.2 },
+  case2022: year(2022),
+  ...over,
+});
+
+const flatYears = [2018, 2019, 2020, 2021, 2022].map((y) => year(y, { model: 0, county: y === 2022 ? -16.6 : 3 }));
 
 const show = async (r: TrustReport | Error) => {
   report = r;
@@ -213,6 +225,95 @@ describe("TrustClient", () => {
   });
 });
 
+describe("irrigated field: flat model", () => {
+  const flat = (over: Partial<TrustReport> = {}) =>
+    base({
+      modelFlat: true,
+      years: flatYears,
+      vsCounty: { n: 5, r: null, mae: 4.2 },
+      vsNdvi: { n: 5, r: null, mae: 5 },
+      case2022: year(2022, { model: 0, county: -16.6, ndvi: -10 }),
+      ...over,
+    });
+
+  it("states first that the model cannot be checked, with the 2022 county deviation, then no 'close' reading", async () => {
+    await show(flat());
+    const heads = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
+    expect(heads[0]).toBe("The model cannot be checked against yields for this field");
+    expect(heads[1]).toBe("2022: the record drought");
+    expect(screen.getByText(/the model shows the same yield every year: it assumes irrigation always covers/)).toBeTruthy();
+    expect(screen.getByText(/for example −17% in 2022 against the county trend/)).toBeTruthy();
+    expect(screen.getByText(/The model shows no change; the county yield was 17% below its trend\./)).toBeTruthy();
+    expect(screen.queryByText(/Model and county moved the same way/)).toBeNull();
+    expect(screen.queryByText(/points apart: within 10 points/)).toBeNull();
+    expect(screen.getAllByText("Cannot be compared: the model does not vary.")).toHaveLength(2);
+    expect(screen.queryByText("Too few years to say.")).toBeNull();
+  });
+
+  it("without a 2022 county value the example is the largest county deviation; without any it is omitted", async () => {
+    const ys = [2018, 2019, 2020, 2021].map((y, i) => year(y, { model: 0, county: [3, -12, 5, 2][i]! }));
+    await show(flat({ years: ys, case2022: year(2022, { model: 0, county: null }) }));
+    expect(screen.getByText(/for example −12% in 2019 against the county trend/)).toBeTruthy();
+    expect(screen.getByText(/There is no county yield for 2022/)).toBeTruthy();
+    cleanup();
+    await show(flat({ years: ys.map((y) => ({ ...y, county: null })), case2022: null }));
+    expect(screen.getByText(/Real yields still moved\. So for this field/)).toBeTruthy();
+    expect(screen.queryByText(/for example/)).toBeNull();
+  });
+
+  it("too few years stays 'too few years' even when the model is flat", async () => {
+    await show(flat({ vsCounty: { n: 3, r: null, mae: 4 } }));
+    expect(screen.getByText("Too few years to say.")).toBeTruthy();
+  });
+
+  it("dryland good fit: own section, area, fit line, chart series, highlighted years, missed list", async () => {
+    await show(
+      flat({
+        dryland: dry({
+          years: [
+            year(2012, { model: -40, county: -35, practice: "non-irrigated" }),
+            year(2019, { model: 30, county: -10, practice: "non-irrigated", miss: true, reason: "unknown" }),
+            year(2022, { model: -20, county: -25, practice: "non-irrigated" }),
+          ],
+        }),
+      }),
+    );
+    expect(screen.getByRole("heading", { name: "The same model without irrigation" })).toBeTruthy();
+    expect(screen.getByText(/compared it with non-irrigated yields of Kansas \(state level, non-irrigated\)\./)).toBeTruthy();
+    expect(screen.getByText(/It is not this field's result/)).toBeTruthy();
+    expect(screen.getByText("r = 0.81, mean error 7.2 points, 9 years")).toBeTruthy();
+    expect(screen.getByText("The model follows it closely.")).toBeTruthy();
+    const calls = chartProps.mock.calls.map(
+      (c) => c[0] as { series: Array<{ id: string; label: string }>; highlightYears: Array<{ year: number }>; missYears: number[] },
+    );
+    const d = calls[1]!;
+    expect(d.series.map((x) => x.label)).toEqual(["Model without irrigation", "Non-irrigated yields"]);
+    expect(d.highlightYears.map((h) => h.year)).toEqual([2012, 2022]);
+    expect(d.missYears).toEqual([2019]);
+    expect(screen.getByRole("heading", { name: "Years the model without irrigation missed" })).toBeTruthy();
+  });
+
+  it("dryland poor fit says so in the same words", async () => {
+    await show(flat({ dryland: dry({ fit: { n: 9, r: 0.1, mae: 25 } }) }));
+    expect(screen.getByText("r = 0.10, mean error 25.0 points, 9 years")).toBeTruthy();
+    expect(screen.getByText("The model does not follow it.")).toBeTruthy();
+  });
+
+  it("dryland absent: no such section", async () => {
+    await show(flat());
+    expect(screen.queryByRole("heading", { name: "The same model without irrigation" })).toBeNull();
+  });
+});
+
+describe("rainfed field", () => {
+  it("shows neither the flat note nor a dryland section", async () => {
+    await show(base());
+    expect(screen.queryByText("The model cannot be checked against yields for this field")).toBeNull();
+    expect(screen.queryByRole("heading", { name: "The same model without irrigation" })).toBeNull();
+    expect(chartProps).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("trustView rules", () => {
   it("thresholds", () => {
     expect(readFit({ n: 10, r: 0.7, mae: 1 })).toBe("close");
@@ -221,6 +322,9 @@ describe("trustView rules", () => {
     expect(readFit({ n: 10, r: 0.39, mae: 1 })).toBe("none");
     expect(readFit({ n: 10, r: -0.9, mae: 1 })).toBe("opposite");
     expect(readFit({ n: 4, r: 0.99, mae: 1 })).toBe("few");
+    expect(readFit({ n: 8, r: null, mae: 1 })).toBe("few");
+    expect(readFit({ n: 8, r: null, mae: 1 }, true)).toBe("flat");
+    expect(readFit({ n: 3, r: null, mae: 1 }, true)).toBe("few");
   });
   it("2022 direction", () => {
     expect(readCase2022(year(2022, { model: -20, county: 10 }))).toEqual({ kind: "opposite" });
