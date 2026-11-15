@@ -7,9 +7,6 @@ import {
   ConfirmDialog,
   FieldThumb,
   InfoHint,
-  SeasonLabel,
-  SelectField,
-  TextField,
   cropColour,
 } from "@terrasight/ui";
 import {
@@ -29,7 +26,7 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
-import { useState, type FormEvent } from "react";
+import { useState } from "react";
 import { api } from "@/lib/api";
 import { useWorkspaceEvents } from "@/lib/events";
 import { QueryState } from "@/components/QueryState";
@@ -38,6 +35,7 @@ import { FieldAssistant } from "@/components/FieldAssistant";
 import { TodayWindows } from "@/components/TodayWindows";
 import { YieldCard } from "./YieldCard";
 import { OutlookCard } from "./OutlookCard";
+import { SeasonPlanner } from "./SeasonPlanner";
 import { GatherFocus, isFirstBuild } from "./GatherFocus";
 import { FieldBrief, FieldTabs, RisksCard, WeatherCard, type Risk } from "./Overview";
 
@@ -90,6 +88,7 @@ interface History {
     detection: { status: string; method: string; confidence: number } | null;
   };
   currentRotation: { label: string; share: number; rotationId: string | null } | null;
+  regionCrops?: string[];
   cropNames: Record<string, { en: string; uk: string }>;
 }
 
@@ -297,15 +296,7 @@ export function FieldClient({
               workspaceId={workspaceId}
             />
           )}
-          {history.data && (
-            <SeasonCard
-              base={base}
-              canEdit={canEdit}
-              cropNames={history.data.cropNames}
-              workspaceId={workspaceId}
-              fieldId={id}
-            />
-          )}
+          {history.data && <SeasonPlanner base={base} canEdit={canEdit} history={history.data} workspaceId={workspaceId} fieldId={id} />}
         </div>
       </div>
       {canEdit && (
@@ -766,130 +757,6 @@ function IrrigationCard({
             ))}
         </div>
       )}
-    </section>
-  );
-}
-
-/** This season's record with the source of each value (RFC §6.4, S-02.08). */
-function SeasonCard({
-  base,
-  canEdit,
-  cropNames,
-  workspaceId,
-  fieldId,
-}: {
-  base: string;
-  canEdit: boolean;
-  cropNames: History["cropNames"];
-  workspaceId: string;
-  fieldId: string;
-}) {
-  const t = useTranslations("App");
-  const locale = useLocale();
-  const client = useQueryClient();
-  const [saved, setSaved] = useState(false);
-  const report = useReportError();
-  const record = useQuery({
-    queryKey: ["field", workspaceId, fieldId, "season"],
-    queryFn: () => api<SeasonRecord>(`${base}/season-records/current`),
-  });
-  const save = useMutation({
-    onError: report,
-    mutationFn: (body: Record<string, string | null>) =>
-      api<SeasonRecord>(`${base}/season-records/${record.data!.season}`, { method: "PUT", body }),
-    onSuccess: (r) => {
-      client.setQueryData(["field", workspaceId, fieldId, "season"], r);
-      setSaved(true);
-    },
-  });
-  if (!record.data) return null;
-  const r = record.data;
-  const options = [
-    { value: "", label: "—" },
-    ...Object.keys(cropNames)
-      .map((id) => ({ value: id, label: cropLabel(cropNames, locale, id) }))
-      .sort((a, b) => a.label.localeCompare(b.label)),
-  ];
-  const source = (v: Resolved<unknown>) => t(`src_${v.source}`);
-  const submit = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const fd = new FormData(e.currentTarget);
-    const val = (k: string) => String(fd.get(k) ?? "") || null;
-    setSaved(false);
-    save.mutate({
-      crop: val("crop"),
-      sowingDate: val("sowingDate"),
-      emergenceDate: val("emergenceDate"),
-      tillage: val("tillage"),
-    });
-  };
-  return (
-    <section className="rounded-card border border-line bg-surface p-5">
-      <h2 className="text-h2 text-ink">
-        {t("seasonTitle")} ·{" "}
-        <SeasonLabel
-          year={r.season}
-          hintLabel={t("hintLabel")}
-          hintTemplate={`${t("hintSeason")} ${t("hintSeasonNow")}`}
-        />
-      </h2>
-      <form onSubmit={submit} className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <SelectField
-          label={t("crop")}
-          name="crop"
-          options={options}
-          defaultValue={r.crop.value ?? ""}
-          hint={source(r.crop)}
-          disabled={!canEdit}
-        />
-        <TextField
-          label={t("sowing")}
-          name="sowingDate"
-          type="date"
-          defaultValue={r.sowingDate.value ?? ""}
-          hint={source(r.sowingDate)}
-          disabled={!canEdit}
-        />
-        <TextField
-          label={t("emergence")}
-          name="emergenceDate"
-          type="date"
-          defaultValue={r.emergenceDate.value ?? ""}
-          hint={source(r.emergenceDate)}
-          disabled={!canEdit}
-        />
-        <SelectField
-          label={t("tillage")}
-          name="tillage"
-          options={[
-            { value: "", label: "—" },
-            ...(["conventional", "reduced", "no_till"] as const).map((v) => ({
-              value: v,
-              label: t(`till_${v}`),
-            })),
-          ]}
-          defaultValue={r.tillage.value ?? ""}
-          hint={source(r.tillage)}
-          disabled={!canEdit}
-        />
-        {r.missing.length > 0 && (
-          <p className="text-small text-week md:col-span-2 xl:col-span-4">
-            {t("missing", { list: r.missing.join(", ") })}
-          </p>
-        )}
-        {canEdit && (
-          <div className="flex items-center gap-3 md:col-span-2 xl:col-span-4">
-            <Button type="submit" disabled={save.isPending} aria-busy={save.isPending}>
-              {t("save")}
-            </Button>
-            {saved && (
-              <span role="status" className="text-small text-ok">
-                {t("saved")}
-              </span>
-            )}
-          </div>
-        )}
-      </form>
     </section>
   );
 }

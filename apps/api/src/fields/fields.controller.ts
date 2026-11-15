@@ -46,12 +46,21 @@ const CropBody = z.object({
   secondCrop: z.string().min(1).max(40).nullable().default(null),
 });
 const IsoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const Origin = z.enum(["plan", "estimate", "regional"]);
 const SeasonBody = z.object({
   crop: z.string().min(1).max(40).nullable().optional(),
   sowingDate: IsoDate.nullable().optional(),
   emergenceDate: IsoDate.nullable().optional(),
   irrigated: z.boolean().nullable().optional(),
   tillage: z.enum(["conventional", "reduced", "no_till"]).nullable().optional(),
+  sources: z
+    .object({
+      crop: Origin.optional(),
+      sowingDate: Origin.optional(),
+      emergenceDate: Origin.optional(),
+      tillage: Origin.optional(),
+    })
+    .optional(),
 });
 
 function fieldId(id: string): string {

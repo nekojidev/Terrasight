@@ -2123,6 +2123,57 @@
           }
         },
         {
+          "name": "Suggested sowing window, emergence and tillage for a chosen crop",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));",
+                  "const r = pm.response.json(); pm.test(\"shape\", () => { pm.expect(r.crop).to.eql(\"corn\"); pm.expect(r.sowing).to.have.property(\"status\"); pm.expect([\"open\", \"not-yet\", \"late\", \"closed\", \"unknown\"]).to.include(r.sowing.status); pm.expect(r).to.have.property(\"emergence\"); pm.expect(r).to.have.property(\"tillage\"); }); pm.test(\"unverified values are flagged\", () => { if (r.emergence) pm.expect(r.emergence.verified).to.be.a(\"boolean\"); if (r.tillage) pm.expect(r.tillage.verified).to.be.a(\"boolean\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/fields/{{fieldId}}/season-records/{{season}}/suggest?crop=corn"
+          }
+        },
+        {
+          "name": "Suggestion rejects a crop outside the library",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status 422\", () => pm.response.to.have.status(422));",
+                  "pm.test(\"problem+json\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"));",
+                  "pm.test(\"type unknown-crop\", () => pm.expect(pm.response.json().type).to.include(\"unknown-crop\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Requested-With",
+                "value": "XMLHttpRequest"
+              }
+            ],
+            "url": "{{baseUrl}}/api/w/{{ws}}/fields/{{fieldId}}/season-records/{{season}}/suggest?crop=banana"
+          }
+        },
+        {
           "name": "Agronomist confirms crop and sowing date",
           "event": [
             {

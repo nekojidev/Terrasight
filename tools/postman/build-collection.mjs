@@ -518,6 +518,23 @@ const collection = {
           },
         ),
         req(
+          "Suggested sowing window, emergence and tillage for a chosen crop",
+          "GET",
+          "/api/w/{{ws}}/fields/{{fieldId}}/season-records/{{season}}/suggest?crop=corn",
+          {
+            tests: [
+              status(200),
+              `const r = pm.response.json(); pm.test("shape", () => { pm.expect(r.crop).to.eql("corn"); pm.expect(r.sowing).to.have.property("status"); pm.expect(["open", "not-yet", "late", "closed", "unknown"]).to.include(r.sowing.status); pm.expect(r).to.have.property("emergence"); pm.expect(r).to.have.property("tillage"); }); pm.test("unverified values are flagged", () => { if (r.emergence) pm.expect(r.emergence.verified).to.be.a("boolean"); if (r.tillage) pm.expect(r.tillage.verified).to.be.a("boolean"); });`,
+            ],
+          },
+        ),
+        req(
+          "Suggestion rejects a crop outside the library",
+          "GET",
+          "/api/w/{{ws}}/fields/{{fieldId}}/season-records/{{season}}/suggest?crop=banana",
+          { tests: problem(422, "unknown-crop") },
+        ),
+        req(
           "Agronomist confirms crop and sowing date",
           "PUT",
           "/api/w/{{ws}}/fields/{{fieldId}}/season-records/{{season}}",
