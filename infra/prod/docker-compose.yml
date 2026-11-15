@@ -69,6 +69,9 @@ services:
       postgres: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
       redis: { condition: service_healthy }
+    # Scouting photos and zone rasters land in /repo/uploads when S3_BUCKET is not set (UPLOADS_DIR default in the
+    # image); the named volume keeps them across deploys. With a bucket the volume stays empty. Not covered by backup.sh.
+    volumes: [uploads:/repo/uploads]
     # HEALTHCHECK (/healthz) comes from the image. Migrations are applied by deploy.sh, not here.
     logging: { driver: json-file, options: { max-size: "20m", max-file: "5" } }
 
@@ -84,5 +87,6 @@ services:
 volumes:
   pgdata:
   redisdata:
+  uploads:
   caddy_data:
   caddy_config:

@@ -119,6 +119,26 @@ jobs:
       - if: failure()
         run: cat /tmp/api.log
 
+  prod-files:
+    # The host files cannot rot unnoticed: shell syntax and the compose files (with dummy values; no secrets, no network).
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: bash -n infra/prod/*.sh
+        run: for f in infra/prod/*.sh; do bash -n "$f"; done
+      - name: docker compose config (prod, and with the CloudWatch override)
+        env:
+          DOMAIN: ci.example.test
+          TAG: ci
+          POSTGRES_PASSWORD: ci-dummy
+          AWS_REGION: eu-west-1
+        run: |
+          # The api service reads its secrets from this file on the host; an empty one is enough to validate.
+          sudo mkdir -p /opt/terrasight && sudo touch /opt/terrasight/.env
+          docker compose -f infra/prod/docker-compose.yml config -q
+          docker compose -f infra/prod/docker-compose.yml -f infra/prod/docker-compose.cloudwatch.yml config -q
+
   docker-build:
     # Both images must keep building (multi-stage, non-root, standalone web). No push.
     runs-on: ubuntu-latest

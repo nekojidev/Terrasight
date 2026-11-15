@@ -6,7 +6,23 @@
 		rewrite * /readyz
 		reverse_proxy api:4000
 	}
+	# Local photo upload (only used when S3_BUCKET is not set; with a bucket the browser PUTs to S3 directly):
+	# the API accepts PHOTO_MAX_BYTES = 10 MiB per photo, so allow 11 MiB here.
+	handle /api/scouting-photos/* {
+		request_body {
+			max_size 11MB
+		}
+		reverse_proxy api:4000 {
+			flush_interval -1
+		}
+	}
+	# Every other API body is JSON. The largest legitimate one is a field outline (Polygon, up to 5000 vertices per ring,
+	# or a MultiPolygon of up to 50 parts); the API's own JSON parser limit is 100 kB, so 1 MB here is a coarse outer guard.
+	# Request RATE limits are enforced in the API (per-IP and per-user buckets), not here: stock Caddy has no rate limiter.
 	handle /api/* {
+		request_body {
+			max_size 1MB
+		}
 		reverse_proxy api:4000 {
 			flush_interval -1
 		}
@@ -18,5 +34,8 @@
 		Strict-Transport-Security "max-age=31536000"
 		X-Content-Type-Options nosniff
 		Referrer-Policy strict-origin-when-cross-origin
+		X-Frame-Options DENY
+		Permissions-Policy "microphone=(), payment=(), usb=()"
+		-Server
 	}
 }
