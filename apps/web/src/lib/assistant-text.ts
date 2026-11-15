@@ -65,3 +65,11 @@ export function formatDates(text: string, lang: "en" | "uk"): string {
 export function displayText(text: string, aliases: Aliases, lang: "en" | "uk"): string {
   return formatDates(restoreAliases(text, aliases), lang);
 }
+
+/** The language an answer is written in, judged by its letters; null when there are too few to tell. */
+export function answerLang(text: string): "en" | "uk" | null {
+  const cyr = (text.match(/[Ѐ-ӿ]/g) ?? []).length;
+  const lat = (text.match(/[A-Za-z]/g) ?? []).length;
+  if (cyr + lat < 12) return null;
+  return cyr > lat ? "uk" : "en";
+}

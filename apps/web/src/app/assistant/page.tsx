@@ -12,11 +12,11 @@ interface WorkspaceDetail {
   role: Me["workspaces"][number]["role"];
 }
 
-/** Design 14: the assistant (S-05.05). `?field=<id>` opens that field's latest chat (or a new one), `?rec=<id>` a new one; `?q=` sends a question (⌘K palette). */
+/** Design 14: the assistant (S-05.05). `?field=<id>` opens that field's latest chat (or a new one), `?rec=<id>` a new one; `?q=` sends a question (⌘K palette); `?ask=` places a question in the composer without sending it (see `askHref`). */
 export default async function AssistantPage({
   searchParams,
 }: {
-  searchParams: Promise<{ field?: string; rec?: string; q?: string }>;
+  searchParams: Promise<{ field?: string; rec?: string; q?: string; ask?: string }>;
 }) {
   const sp = await searchParams;
   const me = await serverGet<Me>("/api/me");
@@ -39,6 +39,7 @@ export default async function AssistantPage({
         workspaceId={ws.data.id}
         fieldCount={ws.data.fieldCount}
         question={sp.q?.trim().slice(0, 2000) || undefined}
+        ask={sp.ask?.trim().slice(0, 2000) || undefined}
         context={{
           ...(sp.field ? { fieldId: sp.field } : {}),
           ...(sp.rec ? { recommendationId: sp.rec } : {}),

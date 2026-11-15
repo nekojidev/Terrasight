@@ -45,13 +45,56 @@ describe("ToolCard", () => {
     expect(screen.getByText("July 1, 2026")).toBeTruthy();
   });
 
-  it("hides unknown fields behind Details as plain text, not JSON paths", () => {
+  it("hides unknown fields: no developer keys anywhere", () => {
     const { container } = show("get_field_summary", { field: "F1", mysteryScore: 7, nested: { oddThing: "x y" } });
-    expect(screen.getByText("Details")).toBeTruthy();
-    fireEvent.click(screen.getByText("Details"));
-    expect(container.textContent).toContain("Mystery score → 7");
-    expect(container.textContent).toContain("Odd thing → x y");
-    expect(container.textContent).not.toContain("nested.oddThing");
+    expect(container.textContent).not.toMatch(/Mystery|mystery|Odd thing|oddThing|nested|Details/);
+  });
+
+  it("shows 3 rows first, the ones the answer quotes, and the rest behind All rows", () => {
+    show(
+      "get_weather",
+      {
+        field: "F1",
+        precipitation: { value: 12, unit: "mm" },
+        meanTemperature: { value: 20, unit: "°C" },
+        minTemperature: { value: 8, unit: "°C" },
+        maxTemperature: { value: 31, unit: "°C" },
+        frostDays: { value: 2, unit: "days" },
+      },
+      "en",
+    );
+    expect(screen.getByText("All rows (6)")).toBeTruthy();
+  });
+
+  it("puts a quoted row among the first three", () => {
+    const { container } = render(
+      <NextIntlClientProvider locale="en" messages={en}>
+        <ToolCard
+          tool="get_weather"
+          result={{
+            field: "F1",
+            precipitation: { value: 12, unit: "mm" },
+            meanTemperature: { value: 20, unit: "°C" },
+            minTemperature: { value: 8, unit: "°C" },
+            maxTemperature: { value: 31, unit: "°C" },
+            frostDays: { value: 2, unit: "days" },
+          }}
+          aliases={{}}
+          lang="en"
+          answer="It was 31 degrees at the peak."
+        />
+      </NextIntlClientProvider>,
+    );
+    const open = container.querySelector("table")!;
+    expect(open.textContent).toContain("Highest temperature");
+  });
+
+  it("uses farmer's words for the climate labels in both languages", () => {
+    const labels = (en.Assistant as unknown as { label: Record<string, string> }).label;
+    expect(labels.slopePerDecade).toBe("Change every 10 years");
+    expect(labels.sets).toBe("Years of weather used");
+    expect(JSON.stringify(Object.values(labels))).not.toMatch(/First minus second|Year sets|Change per decade|worst 10/);
+    expect((uk.Assistant as unknown as { label: Record<string, string> }).label.slopePerDecade).toBe("Зміна за 10 років");
   });
 
   it("groups list items under their own heading and keeps raw codes out of the rows", () => {
@@ -126,8 +169,8 @@ describe("ToolCard: climate shift and year-set ranking", () => {
     });
     const text = container.textContent ?? "";
     expect(text).toContain("Rotation ranking across weather years");
-    expect(text).toContain("Margin per ha per year");
-    expect(text).toContain("In money");
+    expect(text).toContain("Profit per hectare a year");
+    expect(text).not.toContain("In money");
     expect(text).not.toMatch(/get_year_set_ranking|marginPerHaPerYear|yearsUsed/);
   });
 });

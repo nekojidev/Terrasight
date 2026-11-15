@@ -22,13 +22,15 @@ export const TOOL_NAMES = [
   "get_year_set_ranking",
 ] as const;
 
-/** Fields that are bookkeeping, never worth a labelled row. */
-const HIDDEN = new Set(["id", "region", "state", "provider", "saved", "hasVerifiedModel", "source", "regions", "kind", "issuedAt", "dataset"]);
+/** Fields that are bookkeeping, never worth a labelled row (unknown fields are never printed either: no developer keys). */
+const HIDDEN = new Set(["id", "region", "state", "provider", "saved", "hasVerifiedModel", "source", "regions", "kind", "issuedAt", "dataset", "mode", "genericWindow", "thresholdVerified", "planning", "currency"]);
 /** Numbers that are years or counters: shown without a thousands separator. */
 const PLAIN_NUMBER = new Set(["season", "since", "stressYearCount", "from", "to", "baselineFrom", "baselineTo", "recentFrom", "recentTo", "firstYear", "lastYear", "yearsUsed", "rank"]);
 /** Model-facing caveats and machine reasons: never shown as rows. */
 const SKIP = new Set(["note", "kind", "reason"]);
 const MAX_ROWS = 40;
+/** Rows shown at once; the rest sit behind "All rows". */
+export const VISIBLE_ROWS = 3;
 
 export interface CardRow {
   label: string;
@@ -84,10 +86,9 @@ export function formatQuantity(value: number, unit: string, fmt: Fmt, t: Transla
 export function buildCard(
   result: unknown,
   ctx: { fmt: Fmt; t: Translate; has: (key: string) => boolean; aliases: Aliases; lang: "en" | "uk" },
-): { groups: CardGroup[]; details: CardRow[] } {
+): { groups: CardGroup[] } {
   const { fmt, t, has, aliases, lang } = ctx;
   const groups: CardGroup[] = [];
-  const details: CardRow[] = [];
   let count = 0;
   const known = (k: string) => !HIDDEN.has(k) && has(`label.${k}`);
   const label = (k: string) => t(`label.${k}`);
@@ -98,10 +99,10 @@ export function buildCard(
     return g.rows;
   };
   const place = (key: string, value: string | null, title: string | null) => {
-    if (value === null || count >= MAX_ROWS) return;
+    // Fields without a farmer's label are hidden, never printed with their developer key.
+    if (value === null || count >= MAX_ROWS || !known(key)) return;
     count++;
-    if (known(key)) rowsOf(title).push({ label: label(key), value });
-    else details.push({ label: humanize(key), value });
+    rowsOf(title).push({ label: label(key), value });
   };
   const text = (key: string, s: string): string | null => {
     if (ISO_DATE.test(s)) return fmt.date(s, "full");
@@ -122,13 +123,7 @@ export function buildCard(
       return place(key, s, title);
     }
     const s = text(key, String(v));
-    if (s === null) {
-      if (count < MAX_ROWS) {
-        count++;
-        details.push({ label: humanize(key), value: String(v) });
-      }
-      return;
-    }
+    if (s === null) return;
     place(key, s, title);
   };
   const heading = (o: Record<string, unknown>): { text: string; key: string } | null => {
@@ -148,14 +143,13 @@ export function buildCard(
         const s = node.filter((x) => x !== null && x !== undefined).map((x) => (typeof x === "number" ? fmt.number(x) : displayText(String(x), aliases, lang)));
         const shown = s.filter((x) => !ENUMISH.test(x));
         if (shown.length === s.length && s.length) place(key, s.join(", "), title);
-        else if (s.length) details.push({ label: humanize(key), value: s.join(", ") });
         return;
       }
       node.forEach((item, i) => {
         if (item && typeof item === "object" && !Array.isArray(item)) {
           const o = item as Record<string, unknown>;
           const h = heading(o);
-          const head = h?.text ?? `${known(key) ? label(key) : humanize(key)} ${i + 1}`;
+          const head = h?.text ?? (known(key) ? `${label(key)} ${i + 1}` : title);
           for (const [k, v] of Object.entries(o)) if (k !== h?.key) walk(v, k, head);
         } else walk(item, key, title);
       });
@@ -164,7 +158,7 @@ export function buildCard(
     if (typeof node === "object") {
       const o = node as Record<string, unknown>;
       if (typeof o.value === "number" && "unit" in o) return place(key, formatQuantity(o.value, String(o.unit ?? ""), fmt, t), title);
-      const sub = title ?? (key && known(key) ? label(key) : key ? humanize(key) : null);
+      const sub = title ?? (key && known(key) ? label(key) : null);
       for (const [k, v] of Object.entries(o)) {
         if (SKIP.has(k)) continue;
         // A field name that is only a flag ("source") hides in details even if nested.
@@ -177,32 +171,38 @@ export function buildCard(
   walk(result, "", null);
   // Rows with no group first.
   groups.sort((a, b) => Number(a.title !== null) - Number(b.title !== null));
-  return { groups, details };
+  return { groups };
 }
 
-/** A tool result as a plain card: a title, labelled rows with units, and a "Details" section for the rest. */
-export function ToolCard({
-  tool,
-  result,
-  aliases,
-  lang,
-}: {
-  tool: string;
-  result: unknown;
-  aliases: Aliases;
-  lang: "en" | "uk";
-}) {
-  const a = useTranslations("Assistant");
-  const fmt = useFormat();
-  const t: Translate = (key, values) => a(key as never, values as never);
-  const has = (key: string) => a.has(key as never);
-  const title = (TOOL_NAMES as readonly string[]).includes(tool) ? a(`toolName.${tool}` as never) : a("toolUnknown");
-  const { groups, details } = buildCard(result, { fmt, t, has, aliases, lang });
+/** Whether the answer quotes this row value (its numbers, or the word itself). */
+function quoted(value: string, answer: string): boolean {
+  const a = answer.toLowerCase();
+  const nums = value.match(/\d[\d.,]*\d|\d/g) ?? [];
+  if (nums.length) return nums.some((n) => a.includes(n) || a.includes(n.replace(",", ".")) || a.includes(n.replace(".", ",")));
+  return value.length >= 3 && a.includes(value.toLowerCase());
+}
+
+/** The first `limit` rows (rows the answer quotes come first, then card order) and the groups of the rest. */
+export function splitRows(
+  groups: CardGroup[],
+  answer: string,
+  limit = VISIBLE_ROWS,
+): { shown: CardGroup[]; rest: CardGroup[]; total: number } {
+  const flat = groups.flatMap((g, gi) => g.rows.map((r, ri) => ({ gi, ri, r })));
+  const picked = new Set<string>();
+  const mark = (x: { gi: number; ri: number }) => picked.add(`${x.gi}:${x.ri}`);
+  if (answer) for (const x of flat) if (picked.size < limit && quoted(x.r.value, answer)) mark(x);
+  for (const x of flat) if (picked.size < limit) mark(x);
+  const part = (want: boolean): CardGroup[] =>
+    groups
+      .map((g, gi) => ({ title: g.title, rows: g.rows.filter((_, ri) => picked.has(`${gi}:${ri}`) === want) }))
+      .filter((g) => g.rows.length > 0);
+  return { shown: part(true), rest: part(false), total: flat.length };
+}
+
+function Rows({ groups }: { groups: CardGroup[] }) {
   return (
-    <Surface tone="inset" pad="sm" className="min-w-0">
-      <Kicker as="h4" className="mb-2 break-words">
-        {title}
-      </Kicker>
+    <>
       {groups.map((g, gi) => (
         <div key={`${gi}:${g.title ?? ""}`} className="mb-3 min-w-0 last:mb-0">
           {g.title && <p className="mb-1 text-caption font-semibold break-words text-ink">{g.title}</p>}
@@ -222,15 +222,41 @@ export function ToolCard({
           </div>
         </div>
       ))}
-      {details.length > 0 && (
-        <Disclosure summary={<span className="text-caption">{a("details")}</span>}>
-          <ul className="flex flex-col gap-1 pb-1 text-caption text-ink-2">
-            {details.map((r, i) => (
-              <li key={`${i}:${r.label}`} className="break-words">
-                {r.label} → {r.value}
-              </li>
-            ))}
-          </ul>
+    </>
+  );
+}
+
+/** A tool result as a plain card: a title and at most 3 labelled rows with units (the ones the answer quotes); the rest behind "All rows". */
+export function ToolCard({
+  tool,
+  result,
+  aliases,
+  lang,
+  answer = "",
+}: {
+  tool: string;
+  result: unknown;
+  aliases: Aliases;
+  lang: "en" | "uk";
+  /** The answer text, so that the rows it quotes come first. */
+  answer?: string;
+}) {
+  const a = useTranslations("Assistant");
+  const fmt = useFormat();
+  const t: Translate = (key, values) => a(key as never, values as never);
+  const has = (key: string) => a.has(key as never);
+  const title = (TOOL_NAMES as readonly string[]).includes(tool) ? a(`toolName.${tool}` as never) : a("toolUnknown");
+  const { groups } = buildCard(result, { fmt, t, has, aliases, lang });
+  const { shown, rest, total } = splitRows(groups, answer);
+  return (
+    <Surface tone="inset" pad="sm" className="min-w-0">
+      <Kicker as="h4" className="mb-2 break-words">
+        {title}
+      </Kicker>
+      <Rows groups={shown} />
+      {rest.length > 0 && (
+        <Disclosure summary={<span className="text-caption">{a("allRows", { n: total })}</span>}>
+          <Rows groups={rest} />
         </Disclosure>
       )}
     </Surface>
