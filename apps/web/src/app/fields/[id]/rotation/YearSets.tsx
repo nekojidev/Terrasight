@@ -90,13 +90,13 @@ function SetColumn({
               key={o.id}
               className={
                 rec
-                  ? "flex flex-col gap-1 rounded-chip border-2 border-ink bg-muted p-3"
-                  : "flex flex-col gap-1 rounded-chip border border-line p-3"
+                  ? "flex flex-col gap-1.5 rounded-input border-2 border-ink bg-muted p-3"
+                  : "flex flex-col gap-1.5 rounded-input border border-line p-3"
               }
             >
-              <p className="flex items-start gap-2 text-body font-semibold text-ink">
-                <span className="font-mono text-ink-2">{t("ys_rank", { n: o.rank })}</span>
-                <span className="min-w-0 flex-1">{p.label(o.id)}</span>
+              <p className="flex flex-col gap-0.5 text-body font-semibold text-ink">
+                <span className="font-mono text-caption font-normal text-ink-2">{t("ys_rank", { n: o.rank })}</span>
+                <span className="min-w-0">{p.label(o.id)}</span>
               </p>
               {(o.rank === 1 || rec) && (
                 <div className="flex flex-wrap gap-1.5">
@@ -167,7 +167,7 @@ export function YearSets(props: YearSetsProps) {
   } else {
     body = (
       <>
-        <ul className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <ul className="grid grid-cols-[repeat(auto-fit,minmax(15rem,1fr))] gap-4">
           {sets.map((s) => (
             <SetColumn
               key={s.id}
