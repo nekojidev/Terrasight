@@ -11,10 +11,10 @@ export async function SettingsNav({
 }) {
   const t = await getTranslations("App");
   const tabs = [
-    ...(owner ? [{ id: "workspace" as const, href: "/settings/workspace", label: t("setWorkspace") }] : []),
     { id: "account" as const, href: "/settings/account", label: t("setAccount") },
-    { id: "prices" as const, href: "/settings/prices", label: t("setPrices") },
+    ...(owner ? [{ id: "workspace" as const, href: "/settings/workspace", label: t("setWorkspace") }] : []),
     ...(owner ? [{ id: "team" as const, href: "/settings/team", label: t("navTeam") }] : []),
+    { id: "prices" as const, href: "/settings/prices", label: t("setPrices") },
   ];
   return (
     <nav
@@ -26,7 +26,7 @@ export async function SettingsNav({
           key={tab.id}
           href={tab.href}
           aria-current={tab.id === active ? "page" : undefined}
-          className={`focus-ring rounded-btn px-3 py-2 text-body font-semibold whitespace-nowrap sm:px-4 ${tab.id === active ? "bg-ink text-surface" : "text-ink hover:bg-surface"}`}
+          className={`focus-ring inline-flex min-h-tap items-center rounded-btn px-3 text-body font-semibold whitespace-nowrap sm:px-4 ${tab.id === active ? "bg-ink text-surface" : "text-ink hover:bg-surface"}`}
         >
           {tab.label}
         </Link>

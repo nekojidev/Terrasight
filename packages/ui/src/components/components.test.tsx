@@ -22,6 +22,8 @@ import {
   InfoHint,
   QueueRow,
   Sidebar,
+  BottomTabs,
+  SheetRow,
   SeasonLabel,
   SeasonStrip,
   seasonHintText,
@@ -425,5 +427,31 @@ describe("focus trap", () => {
     );
     fireEvent.keyDown(document, { key: "Tab", shiftKey: true });
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Yes" }));
+  });
+});
+
+describe("BottomTabs More sheet", () => {
+  it("opens a dialog with rows, closes on Esc and on a link tap, and returns focus to More", () => {
+    render(
+      <BottomTabs
+        label="Main"
+        items={[{ href: "/", label: "Today", icon: <i /> }]}
+        more={{
+          label: "More",
+          title: "More pages",
+          closeLabel: "Close",
+          children: <SheetRow href="/rotation" label="Plan" icon={<i />} />,
+        }}
+      />,
+    );
+    const more = screen.getByRole("button", { name: "More" });
+    fireEvent.click(more);
+    expect(screen.getByRole("dialog", { name: "More pages" })).toBeTruthy();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(document.activeElement).toBe(more);
+    fireEvent.click(more);
+    fireEvent.click(screen.getByRole("link", { name: "Plan" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 });

@@ -1,12 +1,14 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Button } from "@terrasight/ui";
 import { Bell } from "lucide-react";
 import Link from "next/link";
-import { useLocale, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { useWorkspaceEvents } from "@/lib/events";
+import { useFormat } from "@/lib/useFormat";
 
 export interface NotificationItem {
   id: string;
@@ -33,10 +35,11 @@ export function notificationHref(n: Pick<NotificationItem, "kind" | "payload">):
 /** Bell with an unread dot and a small list; the text is built here from kind + payload. */
 export function NotificationsBell({ workspaceId }: { workspaceId: string }) {
   const a = useTranslations("App");
-  const locale = useLocale();
+  const fmt = useFormat();
   const client = useQueryClient();
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
   const key = ["notifications", workspaceId];
 
   useWorkspaceEvents(workspaceId, ["notifications"], () => [key]);
@@ -56,7 +59,10 @@ export function NotificationsBell({ workspaceId }: { workspaceId: string }) {
       if (box.current && !box.current.contains(e.target as Node)) setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") {
+        setOpen(false);
+        trigger.current?.focus();
+      }
     };
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
@@ -86,13 +92,7 @@ export function NotificationsBell({ workspaceId }: { workspaceId: string }) {
       return a("notifRunFailed", { failed: num(n.payload.failed), total: num(n.payload.total) });
     return a("notifGeneric");
   };
-  const when = (iso: string) =>
-    new Intl.DateTimeFormat(locale, {
-      day: "numeric",
-      month: "short",
-      hour: "2-digit",
-      minute: "2-digit",
-    }).format(new Date(iso));
+  const when = (iso: string) => fmt.date(iso, "dateTime");
 
   const unread = data?.unread ?? 0;
   const items = data?.items ?? [];
@@ -100,36 +100,45 @@ export function NotificationsBell({ workspaceId }: { workspaceId: string }) {
   return (
     <div ref={box} className="relative">
       <button
+        ref={trigger}
         type="button"
-        aria-label={a("notifBell")}
+        aria-label={unread > 0 ? `${a("notifBell")}, ${a("notifUnreadCount", { n: unread })}` : a("notifBell")}
         aria-expanded={open}
+        aria-haspopup="dialog"
         onClick={() => setOpen((o) => !o)}
-        className="focus-ring relative inline-flex size-11 items-center justify-center rounded-btn border border-line bg-surface"
+        className="focus-ring relative inline-flex size-11 items-center justify-center rounded-btn border border-line-control bg-surface"
       >
         <Bell aria-hidden className="size-5" strokeWidth={1.7} />
-        {unread > 0 && <span className="absolute top-2.5 right-2.5 size-2 rounded-chip bg-urgent" />}
+        {unread > 0 && (
+          <span
+            aria-hidden
+            className="absolute -top-1.5 -right-1.5 inline-flex min-w-5 items-center justify-center rounded-chip bg-urgent px-1 text-caption leading-5 font-semibold text-surface"
+          >
+            {unread > 9 ? "9+" : unread}
+          </span>
+        )}
       </button>
       {open && (
         <div
           role="dialog"
           aria-label={a("notifBell")}
-          className="absolute right-0 z-20 mt-2 w-[min(22rem,calc(100vw-2rem))] rounded-card border border-line bg-surface p-2"
+          className="animate-pop absolute right-0 z-40 mt-2 w-[min(22rem,calc(100vw-2rem))] origin-top-right rounded-card border border-line bg-surface p-2 shadow-hero"
         >
           <div className="flex items-center justify-between gap-2 px-2 py-1">
             <span className="text-body font-semibold text-ink">{a("notifBell")}</span>
-            <button
-              type="button"
+            <Button
+              variant="link"
               disabled={unread === 0 || read.isPending}
               onClick={() => read.mutate(undefined)}
-              className="focus-ring min-h-tap rounded-btn px-2 text-small font-semibold text-ink-2 hover:bg-surface-2 disabled:opacity-50"
+              className="min-h-tap px-2 text-caption no-underline"
             >
               {a("notifMarkAll")}
-            </button>
+            </Button>
           </div>
           {isError ? (
-            <p className="px-2 py-4 text-small text-ink-2">{a("notifError")}</p>
+            <p className="px-2 py-4 text-body text-ink-2">{a("notifError")}</p>
           ) : items.length === 0 ? (
-            <p className="px-2 py-4 text-small text-ink-2">{a("notifEmpty")}</p>
+            <p className="px-2 py-4 text-body text-ink-2">{a("notifEmpty")}</p>
           ) : (
             <ul className="max-h-96 overflow-y-auto">
               {items.map((n) => (
@@ -140,17 +149,18 @@ export function NotificationsBell({ workspaceId }: { workspaceId: string }) {
                       if (!n.readAt) read.mutate([n.id]);
                       setOpen(false);
                     }}
-                    className="focus-ring flex items-start gap-2 rounded-btn px-2 py-2 hover:bg-surface-2"
+                    className="focus-ring flex min-h-tap items-start gap-2 rounded-btn px-2 py-2 hover:bg-surface-2"
                   >
                     <span
                       aria-hidden
                       className={`mt-2 size-2 shrink-0 rounded-chip ${n.readAt ? "bg-transparent" : "bg-urgent"}`}
                     />
+                    {!n.readAt && <span className="sr-only">{a("notifUnread")}</span>}
                     <span className="min-w-0">
-                      <span className={`block text-small text-ink ${n.readAt ? "" : "font-semibold"}`}>
+                      <span className={`block text-body text-ink ${n.readAt ? "" : "font-semibold"}`}>
                         {text(n)}
                       </span>
-                      <span className="block text-small text-ink-3">{when(n.createdAt)}</span>
+                      <span className="block text-caption text-ink-3">{when(n.createdAt)}</span>
                     </span>
                   </Link>
                 </li>

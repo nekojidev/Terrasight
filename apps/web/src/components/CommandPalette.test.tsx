@@ -80,9 +80,9 @@ describe("CommandPalette", () => {
 
   it("finds pages, wraps with ArrowUp, and Escape closes", () => {
     const { box, onClose } = setup();
-    fireEvent.change(box, { target: { value: "rotations" } });
+    fireEvent.change(box, { target: { value: "plan" } });
     const opts = screen.getAllByRole("option");
-    expect(opts.map((o) => o.textContent).join("|")).toContain("Rotations");
+    expect(opts.map((o) => o.textContent).join("|")).toContain("Plan");
     fireEvent.keyDown(box, { key: "ArrowUp" });
     expect(box.getAttribute("aria-activedescendant")).toBe(opts.at(-1)!.id);
     fireEvent.keyDown(box, { key: "Enter" });
