@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import design from "../../../../../messages/en.json";
 import app from "../../../../messages/app.en.json";
 import { TrustClient } from "./TrustClient";
-import { readCase2022, readFit } from "./trustView";
+import { cleanArea, parseCaveat, readCase2022, readFit } from "./trustView";
 
 let report: TrustReport | Error;
 const chartProps = vi.fn();
@@ -111,28 +111,47 @@ const show = async (r: TrustReport | Error) => {
   await waitFor(() => expect(busy()).toBe(0));
 };
 
+const heads2 = () => screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
+
 describe("TrustClient", () => {
-  it("good fit: 2022 case first, numbers, reading, thresholds, source, chart props", async () => {
-    await show(base());
-    const heads = (await screen.findAllByRole("heading", { level: 2 })).map((h) => h.textContent);
-    expect(heads[0]).toBe("2022: the record drought");
-    expect(screen.getByText(/moved the same way, 5 points apart: within 10 points/)).toBeTruthy();
-    expect(screen.getByText("r = 0.82, mean error 4.5 points, 6 years")).toBeTruthy();
+  it("opens with the verdict sentence, then the evidence line; the 2022 card is a collapsed row under it", async () => {
+    await show(base({ years: [2018, 2019, 2020, 2021, 2022, 2023].map((y) => year(y, { miss: y === 2019 || y === 2021 })) }));
+    const heads = heads2();
+    expect(heads[0]).toBe("The short answer");
+    expect(
+      screen.getByText(
+        "On this field the model followed the official yields closely: on average it was 5 points off. It missed 2 years by more than 20 points.",
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText("r = 0.82 · mean error 4.5 points · 6 years")).toBeTruthy();
     expect(screen.getByText("The model follows it closely.")).toBeTruthy();
-    expect(screen.getByText("The model follows it loosely.")).toBeTruthy();
-    expect(screen.getByText(/Reading rule: \|r\| of 0\.7 or more/)).toBeTruthy();
     expect(screen.getByText("Official yields: USDA NASS, Finney County, KS.")).toBeTruthy();
-    expect(screen.getByText("Heat damage at flowering")).toBeTruthy();
-    expect(screen.getByText(/How Corn responds to water and heat is not yet verified/)).toBeTruthy();
+    // the 2022 row is a closed disclosure button, not a hero heading
+    const row = screen.getByRole("button", { name: "2022, the drought year: model −30%, official −25%" });
+    expect(row.getAttribute("aria-expanded")).toBe("false");
+    expect(heads).not.toContain("2022: the record drought");
+    // reading rules sit behind a disclosure
+    expect(screen.getByRole("button", { name: "How we read these numbers" }).getAttribute("aria-expanded")).toBe("false");
+    expect(screen.getByText(/Close: r of 0\.7 or more/)).toBeTruthy();
+    // order: verdict, chart, missed, not modelled
+    const chartH = "Model, official yield and field greenness by year";
+    expect(heads.indexOf("The short answer")).toBeLessThan(heads.indexOf(chartH));
+    expect(heads.indexOf(chartH)).toBeLessThan(heads.indexOf("Years the model missed"));
+    expect(heads.indexOf("Years the model missed")).toBeLessThan(heads.indexOf("What the model does not include"));
     const p = chartProps.mock.calls[0]![0] as { highlightYears: unknown[]; unitLabel: string; series: unknown[] };
     expect(p.highlightYears).toEqual([{ year: 2022, label: "2022" }]);
-    expect(p.unitLabel).toBe("% from the usual level");
     expect(p.series).toHaveLength(3);
     expect(screen.getByRole("link", { name: "Back to the field" }).getAttribute("href")).toBe("/fields/f1");
     expect(screen.getByRole("link", { name: "Go to the rotation" }).getAttribute("href")).toBe("/fields/f1/rotation");
   });
 
-  it("poor fit says it does not follow and shows the numbers; missed years listed with reasons", async () => {
+  it("2022 row says 'drought year' only when the official yield fell clearly; otherwise just 2022", async () => {
+    await show(base({ case2022: year(2022, { model: 3, county: 4, ndvi: 1 }) }));
+    expect(screen.getByRole("button", { name: "2022: model +3%, official yield +4%" })).toBeTruthy();
+    expect(screen.queryByText(/drought year/)).toBeNull();
+  });
+
+  it("poor fit says so in plain words with caution; missed years carry reasons in words", async () => {
     await show(
       base({
         vsCounty: { n: 8, r: 0.12, mae: 22.3 },
@@ -142,8 +161,10 @@ describe("TrustClient", () => {
         ],
       }),
     );
-    expect(screen.getByText("r = 0.12, mean error 22.3 points, 8 years")).toBeTruthy();
-    expect(screen.getByText("The model does not follow it.")).toBeTruthy();
+    expect(
+      screen.getByText(/did not follow the official yields well: on average it was 22 points off\. Treat its yield numbers with caution/),
+    ).toBeTruthy();
+    expect(screen.getByText("r = 0.12 · mean error 22.3 points · 8 years")).toBeTruthy();
     expect(screen.getByText("2019 · Corn")).toBeTruthy();
     expect(screen.getByText("model +30% · official yield −10%")).toBeTruthy();
     expect(screen.getByText(/does not include heat damage/)).toBeTruthy();
@@ -151,50 +172,107 @@ describe("TrustClient", () => {
     expect((chartProps.mock.calls[0]![0] as { missYears: number[] }).missYears).toEqual([2019, 2021]);
   });
 
-  it("too few years", async () => {
+  it("too few years: no error number in the sentence", async () => {
     await show(base({ vsCounty: { n: 3, r: null, mae: 7 } }));
+    expect(screen.getByText(/Fewer than 5 years have both a model value and an official yield/)).toBeTruthy();
     expect(screen.getByText("Too few years to say.")).toBeTruthy();
-    expect(screen.getByText("r = no data, mean error 7.0 points, 3 years")).toBeTruthy();
   });
 
-  it("county yields not connected", async () => {
+  it("no official yields: says it cannot check and names the satellite check", async () => {
     await show(base({ vsCounty: null, actual: { kind: "nass", connected: false, area: null, verified: false } }));
     expect(
       screen.getByText("Official yields are not connected, so the comparison uses satellite greenness only."),
     ).toBeTruthy();
+    expect(screen.getByText(/We cannot check this field against official yields/)).toBeTruthy();
     expect(screen.getByText("There are no official yields, so missed years cannot be listed.")).toBeTruthy();
   });
 
-  it("Ukraine: Derzhstat context, unverified", async () => {
+  it("Ukraine: what was compared, why no official check, soft wording for a weak satellite match", async () => {
     await show(
-      base({ actual: { kind: "derzhstat", connected: true, area: "Poltava", verified: false }, case2022: null }),
+      base({
+        actual: {
+          kind: "derzhstat",
+          connected: true,
+          area: "Poltava oblast (State Statistics Service, unverified)",
+          verified: false,
+        },
+        case2022: year(2022, { model: -5, county: 2, ndvi: 3 }),
+        vsCounty: { n: 0, r: null, mae: null },
+        vsNdvi: { n: 18, r: 0.25, mae: 11 },
+      }),
     );
-    expect(screen.getByText("Oblast yields (Poltava) from Derzhstat, not verified: shown as context.")).toBeTruthy();
-    expect(screen.getByText("Model vs oblast yields (Derzhstat, not verified)")).toBeTruthy();
-    const p = chartProps.mock.calls[0]![0] as { series: Array<{ id: string; label: string }> };
-    expect(p.series.find((s) => s.id === "county")?.label).toBe("Oblast (Derzhstat, not verified)");
+    const text = document.body.textContent ?? "";
+    expect(text).toMatch(/do not exist for single fields, and the oblast averages we have are not verified/);
+    expect(text).toMatch(/satellite greenness only, and it does not clearly agree with the model/);
+    expect(text).toMatch(/not a sign that the model is wrong/);
+    expect(text).not.toMatch(/does not follow it/);
+    expect(text).not.toMatch(/record drought/);
+    expect(screen.getByText("Greenness does not clearly agree.")).toBeTruthy();
+    expect(text).toContain("Poltava oblast (State Statistics Service, not verified)");
+    // no 2022 row for a field without a verified official yield
+    expect(screen.queryByRole("button", { name: /^2022/ })).toBeNull();
+    const p = chartProps.mock.calls[0]![0] as { series: Array<{ label: string }> };
+    expect(p.series[1]!.label).toBe("Oblast (Derzhstat, not verified)");
   });
 
-  it("no 2022 case: the fit comes first", async () => {
+  it("no 2022 case: the verdict still comes first and there is no 2022 row", async () => {
     await show(base({ case2022: null }));
-    const heads = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
-    expect(heads[0]).toBe("How closely the model follows what happened");
-    expect(screen.queryByText("2022: the record drought")).toBeNull();
+    expect(heads2()[0]).toBe("The short answer");
+    expect(screen.queryByRole("button", { name: /^2022/ })).toBeNull();
   });
 
-  it("retrospective in money keeps the label and shows totals and difference", async () => {
+  it("raw caveat codes and crop ids never reach the screen; unknown codes are hidden", async () => {
+    await show(
+      base({
+        caveats: [
+          "practice-all-used:corn",
+          "state-level-yields:winter_wheat",
+          "unverified-crop-parameters:winter_wheat",
+          "single-year-crop:corn",
+          "second-crop-ignored",
+          "no-simulator-parameters:triticale",
+          "short-county-series:corn",
+          "estimated-crop-history",
+          "some-new-code:corn",
+        ],
+        actual: {
+          kind: "nass",
+          connected: true,
+          area: "winter_wheat: Kansas (state level, irrigated); corn: Finney County, KS (all practices)",
+          verified: true,
+        },
+      }),
+    );
+    expect(
+      screen.getByText("Corn: the official yields mix irrigated and non-irrigated fields, so they are a rough guide."),
+    ).toBeTruthy();
+    expect(screen.getByText("This crop: the official yields are state averages, not your county.")).toBeTruthy();
+    expect(screen.getByText(/Only the first crop of the year is modelled/)).toBeTruthy();
+    expect(screen.getByText(/The crop history is estimated from satellite images/)).toBeTruthy();
+    expect(screen.getByText(/This crop: the model has no parameters for it/)).toBeTruthy();
+    const text = document.body.textContent ?? "";
+    expect(text).not.toMatch(
+      /practice-all-used|state-level-yields|single-year-crop|second-crop-ignored|some-new-code|winter_wheat|estimated-crop-history/,
+    );
+    expect(text).toContain(
+      "Official yields: USDA NASS, This crop: Kansas (state level, irrigated); Corn: Finney County, KS (all practices).",
+    );
+  });
+
+  it("retrospective in money: a verdict sentence first, the table behind a disclosure", async () => {
     await show(base({ retrospective: retro() }));
     expect(screen.getByRole("heading", { name: "If this field had switched in 2018" })).toBeTruthy();
     expect(
-      screen.getByText(
-        "At today's prices. This compares two simulations on the real weather of those years; it is not what the field earned.",
-      ),
+      screen.getByText("Over 2 seasons the recommended rotation would have earned $10 per hectare more than the current one."),
     ).toBeTruthy();
+    expect(
+      screen.getByText("At today's prices: two simulations on the real weather of those years, not what the field earned."),
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Season by season" }).getAttribute("aria-expanded")).toBe("false");
     expect(screen.getAllByText("$620").length).toBeGreaterThan(0);
-    expect(screen.getByText("+$10")).toBeTruthy();
   });
 
-  it("retrospective in agronomy mode shows relative yield, not money", async () => {
+  it("retrospective in estimate mode: a verdict sentence from averages, no total of percentages", async () => {
     await show(
       base({
         retrospective: retro({
@@ -205,10 +283,29 @@ describe("TrustClient", () => {
         }),
       }),
     );
+    expect(
+      screen.getByText("Over 2 seasons the model gives both rotations about the same yield: about 95% against 95% of the usual."),
+    ).toBeTruthy();
     expect(screen.getByText("Relative yield, % of the usual")).toBeTruthy();
-    expect(screen.getByText("105%")).toBeTruthy();
+    expect(screen.queryByText("Total")).toBeNull();
+    expect(screen.getByText("Average")).toBeTruthy();
+    expect(screen.queryByText("190%")).toBeNull();
     expect(screen.queryByText(/\$/)).toBeNull();
-    expect(screen.getByText("Difference (recommended minus current)", { exact: false }).textContent).toContain("0%");
+  });
+
+  it("retrospective where the recommendation is lower says why it looks back", async () => {
+    await show(
+      base({
+        retrospective: retro({
+          mode: "agronomy",
+          currency: null,
+          current: { id: "a", bySeason: [100, 100], total: 200 },
+          recommended: { id: "b", bySeason: [90, 90], total: 180 },
+        }),
+      }),
+    );
+    expect(screen.getByText(/lower yield than the current one: about 90% against 100%/)).toBeTruthy();
+    expect(screen.getByText(/This looks back at weather that has already happened/)).toBeTruthy();
   });
 
   it("pending, unavailable (history) and a 404 offer the right text and Retry", async () => {
@@ -236,16 +333,20 @@ describe("irrigated field: flat model", () => {
       ...over,
     });
 
-  it("states first that the model cannot be checked, with the 2022 county deviation, then no 'close' reading", async () => {
+  it("keeps the plain notice first; the flat cards are behind one disclosure", async () => {
     await show(flat());
-    const heads = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
+    const heads = heads2();
     expect(heads[0]).toBe("The model cannot be checked against yields for this field");
-    expect(heads[1]).toBe("2022: the record drought");
+    expect(heads).not.toContain("The short answer");
     expect(screen.getByText(/the model shows the same yield every year: it assumes irrigation always covers/)).toBeTruthy();
-    expect(screen.getByText(/for example −17% in 2022 against the official yield trend/)).toBeTruthy();
-    expect(screen.getByText(/The model shows no change; the official yield was 17% below its trend\./)).toBeTruthy();
-    expect(screen.queryByText(/Model and official yield moved the same way/)).toBeNull();
-    expect(screen.queryByText(/points apart: within 10 points/)).toBeNull();
+    expect(screen.getByText(/for example −17% in 2022 against a normal year/)).toBeTruthy();
+    const btn = screen.getByRole("button", { name: /Show the flat comparison/ });
+    expect(btn.getAttribute("aria-expanded")).toBe("false");
+    const region = document.getElementById(btn.getAttribute("aria-controls")!)!;
+    expect(region.querySelector('[data-testid="chart"]')).toBeTruthy();
+    expect(region.textContent).toMatch(/The model shows no change; the official yield was 17% below a normal year\./);
+    expect(region.textContent).not.toMatch(/moved the same way/);
+    expect(region.querySelectorAll("h3").length).toBeGreaterThan(2);
     expect(screen.getAllByText("Cannot be compared: the model does not vary.")).toHaveLength(2);
     expect(screen.queryByText("Too few years to say.")).toBeNull();
   });
@@ -253,11 +354,11 @@ describe("irrigated field: flat model", () => {
   it("without a 2022 county value the example is the largest county deviation; without any it is omitted", async () => {
     const ys = [2018, 2019, 2020, 2021].map((y, i) => year(y, { model: 0, county: [3, -12, 5, 2][i]! }));
     await show(flat({ years: ys, case2022: year(2022, { model: 0, county: null }) }));
-    expect(screen.getByText(/for example −12% in 2019 against the official yield trend/)).toBeTruthy();
+    expect(screen.getByText(/for example −12% in 2019 against a normal year/)).toBeTruthy();
     expect(screen.getByText(/There is no official yield for 2022/)).toBeTruthy();
     cleanup();
     await show(flat({ years: ys.map((y) => ({ ...y, county: null })), case2022: null }));
-    expect(screen.getByText(/Real yields still moved\. So for this field/)).toBeTruthy();
+    expect(screen.getByText(/Real yields still moved\. So the model/)).toBeTruthy();
     expect(screen.queryByText(/for example/)).toBeNull();
   });
 
@@ -266,7 +367,7 @@ describe("irrigated field: flat model", () => {
     expect(screen.getByText("Too few years to say.")).toBeTruthy();
   });
 
-  it("dryland good fit: own section, area, fit line, chart series, highlighted years, missed list", async () => {
+  it("dryland good fit: the main content after the notice, area, fit line, chart series, missed list", async () => {
     await show(
       flat({
         dryland: dry({
@@ -278,15 +379,21 @@ describe("irrigated field: flat model", () => {
         }),
       }),
     );
-    expect(screen.getByRole("heading", { name: "The same model without irrigation" })).toBeTruthy();
+    const heads = heads2();
+    expect(heads[1]).toBe("The same model without irrigation");
     expect(screen.getByText(/compared it with non-irrigated yields of Kansas \(state level, non-irrigated\)\./)).toBeTruthy();
-    expect(screen.getByText(/It is not this field's result/)).toBeTruthy();
-    expect(screen.getByText("r = 0.81, mean error 7.2 points, 9 years")).toBeTruthy();
+    expect(screen.getByText(/it is not this field's result/)).toBeTruthy();
+    expect(screen.getByText("r = 0.81 · mean error 7.2 points · 9 years")).toBeTruthy();
     expect(screen.getByText("The model follows it closely.")).toBeTruthy();
     const calls = chartProps.mock.calls.map(
-      (c) => c[0] as { series: Array<{ id: string; label: string }>; highlightYears: Array<{ year: number }>; missYears: number[] },
+      (c) =>
+        c[0] as {
+          series: Array<{ id: string; label: string }>;
+          highlightYears: Array<{ year: number }>;
+          missYears: number[];
+        },
     );
-    const d = calls[1]!;
+    const d = calls.find((c) => c.series.length === 2)!;
     expect(d.series.map((x) => x.label)).toEqual(["Model without irrigation", "Non-irrigated yields"]);
     expect(d.highlightYears.map((h) => h.year)).toEqual([2012, 2022]);
     expect(d.missYears).toEqual([2019]);
@@ -295,7 +402,7 @@ describe("irrigated field: flat model", () => {
 
   it("dryland poor fit says so in the same words", async () => {
     await show(flat({ dryland: dry({ fit: { n: 9, r: 0.1, mae: 25 } }) }));
-    expect(screen.getByText("r = 0.10, mean error 25.0 points, 9 years")).toBeTruthy();
+    expect(screen.getByText("r = 0.10 · mean error 25.0 points · 9 years")).toBeTruthy();
     expect(screen.getByText("The model does not follow it.")).toBeTruthy();
   });
 
@@ -310,6 +417,7 @@ describe("rainfed field", () => {
     await show(base());
     expect(screen.queryByText("The model cannot be checked against yields for this field")).toBeNull();
     expect(screen.queryByRole("heading", { name: "The same model without irrigation" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Show the flat comparison/ })).toBeNull();
     expect(chartProps).toHaveBeenCalledTimes(1);
   });
 });
@@ -330,5 +438,19 @@ describe("trustView rules", () => {
     expect(readCase2022(year(2022, { model: -20, county: 10 }))).toEqual({ kind: "opposite" });
     expect(readCase2022(year(2022, { model: -20, county: -35 }))).toEqual({ kind: "same", gap: 15, close: false });
     expect(readCase2022(year(2022, { model: -20, county: null }))).toEqual({ kind: "nocounty" });
+  });
+  it("caveat codes: known parsed, unknown dropped", () => {
+    expect(parseCaveat("state-level-yields:winter_wheat")).toEqual({ code: "state-level-yields", crop: "winter_wheat" });
+    expect(parseCaveat("second-crop-ignored")).toEqual({ code: "second-crop-ignored", crop: null });
+    expect(parseCaveat("whatever:corn")).toBeNull();
+  });
+  it("source line: crop ids to names, bracket words translated", () => {
+    expect(
+      cleanArea(
+        "winter_wheat, corn: Kansas (state level, irrigated); Finney County, KS (all practices)",
+        (c) => c.toUpperCase(),
+        (k) => (k === "irrigated" ? "IRR" : null),
+      ),
+    ).toBe("WINTER_WHEAT, CORN: Kansas (state level, IRR); Finney County, KS (all practices)");
   });
 });

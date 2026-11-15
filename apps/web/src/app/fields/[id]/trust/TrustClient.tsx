@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import type { Retrospective, TrustFit, TrustReport, TrustYear } from "@terrasight/shared";
-import { Button, Chip, Kicker, Skeleton, Surface } from "@terrasight/ui";
+import { Button, Chip, Disclosure, Kicker, Skeleton, Surface } from "@terrasight/ui";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { ModelVsActualChart } from "@/components/ModelVsActualChart";
@@ -11,7 +11,17 @@ import { ApiError, api } from "@/lib/api";
 import { useFormat } from "@/lib/useFormat";
 import { FieldTabs } from "../Overview";
 import { cropLabel } from "../log/group";
-import { flatExample, readCase2022, readFit, readNdvi } from "./trustView";
+import {
+  averageOf,
+  cleanArea,
+  flatExample,
+  parseCaveat,
+  readCase2022,
+  readFit,
+  readNdvi,
+  readVerdict,
+  type Verdict,
+} from "./trustView";
 
 type Fmt = ReturnType<typeof useFormat>;
 type T = ReturnType<typeof useTranslations>;
@@ -77,6 +87,9 @@ export function TrustClient({
   return (
     <div className="flex flex-col gap-5">
       <header className="flex flex-col gap-3">
+        <Link href={`/fields/${fieldId}`} className="focus-ring inline-flex min-h-tap w-fit items-center text-body font-semibold text-ink-2 hover:text-ink">
+          ‹ {fieldName}
+        </Link>
         <Kicker>{fieldName}</Kicker>
         <h1 className="text-h1 text-ink">{t("title")}</h1>
         <FieldTabs fieldId={fieldId} active={3} />
@@ -148,53 +161,150 @@ function Ready({ report, cropNames }: { report: TrustReport; cropNames: CropName
   const derz = report.actual.kind === "derzhstat";
   const years = [...report.years].sort((a, b) => a.year - b.year);
   const crop = (c: string | null) => cropLabel(c, cropNames, fmt.locale, t("miss_crop_unknown"));
+  const cropName = (c: string) => cropLabel(c, cropNames, fmt.locale, t("crop_fallback"));
   const flat = report.modelFlat === true;
   const dryland = report.dryland ?? null;
+  const verdict = readVerdict(report);
+  const source = sourceText(report, t, cropName);
+  const y22 = report.case2022;
+
+  const chart = (
+    <ModelVsActualChart
+      years={years.map((y) => y.year)}
+      series={[
+        { id: "model", label: t("series_model"), values: years.map((y) => y.model) },
+        {
+          id: "county",
+          label: t(derz ? "series_county_derzhstat" : "series_county"),
+          values: years.map((y) => y.county),
+        },
+        { id: "ndvi", label: t("series_ndvi"), values: years.map((y) => y.ndvi) },
+      ]}
+      unitLabel={t("chart_unit")}
+      highlightYears={y22 ? [{ year: y22.year, label: String(y22.year) }] : []}
+      missYears={years.filter((y) => y.miss).map((y) => y.year)}
+      ariaLabel={t("chart_aria")}
+      tableCaption={t("chart_caption")}
+    />
+  );
+  const missed = (
+    <Missed years={years} hasCounty={report.vsCounty !== null} fmt={fmt} t={t} crop={crop} nodata={nodata} />
+  );
+
   return (
     <>
-      {flat && <FlatNotice years={years} fmt={fmt} t={t} />}
-      {report.case2022 && <Case2022 y={report.case2022} flat={flat} fmt={fmt} t={t} />}
-      <Surface as="section" aria-labelledby="trust-fit" className="flex flex-col gap-4">
-        <h2 id="trust-fit" className="text-h2 text-ink">
-          {t("fit_title")}
-        </h2>
-        <Fit title={t(derz ? "fit_county_derzhstat" : "fit_county")} fit={report.vsCounty} flat={flat} fmt={fmt} t={t} />
-        <Fit title={t("fit_ndvi")} fit={report.vsNdvi} flat={flat} fmt={fmt} t={t} />
-        <p className="text-caption text-ink-2">{t("fit_rule")}</p>
-      </Surface>
-      <Surface as="section" aria-labelledby="trust-chart" className="flex flex-col gap-3">
-        <h2 id="trust-chart" className="text-h2 text-ink">
-          {t("chart_title")}
-        </h2>
-        <ModelVsActualChart
-          years={years.map((y) => y.year)}
-          series={[
-            { id: "model", label: t("series_model"), values: years.map((y) => y.model) },
-            {
-              id: "county",
-              label: t(derz ? "series_county_derzhstat" : "series_county"),
-              values: years.map((y) => y.county),
-            },
-            { id: "ndvi", label: t("series_ndvi"), values: years.map((y) => y.ndvi) },
-          ]}
-          unitLabel={t("chart_unit")}
-          highlightYears={report.case2022 ? [{ year: report.case2022.year, label: String(report.case2022.year) }] : []}
-          missYears={years.filter((y) => y.miss).map((y) => y.year)}
-          ariaLabel={t("chart_aria")}
-          tableCaption={t("chart_caption")}
-        />
-      </Surface>
-      <Missed years={years} hasCounty={report.vsCounty !== null} fmt={fmt} t={t} crop={crop} nodata={nodata} />
-      {dryland && <Dryland d={dryland} fmt={fmt} t={t} crop={crop} nodata={nodata} />}
-      <NotModelled report={report} t={t} crop={(c) => cropLabel(c, cropNames, fmt.locale, c)} />
-      <Surface as="section" aria-labelledby="trust-src">
-        <h2 id="trust-src" className="text-h2 text-ink">
-          {t("src_title")}
-        </h2>
-        <p className="mt-2 text-body text-ink">{sourceText(report, t)}</p>
-      </Surface>
+      {flat ? <FlatNotice years={years} fmt={fmt} t={t} /> : <VerdictCard report={report} verdict={verdict} source={source} fmt={fmt} t={t} />}
+      {!flat && !derz && y22 && y22.model !== null && y22.county !== null && (
+        <Surface as="section">
+          <Disclosure
+            summary={t(report.actual.kind === "nass" && y22.county <= -15 ? "c22_row_drought" : "c22_row", {
+              model: signedPct(fmt, y22.model, nodata),
+              county: signedPct(fmt, y22.county, nodata),
+            })}
+          >
+            <div className="pt-3">
+              <Case2022 y={y22} flat={false} fmt={fmt} t={t} />
+            </div>
+          </Disclosure>
+        </Surface>
+      )}
+      {flat && dryland && <Dryland d={dryland} fmt={fmt} t={t} crop={crop} nodata={nodata} />}
+      {flat ? (
+        <Surface as="section" aria-label={t("flat_show")}>
+          <Disclosure summary={t("flat_show")} summaryNote={t("flat_show_note")}>
+            <div className="flex flex-col gap-4 pt-3">
+              <p className="text-body text-ink-2">{source}</p>
+              {y22 && (
+                <section className="flex flex-col gap-2">
+                  <h3 className="text-body font-semibold text-ink">
+                    {t("c22_row_flat", { county: signedPct(fmt, y22.county, nodata) })}
+                  </h3>
+                  <Case2022 y={y22} flat fmt={fmt} t={t} />
+                </section>
+              )}
+              <Fit title={t(derz ? "fit_county_derzhstat" : "fit_county")} fit={report.vsCounty} flat fmt={fmt} t={t} />
+              <Fit title={t("fit_ndvi")} fit={report.vsNdvi} flat fmt={fmt} t={t} />
+              <section aria-labelledby="trust-chart" className="flex flex-col gap-3">
+                <h3 id="trust-chart" className="text-body font-semibold text-ink">
+                  {t("chart_title")}
+                </h3>
+                {chart}
+              </section>
+              {missed}
+            </div>
+          </Disclosure>
+        </Surface>
+      ) : (
+        <>
+          <Surface as="section" aria-labelledby="trust-chart" className="flex flex-col gap-3">
+            <h2 id="trust-chart" className="text-h2 text-ink">
+              {t("chart_title")}
+            </h2>
+            {chart}
+          </Surface>
+          {missed}
+        </>
+      )}
+      {!flat && dryland && <Dryland d={dryland} fmt={fmt} t={t} crop={crop} nodata={nodata} />}
+      <NotModelled report={report} t={t} crop={cropName} />
       {report.retrospective && <Retro r={report.retrospective} fmt={fmt} t={t} />}
     </>
+  );
+}
+
+/** The one-sentence verdict, the evidence line under it and the reading rules behind a disclosure. */
+function VerdictCard({
+  report,
+  verdict,
+  source,
+  fmt,
+  t,
+}: {
+  report: TrustReport;
+  verdict: Verdict;
+  source: string;
+  fmt: Fmt;
+  t: T;
+}) {
+  const derz = report.actual.kind === "derzhstat";
+  let sentence = "";
+  if (verdict.kind === "fit") {
+    sentence =
+      verdict.reading === "few" || verdict.mae === null
+        ? t("verdict_few")
+        : t(`verdict_${verdict.reading}` as "verdict_close", { mae: Math.round(verdict.mae) });
+    if (verdict.reading !== "few" && verdict.misses > 0) sentence += ` ${t("verdict_missed", { n: verdict.misses })}`;
+  } else if (verdict.kind === "estimate") {
+    sentence = `${t(verdict.why === "derzhstat" ? "verdict_est_derzhstat" : "verdict_est_nocounty")} ${t(`verdict_ndvi_${verdict.ndvi}` as "verdict_ndvi_few")}`;
+  }
+  return (
+    <Surface as="section" tone="hero" aria-labelledby="trust-verdict" className="flex flex-col gap-3">
+      <h2 id="trust-verdict" className="text-h2 text-ink">
+        {t("verdict_title")}
+      </h2>
+      <p className="text-body font-semibold text-ink">{sentence}</p>
+      <div className="flex flex-col gap-2">
+        <Fit
+          title={t(derz ? "fit_county_derzhstat" : "fit_county")}
+          fit={report.vsCounty}
+          flat={false}
+          fmt={fmt}
+          t={t}
+          hideEmpty
+          soft={derz}
+        />
+        <Fit title={t("fit_ndvi")} fit={report.vsNdvi} flat={false} fmt={fmt} t={t} hideEmpty ndvi />
+      </div>
+      <p className="text-caption text-ink-2">{source}</p>
+      <Disclosure summary={t("read_title")}>
+        <div className="flex flex-col gap-2 pt-2 text-caption text-ink-2">
+          <p>{t("fit_rule")}</p>
+          <p>{t("read_r")}</p>
+          <p>{t("read_points")}</p>
+          <p>{t("c22_rule")}</p>
+        </div>
+      </Disclosure>
+    </Surface>
   );
 }
 
@@ -249,7 +359,12 @@ function Dryland({
         </h2>
         <p className="text-body text-ink">{t("dry_intro", { area: d.area })}</p>
         <Fit title={t("dry_fit")} fit={d.fit} flat={false} fmt={fmt} t={t} />
-        <p className="text-caption text-ink-2">{t("fit_rule")}</p>
+        <Disclosure summary={t("read_title")}>
+          <div className="flex flex-col gap-2 pt-2 text-caption text-ink-2">
+            <p>{t("fit_rule")}</p>
+            <p>{t("read_r")}</p>
+          </div>
+        </Disclosure>
       </Surface>
       <Surface as="section" aria-labelledby="trust-dry-chart" className="flex flex-col gap-3">
         <h2 id="trust-dry-chart" className="text-h2 text-ink">
@@ -281,13 +396,18 @@ function Dryland({
   );
 }
 
-function sourceText(report: TrustReport, t: T): string {
-  const { kind, connected, area } = report.actual;
+/** Where the official yields come from, with crop ids turned into names (no raw id on screen). */
+function sourceText(report: TrustReport, t: T, cropName: (c: string) => string): string {
+  const { kind, connected } = report.actual;
+  const area = report.actual.area
+    ? cleanArea(report.actual.area, cropName, (k) => (t.has(`area_${k}`) ? t(`area_${k}` as "area_irrigated") : null))
+    : null;
   if (kind === "nass" && connected) return area ? t("src_nass_area", { area }) : t("src_nass");
   if (kind === "derzhstat") return area ? t("src_derzhstat_area", { area }) : t("src_derzhstat");
   return t("src_none");
 }
 
+/** The 2022 numbers and the one-line reading, by fixed rules. */
 function Case2022({ y, flat, fmt, t }: { y: TrustYear; flat: boolean; fmt: Fmt; t: T }) {
   const nodata = t("c22_nodata");
   const reading = readCase2022(y, flat);
@@ -312,10 +432,7 @@ function Case2022({ y, flat, fmt, t }: { y: TrustYear; flat: boolean; fmt: Fmt; 
     [t("c22_ndvi"), y.ndvi],
   ];
   return (
-    <Surface as="section" tone="hero" aria-labelledby="trust-2022" className="flex flex-col gap-4">
-      <h2 id="trust-2022" className="text-h2 text-ink">
-        {t("c22_title")}
-      </h2>
+    <div className="flex flex-col gap-3">
       <dl className="grid grid-cols-3 gap-3">
         {cells.map(([label, v]) => (
           <div key={label} className="min-w-0">
@@ -329,13 +446,48 @@ function Case2022({ y, flat, fmt, t }: { y: TrustYear; flat: boolean; fmt: Fmt; 
         {sentence}
         {ndvi && ` ${t(`c22_ndvi_${ndvi}` as "c22_ndvi_same")}`}
       </p>
-      {!flat && <p className="text-caption text-ink-2">{t("c22_rule")}</p>}
-    </Surface>
+    </div>
   );
 }
 
-function Fit({ title, fit, flat, fmt, t }: { title: string; fit: TrustFit | null; flat: boolean; fmt: Fmt; t: T }) {
+function Fit({
+  title,
+  fit,
+  flat,
+  fmt,
+  t,
+  hideEmpty = false,
+  ndvi = false,
+  soft = false,
+}: {
+  title: string;
+  fit: TrustFit | null;
+  flat: boolean;
+  fmt: Fmt;
+  t: T;
+  /** Nothing at all when there are no years with both values (the verdict already says so). */
+  hideEmpty?: boolean;
+  /** Satellite greenness: a rough check, worded softly and never in the "urgent" tone. */
+  ndvi?: boolean;
+  /** Unverified context (oblast yields): neutral tone, no verdict colour. */
+  soft?: boolean;
+}) {
   const reading = fit ? readFit(fit, flat) : null;
+  if (hideEmpty && (!fit || fit.n === 0)) return null;
+  const words = ndvi ? `ndvi_read_${reading}` : `read_${reading}`;
+  const tone = soft || ndvi
+    ? reading === "close" && !soft
+      ? "ok"
+      : reading === "loose" && !soft
+        ? "week"
+        : "neutral"
+    : reading === "close"
+      ? "ok"
+      : reading === "loose"
+        ? "week"
+        : reading === "few"
+          ? "neutral"
+          : "urgent";
   return (
     <div>
       <h3 className="text-body font-semibold text-ink">{title}</h3>
@@ -356,9 +508,7 @@ function Fit({ title, fit, flat, fmt, t }: { title: string; fit: TrustFit | null
             })}
           </p>
           <p className="mt-1">
-            <Chip tone={reading === "close" ? "ok" : reading === "loose" ? "week" : reading === "few" ? "neutral" : "urgent"}>
-              {t(`read_${reading}` as "read_close")}
-            </Chip>
+            <Chip tone={tone}>{t(words as "read_close")}</Chip>
           </p>
         </>
       )}
@@ -413,31 +563,38 @@ function Missed({
 }
 
 function NotModelled({ report, t, crop }: { report: TrustReport; t: T; crop: (c: string) => string }) {
-  const caveat = (c: string) => {
-    const [code, arg] = c.split(":");
-    return code === "unverified-crop-parameters" && arg
-      ? t("cav_unverified", { crop: crop(arg) })
-      : t("cav_other", { code: c });
-  };
+  // Raw codes never reach the screen: each known code has a sentence, an unknown one is dropped.
+  const sentences = [
+    ...new Set(
+      report.caveats.flatMap((raw) => {
+        const c = parseCaveat(raw);
+        if (!c) return [];
+        const key = `cav_${c.code.replace(/-/g, "_")}` as "cav_unverified";
+        return [t(key, { crop: crop(c.crop ?? "") })];
+      }),
+    ),
+  ];
+  const known = report.notModelled.filter((id) => t.has(`nm_${id}`));
+  if (known.length === 0 && sentences.length === 0) return null;
   return (
     <Surface as="section" aria-labelledby="trust-nm">
       <h2 id="trust-nm" className="text-h2 text-ink">
         {t("nm_title")}
       </h2>
-      {report.notModelled.length > 0 && (
+      {known.length > 0 && (
         <>
           <p className="mt-1 text-body text-ink-2">{t("nm_intro")}</p>
           <ul className="mt-2 list-disc pl-5 text-body text-ink">
-            {report.notModelled.map((id) => (
-              <li key={id}>{t.has(`nm_${id}`) ? t(`nm_${id}` as "nm_heat") : id}</li>
+            {known.map((id) => (
+              <li key={id}>{t(`nm_${id}` as "nm_heat")}</li>
             ))}
           </ul>
         </>
       )}
-      {report.caveats.length > 0 && (
+      {sentences.length > 0 && (
         <ul className="mt-3 list-disc pl-5 text-body text-ink">
-          {report.caveats.map((c) => (
-            <li key={c}>{caveat(c)}</li>
+          {sentences.map((s) => (
+            <li key={s}>{s}</li>
           ))}
         </ul>
       )}
@@ -448,6 +605,7 @@ function NotModelled({ report, t, crop }: { report: TrustReport; t: T; crop: (c:
 function Retro({ r, fmt, t }: { r: Retrospective; fmt: Fmt; t: T }) {
   const agro = r.mode === "agronomy";
   const nodata = t("retro_nodata");
+  const n = r.seasons.length;
   const show = (v: number | null) =>
     v === null
       ? nodata
@@ -456,54 +614,68 @@ function Retro({ r, fmt, t }: { r: Retrospective; fmt: Fmt; t: T }) {
         : r.currency === "USD" || r.currency === "UAH"
           ? fmt.money(v, r.currency)
           : fmt.number(v, { maximumFractionDigits: 0 });
-  const signed = (v: number | null) => (v === null ? nodata : `${v > 0 ? "+" : v < 0 ? "−" : ""}${show(Math.abs(v))}`);
-  const diff =
-    r.current.total !== null && r.recommended.total !== null ? r.recommended.total - r.current.total : null;
+  // Money adds up; percentages of a usual yield do not, so estimate mode compares averages.
+  const cur = agro ? averageOf(r.current.bySeason) : r.current.total;
+  const rec = agro ? averageOf(r.recommended.bySeason) : r.recommended.total;
+  const diff = cur !== null && rec !== null ? rec - cur : null;
+  const same = diff !== null && (agro ? Math.abs(diff) < 1 : Math.round(diff) === 0);
+  let verdict: string | null = null;
+  if (diff !== null && cur !== null && rec !== null) {
+    const dir = same ? "same" : diff > 0 ? "more" : "less";
+    verdict = agro
+      ? t(`retro_verdict_agro_${dir}` as "retro_verdict_agro_same", {
+          n,
+          rec: fmt.number(rec, { maximumFractionDigits: 0 }),
+          cur: fmt.number(cur, { maximumFractionDigits: 0 }),
+        })
+      : t(`retro_verdict_money_${dir}` as "retro_verdict_money_same", { n, value: show(Math.abs(diff)) });
+  }
   return (
     <Surface as="section" aria-labelledby="trust-retro" className="flex flex-col gap-3">
       <h2 id="trust-retro" className="text-h2 text-ink">
         {t("retro_title", { season: r.seasons[0] ?? "" })}
       </h2>
-      <p className="text-body font-semibold text-ink">{t("retro_label")}</p>
-      <div className="overflow-x-auto">
-        <table className="w-full text-body text-ink">
-          <caption className="pb-2 text-left text-caption text-ink-2">{t(agro ? "retro_agronomy" : "retro_money")}</caption>
-          <thead>
-            <tr className="border-b border-line text-left text-caption text-ink-2">
-              <th scope="col" className="py-2 pr-3 font-semibold">
-                {t("retro_season")}
-              </th>
-              <th scope="col" className="py-2 pr-3 text-right font-semibold">
-                {t("retro_current")}
-              </th>
-              <th scope="col" className="py-2 text-right font-semibold">
-                {t("retro_recommended")}
-              </th>
-            </tr>
-          </thead>
-          <tbody className="font-mono">
-            {r.seasons.map((s, i) => (
-              <tr key={s} className="border-b border-line">
-                <th scope="row" className="min-h-tap py-3 pr-3 text-left font-semibold">
-                  {s}
+      {verdict && <p className="text-body font-semibold text-ink">{verdict}</p>}
+      {diff !== null && diff < 0 && !same && <p className="text-body text-ink-2">{t("retro_note_less")}</p>}
+      <p className="text-caption text-ink-2">{t("retro_label")}</p>
+      <Disclosure summary={t("retro_table")}>
+        <div className="overflow-x-auto pt-2">
+          <table className="w-full text-body text-ink">
+            <caption className="pb-2 text-left text-caption text-ink-2">{t(agro ? "retro_agronomy" : "retro_money")}</caption>
+            <thead>
+              <tr className="border-b border-line text-left text-caption text-ink-2">
+                <th scope="col" className="py-2 pr-3 font-semibold">
+                  {t("retro_season")}
                 </th>
-                <td className="py-3 pr-3 text-right">{show(r.current.bySeason[i] ?? null)}</td>
-                <td className="py-3 text-right">{show(r.recommended.bySeason[i] ?? null)}</td>
+                <th scope="col" className="py-2 pr-3 text-right font-semibold">
+                  {t("retro_current")}
+                </th>
+                <th scope="col" className="py-2 text-right font-semibold">
+                  {t("retro_recommended")}
+                </th>
               </tr>
-            ))}
-            <tr className="font-semibold">
-              <th scope="row" className="py-3 pr-3 text-left">
-                {t("retro_total")}
-              </th>
-              <td className="py-3 pr-3 text-right">{show(r.current.total)}</td>
-              <td className="py-3 text-right">{show(r.recommended.total)}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <p className="text-body font-semibold text-ink">
-        {t("retro_diff")}: <span className="font-mono">{signed(diff)}</span>
-      </p>
+            </thead>
+            <tbody className="font-mono">
+              {r.seasons.map((s, i) => (
+                <tr key={s} className="border-b border-line">
+                  <th scope="row" className="min-h-tap py-3 pr-3 text-left font-semibold">
+                    {s}
+                  </th>
+                  <td className="py-3 pr-3 text-right">{show(r.current.bySeason[i] ?? null)}</td>
+                  <td className="py-3 text-right">{show(r.recommended.bySeason[i] ?? null)}</td>
+                </tr>
+              ))}
+              <tr className="font-semibold">
+                <th scope="row" className="py-3 pr-3 text-left">
+                  {t(agro ? "retro_average" : "retro_total")}
+                </th>
+                <td className="py-3 pr-3 text-right">{show(cur)}</td>
+                <td className="py-3 text-right">{show(rec)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </Disclosure>
     </Surface>
   );
 }

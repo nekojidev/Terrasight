@@ -243,7 +243,7 @@ describe("ModelVsActualChart", () => {
     tableCaption: "Model against actual, values by year",
   };
 
-  it("draws gaps, a zero line, a labelled band, a miss ring and end labels", () => {
+  it("draws gaps, a zero line, a labelled band, a miss ring and a legend row instead of end labels", () => {
     const { container } = wrap(<ModelVsActualChart {...props} />);
     expect(screen.getByRole("img", { name: props.ariaLabel })).toBeTruthy();
     expect(screen.getByText("2022 drought")).toBeTruthy();
@@ -251,7 +251,7 @@ describe("ModelVsActualChart", () => {
     expect(screen.getByText(/Ring: the model missed this year \(2019\)/)).toBeTruthy();
     // model has a gap in 2020: two runs, the first with 2 points, the second a lone marker (no line)
     expect(container.querySelectorAll("polyline").length).toBe(4);
-    expect(screen.getByText("Model -30", { exact: false })).toBeTruthy();
+    expect(screen.getByRole("list", { name: "Series" }).textContent).toContain("Model");
     expect(container.querySelectorAll("circle, rect, polygon").length).toBeGreaterThan(10);
   });
 
