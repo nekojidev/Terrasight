@@ -23,6 +23,8 @@ export const SOURCE_LABELS: Record<SourceId, string> = {
   dem: "Copernicus DEM",
   sentinel2: "Sentinel-2",
   openet: "OpenET",
+  cropland: "Land cover",
+  wapor: "FAO WaPOR",
 };
 
 /** What is missing when a source fails ("SSURGO did not respond, soil data missing", RFC §4). */
@@ -35,6 +37,8 @@ export const SOURCE_PROVIDES: Record<SourceId, string> = {
   dem: "slope missing",
   sentinel2: "recent satellite images missing",
   openet: "water-use data missing",
+  cropland: "cropland check missing",
+  wapor: "water-use data missing",
 };
 
 /** Per-task time budget. MODIS reads hundreds of composites on first fetch; the cache makes later runs instant. */
@@ -47,6 +51,8 @@ export const SOURCE_TIMEOUT_MS: Record<SourceId, number> = {
   dem: 60_000,
   sentinel2: 120_000,
   openet: 120_000,
+  cropland: 120_000,
+  wapor: 300_000,
 };
 
 /** How long a cached response stays fresh (RFC §5.4: history is permanent, current-year data refreshes weekly). */
@@ -56,6 +62,8 @@ const FRESH_DAYS: Partial<Record<SourceId, number>> = {
   sentinel2: 1,
   openet: 30,
   cdl: 30,
+  cropland: 30,
+  wapor: 30,
 };
 
 export interface CachedSource<T = unknown> {

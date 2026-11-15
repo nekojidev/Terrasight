@@ -1,15 +1,18 @@
 import { createHash } from "node:crypto";
 import { Inject, Injectable, Logger, type OnModuleInit } from "@nestjs/common";
 import { ModuleRef } from "@nestjs/core";
-import type { Library } from "@terrasight/library";
+import { loadUaYields, oblastYields, type Library, type UaYieldsFile } from "@terrasight/library";
 import { EventKeys, type Envelope } from "@terrasight/shared";
-import type {
-  CdlHistory,
-  DailyWeather,
-  EtSeries,
-  NdviSeries,
-  SoilSummary,
-  SourceResult,
+import {
+  soilSummaryFromGrids,
+  type CdlHistory,
+  type CroplandHistory,
+  type DailyWeather,
+  type EtSeries,
+  type NdviSeries,
+  type SoilGridsSummary,
+  type SoilSummary,
+  type SourceResult,
 } from "@terrasight/sources";
 import { ENV, runsWorker, type Env } from "../config/config.js";
 import { PrismaService } from "../db/prisma.service.js";
@@ -22,6 +25,7 @@ import { eventRow, jobRow } from "../messaging/outbox.js";
 import { OutboxService } from "../messaging/outbox.service.js";
 import { QUEUES } from "../messaging/topology.js";
 import {
+  applyCroplandMask,
   bareMonths,
   baselineCrops,
   cropsFromCdl,
@@ -82,11 +86,15 @@ export class HistoryService extends JobConsumer<BuildJob> implements OnModuleIni
     });
     if (!field) return;
     const r = await this.results(jobId);
-    const weather = (r.power?.payload ?? null) as DailyWeather | null;
-    const cdl = (r.cdl?.payload ?? null) as CdlHistory | null;
-    const ndvi = (r.modis?.payload ?? null) as NdviSeries | null;
-    const soil = (r.ssurgo?.payload ?? null) as SoilSummary | null;
-    const et = (r.openet?.payload ?? null) as EtSeries | null;
+    const payload = <T>(id: string): T | null => (r[id]?.payload ?? null) as T | null;
+    const weather = payload<DailyWeather>("power");
+    const cdl = payload<CdlHistory>("cdl");
+    const ndvi = payload<NdviSeries>("modis");
+    // Outside the US SoilGrids is the soil source and WaPOR the water-use source (estimates, flagged in the payload).
+    const grids = payload<SoilGridsSummary>("soilgrids");
+    const soil = payload<SoilSummary>("ssurgo") ?? (grids ? soilSummaryFromGrids(grids) : null);
+    const et = payload<EtSeries>("openet") ?? payload<EtSeries>("wapor");
+    const cropland = payload<CroplandHistory>("cropland");
 
     const thisYear = new Date().getUTCFullYear();
     const lastSeason = thisYear - 1;
@@ -94,8 +102,12 @@ export class HistoryService extends JobConsumer<BuildJob> implements OnModuleIni
     const crops: SeasonCrop[] = cdl
       ? cropsFromCdl(cdl, field.regionId)
       : ndvi
-        ? cropsFromNdvi(ndvi, baselineCrops(this.lib, field.regionId), lastSeason)
+        ? applyCroplandMask(
+            cropsFromNdvi(ndvi, baselineCrops(this.lib, field.regionId), lastSeason),
+            cropland,
+          )
         : [];
+    const croplandShare = new Map((cropland?.seasons ?? []).map((s) => [s.year, s.cropShare]));
     const stats = seasonStats(weather, ndvi, seasons);
     const irrigation = detectIrrigation(et, stats, soil, ndvi);
 
@@ -156,6 +168,7 @@ export class HistoryService extends JobConsumer<BuildJob> implements OnModuleIni
           peak: s.ndviPeak,
           precipMm: s.precipMm,
           heatDays: s.heatDays,
+          cropland: croplandShare.get(s.season) ?? null,
         })) as Prisma.InputJsonValue,
         irrigationDetection: irrigation as unknown as Prisma.InputJsonValue,
         baselineMatch: baseline as unknown as Prisma.InputJsonValue,
@@ -199,11 +212,19 @@ export class HistoryService extends JobConsumer<BuildJob> implements OnModuleIni
     }
   }
 
+  private uaYields: UaYieldsFile | null | undefined;
+
+  private regionalYields(adminCode: string | null) {
+    if (!adminCode?.startsWith("UA-")) return null;
+    if (this.uaYields === undefined) this.uaYields = loadUaYields(this.env.DATA_DIR);
+    return this.uaYields ? oblastYields(this.uaYields, adminCode) : null;
+  }
+
   /** History view for the field page (design 08): 18-season strip, stress years, irrigation, current rotation. */
   async get(workspaceId: string, fieldId: string) {
     const field = await this.prisma.db.field.findFirst({
       where: { id: fieldId, workspaceId, archivedAt: null },
-      select: { id: true, irrigation: true, irrigationSource: true },
+      select: { id: true, irrigation: true, irrigationSource: true, adminCode: true },
     });
     if (!field) throw new ProblemException(404, "not-found");
     const [history, crops] = await Promise.all([
@@ -229,6 +250,8 @@ export class HistoryService extends JobConsumer<BuildJob> implements OnModuleIni
         detection: history?.irrigationDetection ?? null,
       },
       currentRotation: history?.baselineMatch ?? null,
+      /** Ukraine only: oblast average yields (State Statistics Service). Context, never verified, never a price. */
+      regionalYields: this.regionalYields(field.adminCode),
       /** Localised names of every library crop: labels for the strip and the "correct a season" picker. */
       cropNames: Object.fromEntries(
         Object.entries(this.lib.rotations.crops).map(([id, c]) => [id, { en: c.en, uk: c.uk }]),
