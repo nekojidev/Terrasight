@@ -331,10 +331,16 @@ export class ScenariosService {
       full.current.sequence.flatMap((x) => (typeof x === "string" ? [x] : [x.main, x.second])),
     );
     // A library rotation as "current" must be fully evaluable; a detected one only needs some evaluable crop.
+    // Detected land use with no farm crop at all (grassland, developed, "other:<CDL class>") is compared as
+    // "no crop" (all seasons fallow, margin 0) instead of blocking the comparison.
+    const libraryCrops = new Set(Object.keys(this.lib.rotations.crops));
+    const noFarmCrop =
+      full.current.label !== "baseline" && [...curAll].every((c) => c === "fallow" || !libraryCrops.has(c));
+    if (noFarmCrop) full.current = { ...full.current, sequence: full.current.sequence.map(() => "fallow") };
     const currentOk =
       full.current.label === "baseline"
         ? bad.length === 0
-        : [...curAll].some((c) => !bad.includes(c) && c !== "fallow");
+        : noFarmCrop || [...curAll].some((c) => !bad.includes(c) && c !== "fallow");
     if (!split.usable.length || !currentOk) {
       return this.pending(
         split.unpriced.length || bad.some((c) => !full.prices[c]) ? "prices" : "crops",
