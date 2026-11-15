@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pseudonymise } from "./assistant.service.js";
+import { pseudonymise, titleFromQuestion } from "./assistant.service.js";
 
 describe("pseudonymise (RFC §12.6: field names never go to Gemini)", () => {
   const aliases = new Map([
@@ -15,5 +15,14 @@ describe("pseudonymise (RFC §12.6: field names never go to Gemini)", () => {
     expect(pseudonymise("Pivot 123 is not ours; 12 mm fell.", aliases)).toBe(
       "Pivot 123 is not ours; 12 mm fell.",
     );
+  });
+});
+
+describe("titleFromQuestion", () => {
+  it("collapses whitespace and trims long questions", () => {
+    expect(titleFromQuestion("  Why   is\n the risk\there? ")).toBe("Why is the risk here?");
+    const t = titleFromQuestion("x".repeat(100));
+    expect(t.length).toBe(60);
+    expect(t.endsWith("…")).toBe(true);
   });
 });

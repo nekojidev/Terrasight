@@ -681,6 +681,8 @@ model Conversation {
   workspaceId String   @map("workspace_id") @db.Uuid
   userId      String   @map("user_id") @db.Uuid
   title       String?
+  /// The field the chat was opened from (the field panel); null for company-wide chats.
+  contextFieldId String?  @map("context_field_id") @db.Uuid
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   expiresAt   DateTime @map("expires_at") @db.Timestamptz(3)
 
@@ -688,6 +690,7 @@ model Conversation {
   messages  Message[]
 
   @@index([expiresAt])
+  @@index([workspaceId, userId, contextFieldId, createdAt], map: "conversations_ctx_field_idx")
   @@map("conversations")
 }
 

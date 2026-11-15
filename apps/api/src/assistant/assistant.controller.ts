@@ -6,7 +6,11 @@ import { ProblemException } from "../http/problem.js";
 import { ZodPipe } from "../http/zod.js";
 import { AssistantService } from "./assistant.service.js";
 
-const CreateBody = z.object({ title: z.string().trim().max(120).optional() });
+const CreateBody = z.object({
+  title: z.string().trim().max(120).optional(),
+  /** Opens the chat from a field panel, so the panel can find it again. */
+  fieldId: z.string().regex(UUID).optional(),
+});
 const AskBody = z.object({
   text: z.string().trim().min(1).max(2000),
   /** The language the UI is showing; falls back to the user's profile language. */
@@ -36,13 +40,15 @@ export class AssistantController {
   @Post()
   @Requires("assistant.use")
   create(@Body(new ZodPipe(CreateBody)) body: z.infer<typeof CreateBody>, @Req() req: AuthedRequest) {
-    return this.assistant.create(req.workspaceId!, req.user!.id, body.title);
+    return this.assistant.create(req.workspaceId!, req.user!.id, body.title, body.fieldId);
   }
 
   @Get()
   @Requires("assistant.use")
-  list(@Req() req: AuthedRequest) {
-    return this.assistant.list(req.workspaceId!, req.user!.id);
+  list(@Query("fieldId") fieldId: string | undefined, @Req() req: AuthedRequest) {
+    // ?fieldId=<uuid>: only the latest chat of this user opened from that field (at most one row).
+    if (fieldId !== undefined && !UUID.test(fieldId)) throw new ProblemException(422, "invalid-input", "Bad fieldId");
+    return this.assistant.list(req.workspaceId!, req.user!.id, fieldId);
   }
 
   @Get(":id")
