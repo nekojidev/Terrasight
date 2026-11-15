@@ -6,6 +6,7 @@ import { OUT, ROOT } from "./env.mjs";
 import { settle } from "./take.mjs";
 import { openGraph, sources, tiles } from "./graphics.mjs";
 import * as G2 from "./graphics2.mjs";
+import * as G3 from "./graphics3.mjs";
 
 const must = (v, what) => {
   if (v == null || (Array.isArray(v) && !v.length)) throw new Error("Could not read from the page: " + what);
@@ -880,7 +881,7 @@ export async function renderPhoneBackdrop(browser, cfg, stateFile, file) {
 
 export const SHOTS = { openGraph, sources, tiles, coldOpen, addField, climate, overview, plan, trust, ask1, ask2, endCard, hook, briefHome, briefField, rotation, assistant, owner };
 
-Object.assign(SHOTS, { title: G2.title, proof: G2.proof, askLive: G2.askLive, today: G2.today, climate: G2.climate, rotation: G2.rotation });
+Object.assign(SHOTS, { orbitDown: G3.orbitDown, endOrbit: G3.endOrbit, title: G2.title, proof: G2.proof, askLive: G2.askLive, today: G2.today, climate: G2.climate, rotation: G2.rotation });
 
 /** A lime pill (design tokens) as a transparent PNG, for overlays that are added in the edit. */
 export async function renderPill(browser, cfg, text, file) {

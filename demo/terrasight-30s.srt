@@ -11,17 +11,17 @@ Draw a field, and forty-five years of NASA data go to work.
 Eighteen seasons of history, and a shifting climate: first frost, nine days later.
 
 4
-00:00:14,603 --> 00:00:17,810
-It plans five seasons: thirty-two dollars more per acre.
+00:00:14,603 --> 00:00:16,631
+It plans five seasons of seeding.
 
 5
-00:00:18,190 --> 00:00:21,824
-Ask it anything. Every number is checked, never invented.
+00:00:17,011 --> 00:00:22,126
+The AI assistant answers all your questions. Every number is checked, never invented.
 
 6
-00:00:22,204 --> 00:00:25,204
+00:00:22,506 --> 00:00:25,507
 And it shows where it was wrong: four years of ten.
 
 7
-00:00:25,584 --> 00:00:29,257
+00:00:25,887 --> 00:00:29,560
 Terrasight: NASA data, for your next decision.

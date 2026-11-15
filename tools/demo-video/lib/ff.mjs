@@ -45,8 +45,10 @@ export function renderClip({ input, segs, len, out, phone }) {
     });
     let chain = labels.length > 1 ? `${labels.join("")}concat=n=${labels.length}:v=1:a=0` : null;
     const z = s.zoom;
+    // supersampled push-in: the frame is first scaled to 2x, then zoomed and cropped on that grid (half-pixel steps), then
+    // scaled back: no jitter from integer rounding, and the crop never pins to the frame edge
     const zoom = z
-      ? `scale=w='trunc(1920*(${z.from}+(${z.to}-${z.from})*min(1,t/${f3(dur)}))/2)*2':h=-2:eval=frame:flags=bilinear,crop=1920:1080:x='(iw-1920)*${z.cx ?? 0.5}':y='(ih-1080)*${z.cy ?? 0.5}',setsar=1`
+      ? `scale=3840:2160:flags=bicubic,scale=w='trunc(3840*(${z.from}+(${z.to}-${z.from})*min(1,t/${f3(dur)}))/2)*2':h=-2:eval=frame:flags=bicubic,crop=3840:2160:x='(iw-3840)*${Math.min(z.cx ?? 0.5, 0.94)}':y='(ih-2160)*${z.cy ?? 0.5}',scale=1920:1080:flags=lanczos,setsar=1`
       : null;
     if (chain) parts.push(`${chain}${zoom ? "," + zoom : ""}[s${i}]`);
     else parts.push(`${labels[0]}${zoom ? zoom : "null"}[s${i}]`);

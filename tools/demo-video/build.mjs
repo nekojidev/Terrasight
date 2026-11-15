@@ -9,6 +9,7 @@ import { synthesize, FFMPEG } from "./lib/tts.mjs";
 import { launch, signIn, newTake } from "./lib/take.mjs";
 import { SHOTS, renderPhoneBackdrop, renderPill } from "./lib/shots.mjs";
 import { readFacts, words } from "./lib/graphics2.mjs";
+import { warmTiles } from "./lib/graphics3.mjs";
 import { renderClip, xfadeChain, mixAudio, probe, run, joinClips, makeSfx, mapTime } from "./lib/ff.mjs";
 
 const args = process.argv.slice(2);
@@ -31,15 +32,12 @@ const GAP = 0.38; // the small breath between two lines
 const makeStory = (F) => [
   {
     id: "open",
-    group: 0,
+    group: 1,
     min: 3.8,
     lead: 0.3,
     line: "Meet Terrasight: the AI assistant for farmers.",
     voice: NARRATOR,
-    shots: [
-      ["title", 0.5],
-      ["today", 0.5],
-    ],
+    shots: [["orbitDown", 1]],
   },
   {
     id: "add",
@@ -60,8 +58,8 @@ const makeStory = (F) => [
   {
     id: "rotation",
     group: 1,
-    min: 3.0,
-    line: `It plans ${words(F.seasons)} seasons: ${words(F.gain)} dollars more per acre.`,
+    min: 2.4,
+    line: `It plans ${words(F.seasons)} seasons of seeding.`,
     voice: NARRATOR,
     shots: [["rotation", 1]],
   },
@@ -69,7 +67,7 @@ const makeStory = (F) => [
     id: "ask",
     group: 1,
     min: 3.4,
-    line: "Ask it anything. Every number is checked, never invented.",
+    line: "The AI assistant answers all your questions. Every number is checked, never invented.",
     voice: NARRATOR,
     shots: [["askLive", 1]],
   },
@@ -83,13 +81,13 @@ const makeStory = (F) => [
   },
   {
     id: "end",
-    group: 2,
+    group: 1,
     min: 2.4,
     jcut: 0.8,
     tail: 0.05,
     line: "Terrasight: NASA data, for your next decision.",
     voice: ASSISTANT,
-    shots: [["endCard", 1]],
+    shots: [["endOrbit", 1]],
   },
 ];
 // Re-cuts of the once-only takes (the take itself is never re-recorded: it holds a real field creation / a live Gemini call)
@@ -106,10 +104,9 @@ const RECUT = {
   askLive: (c) => {
     const m = c.marks;
     c.segs = [
-      { from: c.clicks[0] + 0.7, to: m.typed - 0.15, ramp: 0.8, zoom: { from: 1.94, to: 1.94, cx: 0.5, cy: 0.077 } },
-      { from: m.answered + 0.1, to: m.highlight },
-      { from: m.highlight, to: m.chip, ramp: 0.7 },
-      { from: m.chip + 0.95, to: m.chip + 2.45 },
+      { from: c.clicks[0] + 0.7, to: m.typed - 0.15, ramp: 1.1, zoom: { from: 1.94, to: 1.94, cx: 0.5, cy: 0.077 } },
+      { from: m.answered + 0.1, to: m.highlight, zoom: { from: 1.0, to: 1.08, cx: 0.5, cy: 0.35 } },
+      { from: m.highlight, to: m.chip + 0.7, ramp: 3.2, zoom: { from: 1.08, to: 1.24, cx: 0.5, cy: 0.35 } },
     ];
   },
 };
@@ -199,6 +196,7 @@ const browser = await launch();
 try {
   const states = {};
   const need = (r) => (states[r] ??= signIn(browser, cfg, r));
+
   for (const [id, fn] of Object.entries(SHOTS)) {
     if (!NEEDED.has(id)) continue;
     const cache = path.join(OUT, "takes", id + ".json");
@@ -244,7 +242,12 @@ try {
     const { file, marks } = await take.finish();
     const dest = path.join(OUT, "takes", id + ".webm");
     fs.copyFileSync(file, dest);
-    results[id] = { file: dest, segs: r.segs, marks, facts: r.facts, clicks: r.clicks };
+    let srcFile = dest;
+    if (r.file) {
+      srcFile = path.join(OUT, "takes", id + ".mp4");
+      fs.copyFileSync(r.file, srcFile);
+    }
+    results[id] = { file: srcFile, segs: r.segs, marks, facts: r.facts, clicks: r.clicks };
     fs.writeFileSync(cache, JSON.stringify(results[id], null, 1));
     console.log("  facts", JSON.stringify(r.facts ?? {}));
   }

@@ -191,7 +191,7 @@ export async function rotation(take, cfg, L, ctx) {
   const optsBtn = await take.tag(page.getByRole("button", { name: /Choose this option|Chosen/ }).first(), "optsbtn");
   await take.cam(decCard, { dur: 1, fill: [0.9, 0.62], anchor: [0.5, 0.42], maxScale: 2.0 });
   const t0 = take.mark("ready");
-  await take.d("say", [{ segs: [{ text: `5-season plan: +$${gain} per acre a year` }], accent: true, size: NUM }], { pos: "bl" });
+  await take.d("say", [{ segs: [{ text: `+$${gain} per acre a year · ${ctx.facts.seasons} seasons of seeding` }], accent: true, size: NUM }], { pos: "bl" });
   const flick = 1100;
   const hold = Math.max(300, (L + 0.4) * 1000 - flick - 150);
   await take.cam(decCard, { dur: hold, ease: "--ts-ease-enter", fill: [0.94, 0.68], anchor: [0.5, 0.42], maxScale: 2.15 });
