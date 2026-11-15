@@ -64,7 +64,7 @@ const makeStory = (F) => [
   {
     id: "ask",
     group: 1,
-    min: 3.5,
+    min: 4.2,
     line: "Ask it anything. Every number is checked against the models.",
     voice: NARRATOR,
     shots: [["askLive", 1]],
@@ -72,7 +72,7 @@ const makeStory = (F) => [
   {
     id: "proof",
     group: 1,
-    min: 4.7,
+    min: 5.1,
     line: `It also shows where it was wrong: ${words(F.missed.length)} years missed out of ${words(F.seasonsChecked)}.`,
     voice: NARRATOR,
     shots: [["proof", 1]],
@@ -80,8 +80,8 @@ const makeStory = (F) => [
   {
     id: "end",
     group: 2,
-    min: 3.2,
-    jcut: 0.3,
+    min: 2.7,
+    jcut: 1.0,
     tail: 0.05,
     line: "Built on NASA data, for farms adapting to a changing climate.",
     voice: ASSISTANT,
@@ -104,8 +104,8 @@ const RECUT = {
     c.segs = [
       { from: c.clicks[0] + 0.7, to: m.typed - 0.15, ramp: 0.8, zoom: { from: 1.94, to: 1.94, cx: 0.5, cy: 0.077 } },
       { from: m.answered + 0.1, to: m.highlight },
-      { from: m.highlight, to: m.chip, ramp: 0.55 },
-      { from: m.chip + 0.95, to: m.chip + 2.2 },
+      { from: m.highlight, to: m.chip, ramp: 1.0 },
+      { from: m.chip + 0.95, to: m.chip + 2.45 },
     ];
   },
 };

@@ -19,9 +19,9 @@ It plans five seasons: thirty-two dollars more per acre.
 Ask it anything. Every number is checked against the models.
 
 6
-00:00:20,662 --> 00:00:24,692
+00:00:21,362 --> 00:00:25,392
 It also shows where it was wrong: four years missed out of ten.
 
 7
-00:00:25,212 --> 00:00:29,076
+00:00:25,612 --> 00:00:29,476
 Built on NASA data, for farms adapting to a changing climate.

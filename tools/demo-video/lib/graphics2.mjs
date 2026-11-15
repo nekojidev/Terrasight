@@ -75,13 +75,11 @@ async function stageTitle(page, logoHtml, teamLine) {
         <div id="vteam" style="font-family:var(--ts-mono);font-size:30px;font-weight:600;letter-spacing:.04em;color:var(--ts-ink)">${team}</div>`;
       layer.appendChild(veil);
       document.getElementById("vlogo").animate([{ transform: "scale(1)" }, { transform: "scale(1.08)" }], { duration: 2000, easing: "linear", fill: "both" });
-      ["vtag", "vteam"].forEach((id, i) =>
-        document.getElementById(id).animate([{ transform: "translateY(18px)", opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 260, delay: 80 + i * 120, easing: tok("--ts-ease-enter"), fill: "both" }),
-      );
+      document.getElementById("vtag").animate([{ transform: "translateY(18px)", opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 260, delay: 80, easing: tok("--ts-ease-enter"), fill: "both" });
+      document.getElementById("vteam").animate([{ opacity: 0 }, { opacity: 1 }], { duration: 260, delay: 160, easing: tok("--ts-ease-enter"), fill: "both" });
       setTimeout(() => {
-        ["vtag", "vteam"].forEach((id) =>
-          document.getElementById(id).animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(-70px)" }], { duration: 300, easing: tok("--ts-ease-exit"), fill: "both" }),
-        );
+        document.getElementById("vtag").animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(-70px)" }], { duration: 300, easing: tok("--ts-ease-exit"), fill: "both" });
+        document.getElementById("vteam").animate([{ opacity: 1 }, { opacity: 0 }], { duration: 300, easing: tok("--ts-ease-exit"), fill: "both" });
         veil.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 320, easing: tok("--ts-ease-exit"), fill: "both" }).finished.then(() => veil.remove());
       }, 1700);
     },
@@ -126,6 +124,7 @@ export async function today(take, cfg, L, ctx) {
   await take.cam(null, { union: [titleEl, actionEl], dur: 1, fill: [0.86, 0.3], anchor: [0.5, 0.4], maxScale: 2.1 });
   const camB = take.cam(null, { union: [titleEl, actionEl], dur: 1300, ease: "--ts-ease-enter", fill: [0.9, 0.34], anchor: [0.5, 0.4], maxScale: 2.2 });
   await take.d("say", [{ segs: [{ text: sow }], accent: true, size: NUM }], { pos: "bl" });
+  setTimeout(() => void take.d("clear").catch(() => {}), 1600);
   await camB;
   await take.cam(null, { union: [accept, chip], dur: Math.max(400, (L + 0.4 - (take.now() - t0)) * 1000), ease: "--ts-ease-standard", fill: [0.7, 0.4], anchor: [0.5, 0.5], maxScale: 1.9 });
   return { segs: [{ from: t0, to: t0 + L + 0.4 }], facts: { action: sow }, clicks: [] };
@@ -317,11 +316,23 @@ export async function askLive(take, cfg, L, ctx) {
   } catch {
     // the answer is on screen anyway
   }
-  await page.waitForTimeout(450);
-  const end = page.getByText(/Open the field/).first();
-  const endSel = (await end.count()) ? await take.tag(end, "endlink") : badgeSel;
+  await page.getByText("Weather grid size").first().waitFor({ timeout: 15000 });
+  await page.waitForFunction(() => !/Loading the numbers/.test(document.body.innerText), null, { timeout: 15000 }).catch(() => {});
+  await page.waitForTimeout(350);
+  // the whole data card (labels and values) in frame
+  const cardEl = await page.evaluate(() => {
+    const h = [...document.querySelectorAll("*")].find((e) => e.children.length === 0 && /HOW THE CLIMATE HERE CHANGED/i.test(e.textContent));
+    let n = h;
+    for (let i = 0; i < 6 && n.parentElement; i++) {
+      n = n.parentElement;
+      if (/All rows/.test(n.innerText)) break;
+    }
+    n.setAttribute("data-demo-target", "datacard");
+    return true;
+  });
+  void cardEl;
   await take.d("clear");
-  await take.cam(null, { union: [badgeSel, endSel], dur: 700, fill: [0.86, 0.8], anchor: [0.5, 0.5], maxScale: 2.2 });
+  await take.cam(null, { union: [badgeSel, '[data-demo-target="datacard"]'], dur: 700, fill: [0.88, 0.8], anchor: [0.5, 0.5], maxScale: 2.0 });
   await page.waitForTimeout(1300);
   const tEnd = take.mark("end");
   void tSend;

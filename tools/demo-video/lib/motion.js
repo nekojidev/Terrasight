@@ -212,7 +212,12 @@
   }
   async function say(parts, o = {}) {
     await clear();
+    // a soft scrim in the page colour under the overlay: page content fades out before it reaches the pill
+    const sc = document.createElement("div");
+    sc.style.cssText = "position:absolute;left:0;right:0;bottom:0;height:25%;pointer-events:none;background:linear-gradient(to bottom, color-mix(in srgb, var(--ts-bg) 0%, transparent), var(--ts-bg) 60%)";
+    layer.appendChild(sc);
     const el = block(parts, o.pos);
+    el._scrim = sc;
     layer.appendChild(el);
     current = el;
     const rows = [...el.children];
@@ -239,6 +244,7 @@
     if (!current) return;
     const el = current;
     current = null;
+    if (el._scrim) el._scrim.animate([{ opacity: 1 }, { opacity: 0 }], { duration: ms("--ts-dur-fast"), fill: "both" }).finished.then(() => el._scrim.remove());
     await el.animate([{ opacity: 1 }, { opacity: 0, transform: "translateY(-12px)" }], {
       duration: ms("--ts-dur-fast"),
       easing: tok("--ts-ease-exit"),

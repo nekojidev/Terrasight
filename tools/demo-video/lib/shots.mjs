@@ -492,11 +492,11 @@ async function endCard(take, cfg, L) {
         "NASA POWER · MODIS NDVI",
         "font-family:var(--ts-mono);font-size:36px;font-weight:600;letter-spacing:.02em;background:var(--ts-signal);color:var(--ts-on-signal);padding:var(--ts-s3) var(--ts-s6);border-radius:var(--ts-r-chip)",
       ) +
-      row("github.com/nekojidev/Terrasight", "font-family:var(--ts-mono);font-size:30px;font-weight:600;color:var(--ts-ink)") +
+      row("github.com/nekojidev/Terrasight", "font-family:var(--ts-mono);font-size:34px;font-weight:600;color:var(--ts-ink)") +
       row("ESA Copernicus Sentinel-2 · USDA", "font-family:var(--ts-mono);font-size:22px;color:var(--ts-ink-2)") +
       row(
         footer,
-        "font-family:var(--ts-mono);font-size:30px;font-weight:600;letter-spacing:.03em;color:var(--ts-ink);margin-top:var(--ts-s4)",
+        "font-family:var(--ts-mono);font-size:34px;font-weight:600;letter-spacing:.03em;color:var(--ts-ink);margin-top:var(--ts-s4)",
       ) +
       row(
         "Narration: AI-generated voices",
