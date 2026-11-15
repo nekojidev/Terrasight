@@ -4,6 +4,7 @@ import { AppShell } from "@/components/AppShell";
 import { Brief } from "@/components/Brief";
 import { EmptyHome } from "@/components/EmptyHome";
 import { SessionRefresher } from "@/components/SessionRefresher";
+import { canDoFieldWork } from "@/lib/permissions";
 import { activeWorkspace, serverGet, type Me } from "@/lib/server-api";
 
 interface WorkspaceDetail {
@@ -47,7 +48,7 @@ export default async function Home() {
           workspaceId={ws.data.id}
           firstName={me.data.name.split(/\s+/)[0] ?? me.data.name}
           units={ws.data.units}
-          canAct
+          canAct={canDoFieldWork(ws.data.role)}
           isOwner={ws.data.role === "owner"}
           canAsk={ws.data.role !== "owner"}
         />

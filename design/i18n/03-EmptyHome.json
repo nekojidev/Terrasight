@@ -30,7 +30,8 @@
   "owner_sub": "Ваші поля з’являться тут, щойно агроном їх додасть.",
   "owner_title": "Полів ще немає",
   "owner_body": "Польову роботу виконує агроном. Додайте його в Налаштуваннях, у розділі «Команда», і відповідайте на його запитання тут.",
-  "owner_cta": "Відкрити «Команду» в Налаштуваннях"
+  "owner_cta": "Додати агронома",
+  "what_next": "Ми збираємо дані про поле приблизно за 2 хвилини (можна піти). Тут з’являться перші рекомендації, а далі — новий план щоранку о 06:00."
  },
  "en": {
   "lang_group": "Interface language",
@@ -63,6 +64,7 @@
   "owner_sub": "Your fields will show up here once your agronomist adds them.",
   "owner_title": "No fields yet",
   "owner_body": "The agronomist does the field work. Add them in Settings under Team, and you will answer their questions here.",
-  "owner_cta": "Open Team in Settings"
+  "owner_cta": "Add your agronomist",
+  "what_next": "We read the records for the field in about 2 minutes (you can leave). Your first recommendations will be here, and a new plan every morning at 06:00."
  }
 }

@@ -142,7 +142,8 @@ export function FarmStressCard({
   const big = (label: string, x: { atRisk: number; typical: number }) => (
     <div className="min-w-0 flex-1 rounded-input bg-surface-2 p-4">
       <p className="text-caption font-semibold text-ink-2">{label}</p>
-      <p className="text-big-number text-ink">{t("fs_at_risk", { amount: money(x.atRisk) })}</p>
+      <p className="text-big-number text-ink">{money(x.atRisk)}</p>
+      <p className="text-small font-semibold text-ink">{m("fs_risk_label")}</p>
       <p className="text-caption text-ink-2">
         {t("fs_of_typical", { amount: money(x.typical), share: share(x) }).replace(/ · $/, "")}
       </p>

@@ -6,15 +6,13 @@ import {
   Button,
   Chip,
   Disclosure,
-  ErrorCard,
   FieldThumb,
-  InfoHint,
   Kicker,
   Skeleton,
   Surface,
   type Factor,
 } from "@terrasight/ui";
-import { CalendarClock, CloudRain, Gavel, Plus, ShieldCheck, Snowflake, Sun } from "lucide-react";
+import { CalendarClock, CloudRain, Gavel, ShieldCheck, Snowflake, Sun } from "lucide-react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
@@ -22,9 +20,12 @@ import { useEffect, useRef, useState } from "react";
 import { AnalysisCard } from "@/components/AnalysisCard";
 import { AiMark } from "@/components/AiMark";
 import { AskOwnerSheet } from "@/components/AskOwnerSheet";
-import { FarmStressCard } from "@/components/FarmStressCard";
+import { FarmStressLine } from "@/components/FarmStressLine";
 import { OutlookRailLine } from "@/components/OutlookRailLine";
 import { QueryState } from "@/components/QueryState";
+import { SuggestionChips, type SuggestedQuestion } from "@/components/SuggestionChips";
+import { TrustLine } from "@/components/TrustLine";
+import type { FieldsOverviewData } from "@/app/fields/FieldsOverview";
 import { TodayCard, TodayRow } from "@/components/TodayCard";
 import { TodayWindows } from "@/components/TodayWindows";
 import { api, ApiError } from "@/lib/api";
@@ -120,10 +121,14 @@ export function Brief({
 }) {
   const t = useTranslations("App");
   const m = useTranslations("Main");
-  const f = useTranslations("Field");
   const mk = m as unknown as DynamicT;
   const locale = useLocale() as "en" | "uk";
   const fmt = useFormat({ units });
+  const fmtMetric = useFormat({ units: "metric" });
+  const fmtImperial = useFormat({ units: "imperial" });
+  /** Units follow the field's country (US: imperial), not the company setting; unknown country: the company setting. */
+  const fmtFor = (country: string | null | undefined) =>
+    !country ? fmt : country.toUpperCase() === "US" ? fmtImperial : fmtMetric;
   const client = useQueryClient();
   const router = useRouter();
   const toast = useActionToast();
@@ -158,7 +163,16 @@ export function Brief({
       }
     },
   });
+  // Which country each field is in: the same cached query as the Fields page.
+  const fieldCountries = useQuery({
+    queryKey: ["fields-overview", workspaceId],
+    queryFn: () => api<FieldsOverviewData>(`/api/w/${workspaceId}/fields-overview`),
+    staleTime: 30_000,
+    select: (d) =>
+      new Map(d.counties.flatMap((c) => c.fields.map((row) => [row.fieldId, c.state?.split("-")[0] ?? null] as const))),
+  });
   const now = useNow();
+  const [showAll, setShowAll] = useState<Record<string, boolean>>({});
   const [done, setDone] = useState<Record<string, Done>>({});
   const [sheet, setSheet] = useState<Item | null>(null);
 
@@ -178,23 +192,22 @@ export function Brief({
     seen.current = cur;
   }, [data]);
 
-  if (brief.isPending) {
+  if (!brief.data) {
     return (
-      <div className="flex flex-col gap-6" aria-busy>
-        <Skeleton label={t("loading")} variant="text" rows={2} className="w-2/3" />
-        <Skeleton label={t("loading")} variant="number" />
-        <Skeleton label={t("loading")} variant="rows" rows={3} />
-      </div>
-    );
-  }
-  if (brief.isError || !brief.data) {
-    return (
-      <ErrorCard
-        title={t("qsErrWhat", { what: t("todayTitle") })}
-        body={t("qsErrBody")}
-        retryLabel={t("retry")}
-        onRetry={() => void brief.refetch()}
-      />
+      <QueryState
+        query={brief}
+        what={t("todayTitle")}
+        still={m("t_still")}
+        skeleton={
+          <div className="flex flex-col gap-6" aria-busy>
+            <Skeleton label={t("loading")} variant="text" rows={2} className="w-2/3" />
+            <Skeleton label={t("loading")} variant="number" />
+            <Skeleton label={t("loading")} variant="rows" rows={3} />
+          </div>
+        }
+      >
+        {() => null}
+      </QueryState>
     );
   }
   const b = brief.data;
@@ -211,20 +224,24 @@ export function Brief({
           ? t("dueIn", { n })
           : t("dueBy", { date: dateShort(i.deadline) });
   };
-  const reliability = (i: Item) =>
-    m("rel_line", { conf: t(`conf_${i.confidence}`), tier: f(`tier_${i.tier}`) });
-  const keyFmt = {
-    date: dateShort,
-    number: (n: number) => fmt.number(n),
-    percent: (x: number) => fmt.percent(x),
-    temp: (c: number) => fmt.temp(c),
-    rain: (mm: number) => fmt.rain(mm),
-    money: (a: number, c: "USD" | "UAH") => fmt.money(a, c),
+  const nowMs = Date.parse(`${b.date}T12:00:00Z`);
+  /** The one date rule for "when": today / tomorrow as words, any other day short. */
+  const relDate = (iso: string) => fmt.dateRel(`${iso}T12:00:00Z`, { now: nowMs, style: "dayMonth", timeZone: "UTC" });
+  const keyFmtFor = (fieldId: string) => {
+    const x = fmtFor(fieldCountries.data?.get(fieldId));
+    return {
+      date: dateShort,
+      number: (n: number) => x.number(n),
+      percent: (v: number) => x.percent(v),
+      temp: (c: number) => x.temp(c),
+      rain: (mm: number) => x.rain(mm),
+      money: (a: number, c: "USD" | "UAH") => x.money(a, c),
+    };
   };
   /** Key numbers with their unit-aware label; an id without a label or a value that does not fit is dropped. */
   const shownNumbers = (i: Item) =>
     i.keyNumbers.flatMap((k) => {
-      const value = formatKeyNumber(k, keyFmt);
+      const value = formatKeyNumber(k, keyFmtFor(i.fieldId));
       return value !== null && mk.has(`kn_${k.id}`)
         ? [{ value, label: mk(`kn_${k.id}`), weight: k.weight }]
         : [];
@@ -309,24 +326,26 @@ export function Brief({
   ];
   const weekItems = [...(b.hero && !heroUrgent ? [b.hero] : []), ...b.thisWeek];
   const ordered = [...urgentItems, ...weekItems];
-  const todayCount = ordered.length;
-  // The agronomist's first card is the headline recommendation; the Owner reads one flat list.
+  // The agronomist's first card is the headline recommendation; the Owner reads one flat list (collapsed).
   const headline = readOnly ? null : (ordered[0] ?? null);
   const rest = headline ? ordered.slice(1) : ordered;
+  // H1 = the things that cannot wait (the headline card plus "Also today"); "Also this week" is the rest of the week.
+  const alsoToday = rest.filter((i) => i.urgency === "urgent");
+  const alsoWeek = rest.filter((i) => i.urgency !== "urgent");
   const head1 = briefHeadline({ isOwner, decisions: openDecisions.length, urgent: urgentItems.length });
   const emptyText = t("emptyToday", { n: b.counts.fields });
-  const summary = b.daySummary
-    ? humanizeDates(b.daySummary.text[locale], dateShort)
-    : todayCount === 0
-      ? emptyText
-      : t("daySummary", { urgent: b.counts.urgent, week: b.counts.thisWeek, fine: b.counts.allGood });
+  // The day summary only when it adds something (more than one thing to read); never for the Owner.
+  const summary =
+    !isOwner && b.daySummary && ordered.length > 1 ? humanizeDates(b.daySummary.text[locale], dateShort) : null;
+
+  // One source for the frost date: formatted with dateRel; dropped when the headline card is itself a frost item.
+  const heroIsFrost = !!headline?.keyNumbers.some((k) => ["frostMinC", "daysUntilFrost", "frostDate"].includes(k.id));
   const frosts = b.rail.weather
-    .map((w) => w.nextFrost)
-    .filter((x): x is NonNullable<typeof x> => x !== null)
+    .flatMap((w) => (w.nextFrost ? [{ ...w.nextFrost, place: w.county }] : []))
     .sort((a, z) => a.date.localeCompare(z.date));
   const firstFrost = frosts[0];
   const frostText = firstFrost
-    ? t(firstFrost.uncertain ? "frostUncertain" : "frostFrom", { date: dateShort(firstFrost.date) })
+    ? mk("t_frost_where", { date: relDate(firstFrost.date), place: firstFrost.place })
     : t("noFrost");
   const condition = (w: Brief["rail"]["weather"][number]) => {
     const d = w.today;
@@ -336,23 +355,43 @@ export function Brief({
     if (d.precipMm === null) return null;
     return { icon: <Sun />, text: t("wx_dry") };
   };
-  const temp = (c: number | null) => (c === null ? "—" : fmt.temp(c));
+  const wxFmt = (w: Brief["rail"]["weather"][number]) => fmtFor(w.region?.split("-")[0]);
+  const temp = (w: Brief["rail"]["weather"][number], c: number | null) => (c === null ? "—" : wxFmt(w).temp(c));
+
+  const questions = isOwner
+    ? [
+        { id: "o1", text: m("t_q_owner1") },
+        { id: "o2", text: m("t_q_owner2") },
+      ]
+    : [
+        { id: "q1", text: m("t_q_first") },
+        { id: "q2", text: m("t_q_risk") },
+        { id: "q3", text: m("t_q_spray") },
+      ];
+  // The assistant fills the composer with the question and does not send it (the /assistant?ask contract).
+  const askAssistant = (q: SuggestedQuestion, fieldId?: string) =>
+    router.push(`/assistant?ask=${encodeURIComponent(q.text)}${fieldId ? `&field=${encodeURIComponent(fieldId)}` : ""}`);
 
   const ownerSection = isOwner && (
     <Surface as="section" tone="hero" pad="md" aria-labelledby="owner-wait" className="animate-rise sm:p-6">
       <div className="mb-3 flex flex-wrap items-center gap-3">
         <Gavel aria-hidden className="size-5 text-ink-2" strokeWidth={1.7} />
         <h2 id="owner-wait" className="text-h2 text-ink">
-          {t("ownerWaitTitle")} {decisions.data && <span className="text-ink-3">{openDecisions.length}</span>}
+          {t("ownerWaitTitle")}
         </h2>
       </div>
-      <QueryState query={decisions} skeletonVariant="rows" what={t("ownerWaitTitle")}>
+      <QueryState
+        query={decisions}
+        skeletonVariant="rows"
+        what={t("ownerWaitTitle")}
+        still={m("t_still")}
+      >
         {() =>
           openDecisions.length === 0 ? (
             <p className="text-body text-ink-2">{t("ownerNone")}</p>
           ) : (
             <>
-              <p className="mb-3 text-body text-ink-2">{t("ownerWaitSub")}</p>
+              <p className="mb-3 text-body text-ink-2">{m("t_owner_ask_decision")}</p>
               <ul className="mb-4 flex flex-col gap-2">
                 {openDecisions.slice(0, 3).map((d) => (
                   <li key={d.id}>
@@ -363,7 +402,7 @@ export function Brief({
                       <span className="block text-body font-semibold text-ink">{d.title[locale]}</span>
                       <span className="block text-caption text-ink-2">
                         {d.fieldName}
-                        {d.deadline ? ` · ${dateShort(d.deadline)}` : ""}
+                        {d.deadline ? ` · ${m("t_owner_answer_by", { date: relDate(d.deadline) })}` : ""}
                       </span>
                     </Link>
                   </li>
@@ -379,249 +418,117 @@ export function Brief({
     </Surface>
   );
 
-  const stressCard =
+  const stressLine =
     b.counts.fields > 0 ? (
-      <FarmStressCard
+      <FarmStressLine
         data={stress.data}
         isLoading={stress.isLoading}
         isError={stress.isError}
         onRetry={() => void stress.refetch()}
-        isOwner={isOwner}
         units={units}
       />
     ) : null;
 
   const weatherRows = b.rail.weather.slice(0, 2);
+  const firstWx = weatherRows[0];
+  const next7Note = firstWx?.today
+    ? mk("t_next7_sum", {
+        place: firstWx.county,
+        range: `${temp(firstWx, firstWx.today.tminC)} / ${temp(firstWx, firstWx.today.tmaxC)}${condition(firstWx) ? ` · ${condition(firstWx)!.text}` : ""}`,
+      })
+    : undefined;
   const nextDays = (
-    <Surface as="section" aria-labelledby="next7-h" className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center justify-between gap-x-4">
-        <Kicker as="h2" className="">
-          <span id="next7-h">{m("next7_title")}</span>
-        </Kicker>
-        <Link
-          href="/work-windows"
-          className="focus-ring inline-flex min-h-tap items-center text-caption font-semibold text-ink underline underline-offset-4"
-        >
-          {m("next7_link")}
-        </Link>
-      </div>
-      {weatherRows.length > 0 && (
-        <ul className="flex flex-col gap-2">
-          {weatherRows.map((w) => (
-            <li key={`${w.county}${w.region}`} className="flex items-start gap-2 text-caption text-ink">
-              <span aria-hidden className="mt-0.5 inline-flex text-ink-2 [&>svg]:size-4 [&>svg]:stroke-[1.7]">
-                {condition(w)?.icon}
-              </span>
-              <span className="min-w-0">
-                {w.county}
-                {w.region ? `, ${w.region.split("-")[1]}` : ""}
-                <span className="block font-mono text-ink-2">
-                  {w.today
-                    ? `${temp(w.today.tminC)} / ${temp(w.today.tmaxC)}${condition(w) ? ` · ${condition(w)!.text}` : ""}`
-                    : t("noForecast")}
-                </span>
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-      <p className="flex items-center gap-2 rounded-input bg-info-soft px-3 py-2 text-caption text-info">
-        <Snowflake aria-hidden className="size-4 shrink-0" strokeWidth={1.7} />
-        {frostText}
-      </p>
-      <TodayWindows bare workspaceId={workspaceId} units={units} />
-      <OutlookRailLine workspaceId={workspaceId} className="" />
-      {b.rail.weather[0]?.attribution && (
-        <p className="text-caption text-ink-3">{b.rail.weather[0].attribution}</p>
-      )}
-    </Surface>
-  );
-
-  return (
-    <div className="mx-auto flex w-full max-w-3xl min-w-0 flex-col gap-6">
-      <header className="flex flex-col gap-2">
-        <Kicker>
-          {t("kickerHello", {
-            hello: t(hello, { name: firstName }).replace(/\.$/, ""),
-            date: fmt.date(`${b.date}T12:00:00Z`, "dayMonth", { timeZone: "UTC" }),
-          })}
-        </Kicker>
-        <h1 className="text-h1 text-ink">
-          {head1.kind === "decisions"
-            ? t("headDecisions", { n: head1.n })
-            : head1.kind === "urgent"
-              ? t("headUrgent", { n: head1.n })
-              : t("headNone")}
-        </h1>
-        <p className="text-body text-ink-2">
-          {summary}
-          {b.daySummary && <AiMark />}
-        </p>
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-          <AnalysisCard workspaceId={workspaceId} timeZone={b.timeZone} canRun={canAct && !isOwner} />
-          {canAct && !isOwner && (
-            <Button
-              variant="link"
-              icon={<Plus />}
-              onClick={() => router.push("/fields/new")}
-              className="text-caption font-semibold max-sm:hidden"
-            >
-              {t("addField")}
-            </Button>
-          )}
-        </div>
-      </header>
-
-      {ownerSection}
-
-      {isOwner && stressCard}
-
-      {!isOwner && b.rail.ownerQuestion && (
-        <Surface
-          as="section"
-          tone="inset"
-          pad="sm"
-          className="flex flex-wrap items-center justify-between gap-3"
-        >
-          <p className="min-w-0 text-body text-ink">
-            <Kicker as="span" className="block">
-              {m("rail_o")}
-            </Kicker>
-            “{b.rail.ownerQuestion.text}”
-            <span className="block text-caption text-ink-2">
-              {b.rail.ownerQuestion.fieldName} · {dateShort(b.rail.ownerQuestion.at.slice(0, 10))}
-            </span>
-          </p>
-          <Link
-            href="/decisions"
-            className="focus-ring inline-flex min-h-tap items-center rounded-btn bg-muted px-4 text-body font-semibold text-ink hover:brightness-95"
-          >
-            {t("replyLink")}
-          </Link>
-        </Surface>
-      )}
-
-      {headline && (
-        <TodayCard
-          urgent={headline.urgency === "urgent"}
-          due={due(headline) || (headline.urgency === "urgent" ? t("groupUrgent") : t("groupWeek"))}
-          fieldHref={`/fields/${headline.fieldId}`}
-          thumb={thumbOf(headline, "size-8")}
-          fieldName={fieldLabel(headline)}
-          title={headline.text.title[locale]}
-          {...(headline.textSource === "ai" ? { titleMark: <AiMark /> } : {})}
-          action={humanizeDates(headline.text.action[locale], dateShort)}
-          whyText={humanizeDates(headline.text.why[locale], dateShort)}
-          factors={factors(headline)}
-          numbers={shownNumbers(headline).slice(0, 3)}
-          reliability={reliability(headline)}
-          reliabilityHint={
-            <InfoHint label={t("hintLabel")} align="start">
-              {t("hintConf")} {t(`hintTier_${headline.tier}` as "hintTier_A")} {t("hintKeyNumbers")}
-            </InfoHint>
-          }
-          startLabel={m("start_this")}
-          moreLabel={m("more_actions")}
-          labels={{
-            accept: t("acceptBtn"),
-            snooze: m("snooze"),
-            why: t("whyBtn"),
-            details: m("details"),
-            ...(canAsk ? { ask: t("askBtn") } : {}),
-          }}
-          detailsHref={`/recommendations/${headline.id}`}
-          onAccept={() => void act(headline, "accept")}
-          onSnooze={() => void act(headline, "snooze")}
-          {...(canAsk ? { onAsk: () => setSheet(headline) } : {})}
-          {...(doneRow(headline.id) ? { done: doneRow(headline.id)! } : {})}
-        />
-      )}
-
-      {!isOwner && stressCard}
-
-      {todayCount === 0 ? (
-        <Surface pad="md">
-          <p className="text-body text-ink-2">{emptyText}</p>
-        </Surface>
-      ) : (
-        rest.length > 0 && (
-          <section aria-labelledby="today-h" className="flex flex-col gap-3">
-            <div>
-              <h2 id="today-h" className="text-h2 text-ink">
-                {isOwner ? t("ownerFarmTitle") : t("todayTitle")}{" "}
-                <span className="text-ink-3">{todayCount}</span>
-              </h2>
-              {isOwner && <p className="text-caption text-ink-2">{t("ownerFarmSub")}</p>}
-            </div>
-            <ul className="flex flex-col gap-3">
-              {rest.map((i, n) => (
-                <li key={i.id}>
-                  <TodayRow
-                    urgent={i.urgency === "urgent"}
-                    status={i.urgency === "urgent" ? t("groupUrgent") : t("groupWeek")}
-                    due={due(i) || (i.urgency === "urgent" ? t("groupUrgent") : t("groupWeek"))}
-                    fieldName={fieldLabel(i)}
-                    title={i.text.title[locale]}
-                    {...(i.textSource === "ai" ? { titleMark: <AiMark /> } : {})}
-                    reason={humanizeDates(i.text.why[locale] || i.text.action[locale], dateShort)}
-                    href={`/recommendations/${i.id}`}
-                    thumb={thumbOf(i, "size-10")}
-                    index={n}
-                    flash={flash.has(i.id)}
-                    {...(doneRow(i.id) ? { done: doneRow(i.id)! } : {})}
-                  />
+    <Surface as="section" pad="sm" aria-labelledby="next7-h">
+      <Disclosure
+        summary={<span id="next7-h">{m("next7_title")}</span>}
+        {...(next7Note ? { summaryNote: next7Note } : {})}
+      >
+        <div className="flex flex-col gap-3 pt-2">
+          {weatherRows.length > 0 && (
+            <ul className="flex flex-col gap-2">
+              {weatherRows.map((w) => (
+                <li key={`${w.county}${w.region}`} className="flex items-start gap-2 text-caption text-ink">
+                  <span aria-hidden className="mt-0.5 inline-flex text-ink-2 [&>svg]:size-4 [&>svg]:stroke-[1.7]">
+                    {condition(w)?.icon}
+                  </span>
+                  <span className="min-w-0">
+                    {w.county}
+                    {w.region ? `, ${w.region.split("-")[1]}` : ""}
+                    <span className="block font-mono text-ink-2">
+                      {w.today
+                        ? `${temp(w, w.today.tminC)} / ${temp(w, w.today.tmaxC)}${condition(w) ? ` · ${condition(w)!.text}` : ""}`
+                        : t("noForecast")}
+                    </span>
+                  </span>
                 </li>
               ))}
             </ul>
-          </section>
-        )
-      )}
-
-      {nextDays}
-
-      {(b.worthALook?.length ?? 0) > 0 && (
-        <Surface pad="sm">
-          <Disclosure
-            summary={
-              <>
-                <span className="block text-h3 text-ink">
-                  {t("aiWorthTitle")} <span className="text-ink-3">{b.worthALook!.length}</span>
-                </span>
-                <span className="block text-caption font-normal text-ink-2">
-                  {t("lookHint", { n: b.worthALook!.length })}
-                </span>
-              </>
-            }
+          )}
+          {!(heroIsFrost && firstFrost) && (
+            <p className="flex items-center gap-2 rounded-input bg-info-soft px-3 py-2 text-caption text-info">
+              <Snowflake aria-hidden className="size-4 shrink-0" strokeWidth={1.7} />
+              {frostText}
+            </p>
+          )}
+          <TodayWindows bare workspaceId={workspaceId} units={units} />
+          <OutlookRailLine workspaceId={workspaceId} className="" />
+          {b.rail.weather[0]?.attribution && (
+            <p className="text-caption text-ink-3">{b.rail.weather[0].attribution}</p>
+          )}
+          <Link
+            href="/work-windows"
+            className="focus-ring inline-flex min-h-tap items-center text-caption font-semibold text-ink underline underline-offset-4"
           >
-            <div className="flex flex-col gap-2 pt-2">
-              <p className="text-caption text-ink-2">{t("aiWorthSub")}</p>
-              {b.worthALook!.map((i) => (
-                <Link
-                  key={i.id}
-                  href={`/recommendations/${i.id}`}
-                  className="focus-ring flex min-h-tap items-center gap-3 rounded-input bg-surface-2 p-3 hover:bg-muted"
-                >
-                  {thumbOf(i, "size-10")}
-                  <span className="min-w-0">
-                    <span className="block text-body font-semibold text-ink">
-                      {i.text.title[locale]}
-                      <AiMark />
-                    </span>
-                    <span className="block text-caption text-ink-2">{i.text.action[locale]}</span>
-                    <span className="block text-caption text-ink-3">{i.fieldName}</span>
-                  </span>
-                </Link>
-              ))}
-            </div>
-          </Disclosure>
-        </Surface>
-      )}
+            {m("next7_link")}
+          </Link>
+        </div>
+      </Disclosure>
+    </Surface>
+  );
 
-      {b.allGood.length > 0 && (
-        <section aria-labelledby="fine-h" className="flex flex-col gap-2">
-          <h2 id="fine-h" className="text-caption font-semibold text-ink">
-            {t("fineLine", { n: b.allGood.length })}
-          </h2>
+  const rowsOf = (items: Item[], idOffset = 0) => (
+    <ul className="flex flex-col gap-3">
+      {items.map((i, n) => (
+        <li key={i.id}>
+          <TodayRow
+            urgent={i.urgency === "urgent"}
+            status={i.urgency === "urgent" ? t("groupUrgent") : t("groupWeek")}
+            due={due(i) || (i.urgency === "urgent" ? t("groupUrgent") : t("groupWeek"))}
+            fieldName={fieldLabel(i)}
+            title={i.text.title[locale]}
+            {...(i.textSource === "ai" ? { titleMark: <AiMark /> } : {})}
+            href={`/recommendations/${i.id}`}
+            thumb={thumbOf(i, "size-10")}
+            index={n + idOffset}
+            flash={flash.has(i.id)}
+            {...(doneRow(i.id) ? { done: doneRow(i.id)! } : {})}
+          />
+        </li>
+      ))}
+    </ul>
+  );
+  /** A queue section: open, at most five rows, then "Show all N". */
+  const queue = (id: string, title: string, items: Item[], idOffset = 0) =>
+    items.length > 0 && (
+      <section aria-labelledby={id} className="flex flex-col gap-3">
+        <h2 id={id} className="text-h2 text-ink">
+          {title} <span className="text-ink-3">{items.length}</span>
+        </h2>
+        {rowsOf(showAll[id] ? items : items.slice(0, 5), idOffset)}
+        {items.length > 5 && !showAll[id] && (
+          <div>
+            <Button variant="link" className="min-h-tap" onClick={() => setShowAll((s) => ({ ...s, [id]: true }))}>
+              {m("t_show_all", { n: items.length })}
+            </Button>
+          </div>
+        )}
+      </section>
+    );
+
+  const allFine = b.allGood.length > 0 && (
+    <Surface pad="sm">
+      <Disclosure summary={<span className="text-body font-semibold text-ink">{m("t_fine", { n: b.allGood.length })}</span>}>
+        <section aria-label={m("t_fine", { n: b.allGood.length })} className="pt-2">
           <ul className="flex flex-wrap gap-2">
             {b.allGood.map((g) => (
               <li key={g.fieldId}>
@@ -651,11 +558,187 @@ export function Brief({
             ))}
           </ul>
         </section>
+      </Disclosure>
+    </Surface>
+  );
+
+  const ideas = !isOwner && (b.worthALook?.length ?? 0) > 0 && (
+    <Surface pad="sm">
+      <Disclosure
+        summary={
+          <span className="text-body font-semibold text-ink">
+            {m("t_ideas")} <span className="text-ink-3">{b.worthALook!.length}</span>
+          </span>
+        }
+      >
+        <div className="flex flex-col gap-2 pt-2">
+          <p className="text-caption text-ink-2">{m("t_ideas_sub")}</p>
+          {b.worthALook!.map((i) => (
+            <Link
+              key={i.id}
+              href={`/recommendations/${i.id}`}
+              className="focus-ring flex min-h-tap items-center gap-3 rounded-input bg-surface-2 p-3 hover:bg-muted"
+            >
+              {thumbOf(i, "size-10")}
+              <span className="min-w-0">
+                <span className="block text-body font-semibold text-ink">
+                  {i.text.title[locale]}
+                  <AiMark />
+                </span>
+                <span className="block text-caption text-ink-2">{i.text.action[locale]}</span>
+                <span className="block text-caption text-ink-3">{i.fieldName}</span>
+              </span>
+            </Link>
+          ))}
+        </div>
+      </Disclosure>
+    </Surface>
+  );
+
+  const h1 =
+    head1.kind === "decisions"
+      ? m("t_h1_owner", { n: head1.n })
+      : head1.kind === "urgent"
+        ? m("t_h1", { n: head1.n })
+        : isOwner
+          ? m("t_h1_clear")
+          : m("t_h1_none");
+
+  return (
+    <div className="mx-auto flex w-full max-w-3xl min-w-0 flex-col gap-6">
+      <header className="flex flex-col gap-2">
+        <Kicker>
+          {t("kickerHello", {
+            hello: t(hello, { name: firstName }).replace(/\.$/, ""),
+            date: fmt.date(`${b.date}T12:00:00Z`, "dayMonth", { timeZone: "UTC" }),
+          })}
+        </Kicker>
+        <h1 className="text-h1 text-ink">{h1}</h1>
+        {summary && (
+          <p className="text-body text-ink-2">
+            {summary}
+            <AiMark />
+          </p>
+        )}
+        {!isOwner && (
+          <AnalysisCard
+            workspaceId={workspaceId}
+            timeZone={b.timeZone}
+            canRun={canAct}
+            fieldsTotal={b.counts.fields}
+          />
+        )}
+      </header>
+
+      {ownerSection}
+
+      {isOwner && stressLine}
+
+      {!isOwner && b.rail.ownerQuestion && (
+        <Surface
+          as="section"
+          tone="inset"
+          pad="sm"
+          className="flex flex-wrap items-center justify-between gap-3"
+        >
+          <p className="min-w-0 text-body text-ink">
+            <span className="font-semibold">{m("t_owner_asked")}:</span> “{b.rail.ownerQuestion.text}”
+            <span className="block text-caption text-ink-2">
+              {b.rail.ownerQuestion.fieldName} · {dateShort(b.rail.ownerQuestion.at.slice(0, 10))}
+            </span>
+          </p>
+          <Link
+            href="/decisions"
+            className="focus-ring inline-flex min-h-tap items-center rounded-btn bg-muted px-4 text-body font-semibold text-ink hover:brightness-95"
+          >
+            {t("replyLink")}
+          </Link>
+        </Surface>
       )}
+
+      {headline && (
+        <TodayCard
+          urgent={headline.urgency === "urgent"}
+          due={due(headline) || (headline.urgency === "urgent" ? t("groupUrgent") : t("groupWeek"))}
+          fieldHref={`/fields/${headline.fieldId}`}
+          thumb={thumbOf(headline, "size-8")}
+          fieldName={fieldLabel(headline)}
+          title={headline.text.title[locale]}
+          {...(headline.textSource === "ai" ? { titleMark: <AiMark /> } : {})}
+          action={humanizeDates(headline.text.action[locale], dateShort)}
+          whyText={humanizeDates(headline.text.why[locale], dateShort)}
+          factors={factors(headline)}
+          numbers={shownNumbers(headline).slice(0, 3)}
+          trust={
+            <TrustLine
+              reliability={headline.confidence}
+              dataLevel={headline.tier}
+              sources={[...new Set(headline.evidence.flatMap((e) => (e.source ? [e.source] : [])))]}
+            />
+          }
+          startLabel={m("start_this")}
+          moreLabel={m("more_actions")}
+          labels={{
+            accept: t("acceptBtn"),
+            snooze: m("snooze"),
+            why: m("t_evidence"),
+            details: m("details"),
+            ...(canAsk ? { ask: t("askBtn") } : {}),
+          }}
+          detailsHref={`/recommendations/${headline.id}`}
+          onAccept={() => void act(headline, "accept")}
+          onSnooze={() => void act(headline, "snooze")}
+          {...(canAsk ? { onAsk: () => setSheet(headline) } : {})}
+          {...(doneRow(headline.id) ? { done: doneRow(headline.id)! } : {})}
+        />
+      )}
+
+      {!isOwner && ordered.length === 0 && (
+        <Surface pad="md">
+          <p className="text-body text-ink-2">{emptyText}</p>
+        </Surface>
+      )}
+
+      {!isOwner && (
+        <SuggestionChips
+          questions={questions}
+          onAsk={(q) => askAssistant(q, headline?.fieldId)}
+          className="-mt-2"
+        />
+      )}
+
+      {!isOwner && queue("also-today", m("t_also_today"), alsoToday)}
+      {!isOwner && queue("also-week", m("t_also_week"), alsoWeek, alsoToday.length)}
+
+      {isOwner && (
+        <SuggestionChips questions={questions} onAsk={(q) => askAssistant(q)} className="-mt-2" />
+      )}
+
+      {isOwner && ordered.length > 0 && (
+        <Surface pad="sm">
+          <Disclosure
+            summary={
+              <span className="text-body font-semibold text-ink">
+                {m("t_owner_work")} <span className="text-ink-3">{ordered.length}</span>
+              </span>
+            }
+          >
+            <div className="pt-2">{rowsOf(ordered)}</div>
+          </Disclosure>
+        </Surface>
+      )}
+
+      {!isOwner && nextDays}
+
+      {!isOwner && stressLine}
+
+      {allFine}
+
+      {ideas}
 
       <p className="flex items-start gap-2 text-caption text-ink-3">
         <ShieldCheck aria-hidden className="mt-0.5 size-4 shrink-0" strokeWidth={1.7} />
-        {m("neutral")}
+        {m("t_neutral")}
       </p>
 
       <AskOwnerSheet
